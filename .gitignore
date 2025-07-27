@@ -1,0 +1,22 @@
+
+# Include only specific files and directories
+# Exclude everything by default
+*
+
+# Include specific directories
+!convex/
+!convex/**
+!updates/
+!updates/**
+
+# Include specific files in root
+!README.md
+!backend-dev-guide.md
+!frontend-dev-guide.md
+
+# Include this gitignore file
+!.gitignore
+
+# Keep these existing ignores
+.env.local
+node_modules
