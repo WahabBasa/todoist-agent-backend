@@ -3,18 +3,18 @@ import { v } from "convex/values";
 
 export default defineSchema({
   users: defineTable({
-    clerkId: v.string(),
-    email: v.string(),
-    password: v.string(), // In production, this would be hashed
-    firstName: v.string(),
-    lastName: v.string(),
-    todoistToken: v.string(),
+    firebaseUid: v.string(),
+    email: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+    todoistToken: v.optional(v.string()),
+    todayViewText: v.optional(v.string()),
     preferences: v.object({
-      timezone: v.string(),
+      timezone: v.optional(v.string()),
       defaultProject: v.optional(v.string())
     })
   })
-    .index("by_clerk_id", ["clerkId"])
+    .index("by_firebase_uid", ["firebaseUid"])
     .index("by_email", ["email"]),
 
   conversations: defineTable({
@@ -23,5 +23,25 @@ export default defineSchema({
     response: v.string(),
     timestamp: v.number(),
     toolCalls: v.optional(v.array(v.any()))
+  }).index("by_user", ["userId"]),
+
+  userActivity: defineTable({
+    userId: v.string(),
+    displayName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    totalMessages: v.number(),
+    totalToolCalls: v.number(),
+    lastActiveAt: v.number(),
+    todosCreated: v.number(),
+    todosCompleted: v.number(),
+    todosUpdated: v.number(),
+    todosDeleted: v.number(),
+    preferredModel: v.optional(v.string()),
+    dailyUsage: v.object({
+      date: v.string(), // YYYY-MM-DD
+      messageCount: v.number(),
+      toolCallCount: v.number()
+    })
   }).index("by_user", ["userId"])
+    .index("by_last_active", ["lastActiveAt"])
 });

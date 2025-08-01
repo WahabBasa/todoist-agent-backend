@@ -1,4 +1,4 @@
-import { action, mutation } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -26,6 +26,194 @@ export const storeConversation = mutation({
       timestamp: args.timestamp,
       toolCalls: args.toolCalls,
     });
+  },
+});
+
+export const createOrUpdateUser = mutation({
+  args: {
+    firebaseUid: v.string(),
+    email: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+      .first();
+
+    if (!existingUser) {
+      // Create new Firebase user
+      await ctx.db.insert("users", {
+        firebaseUid: args.firebaseUid,
+        email: args.email,
+        displayName: args.displayName,
+        photoUrl: args.photoUrl,
+        preferences: {
+          timezone: undefined,
+          defaultProject: undefined,
+        },
+      });
+    } else {
+      // Update existing Firebase user with latest info
+      await ctx.db.patch(existingUser._id, {
+        email: args.email,
+        displayName: args.displayName,
+        photoUrl: args.photoUrl,
+      });
+    }
+  },
+});
+
+export const getUserConversations = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+    
+    const userId = identity.subject || identity.tokenIdentifier;
+    
+    return await ctx.db
+      .query("conversations")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getAllUsersForAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    // Only return if authenticated (basic check)
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+    
+    return await ctx.db.query("users").collect();
+  },
+});
+
+export const getUserActivitySummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+    
+    return await ctx.db
+      .query("userActivity")
+      .withIndex("by_last_active")
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getUserTodayView = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+    
+    const userId = identity.subject || identity.tokenIdentifier;
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", userId))
+      .first();
+    
+    return user?.todayViewText || null;
+  },
+});
+
+export const updateUserActivity = mutation({
+  args: {
+    userId: v.string(),
+    displayName: v.optional(v.string()),
+    email: v.optional(v.string()),
+    toolCallsCount: v.number(),
+    modelUsed: v.string(),
+    toolsUsed: v.array(v.string())
+  },
+  handler: async (ctx, args) => {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    const existingActivity = await ctx.db
+      .query("userActivity")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    // Count specific todo operations from tools used
+    const todosCreated = args.toolsUsed.filter(tool => tool === 'createTask').length;
+    const todosCompleted = args.toolsUsed.filter(tool => tool === 'completeTask').length;
+    const todosUpdated = args.toolsUsed.filter(tool => tool === 'updateTask').length;
+    const todosDeleted = args.toolsUsed.filter(tool => tool === 'deleteTask').length;
+
+    if (!existingActivity) {
+      // Create new activity record
+      await ctx.db.insert("userActivity", {
+        userId: args.userId,
+        displayName: args.displayName,
+        email: args.email,
+        totalMessages: 1,
+        totalToolCalls: args.toolCallsCount,
+        lastActiveAt: Date.now(),
+        todosCreated,
+        todosCompleted,
+        todosUpdated,
+        todosDeleted,
+        preferredModel: args.modelUsed,
+        dailyUsage: {
+          date: today,
+          messageCount: 1,
+          toolCallCount: args.toolCallsCount
+        }
+      });
+    } else {
+      // Update existing activity record
+      const isNewDay = existingActivity.dailyUsage.date !== today;
+      
+      await ctx.db.patch(existingActivity._id, {
+        displayName: args.displayName,
+        email: args.email,
+        totalMessages: existingActivity.totalMessages + 1,
+        totalToolCalls: existingActivity.totalToolCalls + args.toolCallsCount,
+        lastActiveAt: Date.now(),
+        todosCreated: existingActivity.todosCreated + todosCreated,
+        todosCompleted: existingActivity.todosCompleted + todosCompleted,
+        todosUpdated: existingActivity.todosUpdated + todosUpdated,
+        todosDeleted: existingActivity.todosDeleted + todosDeleted,
+        preferredModel: args.modelUsed,
+        dailyUsage: {
+          date: today,
+          messageCount: isNewDay ? 1 : existingActivity.dailyUsage.messageCount + 1,
+          toolCallCount: isNewDay ? args.toolCallsCount : existingActivity.dailyUsage.toolCallCount + args.toolCallsCount
+        }
+      });
+    }
+  },
+});
+
+export const updateUserTodayView = mutation({
+  args: {
+    userId: v.string(),
+    todayViewText: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId))
+      .first();
+
+    if (user) {
+      await ctx.db.patch(user._id, {
+        todayViewText: args.todayViewText,
+      });
+    }
   },
 });
 
@@ -226,6 +414,88 @@ const deleteTaskTool = tool({
   },
 });
 
+const updateTodayViewTool = tool({
+  description: "Update the Today view text display that the user sees in their Today tab",
+  parameters: z.object({
+    text: z.string().describe("Formatted text content to display in the Today view (can include task details, summaries, etc.)"),
+  }),
+  execute: async ({ text }) => {
+    // The user ID will be injected when this tool is called from the processMessage action
+    return {
+      success: true,
+      message: "Today view updated",
+      text: text,
+      shouldUpdateTodayView: true, // Flag to indicate this tool result should update the today view
+    };
+  },
+});
+
+const getTodayTasksTool = tool({
+  description: "Get today's tasks from Todoist to show the user or update their Today view",
+  parameters: z.object({
+    format_as_text: z.boolean().optional().describe("If true, format the tasks as readable text for the Today view"),
+  }),
+  execute: async ({ format_as_text = false }) => {
+    const todoistToken = process.env.TODOIST_TOKEN;
+    if (!todoistToken) {
+      throw new Error("Todoist token not configured");
+    }
+    
+    const client = new TodoistClient(todoistToken);
+    
+    // Get today's tasks using Todoist filter
+    const todayTasks = await client.getTasks(); // We'll filter on the client side for now
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    const filteredTasks = todayTasks.filter(task => {
+      if (!task.due) return false;
+      const taskDate = task.due.date;
+      return taskDate === today || new Date(taskDate) < new Date();
+    });
+
+    if (format_as_text) {
+      if (filteredTasks.length === 0) {
+        return {
+          success: true,
+          text: "🎉 No tasks for today! You're all caught up.",
+          tasks_count: 0,
+        };
+      }
+
+      let formattedText = `📅 Today's Tasks (${filteredTasks.length})\n\n`;
+      
+      filteredTasks.forEach((task, index) => {
+        const priority = task.priority > 1 ? '🔥'.repeat(task.priority - 1) : '';
+        const overdue = task.due && new Date(task.due.date) < new Date() ? '⚠️ OVERDUE: ' : '';
+        formattedText += `${index + 1}. ${overdue}${priority}${task.content}\n`;
+        if (task.description) {
+          formattedText += `   📝 ${task.description}\n`;
+        }
+        formattedText += `\n`;
+      });
+
+      return {
+        success: true,
+        text: formattedText,
+        tasks_count: filteredTasks.length,
+      };
+    }
+
+    return {
+      success: true,
+      tasks: filteredTasks.map(task => ({
+        id: task.id,
+        content: task.content,
+        description: task.description,
+        due: task.due?.string,
+        priority: task.priority,
+        is_completed: task.is_completed,
+      })),
+      tasks_count: filteredTasks.length,
+    };
+  },
+});
+
 export const processMessage = action({
   args: { 
     message: v.string(),
@@ -243,6 +513,14 @@ export const processMessage = action({
       }
       
       const userId = identity.subject || identity.tokenIdentifier;
+      
+      // Create or update user in database
+      await ctx.runMutation(api.agents.createOrUpdateUser, {
+        firebaseUid: userId,
+        email: identity.email,
+        displayName: identity.name,
+        photoUrl: identity.pictureUrl,
+      });
       // Select model based on provider
       const model = modelProvider === "anthropic" 
         ? anthropic("claude-3-5-sonnet-20241022")
@@ -257,8 +535,15 @@ export const processMessage = action({
           updateTask: updateTaskTool,
           completeTask: completeTaskTool,
           deleteTask: deleteTaskTool,
+          getTodayTasks: getTodayTasksTool,
+          updateTodayView: updateTodayViewTool,
         },
         system: `You are a friendly and efficient Todoist assistant. Help users manage their tasks naturally and conversationally.
+
+        Special Features:
+        - You can update the user's "Today View" tab with formatted text using the updateTodayView tool
+        - Use getTodayTasks to fetch today's tasks from Todoist and format them nicely
+        - When users ask to "show my today view" or similar, use getTodayTasks with format_as_text=true, then updateTodayView with the result
 
         Guidelines:
         - Be warm, helpful, and encouraging in your responses
@@ -270,6 +555,7 @@ export const processMessage = action({
         - Use casual, friendly language - avoid technical jargon
         - Ask clarifying questions if requests are ambiguous
         - Offer proactive suggestions when appropriate (e.g., "Would you like me to set a due date for that?")
+        - When updating the Today View, format the text nicely with emojis and clear structure
         
         Remember: You're helping people stay organized and productive, so make the experience pleasant and motivating!`,
         messages: [{ role: "user", content: message }],
@@ -285,6 +571,32 @@ export const processMessage = action({
           toolName: call.toolName,
           args: call.args,
         })),
+      });
+
+      // Check if any tool calls should update the today view
+      const updateTodayViewCalls = result.toolCalls?.filter(call => 
+        call.toolName === 'updateTodayView'
+      );
+
+      if (updateTodayViewCalls && updateTodayViewCalls.length > 0) {
+        // Use the last updateTodayView call if there are multiple
+        const lastUpdateCall = updateTodayViewCalls[updateTodayViewCalls.length - 1];
+        // Extract text from the args since results aren't available immediately
+        const todayViewText = lastUpdateCall.args?.text || 'Updated today view';
+        await ctx.runMutation(api.agents.updateUserTodayView, {
+          userId,
+          todayViewText,
+        });
+      }
+
+      // Update user activity tracking
+      await ctx.runMutation(api.agents.updateUserActivity, {
+        userId,
+        displayName: identity.name,
+        email: identity.email,
+        toolCallsCount: result.toolCalls?.length || 0,
+        modelUsed: modelProvider === "anthropic" ? "Claude 3.5 Sonnet" : "GPT-4",
+        toolsUsed: result.toolCalls?.map(call => call.toolName) || []
       });
 
       return {

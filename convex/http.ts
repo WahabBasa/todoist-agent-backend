@@ -85,6 +85,45 @@ http.route({
 
 // Custom auth endpoints removed - now using Clerk authentication
 
+// Get today view endpoint
+http.route({
+  path: "/today-view",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const todayViewText = await ctx.runQuery(api.agents.getUserTodayView);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          todayViewText: todayViewText || "Ask the AI to show your today view" 
+        }),
+        {
+          status: 200,
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to get today view" 
+        }),
+        {
+          status: 500,
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+  }),
+});
+
 // Health check endpoint
 http.route({
   path: "/health",
