@@ -6,7 +6,7 @@ A multi-user AI agent system for natural language Todoist task management, built
 
 This system provides a mobile-agnostic backend that enables natural language interaction with Todoist through AI agents. Users can create, read, update, and delete tasks using conversational interfaces across any frontend platform.
 
-**✅ Current Status**: Fully functional with modern ChatGPT-style UI implemented. The EA AI Frontend2 mobile app successfully demonstrates:
+**✅ Current Status**: Fully functional with modern ChatGPT-style UI implemented and MCP integrations working (GitHub + Graphite). The EA AI Frontend2 mobile app successfully demonstrates:
 - Modern linear message layout with avatars and role-based messaging
 - FlashList performance optimization for smooth scrolling
 - Lightweight architecture avoiding complex native modules
