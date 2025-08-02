@@ -132,7 +132,8 @@ http.route({
     return new Response(
       JSON.stringify({ 
         status: "healthy", 
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString(),
+        convex_url: process.env.CONVEX_URL || "not_set"
       }),
       {
         status: 200,
@@ -142,6 +143,21 @@ http.route({
         },
       }
     );
+  }),
+});
+
+// Simple test endpoint
+http.route({
+  path: "/test",
+  method: "GET", 
+  handler: httpAction(async (ctx, request) => {
+    return new Response("OK", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
   }),
 });
 
