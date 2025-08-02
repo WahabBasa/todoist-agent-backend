@@ -1,4 +1,4 @@
-import { action, mutation, query } from "./_generated/server";
+import { action, mutation, query, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { generateText, tool } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -31,7 +31,7 @@ export const storeConversation = mutation({
 
 export const createOrUpdateUser = mutation({
   args: {
-    firebaseUid: v.string(),
+    clerkId: v.string(),
     email: v.optional(v.string()),
     displayName: v.optional(v.string()),
     photoUrl: v.optional(v.string()),
@@ -39,13 +39,13 @@ export const createOrUpdateUser = mutation({
   handler: async (ctx, args) => {
     const existingUser = await ctx.db
       .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.firebaseUid))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .first();
 
     if (!existingUser) {
-      // Create new Firebase user
+      // Create new Clerk user
       await ctx.db.insert("users", {
-        firebaseUid: args.firebaseUid,
+        clerkId: args.clerkId,
         email: args.email,
         displayName: args.displayName,
         photoUrl: args.photoUrl,
@@ -55,7 +55,7 @@ export const createOrUpdateUser = mutation({
         },
       });
     } else {
-      // Update existing Firebase user with latest info
+      // Update existing Clerk user with latest info
       await ctx.db.patch(existingUser._id, {
         email: args.email,
         displayName: args.displayName,
@@ -123,7 +123,7 @@ export const getUserTodayView = query({
     const userId = identity.subject || identity.tokenIdentifier;
     const user = await ctx.db
       .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", userId))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", userId))
       .first();
     
     return user?.todayViewText || null;
@@ -206,7 +206,7 @@ export const updateUserTodayView = mutation({
   handler: async (ctx, args) => {
     const user = await ctx.db
       .query("users")
-      .withIndex("by_firebase_uid", (q) => q.eq("firebaseUid", args.userId))
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
       .first();
 
     if (user) {
@@ -514,9 +514,9 @@ export const processMessage = action({
       
       const userId = identity.subject || identity.tokenIdentifier;
       
-      // Create or update user in database
+      // Create or update Clerk user in database
       await ctx.runMutation(api.agents.createOrUpdateUser, {
-        firebaseUid: userId,
+        clerkId: userId,
         email: identity.email,
         displayName: identity.name,
         photoUrl: identity.pictureUrl,
@@ -612,5 +612,44 @@ export const processMessage = action({
         error: error instanceof Error ? error.message : "Unknown error occurred",
       };
     }
+  },
+});
+
+// User Identity Helper Functions (Following threads-clone pattern)
+export async function getCurrentUserOrThrow(ctx: QueryCtx) {
+  const userRecord = await getCurrentUser(ctx);
+  if (!userRecord) throw new Error("Can't get current user");
+  return userRecord;
+}
+
+export async function getCurrentUser(ctx: QueryCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (identity === null) {
+    return null;
+  }
+  return await userByClerkId(ctx, identity.subject);
+}
+
+async function userByClerkId(ctx: QueryCtx, clerkId: string) {
+  return await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+    .unique();
+}
+
+export const getUserByClerkId = query({
+  args: {
+    clerkId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.clerkId) return null;
+    return await userByClerkId(ctx, args.clerkId);
+  },
+});
+
+export const current = query({
+  args: {},
+  handler: async (ctx) => {
+    return await getCurrentUser(ctx);
   },
 });

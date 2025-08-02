@@ -3,7 +3,8 @@ import { v } from "convex/values";
 
 export default defineSchema({
   users: defineTable({
-    firebaseUid: v.string(),
+    clerkId: v.optional(v.string()), // Clerk user ID - optional during migration
+    firebaseUid: v.optional(v.string()), // Firebase UID - keeping for migration
     email: v.optional(v.string()),
     displayName: v.optional(v.string()),
     photoUrl: v.optional(v.string()),
@@ -14,6 +15,7 @@ export default defineSchema({
       defaultProject: v.optional(v.string())
     })
   })
+    .index("by_clerk_id", ["clerkId"])
     .index("by_firebase_uid", ["firebaseUid"])
     .index("by_email", ["email"]),
 
