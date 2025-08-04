@@ -1,68 +1,16 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Define task management tools with AI SDK v5 syntax
-const createTaskTool = {
-  description: "Create a new task with optional project assignment and priority",
-  parameters: z.object({
-    title: z.string().describe("Task title (required)"),
-    description: z.string().optional().describe("Task description"),
-    priority: z.number().min(1).max(4).optional().describe("Priority level: 1=High, 2=Medium, 3=Normal, 4=Low"),
-    dueDate: z.string().optional().describe("Due date in ISO format (YYYY-MM-DD)"),
-    projectId: z.string().optional().describe("Project ID to assign task to"),
-    tags: z.array(z.string()).optional().describe("Array of tags for the task"),
-    estimatedTime: z.number().optional().describe("Estimated time in minutes"),
-  }),
-};
+// Create configured Anthropic provider
+const anthropic = createAnthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
-const getTasksTool = {
-  description: "Get tasks, optionally filtered by completion status and project",
-  parameters: z.object({
-    completed: z.boolean().optional().describe("Filter by completion status"),
-    projectId: z.string().optional().describe("Filter by project ID"),
-  }),
-};
-
-const updateTaskTool = {
-  description: "Update an existing task (completion status, title, priority, etc.)",
-  parameters: z.object({
-    taskId: z.string().describe("Task ID to update"),
-    title: z.string().optional().describe("New task title"),
-    description: z.string().optional().describe("New task description"),
-    isCompleted: z.boolean().optional().describe("Mark task as completed/incomplete"),
-    priority: z.number().min(1).max(4).optional().describe("New priority level"),
-    dueDate: z.string().optional().describe("New due date in ISO format"),
-    projectId: z.string().optional().describe("New project ID"),
-    tags: z.array(z.string()).optional().describe("New tags array"),
-    estimatedTime: z.number().optional().describe("New estimated time in minutes"),
-  }),
-};
-
-const createProjectTool = {
-  description: "Create a new project to organize tasks",
-  parameters: z.object({
-    name: z.string().describe("Project name (required)"),
-    color: z.string().describe("Project color (hex code or color name)"),
-    description: z.string().optional().describe("Project description"),
-  }),
-};
-
-const getProjectsTool = {
-  description: "Get all projects with task counts",
-  parameters: z.object({}),
-};
-
-const deleteTaskTool = {
-  description: "Delete a task permanently",
-  parameters: z.object({
-    taskId: z.string().describe("Task ID to delete"),
-  }),
-};
 
 export const chatWithAI = action({
   args: { 
@@ -79,6 +27,64 @@ export const chatWithAI = action({
       role: "user",
       content: args.message,
     });
+
+    // Define tools using AI SDK v5 format with manual execution
+    const createTaskTool = {
+      description: "Create a new task with optional project assignment and priority",
+      inputSchema: z.object({
+        title: z.string().describe("Task title (required)"),
+        description: z.string().optional().describe("Task description"),
+        priority: z.number().min(1).max(4).optional().describe("Priority level: 1=High, 2=Medium, 3=Normal, 4=Low"),
+        dueDate: z.string().optional().describe("Due date in ISO format (YYYY-MM-DD)"),
+        projectId: z.string().optional().describe("Project ID to assign task to"),
+        tags: z.array(z.string()).optional().describe("Array of tags for the task"),
+        estimatedTime: z.number().optional().describe("Estimated time in minutes"),
+      }),
+    };
+
+    const getTasksTool = {
+      description: "Get tasks, optionally filtered by completion status and project",
+      inputSchema: z.object({
+        completed: z.boolean().optional().describe("Filter by completion status"),
+        projectId: z.string().optional().describe("Filter by project ID"),
+      }),
+    };
+
+    const updateTaskTool = {
+      description: "Update an existing task (completion status, title, priority, etc.)",
+      inputSchema: z.object({
+        taskId: z.string().describe("Task ID to update"),
+        title: z.string().optional().describe("New task title"),
+        description: z.string().optional().describe("New task description"),
+        isCompleted: z.boolean().optional().describe("Mark task as completed/incomplete"),
+        priority: z.number().min(1).max(4).optional().describe("New priority level"),
+        dueDate: z.string().optional().describe("New due date in ISO format"),
+        projectId: z.string().optional().describe("New project ID"),
+        tags: z.array(z.string()).optional().describe("New tags array"),
+        estimatedTime: z.number().optional().describe("New estimated time in minutes"),
+      }),
+    };
+
+    const createProjectTool = {
+      description: "Create a new project to organize tasks",
+      inputSchema: z.object({
+        name: z.string().describe("Project name (required)"),
+        color: z.string().describe("Project color (hex code or color name)"),
+        description: z.string().optional().describe("Project description"),
+      }),
+    };
+
+    const getProjectsTool = {
+      description: "Get all projects with task counts",
+      inputSchema: z.object({}),
+    };
+
+    const deleteTaskTool = {
+      description: "Delete a task permanently",
+      inputSchema: z.object({
+        taskId: z.string().describe("Task ID to delete"),
+      }),
+    };
 
     try {
       // Generate AI response with tools
@@ -119,7 +125,6 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
             switch (toolCall.toolName) {
               case "createTask":
                 const taskArgs = (toolCall as any).args;
-                // Convert date string to timestamp if provided
                 const dueDate = taskArgs.dueDate ? new Date(taskArgs.dueDate).getTime() : undefined;
                 
                 const taskId = await ctx.runMutation(api.tasks.createTask, {
