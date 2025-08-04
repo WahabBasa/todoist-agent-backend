@@ -13,9 +13,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.2.12",
+    "@ai-sdk/anthropic": "^2.0.0",
     "@convex-dev/auth": "^0.0.81",
-    "ai": "^5.0.1",
+    "ai": "^5.0.2",
     "clsx": "^2.1.1",
     "convex": "^1.23.0",
     "daisyui": "^5.0.50",

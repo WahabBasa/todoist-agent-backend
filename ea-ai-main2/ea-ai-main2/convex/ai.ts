@@ -6,10 +6,10 @@ import { z } from "zod";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Define task management tools with Zod schemas
+// Define task management tools with AI SDK v5 syntax
 const createTaskTool = {
   description: "Create a new task with optional project assignment and priority",
-  inputSchema: z.object({
+  parameters: z.object({
     title: z.string().describe("Task title (required)"),
     description: z.string().optional().describe("Task description"),
     priority: z.number().min(1).max(4).optional().describe("Priority level: 1=High, 2=Medium, 3=Normal, 4=Low"),
@@ -22,7 +22,7 @@ const createTaskTool = {
 
 const getTasksTool = {
   description: "Get tasks, optionally filtered by completion status and project",
-  inputSchema: z.object({
+  parameters: z.object({
     completed: z.boolean().optional().describe("Filter by completion status"),
     projectId: z.string().optional().describe("Filter by project ID"),
   }),
@@ -30,7 +30,7 @@ const getTasksTool = {
 
 const updateTaskTool = {
   description: "Update an existing task (completion status, title, priority, etc.)",
-  inputSchema: z.object({
+  parameters: z.object({
     taskId: z.string().describe("Task ID to update"),
     title: z.string().optional().describe("New task title"),
     description: z.string().optional().describe("New task description"),
@@ -45,7 +45,7 @@ const updateTaskTool = {
 
 const createProjectTool = {
   description: "Create a new project to organize tasks",
-  inputSchema: z.object({
+  parameters: z.object({
     name: z.string().describe("Project name (required)"),
     color: z.string().describe("Project color (hex code or color name)"),
     description: z.string().optional().describe("Project description"),
@@ -54,12 +54,12 @@ const createProjectTool = {
 
 const getProjectsTool = {
   description: "Get all projects with task counts",
-  inputSchema: z.object({}),
+  parameters: z.object({}),
 };
 
 const deleteTaskTool = {
   description: "Delete a task permanently",
-  inputSchema: z.object({
+  parameters: z.object({
     taskId: z.string().describe("Task ID to delete"),
   }),
 };
@@ -83,7 +83,7 @@ export const chatWithAI = action({
     try {
       // Generate AI response with tools
       const result = await generateText({
-        model: anthropic("claude-3-5-sonnet-20241022") as any,
+        model: anthropic("claude-3-5-sonnet-20240620"),
         system: `You are an intelligent task management assistant. You help users manage their tasks and projects through natural language conversations.
 
 Available capabilities:
@@ -118,7 +118,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
 
             switch (toolCall.toolName) {
               case "createTask":
-                const taskArgs = toolCall.input as any;
+                const taskArgs = (toolCall as any).args;
                 // Convert date string to timestamp if provided
                 const dueDate = taskArgs.dueDate ? new Date(taskArgs.dueDate).getTime() : undefined;
                 
@@ -135,7 +135,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 break;
 
               case "getTasks":
-                const filterArgs = toolCall.input as any;
+                const filterArgs = (toolCall as any).args;
                 const tasks = await ctx.runQuery(api.tasks.getTasks, {
                   completed: filterArgs.completed,
                   projectId: filterArgs.projectId,
@@ -144,7 +144,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 break;
 
               case "updateTask":
-                const updateArgs = toolCall.input as any;
+                const updateArgs = (toolCall as any).args;
                 const updateDueDate = updateArgs.dueDate ? new Date(updateArgs.dueDate).getTime() : undefined;
                 
                 await ctx.runMutation(api.tasks.updateTask, {
@@ -162,7 +162,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 break;
 
               case "createProject":
-                const projectArgs = toolCall.input as any;
+                const projectArgs = (toolCall as any).args;
                 const projectId = await ctx.runMutation(api.projects.createProject, {
                   name: projectArgs.name,
                   color: projectArgs.color,
@@ -177,7 +177,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 break;
 
               case "deleteTask":
-                const deleteArgs = toolCall.input as any;
+                const deleteArgs = (toolCall as any).args;
                 await ctx.runMutation(api.tasks.deleteTask, {
                   id: deleteArgs.taskId,
                 });
@@ -190,7 +190,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
 
             toolResults.push({
               name: toolCall.toolName,
-              args: toolCall.input,
+              args: (toolCall as any).args,
               result: toolResult,
             });
 
@@ -198,7 +198,7 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
             console.error(`Error executing tool ${toolCall.toolName}:`, error);
             toolResults.push({
               name: toolCall.toolName,
-              args: toolCall.input,
+              args: (toolCall as any).args,
               result: { 
                 success: false, 
                 error: error instanceof Error ? error.message : "Unknown error" 
