@@ -1,0 +1,245 @@
+import { useState, useRef, useEffect } from "react";
+import { useAction, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { toast } from "sonner";
+
+interface Message {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: number;
+  toolCalls?: Array<{
+    name: string;
+    args: any;
+    result: any;
+  }>;
+}
+
+export function ChatView() {
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const chatWithAI = useAction(api.ai.chatWithAI);
+  const conversation = useQuery(api.conversations.getConversation);
+  const messages: Message[] = conversation?.messages || [];
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || isLoading) return;
+
+    const userMessage = message.trim();
+    setMessage("");
+    setIsLoading(true);
+
+    try {
+      const result = await chatWithAI({ message: userMessage });
+      
+      if (result.toolCalls && result.toolCalls.length > 0) {
+        const successfulToolCalls = result.toolCalls.filter(tc => tc.result.success);
+        if (successfulToolCalls.length > 0) {
+          toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
+        }
+        
+        const failedToolCalls = result.toolCalls.filter(tc => !tc.result.success);
+        if (failedToolCalls.length > 0) {
+          toast.error(`${failedToolCalls.length} action(s) failed`);
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      toast.error("Failed to send message");
+    } finally {
+      setIsLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
+  const renderToolCall = (toolCall: { name: string; args: any; result: any }) => {
+    const isSuccess = toolCall.result.success;
+    
+    return (
+      <div 
+        key={`${toolCall.name}-${JSON.stringify(toolCall.args)}`}
+        className={`
+          p-3 rounded-lg border-l-4 mt-2
+          ${isSuccess 
+            ? 'bg-success/10 border-success text-success-content' 
+            : 'bg-error/10 border-error text-error-content'
+          }
+        `}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-mono">{toolCall.name}</span>
+          <div className={`badge badge-sm ${isSuccess ? 'badge-success' : 'badge-error'}`}>
+            {isSuccess ? 'Success' : 'Failed'}
+          </div>
+        </div>
+        {toolCall.result.message && (
+          <div className="text-sm opacity-80">{toolCall.result.message}</div>
+        )}
+        {!isSuccess && toolCall.result.error && (
+          <div className="text-sm text-error mt-1">{toolCall.result.error}</div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex-none bg-base-100 border-b border-base-300 p-4">
+        <div className="flex items-center gap-3">
+          <div className="avatar">
+            <div className="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center">
+              <span className="text-lg">🤖</span>
+            </div>
+          </div>
+          <div>
+            <h2 className="font-semibold">AI Task Assistant</h2>
+            <p className="text-sm text-base-content/70">
+              Ask me to create tasks, manage projects, or help with your workflow
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center max-w-md">
+              <div className="text-6xl mb-4">🤖</div>
+              <h3 className="text-xl font-semibold mb-2">Welcome to TaskAI</h3>
+              <p className="text-base-content/70 mb-6">
+                I'm your AI task management assistant. I can help you create tasks, 
+                organize projects, and manage your workflow through natural language.
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="bg-base-200 rounded-lg p-3">
+                  <strong>Try asking:</strong>
+                  <ul className="mt-2 space-y-1 text-left">
+                    <li>• "Create a task to review the quarterly report"</li>
+                    <li>• "Show me my active tasks"</li>
+                    <li>• "Create a project for the website redesign"</li>
+                    <li>• "Mark the presentation task as completed"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`chat ${msg.role === "user" ? "chat-end" : "chat-start"}`}
+              >
+                <div className="chat-image avatar">
+                  <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+                    {msg.role === "user" ? "👤" : "🤖"}
+                  </div>
+                </div>
+                <div className="chat-header">
+                  {msg.role === "user" ? "You" : "AI Assistant"}
+                  <time className="text-xs opacity-50 ml-2">
+                    {formatTimestamp(msg.timestamp)}
+                  </time>
+                </div>
+                <div className={`chat-bubble ${
+                  msg.role === "user" 
+                    ? "chat-bubble-primary" 
+                    : "chat-bubble-secondary"
+                }`}>
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  
+                  {/* Tool execution results */}
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {msg.toolCalls.map((toolCall, tcIndex) => (
+                        <div key={tcIndex}>
+                          {renderToolCall(toolCall)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="chat chat-start">
+                <div className="chat-image avatar">
+                  <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+                    🤖
+                  </div>
+                </div>
+                <div className="chat-bubble chat-bubble-secondary">
+                  <div className="flex items-center gap-2">
+                    <span className="loading loading-dots loading-sm"></span>
+                    <span>Thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="flex-none bg-base-100 border-t border-base-300 p-4">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            className="input input-bordered flex-1"
+            placeholder="Ask me to create a task, show your projects, or help with your workflow..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+            autoFocus
+          />
+          <button
+            type="submit"
+            className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
+            disabled={!message.trim() || isLoading}
+          >
+            {isLoading ? '' : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            )}
+          </button>
+        </form>
+        <div className="text-xs text-center text-base-content/50 mt-2">
+          Press Enter to send, Shift+Enter for new line
+        </div>
+      </div>
+    </div>
+  );
+}

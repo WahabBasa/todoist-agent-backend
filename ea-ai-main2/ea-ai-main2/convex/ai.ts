@@ -1,15 +1,15 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { generateText, tool } from "ai";
+import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 // Define task management tools with Zod schemas
-const createTaskTool = tool({
+const createTaskTool = {
   description: "Create a new task with optional project assignment and priority",
-  parameters: z.object({
+  inputSchema: z.object({
     title: z.string().describe("Task title (required)"),
     description: z.string().optional().describe("Task description"),
     priority: z.number().min(1).max(4).optional().describe("Priority level: 1=High, 2=Medium, 3=Normal, 4=Low"),
@@ -18,19 +18,19 @@ const createTaskTool = tool({
     tags: z.array(z.string()).optional().describe("Array of tags for the task"),
     estimatedTime: z.number().optional().describe("Estimated time in minutes"),
   }),
-});
+};
 
-const getTasksTool = tool({
+const getTasksTool = {
   description: "Get tasks, optionally filtered by completion status and project",
-  parameters: z.object({
+  inputSchema: z.object({
     completed: z.boolean().optional().describe("Filter by completion status"),
     projectId: z.string().optional().describe("Filter by project ID"),
   }),
-});
+};
 
-const updateTaskTool = tool({
+const updateTaskTool = {
   description: "Update an existing task (completion status, title, priority, etc.)",
-  parameters: z.object({
+  inputSchema: z.object({
     taskId: z.string().describe("Task ID to update"),
     title: z.string().optional().describe("New task title"),
     description: z.string().optional().describe("New task description"),
@@ -41,28 +41,28 @@ const updateTaskTool = tool({
     tags: z.array(z.string()).optional().describe("New tags array"),
     estimatedTime: z.number().optional().describe("New estimated time in minutes"),
   }),
-});
+};
 
-const createProjectTool = tool({
+const createProjectTool = {
   description: "Create a new project to organize tasks",
-  parameters: z.object({
+  inputSchema: z.object({
     name: z.string().describe("Project name (required)"),
     color: z.string().describe("Project color (hex code or color name)"),
     description: z.string().optional().describe("Project description"),
   }),
-});
+};
 
-const getProjectsTool = tool({
+const getProjectsTool = {
   description: "Get all projects with task counts",
-  parameters: z.object({}),
-});
+  inputSchema: z.object({}),
+};
 
-const deleteTaskTool = tool({
+const deleteTaskTool = {
   description: "Delete a task permanently",
-  parameters: z.object({
+  inputSchema: z.object({
     taskId: z.string().describe("Task ID to delete"),
   }),
-});
+};
 
 export const chatWithAI = action({
   args: { 
@@ -83,9 +83,7 @@ export const chatWithAI = action({
     try {
       // Generate AI response with tools
       const result = await generateText({
-        model: anthropic("claude-3-5-sonnet-20241022"),
-        maxTokens: 4000,
-        temperature: 0.7,
+        model: anthropic("claude-3-5-sonnet-20241022") as any,
         system: `You are an intelligent task management assistant. You help users manage their tasks and projects through natural language conversations.
 
 Available capabilities:
