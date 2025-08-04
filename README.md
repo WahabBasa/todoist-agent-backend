@@ -6,101 +6,97 @@ A multi-user AI agent system for natural language Todoist task management, built
 
 This system provides a mobile-agnostic backend that enables natural language interaction with Todoist through AI agents. Users can create, read, update, and delete tasks using conversational interfaces across any frontend platform.
 
-**✅ Current Status**: Fully functional with modern ChatGPT-style UI implemented and MCP integrations working (GitHub + Graphite). The EA AI Frontend2 mobile app successfully demonstrates:
-- Modern linear message layout with avatars and role-based messaging
-- FlashList performance optimization for smooth scrolling
-- Lightweight architecture avoiding complex native modules
-- Working authentication via Clerk with JWT integration
-- Complete task management with local SQLite storage
-- Proven debugging methodologies documented for future development
+**✅ Current Status**: Fully functional multi-user EA AI system with MCP integrations working (GitHub + Graphite). The EA-AI-main2 web application provides:
+- Clean, minimal React + Vite frontend with modern authentication
+- Convex Auth integration with JWT security
+- Professional UI design matching modern standards
+- Real-time backend communication via Convex
+- Proven development workflow with strategic stacked PRs
+- Complete debugging methodologies documented for future development
 
 ## Directory Structure & Access Methods
 
 ### Working Directories
 
-This project contains **two distinct working directories** with different access patterns:
+This project contains **two main working directories**:
 
-#### 1. Main Project Directory (Current Working Directory)
-- **Path**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend`
-- **Access**: Standard `cd` commands work, this is the current working directory
-- **Contents**: Convex backend, web frontend, mobile apps, Chrome extension
-- **Usage**: All development commands, git operations, and file modifications
+#### 1. EA-AI-main2 (Primary Frontend)
+- **Path**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\ea-ai-main2\ea-ai-main2`
+- **Access**: Navigate to the main project directory for development
+- **Contents**: React + Vite frontend with Convex backend and Convex Auth
+- **Usage**: **PRIMARY** EA AI development directory with modern authentication
+- **Deployment**: Convex deployment "peaceful-boar-923"
+- **Status**: ✅ Active - Clean minimal UI with working authentication
 
-#### 2. EA AI Frontend Directory
-- **Path**: `C:\Users\AtheA\Desktop\ea-ai-frontend2\` (separate location)
-- **Access**: Navigate to separate directory outside main project
-- **Contents**: React Native Expo app for EA AI integration (optimized build)
-- **Repository**: [WahabBasa/ea-ai-frontend2](https://github.com/WahabBasa/ea-ai-frontend2)
-- **Usage**: Primary mobile frontend development directory (latest working version)
+#### 2. Legacy Backend Directory
+- **Path**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\convex\`
+- **Access**: Legacy backend functions (if needed for reference)
+- **Contents**: Original Convex functions and schema
+- **Usage**: Reference implementation, superseded by EA-AI-main2
+- **Status**: 📚 Reference Only
 
 ### Important Access Notes
 
 ```bash
-# ✅ WORKS - Main project directory
+# ✅ PRIMARY - EA-AI-main2 development
+cd ea-ai-main2/ea-ai-main2/
+npm install
+npm run dev        # Frontend (localhost:5173)
+npx convex dev     # Backend (peaceful-boar-923)
+
+# 📚 REFERENCE - Legacy backend (if needed)
 cd convex/
-cat schema.ts
-npm install
-
-# ✅ WORKS - EA AI Frontend directory  
-cd C:\Users\AtheA\Desktop\ea-ai-frontend2\
-npm install
-npx expo start
-
-# ✅ WORKS - Backend development
-cd ../
 npx convex dev
 ```
 
 ### Related Projects
 
-- **EA AI Frontend2**: [WahabBasa/ea-ai-frontend2](https://github.com/WahabBasa/ea-ai-frontend2) - React Native Expo app for EA AI integration (main mobile frontend - optimized build)
-- **React Native Frontend**: [WahabBasa/todoapp](https://github.com/WahabBasa/todoapp) - React Native Todoist clone that consumes this backend
-- **OpenCode Fork**: [WahabBasa/opencode-copy2](https://github.com/WahabBasa/opencode-copy2) - AI coding agent for terminal (forked for study)
+- **EA AI Frontend2**: [WahabBasa/ea-ai-frontend2](https://github.com/WahabBasa/ea-ai-frontend2) - React Native Expo mobile app (reference implementation)
+- **React Native Frontend**: [WahabBasa/todoapp](https://github.com/WahabBasa/todoapp) - React Native Todoist clone
+- **OpenCode Fork**: [WahabBasa/opencode-copy2](https://github.com/WahabBasa/opencode-copy2) - AI coding agent for terminal (study reference)
 
-## Mobile App Architecture
+## EA-AI-main2 Frontend Architecture
 
-### EA AI Frontend - React Native Expo
+### React + Vite Web Application
 
-The primary mobile frontend is built with React Native and Expo, providing cross-platform iOS and Android support:
+The primary frontend is a modern React web application with Convex integration:
 
 **Key Features:**
-- **Cross-Platform**: Single codebase for iOS and Android
-- **Expo Integration**: Rapid development and deployment
-- **TypeScript**: Full type safety and developer experience  
-- **Real-time Updates**: WebSocket integration with Convex backend
-- **Natural Language Interface**: AI-powered task management through conversational UI
+- **Clean Minimal UI**: Professional design matching modern authentication standards
+- **Convex Auth**: JWT-based authentication with proper security
+- **Real-time Backend**: WebSocket integration with Convex deployment
+- **TypeScript**: Full type safety and developer experience
+- **Modern Tooling**: Vite for fast development and builds
+- **Strategic Development**: Stacked PR workflow with Graphite integration
 
-**Repository**: [WahabBasa/ea-ai-frontend2](https://github.com/WahabBasa/ea-ai-frontend2)
+**Location**: `ea-ai-main2/ea-ai-main2/`
 
 **Development Workflow:**
 ```bash
-# Navigate to frontend
-cd C:\Users\AtheA\Desktop\ea-ai-frontend2\
+# Navigate to EA-AI-main2
+cd ea-ai-main2/ea-ai-main2/
 
 # Install dependencies
 npm install
 
-# Start development server
-npx expo start
-
-# Run on specific platform
-npx expo run:ios
-npx expo run:android
+# Start development servers
+npm run dev     # Frontend (localhost:5173)
+npx convex dev  # Backend (peaceful-boar-923)
 ```
 
 **Architecture Pattern:**
-- **API Integration**: HTTP/WebSocket communication with Convex backend
-- **State Management**: React hooks and context for UI state
-- **Navigation**: Expo Router for type-safe navigation
-- **Styling**: Native components with responsive design
-- **Authentication**: Clerk integration for user management
+- **Frontend**: React + Vite with clean component architecture
+- **Backend**: Convex functions with real-time subscriptions
+- **Authentication**: Convex Auth with JWT tokens
+- **State Management**: React hooks and Convex queries
+- **Deployment**: Convex Cloud with automated deployments
 
 ### Core Architecture
 
 ```
-Mobile Apps (Any Framework) → HTTP/WebSocket → Convex Backend → Vercel AI SDK → Mobile App SQLite
-                                              ↓
-                                         Convex Database (Users + Conversations Only)
+EA-AI-main2 Web App → HTTP/WebSocket → Convex Backend → Vercel AI SDK → Task Management
+                                       ↓
+                                  Convex Database (Users + Conversations + Activity)
 ```
 
 ## Technical Stack
@@ -130,27 +126,31 @@ Mobile Apps (Any Framework) → HTTP/WebSocket → Convex Backend → Vercel AI 
 
 ```
 todoist-agent-backend/
-├── convex/
-│   ├── schema.ts           # Database schema definitions (users + conversations)
+├── ea-ai-main2/ea-ai-main2/    # ✅ PRIMARY FRONTEND
+│   ├── src/                    # React components and pages
+│   ├── convex/                 # Backend functions and schema
+│   │   ├── auth.ts             # Convex Auth configuration
+│   │   ├── myFunctions.ts      # Core backend logic
+│   │   └── schema.ts           # Database schema
+│   ├── package.json
+│   └── vite.config.ts
+├── convex/                      # 📚 LEGACY REFERENCE
+│   ├── schema.ts           # Original schema (users + conversations + activity)
 │   ├── agents.ts           # AI agent logic with Vercel AI SDK
-│   ├── todoist.ts          # Task API integration functions (for mobile app)
-│   ├── http.ts             # HTTP endpoints for mobile clients
-│   └── auth.ts             # User authentication handlers
-├── src/
-│   ├── test-interface.html # Simple web testing interface
-│   └── todoist-client.ts   # Task API wrapper (will be replaced with mobile app API)
-├── package.json
-└── convex.json
+│   ├── todoist.ts          # Task API integration functions
+│   └── http.ts             # HTTP endpoints
+├── updates/                     # Development logs and debugging history
+├── CLAUDE.md                    # Development guidelines and workflow
+└── README.md                    # This file
 ```
 
 ## Development Setup
 
 ### Prerequisites
-- Bun or Node.js 18+
+- Node.js 18+
 - Convex CLI (`npm i -g convex`)
-- Todoist API token
-- OpenAI API key
-- Clerk account (for auth)
+- OpenAI API key (for AI functionality)
+- Modern web browser
 
 ### Installation
 
@@ -159,43 +159,65 @@ todoist-agent-backend/
 git clone <repository>
 cd todoist-agent-backend
 
-# Install dependencies
-bun install
-# or: npm install
+# Navigate to EA-AI-main2
+cd ea-ai-main2/ea-ai-main2/
 
-# Initialize Convex
-npx convex dev --once
+# Install dependencies
+npm install
+
+# Start development
+npm run dev     # Frontend (localhost:5173)
+npx convex dev  # Backend (separate terminal)
 ```
 
 ### Environment Configuration
 
-Create `.env.local`:
+Environment variables are managed via Convex Dashboard:
 ```bash
-OPENAI_API_KEY=sk-...
-TODOIST_API_URL=https://api.todoist.com/rest/v2
-CLERK_SECRET_KEY=sk_test_...
+# Set via Convex CLI
+npx convex env set OPENAI_API_KEY sk-...
+npx convex env set SITE_URL http://localhost:5173
+
+# JWT keys are auto-generated during auth setup
 ```
 
 ### Database Schema
 
 ```typescript
-// convex/schema.ts
+// ea-ai-main2/ea-ai-main2/convex/schema.ts (Active)
 export default defineSchema({
   users: defineTable({
-    clerkId: v.string(),
-    todoistToken: v.string(),
+    // Convex Auth fields (auto-managed)
+  }),
+  
+  // Add custom tables as needed
+});
+
+// Legacy schema reference (convex/schema.ts)
+export default defineSchema({
+  users: defineTable({
+    firebaseUid: v.string(),
+    email: v.optional(v.string()),
+    todoistToken: v.optional(v.string()),
     preferences: v.object({
-      timezone: v.string(),
+      timezone: v.optional(v.string()),
       defaultProject: v.optional(v.string())
     })
-  }).index("by_clerk_id", ["clerkId"]),
+  }).index("by_firebase_uid", ["firebaseUid"]),
 
   conversations: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     message: v.string(),
     response: v.string(),
     timestamp: v.number(),
     toolCalls: v.optional(v.array(v.any()))
+  }).index("by_user", ["userId"]),
+
+  userActivity: defineTable({
+    userId: v.string(),
+    totalMessages: v.number(),
+    lastActiveAt: v.number(),
+    // ... activity tracking fields
   }).index("by_user", ["userId"])
 });
 ```
@@ -346,20 +368,22 @@ npx convex env set CLERK_SECRET_KEY sk_live_...
 - Framework-agnostic (works in Convex actions)
 - Excellent OpenAI integration
 
-### Mobile-First Design
-- HTTP endpoints for universal compatibility
-- Stateless API design for mobile reliability
-- Real-time updates via WebSocket subscriptions
-- No frontend framework dependencies
+### Web-First Design
+- React + Vite for modern web development
+- Convex real-time subscriptions for live updates
+- Clean authentication with Convex Auth
+- TypeScript for full type safety
+- Strategic development with stacked PRs
 
 ## Development Workflow
 
-1. **Backend Development**: Focus on Convex functions and AI agent logic
-2. **API Testing**: Use test interface and curl commands
-3. **Mobile Integration**: Consume HTTP endpoints from any mobile framework
-4. **Production Deployment**: Single command deployment with Convex
+1. **EA-AI-main2 Development**: Primary focus on React frontend with Convex backend
+2. **Stacked PR Strategy**: Use TodoWrite + Graphite for organized feature development
+3. **Real-time Testing**: Live updates via Convex subscriptions during development
+4. **Production Deployment**: Single command deployment with Convex Cloud
+5. **Legacy Reference**: Use original convex/ directory for reference implementations
 
-This architecture provides a robust, scalable foundation for multi-user AI-powered task management that can support any mobile frontend while maintaining sophisticated natural language processing capabilities.
+This architecture provides a robust, scalable foundation for multi-user AI-powered applications with modern web technologies and proven development workflows.
 
 ---
 
