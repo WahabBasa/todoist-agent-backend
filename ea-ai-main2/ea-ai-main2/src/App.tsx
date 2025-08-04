@@ -10,15 +10,17 @@ import {
 import { api } from "../convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
+import { toast, Toaster } from "sonner";
 
 export default function App() {
   return (
     <div data-theme="ea-theme">
+      <Toaster position="top-right" />
       <Authenticated>
         <div className="min-h-screen bg-base-200">
           <div className="navbar bg-base-100 shadow-sm">
             <div className="flex-1">
-              <a className="btn btn-ghost normal-case text-xl">Dashboard</a>
+              <a className="btn btn-ghost normal-case text-xl">Task Manager</a>
             </div>
             <div className="flex-none">
               <SignOutButton />
@@ -179,13 +181,77 @@ function SignInForm() {
 }
 
 function Content() {
-  const { viewer, numbers } =
-    useQuery(api.myFunctions.listNumbers, {
-      count: 10,
-    }) ?? {};
-  const addNumber = useMutation(api.myFunctions.addNumber);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState(3);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
-  if (viewer === undefined || numbers === undefined) {
+  const user = useQuery(api.myFunctions.getCurrentUser);
+  const stats = useQuery(api.myFunctions.getDashboardStats);
+  const tasks = useQuery(api.tasks.getTasks, { completed: false });
+  const completedTasks = useQuery(api.tasks.getTasks, { completed: true });
+  const projects = useQuery(api.projects.getProjects);
+  
+  const createTask = useMutation(api.tasks.createTask);
+  const updateTask = useMutation(api.tasks.updateTask);
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) {
+      toast.error("Please enter a task title");
+      return;
+    }
+
+    try {
+      await createTask({
+        title: newTaskTitle.trim(),
+        description: newTaskDescription.trim() || undefined,
+        priority: newTaskPriority,
+      });
+      
+      setNewTaskTitle("");
+      setNewTaskDescription("");
+      setNewTaskPriority(3);
+      setIsFormOpen(false);
+      toast.success("Task created successfully!");
+    } catch (error) {
+      toast.error("Failed to create task");
+    }
+  };
+
+  const toggleTaskCompletion = async (taskId: string, isCompleted: boolean) => {
+    try {
+      await updateTask({
+        id: taskId,
+        isCompleted: !isCompleted,
+      });
+      toast.success(isCompleted ? "Task marked as active" : "Task completed!");
+    } catch (error) {
+      toast.error("Failed to update task");
+    }
+  };
+
+  const getPriorityLabel = (priority: number) => {
+    switch (priority) {
+      case 1: return "High";
+      case 2: return "Medium";
+      case 3: return "Normal";
+      case 4: return "Low";
+      default: return "Normal";
+    }
+  };
+
+  const getPriorityColor = (priority: number) => {
+    switch (priority) {
+      case 1: return "badge-error";
+      case 2: return "badge-warning";
+      case 3: return "badge-info";
+      case 4: return "badge-success";
+      default: return "badge-info";
+    }
+  };
+
+  if (user === undefined || stats === undefined || tasks === undefined || projects === undefined || completedTasks === undefined) {
     return (
       <div className="flex justify-center items-center min-h-96">
         <div className="loading loading-spinner loading-lg"></div>
@@ -194,100 +260,203 @@ function Content() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {/* Welcome Card */}
-      <div className="card bg-base-100 shadow-xl md:col-span-2 lg:col-span-3">
-        <div className="card-body">
-          <div className="flex items-center gap-4">
-            <div className="avatar placeholder">
-              <div className="bg-neutral text-neutral-content rounded-full w-12">
-                <span className="text-xl">👋</span>
-              </div>
-            </div>
-            <div>
-              <h2 className="card-title text-2xl">
-                Welcome, {viewer ?? "User"}!
-              </h2>
-              <p className="text-base-content/70">
-                Click the button below and open this page in another window - this data is persisted in the Convex cloud database!
-              </p>
-            </div>
-          </div>
-          <div className="card-actions justify-end">
-            <button
-              className="btn btn-accent"
-              onClick={() => {
-                void addNumber({ value: Math.floor(Math.random() * 10) });
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add Random Number
-            </button>
-          </div>
+    <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="stat bg-base-100 rounded-lg shadow">
+          <div className="stat-title">Total Tasks</div>
+          <div className="stat-value text-primary">{stats.totalTasks}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow">
+          <div className="stat-title">Completed</div>
+          <div className="stat-value text-success">{stats.completedTasks}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow">
+          <div className="stat-title">Active</div>
+          <div className="stat-value text-warning">{tasks.length}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow">
+          <div className="stat-title">Projects</div>
+          <div className="stat-value text-accent">{stats.totalProjects}</div>
         </div>
       </div>
-      
-      {/* Numbers Display Card */}
+
+      {/* Task Creation Form */}
+      <div className="card bg-base-100 shadow-xl">
+        <div className="card-body">
+          <div className="flex items-center justify-between">
+            <h3 className="card-title">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Add New Task
+            </h3>
+            <button 
+              className="btn btn-primary btn-sm"
+              onClick={() => setIsFormOpen(!isFormOpen)}
+            >
+              {isFormOpen ? "Cancel" : "New Task"}
+            </button>
+          </div>
+          
+          {isFormOpen && (
+            <form onSubmit={handleCreateTask} className="space-y-4 mt-4">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Task Title *</span>
+                </label>
+                <input
+                  type="text"
+                  className="input input-bordered w-full"
+                  placeholder="Enter task title..."
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Description</span>
+                </label>
+                <textarea
+                  className="textarea textarea-bordered"
+                  placeholder="Enter task description..."
+                  value={newTaskDescription}
+                  onChange={(e) => setNewTaskDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Priority</span>
+                </label>
+                <select
+                  className="select select-bordered w-full"
+                  value={newTaskPriority}
+                  onChange={(e) => setNewTaskPriority(Number(e.target.value))}
+                >
+                  <option value={1}>High Priority</option>
+                  <option value={2}>Medium Priority</option>
+                  <option value={3}>Normal Priority</option>
+                  <option value={4}>Low Priority</option>
+                </select>
+              </div>
+              
+              <div className="form-control">
+                <button type="submit" className="btn btn-primary">
+                  Create Task
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Active Tasks */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
           <h3 className="card-title">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            Your Numbers
+            Active Tasks ({tasks.length})
           </h3>
+          
           <div className="divider my-2"></div>
-          {numbers?.length === 0 ? (
+          
+          {tasks.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-4xl mb-2">📊</div>
-              <p className="text-base-content/70">Click the button to get started!</p>
+              <div className="text-4xl mb-2">✅</div>
+              <p className="text-base-content/70">No active tasks. Create one to get started!</p>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {numbers?.map((num, index) => (
-                <div key={index} className="badge badge-primary badge-lg">
-                  {num}
+            <div className="space-y-3">
+              {tasks.map((task) => (
+                <div key={task._id} className="card bg-base-200 shadow-sm">
+                  <div className="card-body p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-primary mt-1"
+                        checked={task.isCompleted}
+                        onChange={() => toggleTaskCompletion(task._id, task.isCompleted)}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-medium">{task.title}</h4>
+                          <div className={`badge badge-sm ${getPriorityColor(task.priority)}`}>
+                            {getPriorityLabel(task.priority)}
+                          </div>
+                        </div>
+                        {task.description && (
+                          <p className="text-sm text-base-content/70 mb-2">{task.description}</p>
+                        )}
+                        {task.projectName && (
+                          <div className="badge badge-outline badge-sm">📁 {task.projectName}</div>
+                        )}
+                        {task.tags && task.tags.length > 0 && (
+                          <div className="flex gap-1 mt-2">
+                            {task.tags.map((tag, index) => (
+                              <div key={index} className="badge badge-ghost badge-sm">#{tag}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
-      
-      {/* Development Info Card */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-            Development
-          </h3>
-          <div className="divider my-2"></div>
-          <div className="space-y-3">
-            <div className="alert alert-info">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+
+      {/* Completed Tasks */}
+      {completedTasks.length > 0 && (
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <h3 className="card-title">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <div className="text-sm">
-                <div>Edit <kbd className="kbd kbd-sm">convex/myFunctions.ts</kbd></div>
-                <div className="text-xs opacity-70">to change your backend</div>
-              </div>
+              Completed Tasks ({completedTasks.length})
+            </h3>
+            
+            <div className="divider my-2"></div>
+            
+            <div className="space-y-2">
+              {completedTasks.slice(0, 5).map((task) => (
+                <div key={task._id} className="flex items-center gap-3 p-2 rounded-lg bg-base-200 opacity-60">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-primary"
+                    checked={task.isCompleted}
+                    onChange={() => toggleTaskCompletion(task._id, task.isCompleted)}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="line-through text-base-content/60">{task.title}</span>
+                      <div className={`badge badge-sm ${getPriorityColor(task.priority)}`}>
+                        {getPriorityLabel(task.priority)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="alert alert-success">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              <div className="text-sm">
-                <div>Edit <kbd className="kbd kbd-sm">src/App.tsx</kbd></div>
-                <div className="text-xs opacity-70">to change your frontend</div>
+            
+            {completedTasks.length > 5 && (
+              <div className="text-center mt-4">
+                <p className="text-sm text-base-content/70">
+                  And {completedTasks.length - 5} more completed tasks...
+                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
