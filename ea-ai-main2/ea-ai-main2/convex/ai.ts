@@ -121,59 +121,81 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
         for (const toolCall of result.toolCalls) {
           try {
             let toolResult: any = {};
+            
+            // AI SDK v5 uses 'input' instead of 'args' for tool call arguments
+            const toolArgs = (toolCall as any)?.input || {};
+
+            // Validate tool call has required structure
+            if (!toolCall.toolName) {
+              throw new Error("Tool call missing toolName");
+            }
 
             switch (toolCall.toolName) {
               case "createTask":
-                const taskArgs = (toolCall as any).args;
-                const dueDate = taskArgs.dueDate ? new Date(taskArgs.dueDate).getTime() : undefined;
+                // Validate required fields
+                if (!toolArgs.title || typeof toolArgs.title !== 'string') {
+                  throw new Error("createTask requires a valid title");
+                }
+                
+                const dueDate = toolArgs.dueDate ? new Date(toolArgs.dueDate).getTime() : undefined;
                 
                 const taskId = await ctx.runMutation(api.tasks.createTask, {
-                  title: taskArgs.title,
-                  description: taskArgs.description,
-                  priority: taskArgs.priority,
+                  title: toolArgs.title,
+                  description: toolArgs.description || undefined,
+                  priority: typeof toolArgs.priority === 'number' ? toolArgs.priority : undefined,
                   dueDate,
-                  projectId: taskArgs.projectId,
-                  tags: taskArgs.tags,
-                  estimatedTime: taskArgs.estimatedTime,
+                  projectId: toolArgs.projectId || undefined,
+                  tags: Array.isArray(toolArgs.tags) ? toolArgs.tags : undefined,
+                  estimatedTime: typeof toolArgs.estimatedTime === 'number' ? toolArgs.estimatedTime : undefined,
                 });
-                toolResult = { success: true, taskId, message: `Created task: ${taskArgs.title}` };
+                toolResult = { success: true, taskId, message: `Created task: ${toolArgs.title}` };
                 break;
 
               case "getTasks":
-                const filterArgs = (toolCall as any).args;
                 const tasks = await ctx.runQuery(api.tasks.getTasks, {
-                  completed: filterArgs.completed,
-                  projectId: filterArgs.projectId,
+                  completed: typeof toolArgs.completed === 'boolean' ? toolArgs.completed : undefined,
+                  projectId: toolArgs.projectId || undefined,
                 });
                 toolResult = { success: true, tasks, count: tasks.length };
                 break;
 
               case "updateTask":
-                const updateArgs = (toolCall as any).args;
-                const updateDueDate = updateArgs.dueDate ? new Date(updateArgs.dueDate).getTime() : undefined;
+                // Validate required fields
+                if (!toolArgs.taskId || typeof toolArgs.taskId !== 'string') {
+                  throw new Error("updateTask requires a valid taskId");
+                }
+                
+                const updateDueDate = toolArgs.dueDate ? new Date(toolArgs.dueDate).getTime() : undefined;
                 
                 await ctx.runMutation(api.tasks.updateTask, {
-                  id: updateArgs.taskId,
-                  title: updateArgs.title,
-                  description: updateArgs.description,
-                  isCompleted: updateArgs.isCompleted,
-                  priority: updateArgs.priority,
+                  id: toolArgs.taskId,
+                  title: toolArgs.title || undefined,
+                  description: toolArgs.description || undefined,
+                  isCompleted: typeof toolArgs.isCompleted === 'boolean' ? toolArgs.isCompleted : undefined,
+                  priority: typeof toolArgs.priority === 'number' ? toolArgs.priority : undefined,
                   dueDate: updateDueDate,
-                  projectId: updateArgs.projectId,
-                  tags: updateArgs.tags,
-                  estimatedTime: updateArgs.estimatedTime,
+                  projectId: toolArgs.projectId || undefined,
+                  tags: Array.isArray(toolArgs.tags) ? toolArgs.tags : undefined,
+                  estimatedTime: typeof toolArgs.estimatedTime === 'number' ? toolArgs.estimatedTime : undefined,
                 });
-                toolResult = { success: true, message: `Updated task ${updateArgs.taskId}` };
+                toolResult = { success: true, message: `Updated task ${toolArgs.taskId}` };
                 break;
 
               case "createProject":
-                const projectArgs = (toolCall as any).args;
+                // Validate required fields
+                if (!toolArgs.name || typeof toolArgs.name !== 'string') {
+                  throw new Error("createProject requires a valid name");
+                }
+                if (!toolArgs.color || typeof toolArgs.color !== 'string') {
+                  throw new Error("createProject requires a valid color");
+                }
+                
                 const projectId = await ctx.runMutation(api.projects.createProject, {
-                  name: projectArgs.name,
-                  color: projectArgs.color,
-                  description: projectArgs.description,
+                  name: toolArgs.name,
+                  color: toolArgs.color,
+                  description: toolArgs.description || undefined,
                 });
-                toolResult = { success: true, projectId, message: `Created project: ${projectArgs.name}` };
+                toolResult = { success: true, projectId, message: `Created project: ${toolArgs.name}` };
                 break;
 
               case "getProjects":
@@ -182,11 +204,15 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 break;
 
               case "deleteTask":
-                const deleteArgs = (toolCall as any).args;
+                // Validate required fields
+                if (!toolArgs.taskId || typeof toolArgs.taskId !== 'string') {
+                  throw new Error("deleteTask requires a valid taskId");
+                }
+                
                 await ctx.runMutation(api.tasks.deleteTask, {
-                  id: deleteArgs.taskId,
+                  id: toolArgs.taskId,
                 });
-                toolResult = { success: true, message: `Deleted task ${deleteArgs.taskId}` };
+                toolResult = { success: true, message: `Deleted task ${toolArgs.taskId}` };
                 break;
 
               default:
@@ -195,15 +221,15 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
 
             toolResults.push({
               name: toolCall.toolName,
-              args: (toolCall as any).args,
+              args: toolArgs, // This now contains the actual input data
               result: toolResult,
             });
 
           } catch (error) {
-            console.error(`Error executing tool ${toolCall.toolName}:`, error);
+            console.error(`Error executing tool ${toolCall.toolName || 'unknown'}:`, error);
             toolResults.push({
-              name: toolCall.toolName,
-              args: (toolCall as any).args,
+              name: toolCall.toolName || 'unknown',
+              args: (toolCall as any)?.input || {},
               result: { 
                 success: false, 
                 error: error instanceof Error ? error.message : "Unknown error" 

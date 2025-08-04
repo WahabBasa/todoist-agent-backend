@@ -23,7 +23,7 @@ export const addMessage = mutation({
     content: v.string(),
     toolCalls: v.optional(v.array(v.object({
       name: v.string(),
-      args: v.any(),
+      args: v.optional(v.any()),
       result: v.any(),
     }))),
   },
