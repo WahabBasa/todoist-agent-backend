@@ -18,7 +18,7 @@ import { SettingsView } from "./views/SettingsView";
 
 export default function App() {
   return (
-    <div data-theme="ea-theme">
+    <div data-theme="ea-theme" className="h-full">
       <Toaster position="top-right" />
       <Authenticated>
         <MainApp />
@@ -54,8 +54,8 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200">
-      {/* Fixed Sidebar */}
+    // The root div now manages the sidebar's presence
+    <div className="h-full w-full bg-base-200">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -63,16 +63,11 @@ function MainApp() {
         onViewChange={setActiveView}
       />
 
-      {/* Main Content with proper margins for sidebar */}
-      <div 
-        className={`
-          min-h-screen flex flex-col
-          transition-all duration-300 ease-in-out
-          lg:ml-64
-        `}
-      >
-        {/* Top Navigation Bar */}
-        <div className="navbar bg-base-100 shadow-sm sticky top-0 z-30">
+      {/* --- THIS LAYOUT IS NOW SIMPLIFIED AND MORE ROBUST --- */}
+      {/* This div is the main content area that sits to the right of the sidebar */}
+      <div className="lg:ml-64 flex flex-col h-screen">
+        {/* Header: Fixed height, does not grow or shrink */}
+        <div className="navbar bg-base-100 shadow-sm sticky top-0 z-30 flex-shrink-0">
           <div className="flex-none lg:hidden">
             <button 
               className="btn btn-square btn-ghost"
@@ -97,17 +92,9 @@ function MainApp() {
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto">
-          {activeView === "chat" ? (
-            <div className="h-full">
-              {renderActiveView()}
-            </div>
-          ) : (
-            <div className="container mx-auto p-6">
-              {renderActiveView()}
-            </div>
-          )}
+        {/* Main Content Area: Takes up all remaining vertical space */}
+        <main className="flex-1 overflow-y-auto">
+            {renderActiveView()}
         </main>
       </div>
     </div>
@@ -171,7 +158,6 @@ function SignInForm() {
           </p>
         </div>
         
-        {/* Email and Password Form */}
         <form
           onSubmit={(e) => {
             e.preventDefault();

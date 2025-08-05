@@ -4,8 +4,8 @@ import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 
 interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: any;
   timestamp: number;
   toolCalls?: Array<{
     name: string;
@@ -22,7 +22,10 @@ export function ChatView() {
 
   const chatWithAI = useAction(api.ai.chatWithAI);
   const conversation = useQuery(api.conversations.getConversation);
-  const messages: Message[] = conversation?.messages || [];
+  
+  // --- THIS IS THE FIX ---
+  // Cast to `any[]` first for robustness before casting to `Message[]`
+  const messages: Message[] = (conversation?.messages as any[]) || [];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,13 +46,13 @@ export function ChatView() {
     try {
       const result = await chatWithAI({ message: userMessage });
       
-      if (result.toolCalls && result.toolCalls.length > 0) {
-        const successfulToolCalls = result.toolCalls.filter(tc => tc.result.success);
+      if (result.toolResults && result.toolResults.length > 0) {
+        const successfulToolCalls = result.toolResults.filter(tc => tc.success);
         if (successfulToolCalls.length > 0) {
           toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
         }
         
-        const failedToolCalls = result.toolCalls.filter(tc => !tc.result.success);
+        const failedToolCalls = result.toolResults.filter(tc => !tc.success);
         if (failedToolCalls.length > 0) {
           toast.error(`${failedToolCalls.length} action(s) failed`);
         }
@@ -78,13 +81,14 @@ export function ChatView() {
   };
 
   const renderToolCall = (toolCall: { name: string; args: any; result: any }) => {
-    const isSuccess = toolCall.result.success;
-    
+    const isSuccess = toolCall.result !== null && toolCall.result !== undefined;
+    const resultDisplay = isSuccess ? JSON.stringify(toolCall.result, null, 2) : "Not found or failed.";
+
     return (
       <div 
         key={`${toolCall.name}-${JSON.stringify(toolCall.args)}`}
         className={`
-          p-3 rounded-lg border-l-4 mt-2
+          p-3 rounded-lg border-l-4 mt-2 text-left
           ${isSuccess 
             ? 'bg-success/10 border-success text-success-content' 
             : 'bg-error/10 border-error text-error-content'
@@ -92,17 +96,21 @@ export function ChatView() {
         `}
       >
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-mono">{toolCall.name}</span>
+          <span className="font-semibold font-mono text-sm">{toolCall.name}</span>
           <div className={`badge badge-sm ${isSuccess ? 'badge-success' : 'badge-error'}`}>
             {isSuccess ? 'Success' : 'Failed'}
           </div>
         </div>
-        {toolCall.result.message && (
-          <div className="text-sm opacity-80">{toolCall.result.message}</div>
-        )}
-        {!isSuccess && toolCall.result.error && (
-          <div className="text-sm text-error mt-1">{toolCall.result.error}</div>
-        )}
+        <div className="text-xs font-mono opacity-80 collapse">
+            <input type="checkbox" className="min-h-0" /> 
+            <div className="collapse-title text-xs p-0 min-h-0 font-medium">
+                Show Details
+            </div>
+            <div className="collapse-content p-0">
+                <p><strong>Arguments:</strong> {JSON.stringify(toolCall.args, null, 2)}</p>
+                <p><strong>Result:</strong> {resultDisplay}</p>
+            </div>
+        </div>
       </div>
     );
   };
@@ -144,7 +152,7 @@ export function ChatView() {
                     <li>• "Create a task to review the quarterly report"</li>
                     <li>• "Show me my active tasks"</li>
                     <li>• "Create a project for the website redesign"</li>
-                    <li>• "Mark the presentation task as completed"</li>
+                    <li>• "Delete the 'Old Project'"</li>
                   </ul>
                 </div>
               </div>
@@ -173,9 +181,10 @@ export function ChatView() {
                     ? "chat-bubble-primary" 
                     : "chat-bubble-secondary"
                 }`}>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  {typeof msg.content === 'string' && (
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  )}
                   
-                  {/* Tool execution results */}
                   {msg.toolCalls && msg.toolCalls.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {msg.toolCalls.map((toolCall, tcIndex) => (
@@ -189,7 +198,6 @@ export function ChatView() {
               </div>
             ))}
             
-            {/* Loading indicator */}
             {isLoading && (
               <div className="chat chat-start">
                 <div className="chat-image avatar">

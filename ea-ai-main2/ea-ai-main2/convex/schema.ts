@@ -30,8 +30,11 @@ const applicationTables = {
   conversations: defineTable({
     userId: v.id("users"),
     messages: v.array(v.object({
-      role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
-      content: v.string(),
+      // --- THIS IS THE FIX ---
+      // Added "tool" to the list of valid roles
+      role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
+      // Changed content to `v.any()` to allow for tool call objects
+      content: v.any(), 
       timestamp: v.number(),
       toolCalls: v.optional(v.array(v.object({
         name: v.string(),

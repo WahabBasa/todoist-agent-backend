@@ -59,6 +59,39 @@ export const addMessage = mutation({
   },
 });
 
+export const updateConversation = mutation({
+  args: {
+    // This validator now correctly matches the updated schema
+    messages: v.array(v.object({
+      role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
+      content: v.any(),
+      timestamp: v.number(),
+      toolCalls: v.optional(v.array(v.object({
+        name: v.string(),
+        args: v.optional(v.any()),
+        result: v.any(),
+      }))),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+    const existingConversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+
+    if (existingConversation) {
+      await ctx.db.patch(existingConversation._id, { messages: args.messages });
+    } else {
+      await ctx.db.insert("conversations", { userId, messages: args.messages });
+    }
+  },
+});
+
+
 export const clearConversation = mutation({
   args: {},
   handler: async (ctx) => {

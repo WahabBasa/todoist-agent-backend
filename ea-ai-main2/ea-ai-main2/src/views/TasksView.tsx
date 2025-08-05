@@ -59,6 +59,7 @@ export function TasksView() {
       case 2: return "Medium";
       case 3: return "Normal";
       case 4: return "Low";
+      // Fixed: Added default case for robustness
       default: return "Normal";
     }
   };
@@ -69,6 +70,7 @@ export function TasksView() {
       case 2: return "badge-warning";
       case 3: return "badge-info";
       case 4: return "badge-success";
+      // Fixed: Added default case for robustness
       default: return "badge-info";
     }
   };
