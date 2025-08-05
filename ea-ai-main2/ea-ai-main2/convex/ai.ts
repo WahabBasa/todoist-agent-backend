@@ -87,9 +87,9 @@ export const chatWithAI = action({
     };
 
     const updateTaskTool = {
-      description: "Update an existing task (completion status, title, priority, etc.)",
+      description: "Update an existing task using the exact taskId from getTasks results",
       inputSchema: z.object({
-        taskId: z.string().describe("Task ID to update"),
+        taskId: z.string().describe("Exact task ID from getTasks results (required)"),
         title: z.string().optional().describe("New task title"),
         description: z.string().optional().describe("New task description"),
         isCompleted: z.boolean().optional().describe("Mark task as completed/incomplete"),
@@ -116,9 +116,9 @@ export const chatWithAI = action({
     };
 
     const deleteTaskTool = {
-      description: "Delete a task permanently",
+      description: "Delete a task permanently using the exact taskId from getTasks results",
       inputSchema: z.object({
-        taskId: z.string().describe("Task ID to delete"),
+        taskId: z.string().describe("Exact task ID from getTasks results (required)"),
       }),
     };
 
@@ -142,7 +142,65 @@ Available capabilities:
 Priority levels: 1=High (urgent), 2=Medium, 3=Normal (default), 4=Low
 Colors for projects: Use standard color names or hex codes
 
-Be helpful, concise, and proactive in suggesting task organization improvements. Always confirm successful operations and provide clear feedback about what was accomplished.`,
+TOOL COORDINATION RULES:
+- When users request multiple actions, execute ALL relevant tools in a SINGLE response
+- Always batch related operations together - never ask "would you like me to..." 
+- Use multiple tool calls when the user's intent clearly requires multiple actions
+- Process all requested tasks, projects, or updates simultaneously
+- Don't wait for confirmation between multiple tool calls
+
+BATCHING EXAMPLES:
+User: "Create 3 tasks: review docs, update website, call client"
+Response: Execute createTask tool 3 times in one response, one for each task
+
+User: "Show my tasks and create a new project called Marketing"
+Response: Execute getTasks tool, then createProject tool in the same response
+
+User: "Add a high priority task to review the budget and mark the presentation task as done"
+Response: Execute createTask tool with priority=1, then updateTask tool with isCompleted=true
+
+User: "Create tasks for groceries, laundry, and cleaning"
+Response: Execute createTask tool 3 times immediately, don't ask for details
+
+User: "Make a Shopping project and add buy milk task to it"
+Response: Execute createProject tool first, then createTask tool with the new projectId
+
+WORKFLOW PATTERNS:
+- Before updating/deleting tasks, ALWAYS call getTasks first to see available tasks
+- When user says "mark the presentation task as done", first call getTasks, find tasks matching "presentation", then call updateTask
+- When user says "delete my grocery task", first call getTasks, identify the grocery task ID, then call deleteTask
+- For ambiguous references, show the user available options from getTasks results
+- Chain tool calls in the same response: getTasks → updateTask/deleteTask
+
+WORKFLOW EXAMPLES:
+User: "Mark my presentation task as completed"
+Response: First call getTasks to find tasks, then call updateTask with the matching task ID
+
+User: "Delete the grocery task"
+Response: First call getTasks to find the grocery task, then call deleteTask with that task ID
+
+User: "Show me my tasks and mark the urgent ones as high priority"
+Response: Call getTasks first, then call updateTask multiple times for tasks that need priority updates
+
+SIMPLIFIED WORKFLOW:
+- When getTasks returns task data, use the exact _id values in updateTask/deleteTask calls
+- Task IDs are provided in the getTasks results - use them exactly as returned
+- Match tasks by examining the task titles and descriptions from getTasks results
+
+ID USAGE EXAMPLES:
+getTasks returns: [{"_id": "abc123", "title": "Buy groceries", "isCompleted": false}]
+To mark as complete: updateTask with taskId="abc123" and isCompleted=true
+
+User: "Mark all my tasks as complete"
+Response: Call getTasks, then for each task in results, call updateTask with that task's _id
+
+User: "Delete the grocery task"
+Response: Call getTasks, find task with title containing "grocery", then call deleteTask with that task's _id
+
+User: "Show me my tasks and mark urgent ones as high priority"
+Response: Call getTasks, examine results, then call updateTask for tasks that need priority=1 using their exact _id values
+
+Be helpful, concise, and proactive in suggesting task organization improvements. Always confirm successful operations and provide clear feedback about what was accomplished. Execute multiple tools efficiently in a single response when the user's request involves multiple actions.`,
         messages: [
           ...recentMessages,
           { role: "user", content: args.message }
@@ -210,18 +268,23 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                 
                 const updateDueDate = toolArgs.dueDate ? new Date(toolArgs.dueDate).getTime() : undefined;
                 
-                await ctx.runMutation(api.tasks.updateTask, {
-                  id: toolArgs.taskId,
-                  title: toolArgs.title || undefined,
-                  description: toolArgs.description || undefined,
-                  isCompleted: typeof toolArgs.isCompleted === 'boolean' ? toolArgs.isCompleted : undefined,
-                  priority: typeof toolArgs.priority === 'number' ? toolArgs.priority : undefined,
-                  dueDate: updateDueDate,
-                  projectId: toolArgs.projectId || undefined,
-                  tags: Array.isArray(toolArgs.tags) ? toolArgs.tags : undefined,
-                  estimatedTime: typeof toolArgs.estimatedTime === 'number' ? toolArgs.estimatedTime : undefined,
-                });
-                toolResult = { success: true, message: `Updated task ${toolArgs.taskId}` };
+                try {
+                  const result = await ctx.runMutation(api.tasks.updateTask, {
+                    id: toolArgs.taskId as any, // Cast to handle Convex ID type
+                    title: toolArgs.title || undefined,
+                    description: toolArgs.description || undefined,
+                    isCompleted: typeof toolArgs.isCompleted === 'boolean' ? toolArgs.isCompleted : undefined,
+                    priority: typeof toolArgs.priority === 'number' ? toolArgs.priority : undefined,
+                    dueDate: updateDueDate,
+                    projectId: toolArgs.projectId || undefined,
+                    tags: Array.isArray(toolArgs.tags) ? toolArgs.tags : undefined,
+                    estimatedTime: typeof toolArgs.estimatedTime === 'number' ? toolArgs.estimatedTime : undefined,
+                  });
+                  toolResult = { success: true, message: `Updated task ${toolArgs.taskId}`, updatedId: result };
+                } catch (mutationError) {
+                  console.error("updateTask mutation failed:", mutationError);
+                  throw new Error(`Failed to update task: ${mutationError instanceof Error ? mutationError.message : 'Unknown error'}`);
+                }
                 break;
 
               case "createProject":
@@ -252,10 +315,15 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
                   throw new Error("deleteTask requires a valid taskId");
                 }
                 
-                await ctx.runMutation(api.tasks.deleteTask, {
-                  id: toolArgs.taskId,
-                });
-                toolResult = { success: true, message: `Deleted task ${toolArgs.taskId}` };
+                try {
+                  const result = await ctx.runMutation(api.tasks.deleteTask, {
+                    id: toolArgs.taskId as any, // Cast to handle Convex ID type
+                  });
+                  toolResult = { success: true, message: `Deleted task ${toolArgs.taskId}`, deletedId: result };
+                } catch (mutationError) {
+                  console.error("deleteTask mutation failed:", mutationError);
+                  throw new Error(`Failed to delete task: ${mutationError instanceof Error ? mutationError.message : 'Unknown error'}`);
+                }
                 break;
 
               default:
