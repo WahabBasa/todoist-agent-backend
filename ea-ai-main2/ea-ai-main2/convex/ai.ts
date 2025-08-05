@@ -11,6 +11,42 @@ const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+// Helper function to get the last N user-assistant message pairs for context
+function getRecentMessagePairs(messages: any[], maxPairs: number): any[] {
+  if (!messages || messages.length === 0) {
+    return [];
+  }
+
+  // Work backwards through messages to find user-assistant pairs
+  const recentPairs: any[] = [];
+  let pairCount = 0;
+  
+  // Start from the end and work backwards, but skip the very last message 
+  // since it might be incomplete (we're about to add a new user message)
+  for (let i = messages.length - 1; i >= 0 && pairCount < maxPairs; i--) {
+    const message = messages[i];
+    
+    if (message.role === "assistant") {
+      // Look for the preceding user message
+      for (let j = i - 1; j >= 0; j--) {
+        const prevMessage = messages[j];
+        if (prevMessage.role === "user") {
+          // Found a user-assistant pair, add them to the beginning of our array
+          recentPairs.unshift(
+            { role: "user", content: prevMessage.content },
+            { role: "assistant", content: message.content }
+          );
+          pairCount++;
+          i = j; // Skip to before the user message we just processed
+          break;
+        }
+      }
+    }
+  }
+  
+  return recentPairs;
+}
+
 
 export const chatWithAI = action({
   args: { 
@@ -86,8 +122,12 @@ export const chatWithAI = action({
       }),
     };
 
+    // Get recent conversation history for context (limited to last 6 user-assistant pairs to reduce token usage)
+    const conversation = await ctx.runQuery(api.conversations.getConversation, {});
+    const recentMessages = getRecentMessagePairs(conversation?.messages || [], 6);
+
     try {
-      // Generate AI response with tools
+      // Generate AI response with tools and limited conversation context
       const result = await generateText({
         model: anthropic("claude-3-5-sonnet-20240620"),
         system: `You are an intelligent task management assistant. You help users manage their tasks and projects through natural language conversations.
@@ -103,7 +143,10 @@ Priority levels: 1=High (urgent), 2=Medium, 3=Normal (default), 4=Low
 Colors for projects: Use standard color names or hex codes
 
 Be helpful, concise, and proactive in suggesting task organization improvements. Always confirm successful operations and provide clear feedback about what was accomplished.`,
-        messages: [{ role: "user", content: args.message }],
+        messages: [
+          ...recentMessages,
+          { role: "user", content: args.message }
+        ],
         tools: {
           createTask: createTaskTool,
           getTasks: getTasksTool,
@@ -267,21 +310,3 @@ Be helpful, concise, and proactive in suggesting task organization improvements.
   },
 });
 
-// Helper action to get conversation context for the AI  
-export const getConversationContext = action({
-  args: {
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args): Promise<any[]> => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
-    const messages: any[] = await ctx.runQuery(api.conversations.getMessages, {
-      limit: args.limit || 10,
-    });
-
-    return messages;
-  },
-});

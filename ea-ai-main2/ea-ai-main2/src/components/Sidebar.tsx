@@ -48,24 +48,25 @@ export function Sidebar({ isOpen, onClose, activeView, onViewChange }: SidebarPr
 
   return (
     <>
-      {/* Backdrop */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      {/* Mobile Backdrop */}
+      <div 
+        className={`
+          fixed inset-0 bg-black transition-opacity duration-300 ease-in-out z-40 lg:hidden
+          ${isOpen ? 'opacity-50 visible' : 'opacity-0 invisible'}
+        `}
+        onClick={onClose}
+      />
       
-      {/* Sidebar */}
-      <div className={`
+      {/* Fixed Sidebar */}
+      <aside className={`
         fixed top-0 left-0 h-full w-80 bg-base-100 shadow-xl z-50 
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:relative lg:translate-x-0 lg:w-64 lg:shadow-none
+        lg:translate-x-0 lg:w-64 lg:shadow-lg
       `}>
-        <div className="p-6">
+        <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between p-6 border-b border-base-200">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-primary-content font-bold text-lg">T</span>
@@ -73,7 +74,7 @@ export function Sidebar({ isOpen, onClose, activeView, onViewChange }: SidebarPr
               <span className="font-bold text-xl">TaskAI</span>
             </div>
             <button 
-              className="btn btn-ghost btn-sm lg:hidden"
+              className="btn btn-ghost btn-sm lg:hidden hover:bg-base-200"
               onClick={onClose}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,71 +83,82 @@ export function Sidebar({ isOpen, onClose, activeView, onViewChange }: SidebarPr
             </button>
           </div>
 
-          {/* Quick Stats */}
-          {stats && (
-            <div className="mb-6 p-4 bg-base-200 rounded-lg">
-              <div className="text-sm font-medium text-base-content/70 mb-2">Quick Overview</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <div className="font-semibold text-primary">{stats.totalTasks}</div>
-                  <div className="text-base-content/60">Total Tasks</div>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 space-y-6">
+              {/* Quick Stats */}
+              {stats && (
+                <div className="p-4 bg-base-200 rounded-lg">
+                  <div className="text-sm font-medium text-base-content/70 mb-3">Quick Overview</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="text-center">
+                      <div className="font-semibold text-2xl text-primary">{stats.totalTasks}</div>
+                      <div className="text-base-content/60">Total Tasks</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold text-2xl text-success">{stats.completedTasks}</div>
+                      <div className="text-base-content/60">Completed</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-success">{stats.completedTasks}</div>
-                  <div className="text-base-content/60">Completed</div>
-                </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* Navigation Menu */}
-          <nav className="space-y-2">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleItemClick(item.id as "chat" | "tasks" | "projects" | "settings")}
-                className={`
-                  w-full text-left p-3 rounded-lg transition-colors
-                  flex items-center gap-3 group
-                  ${activeView === item.id 
-                    ? 'bg-primary text-primary-content' 
-                    : 'hover:bg-base-200'
-                  }
-                `}
-              >
-                <span className="text-xl">{item.icon}</span>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{item.label}</span>
-                    {item.count !== undefined && (
-                      <span className={`
-                        badge badge-sm
-                        ${activeView === item.id ? 'badge-primary-content' : 'badge-primary'}
-                      `}>
-                        {item.count}
-                      </span>
-                    )}
-                  </div>
-                  <div className={`text-xs mt-1 ${
-                    activeView === item.id 
-                      ? 'text-primary-content/70' 
-                      : 'text-base-content/60'
-                  }`}>
-                    {item.description}
-                  </div>
+              {/* Navigation Menu */}
+              <nav className="space-y-2">
+                <div className="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">
+                  Navigation
                 </div>
-              </button>
-            ))}
-          </nav>
+                {menuItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleItemClick(item.id as "chat" | "tasks" | "projects" | "settings")}
+                    className={`
+                      w-full text-left p-3 rounded-lg transition-all duration-200
+                      flex items-center gap-3 group relative
+                      ${activeView === item.id 
+                        ? 'bg-primary text-primary-content shadow-sm' 
+                        : 'hover:bg-base-200 hover:shadow-sm'
+                      }
+                    `}
+                  >
+                    <span className="text-xl">{item.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium truncate">{item.label}</span>
+                        {item.count !== undefined && (
+                          <span className={`
+                            badge badge-sm font-medium
+                            ${activeView === item.id ? 'badge-primary-content' : 'badge-primary'}
+                          `}>
+                            {item.count}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-xs mt-1 truncate ${
+                        activeView === item.id 
+                          ? 'text-primary-content/70' 
+                          : 'text-base-content/60'
+                      }`}>
+                        {item.description}
+                      </div>
+                    </div>
+                    {activeView === item.id && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary-content rounded-r"></div>
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
 
           {/* Footer */}
-          <div className="absolute bottom-6 left-6 right-6">
+          <div className="p-6 border-t border-base-200">
             <div className="text-xs text-base-content/50 text-center">
               TaskAI v1.0 • Powered by Claude
             </div>
           </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }

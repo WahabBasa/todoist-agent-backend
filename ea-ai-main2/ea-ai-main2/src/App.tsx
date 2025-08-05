@@ -54,8 +54,8 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200 flex">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-base-200">
+      {/* Fixed Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -63,10 +63,16 @@ function MainApp() {
         onViewChange={setActiveView}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:ml-0">
+      {/* Main Content with proper margins for sidebar */}
+      <div 
+        className={`
+          min-h-screen flex flex-col
+          transition-all duration-300 ease-in-out
+          lg:ml-64
+        `}
+      >
         {/* Top Navigation Bar */}
-        <div className="navbar bg-base-100 shadow-sm">
+        <div className="navbar bg-base-100 shadow-sm sticky top-0 z-30">
           <div className="flex-none lg:hidden">
             <button 
               className="btn btn-square btn-ghost"
@@ -80,12 +86,6 @@ function MainApp() {
           
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <div className="hidden lg:flex items-center gap-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-primary-content font-bold text-lg">T</span>
-                </div>
-                <span className="font-bold text-xl">TaskAI</span>
-              </div>
               <div className="lg:hidden">
                 <span className="font-bold text-xl">TaskAI</span>
               </div>
