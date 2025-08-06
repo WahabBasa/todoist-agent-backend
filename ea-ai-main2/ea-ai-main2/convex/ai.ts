@@ -70,12 +70,10 @@ namespace SystemExecutor {
       }
       
       console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
-      // --- FIX: Return object must use the 'result' property ---
-      return { type: 'tool-result', toolCallId, toolName, output: result } as ToolResultPart;
+      return { type: 'tool-result', toolCallId, toolName, output: result };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
-      // --- FIX: Errors must also be returned in the 'result' property ---
       return { type: 'tool-result', toolCallId, toolName, output: { error: errorMessage }, isError: true } as unknown as ToolResultPart;
     }
   }
@@ -110,7 +108,6 @@ export const chatWithAI = action({
       console.log(`[Orchestrator] -> Calling AI Planner...`);
       const plannerResult = await generateText({
         model: anthropic(modelName),
-        // --- FIX: Injected the new, stricter system prompt ---
         system: `You are a database-aware AI Planner. Your only job is to create a sequence of tool calls to fulfill the user's request.
 
 <critical_rule>
@@ -118,7 +115,7 @@ For ANY request that refers to a specific project or task by name (e.g., "my per
 1.  **READ**: Call \`getProjects()\` or \`getTasks()\` to retrieve a list of all items.
 2.  **FIND**: In your internal reasoning, find the item in the list that matches the user's description (e.g., the project where \`name\` is "Personal").
 3.  **EXTRACT**: Get the exact \`_id\` value from that item.
-4.  **EXECUTE**: Use that extracted \`_id\` in the next tool call (e.g., \`getTasks({ projectId: "jx123abc" })\`).
+4.  **EXECUTE**: Use that extracted \`_id\` in the subsequent tool call (e.g., \`getTasks({ projectId: "jx123abc" })\`).
 
 You are forbidden from using human-readable names or invented placeholders like "PERSONAL_PROJECT_ID" as arguments for \`projectId\` or \`taskId\`.
 </critical_rule>
@@ -140,6 +137,8 @@ If a request is conversational (e.g., "hello"), you may respond with text. Other
       // Case A: The Planner decided no tools were needed.
       if (!plannerResult.toolCalls || plannerResult.toolCalls.length === 0) {
         console.log(`[Orchestrator] Planner decided no tools were needed. Responding directly.`);
+        // NEW LOGGING
+        console.log(`[Orchestrator] Planner's response: "${plannerResult.text}"`);
         await ctx.runMutation(api.conversations.addMessage, { role: "user", content: message });
         await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: plannerResult.text });
         return { response: plannerResult.text };
@@ -147,9 +146,14 @@ If a request is conversational (e.g., "hello"), you may respond with text. Other
 
       // Case B: The Planner created a plan. Now, the Executor runs it.
       console.log(`[Orchestrator] Planner returned a plan with ${plannerResult.toolCalls.length} step(s).`);
-      const toolResults = await Promise.all(
-        plannerResult.toolCalls.map(toolCall => SystemExecutor.executeTool(ctx, toolCall))
-      );
+      // NEW LOGGING
+      console.log('[Orchestrator] Planner plan:', JSON.stringify(plannerResult.toolCalls, null, 2));
+      
+      const toolResults: ToolResultPart[] = [];
+      for (const toolCall of plannerResult.toolCalls) {
+        const result = await SystemExecutor.executeTool(ctx, toolCall);
+        toolResults.push(result);
+      }
       
       // --- Step 3: Call the AI Reporter ---
       console.log(`[Orchestrator] -> Calling AI Reporter to summarize results...`);
@@ -158,38 +162,43 @@ If a request is conversational (e.g., "hello"), you may respond with text. Other
         `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
       ).join('\n');
 
-      const reporterMessages: CoreMessage[] = [
-        ...messages.slice(0, -1), // All messages except the current user message
-        { role: "user", content: message }, // Current user message as simple string
-      ];
-
       const reporterResult = await generateText({
         model: anthropic(modelName),
         system: `You are the AI Reporter. The following tools were executed successfully:
 ${toolResultsContext}
 
+Based on the user's request: "${message}"
 Summarize these results clearly for the user. If the plan was successful, confirm the action. If any part failed, report the error clearly.`,
-        messages: reporterMessages,
+        messages: [{ role: "user", content: message }], // Provide the current user message
       });
+      
+      // NEW LOGGING
+      console.log(`[Orchestrator] Reporter's response: "${reporterResult.text}"`);
 
       // --- Step 4: Persist and Return ---
       console.log(`[Orchestrator] Interaction complete. Saving history and returning final response.`);
+      
+      const assistantMessage = { 
+        role: "assistant", 
+        content: reporterResult.text,
+        timestamp: Date.now(),
+        toolCalls: plannerResult.toolCalls.map(tc => ({
+          name: tc.toolName,
+          args: tc.input,
+          result: toolResults.find(tr => tr.toolCallId === tc.toolCallId)?.output,
+        })),
+      };
+      
+      console.log('[Orchestrator] About to store assistant message:', {
+        content: assistantMessage.content,
+        toolCallsCount: assistantMessage.toolCalls?.length || 0
+      });
+      
       await ctx.runMutation(api.conversations.updateConversation, {
         messages: [
           ...(conversation?.messages || []),
           { role: "user", content: message, timestamp: Date.now() },
-          { 
-            role: "assistant", 
-            content: reporterResult.text,
-            timestamp: Date.now(),
-            toolCalls: plannerResult.toolCalls.map(tc => ({
-              name: tc.toolName,
-              // --- FIX: Use 'args' to match the ToolCallPart schema ---
-              args: tc.input,
-              // --- FIX: Use 'result' to match the ToolResultPart schema ---
-              result: toolResults.find(tr => tr.toolCallId === tc.toolCallId)?.output,
-            })),
-          }
+          assistantMessage
         ] as any,
       });
 
@@ -202,7 +211,6 @@ Summarize these results clearly for the user. If the plan was successful, confir
     } catch (error) {
       console.error("[Orchestrator] ❌ An error occurred during the interaction:", error);
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-      // Persist the error message for the user
       await ctx.runMutation(api.conversations.addMessage, { 
         role: "assistant", 
         content: `I'm sorry, I encountered an internal error: ${errorMessage}` 
