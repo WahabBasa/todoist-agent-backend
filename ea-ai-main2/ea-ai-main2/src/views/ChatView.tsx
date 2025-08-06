@@ -17,6 +17,7 @@ interface Message {
 export function ChatView() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [useHaiku, setUseHaiku] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -44,7 +45,7 @@ export function ChatView() {
     setIsLoading(true);
 
     try {
-      const result = await chatWithAI({ message: userMessage });
+      const result = await chatWithAI({ message: userMessage, useHaiku });
       
       if (result.toolResults && result.toolResults.length > 0) {
         const successfulToolCalls = result.toolResults.filter(tc => tc.success);
@@ -125,11 +126,26 @@ export function ChatView() {
               <span className="text-lg">🤖</span>
             </div>
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="font-semibold">AI Task Assistant</h2>
             <p className="text-sm text-base-content/70">
               Ask me to create tasks, manage projects, or help with your workflow
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="form-control">
+              <label className="label cursor-pointer gap-2">
+                <span className="label-text text-xs">
+                  {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3.5 Sonnet'}
+                </span>
+                <input 
+                  type="checkbox" 
+                  className="toggle toggle-sm toggle-primary" 
+                  checked={useHaiku}
+                  onChange={(e) => setUseHaiku(e.target.checked)}
+                />
+              </label>
+            </div>
           </div>
         </div>
       </div>

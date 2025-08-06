@@ -63,11 +63,12 @@ const defineTools = (ctx: ActionCtx) => ({
     },
   }),
   updateTask: tool({
-    description: "Update an existing task. Use getTasks first to get the exact task ID (_id field). Use isCompleted: true to mark tasks as completed.",
+    description: "Update an existing task. Use getTasks first to get the exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Use projectId to move tasks between projects.",
     inputSchema: z.object({
       taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
       title: z.string().optional().describe("Updated task title"),
       description: z.string().optional().describe("Updated task description"),
+      projectId: z.string().optional().describe("Move task to a different project by providing the target project ID"),
       isCompleted: z.boolean().optional().describe("Mark task as completed (true) or pending (false)"),
       priority: z.number().min(1).max(4).optional().describe("Updated priority: 1=highest, 4=lowest"),
       dueDate: z.string().optional().describe("Updated due date in ISO format"),
@@ -83,6 +84,7 @@ const defineTools = (ctx: ActionCtx) => ({
         const result = await ctx.runMutation(api.tasks.updateTask, {
           id: taskId as Id<"tasks">,
           ...updateData,
+          projectId: updateData.projectId as Id<"projects"> | undefined,
           dueDate: updateData.dueDate ? new Date(updateData.dueDate).getTime() : undefined,
         });
         console.log(`✅ updateTask succeeded:`, result, `with data:`, updateData);
@@ -192,8 +194,9 @@ const defineTools = (ctx: ActionCtx) => ({
 export const chatWithAI = action({
   args: { 
     message: v.string(),
+    useHaiku: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { message, useHaiku = false }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
@@ -203,14 +206,19 @@ export const chatWithAI = action({
 
     const conversation = await ctx.runQuery(api.conversations.getConversation, {});
     const initialMessages: CoreMessage[] = (conversation?.messages as CoreMessage[]) || [];
-    initialMessages.push({ role: "user", content: args.message });
+    initialMessages.push({ role: "user", content: message });
     
     try {
+      const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-5-sonnet-20240620";
+      console.log(`🤖 Using AI model: ${modelName}`);
+      
       const result = await generateText({
-        model: anthropic("claude-3-5-sonnet-20240620"),
+        model: useHaiku ? anthropic("claude-3-5-haiku-20241022") : anthropic("claude-3-5-sonnet-20240620"),
         system: `You are a helpful AI assistant for task and project management. You can create, read, update, and delete tasks and projects.
 
-CRITICAL: For multi-step operations, you have up to 10 steps to complete complex tasks:
+CRITICAL: You MUST actually call the tools to perform actions - don't just describe what you would do!
+
+For multi-step operations, you have up to ${useHaiku ? 6 : 10} steps to complete complex tasks:
 
 1. ALWAYS call getTasks first to see current tasks and get their exact IDs
 2. Use the exact _id field from getTasks results when calling updateTask or deleteTask  
@@ -218,24 +226,42 @@ CRITICAL: For multi-step operations, you have up to 10 steps to complete complex
    - Step 1: Call getTasks with completed: false to get all pending tasks
    - Step 2-N: Call updateTask for each task with isCompleted: true using their exact _id values
 
-4. For task updates, use the isCompleted field - set to true when completing tasks
+4. For moving tasks between projects:
+   - Step 1: Call getProjects to see available projects and their IDs
+   - Step 2: Call getTasks to find tasks to move
+   - Step 3: Call updateTask with projectId to move each task
 
-Example multi-step workflow for "complete all my active tasks":
-1. getTasks(completed: false) -> get all pending tasks
-2. updateTask(taskId: "task1_id", isCompleted: true) 
-3. updateTask(taskId: "task2_id", isCompleted: true)
-4. Continue for all tasks found
+5. For task updates, use the isCompleted field - set to true when completing tasks
+
+Example multi-step workflow for "move tasks to project X":
+1. getProjects() -> find target project ID
+2. getTasks() -> find tasks to move  
+3. updateTask(taskId: "task1_id", projectId: "target_project_id")
+4. updateTask(taskId: "task2_id", projectId: "target_project_id")
+5. Continue for all tasks
+
+IMPORTANT: Always execute the tool calls - don't just plan or describe actions!
 
 Be conversational and explain what you're doing step by step. Use the tools systematically to accomplish complex operations.`,
         messages: initialMessages,
         tools: tools,
-        stopWhen: stepCountIs(10), // Enable multi-step tool execution for complex operations
+        stopWhen: stepCountIs(useHaiku ? 6 : 10), // Reduce steps for Haiku
       });
 
       // Log AI response details for debugging
       console.log(`🤖 AI Response - Tool Calls:`, result.toolCalls?.length || 0);
       console.log(`🤖 AI Response - Tool Results:`, result.toolResults?.length || 0);
       console.log(`🤖 AI Response - Text:`, result.text);
+      
+      // Warning if no tools were called when they might be needed
+      if (!result.toolCalls || result.toolCalls.length === 0) {
+        if (message.toLowerCase().includes('move') || 
+            message.toLowerCase().includes('update') || 
+            message.toLowerCase().includes('complete') ||
+            message.toLowerCase().includes('create')) {
+          console.log(`⚠️ WARNING: No tools executed for potential action request: "${message}"`);
+        }
+      }
       if (result.toolCalls && result.toolCalls.length > 0) {
         console.log(`🤖 AI Tool Calls Details:`, JSON.stringify(result.toolCalls, null, 2));
       }
@@ -246,7 +272,7 @@ Be conversational and explain what you're doing step by step. Use the tools syst
       // Store user message
       await ctx.runMutation(api.conversations.addMessage, {
         role: "user",
-        content: args.message,
+        content: message,
       });
 
       // Store AI response  

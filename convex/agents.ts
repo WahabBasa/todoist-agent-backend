@@ -499,9 +499,9 @@ const getTodayTasksTool = tool({
 export const processMessage = action({
   args: { 
     message: v.string(),
-    modelProvider: v.optional(v.string())
+    useHaiku: v.optional(v.boolean())
   },
-  handler: async (ctx, { message, modelProvider = "openai" }) => {
+  handler: async (ctx, { message, useHaiku = false }) => {
     try {
       // Get authenticated user identity
       const identity = await ctx.auth.getUserIdentity();
@@ -521,14 +521,14 @@ export const processMessage = action({
         displayName: identity.name,
         photoUrl: identity.pictureUrl,
       });
-      // Select model based on provider
-      const model = modelProvider === "anthropic" 
-        ? anthropic("claude-3-5-sonnet-20241022")
-        : openai("gpt-4");
+      // Select Claude model based on toggle
+      const model = useHaiku 
+        ? anthropic("claude-3-5-haiku-20241022")
+        : anthropic("claude-3-5-sonnet-20241022");
       
       const result = await generateText({
         model: model,
-        maxSteps: 10,
+        maxSteps: useHaiku ? 6 : 10, // Reduce steps for Haiku
         tools: {
           createTask: createTaskTool,
           getTasks: getTasksTool,
@@ -595,7 +595,7 @@ export const processMessage = action({
         displayName: identity.name,
         email: identity.email,
         toolCallsCount: result.toolCalls?.length || 0,
-        modelUsed: modelProvider === "anthropic" ? "Claude 3.5 Sonnet" : "GPT-4",
+        modelUsed: useHaiku ? "Claude 3.5 Haiku" : "Claude 3.5 Sonnet",
         toolsUsed: result.toolCalls?.map(call => call.toolName) || []
       });
 
@@ -603,7 +603,7 @@ export const processMessage = action({
         success: true,
         response: result.text,
         toolCalls: result.toolCalls?.length || 0,
-        modelUsed: modelProvider === "anthropic" ? "Claude 3.5 Sonnet" : "GPT-4",
+        modelUsed: useHaiku ? "Claude 3.5 Haiku" : "Claude 3.5 Sonnet",
       };
     } catch (error) {
       console.error("Error processing message:", error);
