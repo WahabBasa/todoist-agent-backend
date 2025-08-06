@@ -1,88 +1,15 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { generateText, tool, CoreMessage, stepCountIs } from "ai";
+import { generateText, tool, CoreMessage, ToolResultPart, stepCountIs } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { z } from "zod";
-import { Id, Doc } from "./_generated/dataModel";
+import { Id } from "./_generated/dataModel";
 import { ActionCtx } from "./_generated/server";
 
-// Action types and their required tools mapping
-interface ActionClaim {
-  type: 'complete' | 'create' | 'delete' | 'update' | 'move';
-  text: string;
-  requiredTools: string[];
-}
-
-// Strict action-to-tool mapping matrix
-const ACTION_TOOL_MAPPING: Record<ActionClaim['type'], string[]> = {
-  complete: ['updateTask'], // Must call updateTask with isCompleted: true
-  create: ['createTask'],   // Must call createTask
-  delete: ['deleteTask'],   // Must call deleteTask  
-  update: ['updateTask'],   // Must call updateTask
-  move: ['updateTask']      // Must call updateTask with projectId
-};
-
-// Enhanced function to extract structured action claims
-function extractActionClaims(text: string): ActionClaim[] {
-  const actionPatterns = [
-    // Completion patterns
-    { regex: /I['']?ll (mark|complete|finish|done)/gi, type: 'complete' as const },
-    { regex: /I['']?m (marking|completing|finishing)/gi, type: 'complete' as const },
-    { regex: /(Marking|Completing|Finishing)/gi, type: 'complete' as const },
-    { regex: /Let me (mark|complete|finish)/gi, type: 'complete' as const },
-    { regex: /I will (mark|complete|finish)/gi, type: 'complete' as const },
-    { regex: /(mark|set) .* (as )?(complete|done|finished)/gi, type: 'complete' as const },
-    
-    // Creation patterns
-    { regex: /I['']?ll (create|add)/gi, type: 'create' as const },
-    { regex: /I['']?m (creating|adding)/gi, type: 'create' as const },
-    { regex: /(Creating|Adding)/gi, type: 'create' as const },
-    { regex: /Let me (create|add)/gi, type: 'create' as const },
-    { regex: /I will (create|add)/gi, type: 'create' as const },
-    
-    // Deletion patterns
-    { regex: /I['']?ll (delete|remove)/gi, type: 'delete' as const },
-    { regex: /I['']?m (deleting|removing)/gi, type: 'delete' as const },
-    { regex: /(Deleting|Removing)/gi, type: 'delete' as const },
-    { regex: /Let me (delete|remove)/gi, type: 'delete' as const },
-    { regex: /I will (delete|remove)/gi, type: 'delete' as const },
-    
-    // Update patterns
-    { regex: /I['']?ll update/gi, type: 'update' as const },
-    { regex: /I['']?m updating/gi, type: 'update' as const },
-    { regex: /Updating/gi, type: 'update' as const },
-    { regex: /Let me update/gi, type: 'update' as const },
-    { regex: /I will update/gi, type: 'update' as const },
-    
-    // Move patterns
-    { regex: /I['']?ll move/gi, type: 'move' as const },
-    { regex: /I['']?m moving/gi, type: 'move' as const },
-    { regex: /Moving/gi, type: 'move' as const },
-    { regex: /Let me move/gi, type: 'move' as const },
-    { regex: /I will move/gi, type: 'move' as const },
-  ];
-  
-  const claims: ActionClaim[] = [];
-  
-  for (const { regex, type } of actionPatterns) {
-    const matches = text.match(regex);
-    if (matches) {
-      for (const match of matches) {
-        claims.push({
-          type,
-          text: match,
-          requiredTools: ACTION_TOOL_MAPPING[type]
-        });
-      }
-    }
-  }
-  
-  return claims;
-}
-
-// Helper function to validate messages before API calls
+// Helper function to validate messages before API calls. This is a good practice
+// to prevent sending empty or invalid messages to the AI model.
 function validateMessages(messages: CoreMessage[]): CoreMessage[] {
   return messages.filter(msg => {
     if (!msg.content) return false;
@@ -97,568 +24,271 @@ const anthropic = createAnthropic({
 });
 
 // Helper to create a typed set of tools
-const defineTools = (ctx: ActionCtx) => ({
+const defineTools = (ctx: ActionCtx): Record<string, any> => ({
   createTask: tool({
-    description: "Create a new task with comprehensive options including recurring patterns, time estimation, tags, and due dates",
+    description: "Create a new task with a title, description, priority, due date, and project.",
     inputSchema: z.object({
-      title: z.string().describe("The task title or name"),
-      description: z.string().optional().describe("Optional detailed description of the task"),
-      priority: z.number().min(1).max(4).optional().describe("Task priority: 1=highest, 4=lowest (default: 3)"),
-      dueDate: z.string().optional().describe("Due date in ISO format (YYYY-MM-DD or ISO datetime)"),
-      projectId: z.string().optional().describe("The ID of the project to associate the task with"),
-      estimatedHours: z.number().min(0).optional().describe("Estimated hours to complete the task"),
-      estimatedMinutes: z.number().min(0).max(59).optional().describe("Estimated minutes to complete the task (0-59)"),
-      tags: z.array(z.string()).optional().describe("Array of tags for categorizing the task"),
-      isRecurring: z.boolean().optional().describe("Whether this task repeats on a schedule"),
-      recurringPattern: z.enum(['daily', 'weekly', 'monthly', 'yearly']).optional().describe("How often the task recurs (only if isRecurring is true)"),
+      title: z.string().describe("The task title."),
+      description: z.string().optional().describe("A detailed description of the task."),
+      priority: z.number().min(1).max(4).optional().describe("Priority: 1=high, 2=medium, 3=normal, 4=low. Defaults to 3."),
+      dueDate: z.string().optional().describe("Due date in ISO format (e.g., YYYY-MM-DDTHH:mm)."),
+      projectId: z.string().optional().describe("The exact database-generated project ID from getProjects - NOT the project name like 'Personal' or 'Work'"),
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
       console.log(`🔧 createTask called with:`, toolArgs);
-      try {
-        const result = await ctx.runMutation(api.tasks.createTask, {
-          ...toolArgs,
-          projectId: toolArgs.projectId as Id<"projects"> | undefined,
-          dueDate: toolArgs.dueDate ? new Date(toolArgs.dueDate).getTime() : undefined,
-        });
-        console.log(`✅ createTask succeeded:`, result);
-        return result;
-      } catch (error) {
-        console.error(`❌ createTask failed:`, error);
-        throw error;
-      }
+      return await ctx.runMutation(api.tasks.createTask, {
+        ...toolArgs,
+        projectId: toolArgs.projectId ? (() => {
+          // Validate projectId format if provided
+          if (toolArgs.projectId && (toolArgs.projectId.length < 8 || /\s/.test(toolArgs.projectId) || /[A-Z]/.test(toolArgs.projectId))) {
+            throw new Error(`Invalid projectId format: "${toolArgs.projectId}". You must call getProjects first to get the actual database ID, not the project name.`);
+          }
+          return toolArgs.projectId as Id<"projects">;
+        })() : undefined,
+        dueDate: toolArgs.dueDate ? new Date(toolArgs.dueDate).getTime() : undefined,
+      });
     },
   }),
   getTasks: tool({
-    description: "Retrieve tasks with optional filtering by completion status or project",
+    description: "Retrieve a list of tasks, with optional filters. This is the primary way to get task IDs and details.",
     inputSchema: z.object({
-      completed: z.boolean().optional().describe("Filter by completion status (true=completed, false=pending)"),
-      projectId: z.string().optional().describe("Filter by specific project ID"),
+      completed: z.boolean().optional().describe("Filter by completion status (true for completed, false for active)."),
+      projectId: z.string().optional().describe("Filter tasks for a specific project using its exact database ID from getProjects - NOT project name"),
     }),
-    execute: async (toolArgs): Promise<Doc<"tasks">[]> => {
+    execute: async (toolArgs): Promise<any[]> => {
       console.log(`🔧 getTasks called with:`, toolArgs);
-      try {
-        const queryArgs: any = { completed: toolArgs.completed };
-        if (toolArgs.projectId) {
-          queryArgs.projectId = toolArgs.projectId as any;
-        }
-        const result = await ctx.runQuery(api.tasks.getTasks, queryArgs);
-        console.log(`✅ getTasks succeeded - found ${result.length} tasks:`, result.map(t => ({ id: t._id, title: t.title, completedAt: t.completedAt })));
-        return result;
-      } catch (error) {
-        console.error(`❌ getTasks failed:`, error);
-        throw error;
-      }
+      return await ctx.runQuery(api.tasks.getTasks, {
+        completed: toolArgs.completed,
+        projectId: toolArgs.projectId as Id<"projects"> | undefined,
+      });
     },
   }),
   updateTask: tool({
-    description: "Update an existing task with comprehensive options. REQUIRES calling getTasks first to get current task data and exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Supports recurring patterns, time estimation, and tags.",
+    description: "Update an existing task. MANDATORY WORKFLOW: 1) Call getTasks first to get current task data and exact taskId (_id field), 2) Use that exact taskId in this tool call.",
     inputSchema: z.object({
-      taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
-      title: z.string().optional().describe("Updated task title"),
-      description: z.string().optional().describe("Updated task description"),
-      projectId: z.string().optional().describe("Move task to a different project by providing the target project ID"),
-      isCompleted: z.boolean().optional().describe("Mark task as completed (true) or pending (false)"),
-      priority: z.number().min(1).max(4).optional().describe("Updated priority: 1=highest, 4=lowest"),
-      dueDate: z.string().optional().describe("Updated due date in ISO format"),
-      estimatedHours: z.number().min(0).optional().describe("Updated estimated hours to complete the task"),
-      estimatedMinutes: z.number().min(0).max(59).optional().describe("Updated estimated minutes (0-59)"),
-      tags: z.array(z.string()).optional().describe("Updated array of tags for the task"),
-      isRecurring: z.boolean().optional().describe("Whether this task should repeat on a schedule"),
-      recurringPattern: z.enum(['daily', 'weekly', 'monthly', 'yearly']).optional().describe("How often the task recurs"),
+      taskId: z.string().describe("The exact database-generated task ID (_id field) from getTasks result - NOT the task title or description"),
+      title: z.string().optional().describe("New title for the task."),
+      description: z.string().optional().describe("New description for the task."),
+      projectId: z.string().optional().describe("Move task to a new project by providing its exact database ID from getProjects - NOT project name"),
+      isCompleted: z.boolean().optional().describe("Mark task as completed (true) or active (false)."),
+      priority: z.number().min(1).max(4).optional().describe("New priority for the task."),
+      dueDate: z.string().optional().describe("New due date in ISO format."),
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
       console.log(`🔧 updateTask called with:`, toolArgs);
+      const { taskId, ...updateData } = toolArgs;
       
-      // ENFORCE READ-BEFORE-WRITE: Check if getTasks was called recently
-      const recentMessages = await ctx.runQuery(api.conversations.getMessages, { limit: 10 });
-      const hasRecentTaskRead = recentMessages.some(msg => 
-        msg.toolCalls?.some((tc: any) => 
-          ['getTasks', 'getTasksByFilter', 'getUpcomingTasks'].includes(tc.toolName)
-        )
-      );
-      
-      if (!hasRecentTaskRead) {
-        throw new Error(`PRECONDITION FAILED: You must call getTasks, getTasksByFilter, or getUpcomingTasks first to read current task data before updating. This ensures you have the correct task information and valid task ID.`);
+      // Validate taskId format - must be database ID, not human text
+      if (!taskId || taskId.length < 8 || /\s/.test(taskId) || /[A-Z]/.test(taskId)) {
+        throw new Error(`Invalid taskId format: "${taskId}". You must call getTasks first to get the actual database ID (like "j57abc123def4gh8"), not the task title or description.`);
       }
       
-      if (!toolArgs.taskId) {
-        console.error(`❌ updateTask missing taskId`);
-        throw new Error("taskId is required for updateTask. Call getTasks first to get valid task IDs.");
+      const task = await ctx.runQuery(api.tasks.getTaskById, { taskId: taskId as Id<"tasks"> });
+      if (!task) {
+          throw new Error(`Task with ID '${taskId}' not found. Call getTasks to see available tasks and their correct database IDs.`);
       }
-      
-      // Verify task exists with current data
-      const currentTasks = await ctx.runQuery(api.tasks.getTasks, {});
-      const currentTask = currentTasks.find(t => t._id === toolArgs.taskId);
-      
-      if (!currentTask) {
-        throw new Error(`Task with ID ${toolArgs.taskId} not found. Call getTasks first to get valid task IDs. Available tasks: ${currentTasks.map(t => `"${t.title}" (${t._id})`).join(', ')}`);
-      }
-      
-      try {
-        const { taskId, ...updateData } = toolArgs;
-        const result = await ctx.runMutation(api.tasks.updateTask, {
-          id: taskId as Id<"tasks">,
-          ...updateData,
-          projectId: updateData.projectId as Id<"projects"> | undefined,
-          dueDate: updateData.dueDate ? new Date(updateData.dueDate).getTime() : undefined,
-        });
-        
-        // Get updated task for rich feedback
-        const updatedTasks = await ctx.runQuery(api.tasks.getTasks, {});
-        const updatedTask = updatedTasks.find(t => t._id === result);
-        
-        console.log(`✅ updateTask succeeded. Task "${updatedTask?.title}" was updated. Previous: ${JSON.stringify({
-          title: currentTask.title,
-          isCompleted: currentTask.isCompleted,
-          priority: currentTask.priority
-        })} | New: ${JSON.stringify({
-          title: updatedTask?.title,
-          isCompleted: updatedTask?.isCompleted, 
-          priority: updatedTask?.priority
-        })}`);
-        return result;
-      } catch (error) {
-        console.error(`❌ updateTask failed:`, error);
-        throw error;
-      }
+
+      return await ctx.runMutation(api.tasks.updateTask, {
+        id: taskId as Id<"tasks">,
+        ...updateData,
+        projectId: updateData.projectId ? (() => {
+          // Validate projectId format if provided
+          if (updateData.projectId && (updateData.projectId.length < 8 || /\s/.test(updateData.projectId) || /[A-Z]/.test(updateData.projectId))) {
+            throw new Error(`Invalid projectId format: "${updateData.projectId}". You must call getProjects first to get the actual database ID, not the project name.`);
+          }
+          return updateData.projectId as Id<"projects">;
+        })() : undefined,
+        dueDate: updateData.dueDate ? new Date(updateData.dueDate).getTime() : undefined,
+      });
     },
   }),
   deleteTask: tool({
-    description: "Delete a task by its ID. REQUIRES calling getTasks first to confirm the task exists and get its details.",
+    description: "Delete a task by its ID. MANDATORY WORKFLOW: 1) Call getTasks first to confirm the task exists and get its exact _id, 2) Use that database _id in this tool call.",
     inputSchema: z.object({
-      taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
+      taskId: z.string().describe("The exact database-generated task ID (_id field) from getTasks - NOT the task title"),
     }),
     execute: async ({ taskId }): Promise<Id<"tasks">> => {
       console.log(`🔧 deleteTask called with taskId:`, taskId);
       
-      // ENFORCE READ-BEFORE-WRITE: Check if getTasks was called recently
-      const recentMessages = await ctx.runQuery(api.conversations.getMessages, { limit: 10 });
-      const hasRecentTaskRead = recentMessages.some(msg => 
-        msg.toolCalls?.some((tc: any) => 
-          ['getTasks', 'getTasksByFilter', 'getUpcomingTasks'].includes(tc.toolName)
-        )
-      );
-      
-      if (!hasRecentTaskRead) {
-        throw new Error(`PRECONDITION FAILED: You must call getTasks first to read current tasks before deleting. This ensures the task actually exists and you have the correct ID.`);
+      // Validate taskId format - must be database ID, not human text
+      if (!taskId || taskId.length < 8 || /\s/.test(taskId) || /[A-Z]/.test(taskId)) {
+        throw new Error(`Invalid taskId format: "${taskId}". You must call getTasks first to get the actual database ID, not the task title.`);
       }
       
-      if (!taskId) {
-        console.error(`❌ deleteTask missing taskId`);
-        throw new Error("taskId is required for deleteTask. Call getTasks first to get valid task IDs.");
+      const task = await ctx.runQuery(api.tasks.getTaskById, { taskId: taskId as Id<"tasks"> });
+      if (!task) {
+          throw new Error(`Task with ID '${taskId}' not found. Call getTasks to see available tasks and their correct database IDs.`);
       }
-      
-      // Verify and get task details before deletion
-      const currentTasks = await ctx.runQuery(api.tasks.getTasks, {});
-      const taskToDelete = currentTasks.find(t => t._id === taskId);
-      
-      if (!taskToDelete) {
-        throw new Error(`Task with ID ${taskId} not found. Call getTasks first to get valid task IDs. Available tasks: ${currentTasks.map(t => `"${t.title}" (${t._id})`).join(', ')}`);
-      }
-      
-      try {
-        const result = await ctx.runMutation(api.tasks.deleteTask, { id: taskId as Id<"tasks"> });
-        console.log(`✅ deleteTask succeeded. Deleted task: "${taskToDelete.title}" (ID: ${taskId})`);
-        return result;
-      } catch (error) {
-        console.error(`❌ deleteTask failed:`, error);
-        throw error;
-      }
-    },
-  }),
-  createProject: tool({
-    description: "Create a new project with name, color, and optional description",
-    inputSchema: z.object({
-      name: z.string().describe("The project name"),
-      color: z.string().describe("Project color (hex code or color name)"),
-      description: z.string().optional().describe("Optional project description"),
-    }),
-    execute: async (toolArgs): Promise<Id<"projects">> => {
-      console.log(`🔧 createProject called with:`, toolArgs);
-      try {
-        const result = await ctx.runMutation(api.projects.createProject, toolArgs);
-        console.log(`✅ createProject succeeded:`, result);
-        return result;
-      } catch (error) {
-        console.error(`❌ createProject failed:`, error);
-        throw error;
-      }
+
+      return await ctx.runMutation(api.tasks.deleteTask, { id: taskId as Id<"tasks"> });
     },
   }),
   getProjects: tool({
-    description: "Retrieve all projects for the current user",
+    description: "Retrieve all projects to get their names and IDs.",
     inputSchema: z.object({}),
-    execute: async (): Promise<Doc<"projects">[]> => {
+    execute: async (): Promise<any[]> => {
       console.log(`🔧 getProjects called`);
-      try {
-        const result = await ctx.runQuery(api.projects.getProjects, {});
-        console.log(`✅ getProjects succeeded - found ${result.length} projects:`, result.map(p => ({ id: p._id, name: p.name })));
-        return result;
-      } catch (error) {
-        console.error(`❌ getProjects failed:`, error);
-        throw error;
-      }
+      return await ctx.runQuery(api.projects.getProjects, {});
+    },
+  }),
+  createProject: tool({
+    description: "Create a new project.",
+    inputSchema: z.object({
+        name: z.string().describe("The project name."),
+        color: z.string().describe("A hex color code for the project (e.g., '#FF5733')."),
+        description: z.string().optional().describe("Optional project description."),
+    }),
+    execute: async (toolArgs): Promise<Id<"projects">> => {
+        console.log(`🔧 createProject called with:`, toolArgs);
+        return await ctx.runMutation(api.projects.createProject, toolArgs);
     },
   }),
   deleteProject: tool({
-    description: "Delete a project by its ID.",
+    description: "Delete a project by its ID. MANDATORY: Call getProjects first to get the exact database ID. Fails if the project contains tasks.",
     inputSchema: z.object({
-      id: z.string().describe("The ID of the project to delete."),
+      id: z.string().describe("The exact database-generated project ID from getProjects - NOT the project name"),
     }),
     execute: async ({ id }): Promise<Id<"projects">> => {
       console.log(`🔧 deleteProject called with id:`, id);
-      if (!id) {
-        console.error(`❌ deleteProject missing id`);
-        throw new Error("id is required for deleteProject");
+      
+      // Validate projectId format - must be database ID, not project name
+      if (!id || id.length < 8 || /\s/.test(id) || /[A-Z]/.test(id)) {
+        throw new Error(`Invalid project ID format: "${id}". You must call getProjects first to get the actual database ID, not the project name like "Personal" or "Work".`);
       }
-      try {
-        const result = await ctx.runMutation(api.projects.deleteProject, { id: id as Id<"projects"> });
-        console.log(`✅ deleteProject succeeded:`, result);
-        return result;
-      } catch (error) {
-        console.error(`❌ deleteProject failed:`, error);
-        throw error;
-      }
-    },
-  }),
-  getProjectByName: tool({
-    description: "Get a project by its name to find its ID.",
-    inputSchema: z.object({
-      name: z.string().describe("The name of the project to find."),
-    }),
-    execute: async ({ name }): Promise<Doc<"projects"> | null> => {
-      console.log(`🔧 getProjectByName called with name:`, name);
-      try {
-        const projects: Doc<"projects">[] = await ctx.runQuery(api.projects.getProjects, {});
-        const result = projects.find((p: Doc<"projects">) => p.name === name) || null;
-        console.log(`✅ getProjectByName ${result ? 'found' : 'not found'} project:`, result ? { id: result._id, name: result.name } : 'null');
-        return result;
-      } catch (error) {
-        console.error(`❌ getProjectByName failed:`, error);
-        throw error;
-      }
-    },
-  }),
-  getUpcomingTasks: tool({
-    description: "Get tasks that are due within a specified number of days (default 7 days). Useful for deadline awareness and planning.",
-    inputSchema: z.object({
-      days: z.number().min(1).max(30).optional().describe("Number of days ahead to look for upcoming tasks (1-30, default: 7)"),
-    }),
-    execute: async (toolArgs): Promise<Doc<"tasks">[]> => {
-      console.log(`🔧 getUpcomingTasks called with:`, toolArgs);
-      try {
-        const result = await ctx.runQuery(api.tasks.getUpcomingTasks, {
-          days: toolArgs.days || 7,
-        });
-        console.log(`✅ getUpcomingTasks succeeded - found ${result.length} upcoming tasks`);
-        return result;
-      } catch (error) {
-        console.error(`❌ getUpcomingTasks failed:`, error);
-        throw error;
-      }
-    },
-  }),
-  getTasksByFilter: tool({
-    description: "Get tasks with advanced filtering and sorting options. Use this for complex task queries and organization.",
-    inputSchema: z.object({
-      completed: z.boolean().optional().describe("Filter by completion status (true=completed, false=active)"),
-      projectId: z.string().optional().describe("Filter by specific project ID"),
-      priority: z.number().min(1).max(4).optional().describe("Filter by priority level (1=highest, 4=lowest)"),
-      sortBy: z.enum(['priority', 'dueDate', 'createdAt']).optional().describe("Sort tasks by priority, due date, or creation date"),
-      sortOrder: z.enum(['asc', 'desc']).optional().describe("Sort order: ascending or descending"),
-    }),
-    execute: async (toolArgs): Promise<Doc<"tasks">[]> => {
-      console.log(`🔧 getTasksByFilter called with:`, toolArgs);
-      try {
-        const result = await ctx.runQuery(api.tasks.getTasksByFilter, {
-          ...toolArgs,
-          projectId: toolArgs.projectId as Id<"projects"> | undefined,
-        });
-        console.log(`✅ getTasksByFilter succeeded - found ${result.length} tasks`);
-        return result;
-      } catch (error) {
-        console.error(`❌ getTasksByFilter failed:`, error);
-        throw error;
-      }
-    },
-  }),
-  getTaskStats: tool({
-    description: "Get comprehensive statistics about tasks including totals, priority distribution, and overdue counts.",
-    inputSchema: z.object({}),
-    execute: async (): Promise<any> => {
-      console.log(`🔧 getTaskStats called`);
-      try {
-        const result = await ctx.runQuery(api.tasks.getTaskStats, {});
-        console.log(`✅ getTaskStats succeeded:`, result);
-        return result;
-      } catch (error) {
-        console.error(`❌ getTaskStats failed:`, error);
-        throw error;
-      }
+      
+      return await ctx.runMutation(api.projects.deleteProject, { id: id as Id<"projects"> });
     },
   }),
 });
 
-export const chatWithAI = action({
+export const chatWithAI: any = action({
   args: { 
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
   },
-  handler: async (ctx, { message, useHaiku = false }) => {
+  handler: async (ctx, { message, useHaiku = false }): Promise<any> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Not authenticated");
     }
 
-    const tools = defineTools(ctx);
+    const tools: any = defineTools(ctx);
 
     const conversation = await ctx.runQuery(api.conversations.getConversation, {});
-    const rawMessages: CoreMessage[] = (conversation?.messages as CoreMessage[]) || [];
-    rawMessages.push({ role: "user", content: message });
-    const initialMessages = validateMessages(rawMessages);
+    const initialMessages: CoreMessage[] = (conversation?.messages as CoreMessage[]) || [];
+    initialMessages.push({ role: "user", content: message });
     
     try {
-      const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-5-sonnet-20240620";
+      const modelName = useHaiku ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620";
       console.log(`🤖 Using AI model: ${modelName}`);
       
-      let result = await generateText({
-        model: useHaiku ? anthropic("claude-3-5-haiku-20241022") : anthropic("claude-3-5-sonnet-20240620"),
-        system: `You are a helpful AI assistant for task and project management. You can create, read, update, and delete tasks and projects.
+      // STEP 1: Plan and Execute Tools
+      // The AI is instructed to think, decide which tools to use, and call them.
+      const executionResult: any = await generateText({
+        model: anthropic(modelName),
+        system: `You are an expert AI assistant for task and project management.
 
-CRITICAL: You MUST actually call the tools to perform actions - don't just describe what you would do!
+        **CRITICAL ID REQUIREMENTS:**
+        - Task IDs and Project IDs are database-generated strings like "j57abc123def4gh8", NOT human-readable names
+        - BEFORE updating, deleting, or filtering tasks: MUST call getTasks to get actual task IDs
+        - BEFORE referencing projects: MUST call getProjects to get actual project IDs  
+        - NEVER use task titles like "Put dad's golf bag in the car" or project names like "Personal" as IDs
 
-You have powerful task management tools at your disposal:
-- createTask: Supports recurring patterns, time estimation, tags, due dates, and project assignment
-- updateTask: Can modify any task property including recurring settings and time estimates
-- getUpcomingTasks: Shows tasks due within specified days for deadline awareness
-- getTasksByFilter: Advanced filtering and sorting by priority, project, completion status
-- getTaskStats: Comprehensive task analytics and priority distribution
+        **CORE INSTRUCTIONS:**
+        1.  **READ-FIRST PATTERN**: For ANY operation involving specific tasks/projects, start with getTasks or getProjects
+        2.  **PLAN & EXECUTE**: Use the exact database IDs returned by get operations for all subsequent tool calls
+        3.  **NO ASSUMPTIONS**: Never assume you know IDs - always fetch current data first
+        4.  If no tool is required, you may respond directly to the user.
 
-For multi-step operations, you have up to ${useHaiku ? 6 : 10} steps to complete complex tasks:
-
-1. ALWAYS call getTasks or getTasksByFilter first to see current tasks and get their exact IDs
-2. Use getUpcomingTasks to check for deadline-sensitive tasks when relevant
-3. Use getTaskStats to understand overall task distribution and priority levels
-4. For complex queries, use getTasksByFilter with appropriate filters and sorting
-
-Common Workflows:
-
-🔄 **Creating Recurring Tasks:**
-- createTask with isRecurring: true and recurringPattern: 'daily/weekly/monthly/yearly'
-- Include estimatedHours/estimatedMinutes for time planning
-- Add tags for easy categorization
-
-⏰ **Time Management:**
-- Use getUpcomingTasks to check deadlines
-- createTask or updateTask with estimatedHours and estimatedMinutes
-- Set priority levels based on urgency and importance
-
-📊 **Task Organization:**
-- Use getTasksByFilter for complex queries (filter by project, priority, completion)
-- Sort tasks by priority, dueDate, or createdAt
-- Use getTaskStats to understand workload distribution
-
-✅ **Bulk Operations:**
-- Step 1: Use getTasksByFilter to find specific tasks
-- Step 2-N: Apply updateTask to each task with desired changes
-
-IMPORTANT: Always execute the tool calls - don't just plan or describe actions!
-
-Be conversational and explain what you're doing step by step. Use the enhanced task management capabilities systematically:
-- When users mention deadlines or time constraints, use getUpcomingTasks
-- For recurring tasks (daily standup, weekly reviews), use the recurring task features
-- For time estimation requests, use estimatedHours and estimatedMinutes
-- For filtering requests, use getTasksByFilter with appropriate parameters
-- Always provide task statistics when users ask for overviews or summaries`,
-        messages: initialMessages,
+        **MANDATORY WORKFLOW EXAMPLES:**
+        - To complete a task: 1) getTasks to find the task and get its _id, 2) updateTask with that exact _id
+        - To move a task to project: 1) getTasks for task _id, 2) getProjects for project _id, 3) updateTask
+        - To delete a task: 1) getTasks to confirm existence and get _id, 2) deleteTask with that _id`,
+        messages: validateMessages(initialMessages),
         tools: tools,
-        stopWhen: stepCountIs(useHaiku ? 6 : 10), // Reduce steps for Haiku
+        stopWhen: stepCountIs(5),
       });
 
-      // TOOL EXECUTION VALIDATION: Strict validation of claimed actions against actual tool executions
-      const claimedActions = extractActionClaims(result.text);
-      const actualToolCalls = result.toolCalls?.map(tc => tc.toolName) || [];
-      
-      // Check if any action claims are completely unsatisfied (no tools called at all)
-      const hasUnfulfilledClaims = claimedActions.length > 0 && actualToolCalls.length === 0;
-      
-      // Check if action claims don't match required tools (strict validation)
-      const hasInvalidToolMapping = claimedActions.some(claim => {
-        const requiredTools = claim.requiredTools;
-        const hasRequiredTool = requiredTools.some(tool => actualToolCalls.includes(tool));
-        
-        // Special validation for completion actions - ensure updateTask was called with isCompleted: true
-        if (claim.type === 'complete' && actualToolCalls.includes('updateTask')) {
-          const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
-          const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
-          return !hasCompletionUpdate;
-        }
-        
-        return !hasRequiredTool;
-      });
+      // If the model didn't call any tools, its text response is the final answer.
+      if (executionResult.toolCalls === undefined || executionResult.toolCalls.length === 0) {
+        console.log("✅ No tool calls needed. Responding directly.");
+        await ctx.runMutation(api.conversations.addMessage, { role: "user", content: message });
+        await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: executionResult.text });
+        return { response: executionResult.text };
+      }
 
-      if (hasUnfulfilledClaims || hasInvalidToolMapping) {
-        if (hasUnfulfilledClaims) {
-          console.log(`🚨 VALIDATION FAILED: AI claimed ${claimedActions.length} actions but called NO TOOLS. Claims:`, claimedActions.map(c => c.text));
-        }
-        if (hasInvalidToolMapping) {
-          const invalidClaims = claimedActions.filter(claim => {
-            const requiredTools = claim.requiredTools;
-            const hasRequiredTool = requiredTools.some(tool => actualToolCalls.includes(tool));
-            
-            if (claim.type === 'complete' && actualToolCalls.includes('updateTask')) {
-              const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
-              const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
-              return !hasCompletionUpdate;
+      // Validate workflow: Check for read-first pattern compliance
+      const hasUpdateOrDelete = executionResult.toolCalls.some((call: any) => 
+        ['updateTask', 'deleteTask', 'deleteProject'].includes(call.toolName)
+      );
+      const hasReadOperation = executionResult.toolCalls.some((call: any) =>
+        ['getTasks', 'getProjects'].includes(call.toolName)
+      );
+      
+      if (hasUpdateOrDelete && !hasReadOperation) {
+        console.log(`⚠️  WORKFLOW VIOLATION: AI attempted update/delete without reading data first`);
+        console.log(`Tool calls: ${executionResult.toolCalls.map((tc: any) => tc.toolName).join(', ')}`);
+      } else if (hasReadOperation && hasUpdateOrDelete) {
+        console.log(`✅ PROPER WORKFLOW: AI used read-first pattern`);
+      }
+
+      // STEP 2: Respond based on Tool Results
+      // If tools were called, the AI's job is now to interpret the results and formulate a final,
+      // user-facing response that accurately reflects what happened.
+      console.log(`🔄 ${executionResult.toolCalls.length} tool calls made. Generating final response...`);
+
+      const finalResponse = await generateText({
+        model: anthropic(modelName),
+        system: `You have just executed tools and their results are provided below. Your task is to summarize these results for the user.
+        
+        **CORE INSTRUCTIONS:**
+        1.  **VERIFY RESULTS**: Base your response ONLY on the actual outcomes from the provided 'tool_results'.
+        2.  **CONFIRM ACTIONS**: If a tool call was successful, confirm the action and mention the key results (e.g., "I've created the task 'Deploy to production'.").
+        3.  **REPORT FAILURES**: If a tool call failed, you MUST apologize and clearly report the error message from the tool result (e.g., "I tried to delete the project, but the action failed because it still has tasks in it.").`,
+        messages: validateMessages([
+            ...initialMessages,
+            {
+                role: 'assistant',
+                content: executionResult.toolCalls.map((call: any) => ({
+                    type: 'tool-call',
+                    toolCallId: call.toolCallId,
+                    toolName: call.toolName,
+                    args: call.args,
+                }))
+            },
+            {
+                role: 'tool',
+                content: executionResult.toolResults as ToolResultPart[]
             }
-            
-            return !hasRequiredTool;
-          });
-          console.log(`🚨 VALIDATION FAILED: AI claimed actions but used wrong tools. Invalid claims:`, invalidClaims.map(c => ({ claim: c.text, required: c.requiredTools, actual: actualToolCalls })));
-        }
-        console.log(`🔄 Enforcing tool execution with retry...`);
-        
-        // Create highly specific enforcement prompt based on action types
-        const specificRequirements = claimedActions.map(claim => {
-          const toolList = claim.requiredTools.join(' or ');
-          if (claim.type === 'complete') {
-            return `For "${claim.text}": Call updateTask with isCompleted: true and the correct task ID`;
-          }
-          return `For "${claim.text}": Call ${toolList} with appropriate parameters`;
-        }).join('. ');
-        
-        const enforcementPrompt = `CRITICAL VALIDATION ERROR: You claimed specific actions but didn't execute the required tools. ${specificRequirements}. You MUST call the exact required tools now - do not just read data with getTasks.`;
-        
-        // Limit enforcement messages to prevent API overload - only use last 5 messages plus the current exchange
-        const limitedMessages = initialMessages.slice(-5);
-        const enforcementMessages = validateMessages([
-          ...limitedMessages, 
-          { role: "assistant", content: result.text },
-          { role: "user", content: enforcementPrompt }
-        ]);
-        
-        let enforcementResult;
-        try {
-          enforcementResult = await generateText({
-            model: useHaiku ? anthropic("claude-3-5-haiku-20241022") : anthropic("claude-3-5-sonnet-20240620"),
-            system: `CRITICAL: Execute the tools needed to complete the actions you claimed. After executing tools, provide a brief confirmation of what was actually done.`,
-            messages: enforcementMessages,
-            tools: tools,
-            toolChoice: "required", // Force tool usage
-            stopWhen: stepCountIs(useHaiku ? 6 : 10),
-          });
-        } catch (error) {
-          console.log(`❌ ENFORCEMENT FAILED: ${error instanceof Error ? error.message : String(error)}`);
-          // Fall back to original result if enforcement fails
-          console.log(`🔄 Using original result due to enforcement failure`);
-          result = {
-            ...result,
-            text: result.text + "\n\n(Note: I intended to perform additional actions but encountered a temporary issue. Please try your request again if needed.)"
-          };
-          return result; // Return early to avoid further processing
-        }
-        
-        console.log(`✅ ENFORCEMENT SUCCEEDED: Retry generated ${enforcementResult.toolCalls?.length || 0} tool calls`);
-        
-        // If enforcement result has empty text, use a simple fallback message instead of another API call
-        if (!enforcementResult.text || enforcementResult.text.trim().length === 0) {
-          console.log(`🔄 Using fallback response for empty enforcement text...`);
-          
-          // Create a simple response based on what tools were executed
-          const toolSummary = enforcementResult.toolCalls?.map(tc => tc.toolName).join(', ') || 'tools';
-          const fallbackText = `I've executed the requested ${toolSummary} to complete your request.`;
-          
-          // Combine enforcement tool calls with fallback text
-          result = {
-            ...enforcementResult,
-            text: fallbackText,
-            toolCalls: enforcementResult.toolCalls,
-            toolResults: enforcementResult.toolResults,
-          };
-        } else {
-          // Use the enforcement result directly if it has proper text
-          result = enforcementResult;
-        }
-        
-        // STRICT ENFORCEMENT VALIDATION: Check if enforcement actually completed the claimed actions
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          const executedToolNames = result.toolCalls.map(tc => tc.toolName);
-          const missedActions = claimedActions.filter(claim => {
-            const requiredTools = claim.requiredTools;
-            const hasRequiredTool = requiredTools.some(tool => executedToolNames.includes(tool));
-            
-            // Special strict validation for completion actions
-            if (claim.type === 'complete' && executedToolNames.includes('updateTask')) {
-              const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
-              const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
-              if (!hasCompletionUpdate) {
-                console.log(`🚨 COMPLETION VALIDATION FAILED: updateTask called but isCompleted !== true for claim: "${claim.text}"`);
-                return true; // Mark as missed
-              }
-            }
-            
-            // NO TOLERANCE for read-only tools satisfying write actions
-            if (!hasRequiredTool) {
-              console.log(`🚨 TOOL MISMATCH: Claim "${claim.text}" requires ${requiredTools.join(' or ')} but got ${executedToolNames.join(', ')}`);
-              return true; // Mark as missed
-            }
-            
-            return false;
-          });
-          
-          if (missedActions.length > 0) {
-            console.log(`⚠️ ENFORCEMENT INCOMPLETE: ${missedActions.length}/${claimedActions.length} actions still not properly executed:`, missedActions.map(a => a.text));
-          } else {
-            console.log(`✅ ENFORCEMENT SUCCESS: All ${claimedActions.length} claimed actions properly validated with correct tools`);
-          }
-        }
-      } else if (claimedActions.length > 0 && actualToolCalls.length > 0 && !hasInvalidToolMapping) {
-        console.log(`✅ VALIDATION PASSED: AI claimed ${claimedActions.length} actions and executed correct tools:`, claimedActions.map(c => `${c.text} -> ${c.requiredTools.join('|')}`));
-      }
-
-      // Log AI response details for debugging
-      console.log(`🤖 AI Response - Tool Calls:`, result.toolCalls?.length || 0);
-      console.log(`🤖 AI Response - Tool Results:`, result.toolResults?.length || 0);
-      console.log(`🤖 AI Response - Text:`, result.text);
-      
-      // Warning if no tools were called when they might be needed
-      if (!result.toolCalls || result.toolCalls.length === 0) {
-        if (message.toLowerCase().includes('move') || 
-            message.toLowerCase().includes('update') || 
-            message.toLowerCase().includes('complete') ||
-            message.toLowerCase().includes('create')) {
-          console.log(`⚠️ WARNING: No tools executed for potential action request: "${message}"`);
-        }
-      }
-      if (result.toolCalls && result.toolCalls.length > 0) {
-        console.log(`🤖 AI Tool Calls Details:`, JSON.stringify(result.toolCalls, null, 2));
-      }
-      if (result.toolResults && result.toolResults.length > 0) {
-        console.log(`🤖 AI Tool Results Details:`, JSON.stringify(result.toolResults, null, 2));
-      }
-
-      // Store user message
-      await ctx.runMutation(api.conversations.addMessage, {
-        role: "user",
-        content: message,
+        ]),
       });
 
-      // Store AI response  
-      await ctx.runMutation(api.conversations.addMessage, {
-        role: "assistant", 
-        content: result.text,
+      // Save the complete interaction history to the database
+      await ctx.runMutation(api.conversations.updateConversation, {
+        messages: [
+            ...initialMessages,
+            { 
+              role: "assistant", 
+              content: finalResponse.text,
+              timestamp: Date.now(),
+              toolCalls: executionResult.toolCalls.map((tc: any) => ({
+                name: tc.toolName,
+                args: tc.args,
+                result: executionResult.toolResults?.find((tr: any) => tr.toolCallId === tc.toolCallId)?.result,
+              })),
+            }
+        ] as any,
       });
-      
+
       return {
-        response: result.text,
-        toolCalls: result.toolCalls,
-        toolResults: result.toolResults,
-        usage: result.usage,
+        response: finalResponse.text,
+        toolCalls: executionResult.toolCalls,
+        toolResults: executionResult.toolResults,
       };
 
     } catch (error) {
       console.error("AI chat error:", error);
-      const errorMessage = error instanceof Error ? error.message : "An error occurred while processing your request.";
+      const errorMessage = error instanceof Error ? error.message : "An error occurred.";
       await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: `I apologize, but I encountered an error: ${errorMessage}` });
       throw new Error(`AI processing failed: ${errorMessage}`);
     }
