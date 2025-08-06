@@ -56,6 +56,21 @@ const defineTools = (ctx: ActionCtx): Record<string, any> => ({
       projectId: z.string().optional().describe("Filter tasks for a specific project using its exact database ID from getProjects - NOT project name"),
     }),
     execute: async (toolArgs): Promise<any[]> => {
+      console.log(`🔍 getTasks received parameters:`, JSON.stringify(toolArgs, null, 2));
+      console.log(`🔍 Validating projectId format if provided...`);
+      
+      // Enhanced validation for projectId if provided
+      if (toolArgs.projectId) {
+        if (toolArgs.projectId.length < 8 || /\s/.test(toolArgs.projectId) || /[A-Z]/.test(toolArgs.projectId)) {
+          console.log(`❌ Invalid projectId format detected: "${toolArgs.projectId}"`);
+          console.log(`❌ Expected: Database ID like "k789def456ghi"`);
+          console.log(`❌ Received: ${toolArgs.projectId?.includes(' ') ? 'Human-readable project name' : 'Invalid ID format'}`);
+          console.log(`❌ SOLUTION: Call getProjects() first to get actual database IDs`);
+          throw new Error(`Invalid projectId format: "${toolArgs.projectId}". You must call getProjects first to get the actual database ID, not the project name like "Personal" or "Work".`);
+        }
+        console.log(`✅ projectId format validation passed: "${toolArgs.projectId}"`);
+      }
+      
       console.log(`🔧 getTasks called with:`, toolArgs);
       return await ctx.runQuery(api.tasks.getTasks, {
         completed: toolArgs.completed,
@@ -75,13 +90,21 @@ const defineTools = (ctx: ActionCtx): Record<string, any> => ({
       dueDate: z.string().optional().describe("New due date in ISO format."),
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
-      console.log(`🔧 updateTask called with:`, toolArgs);
+      console.log(`🔍 updateTask received parameters:`, JSON.stringify(toolArgs, null, 2));
+      console.log(`🔍 Validating ID formats...`);
       const { taskId, ...updateData } = toolArgs;
       
-      // Validate taskId format - must be database ID, not human text
+      // Enhanced validation with detailed logging
       if (!taskId || taskId.length < 8 || /\s/.test(taskId) || /[A-Z]/.test(taskId)) {
+        console.log(`❌ Invalid taskId format detected: "${taskId}"`);
+        console.log(`❌ Expected: Database ID like "j57abc123def4gh8"`);
+        console.log(`❌ Received: ${taskId?.includes(' ') ? 'Human-readable text with spaces' : 'Invalid ID format'}`);
+        console.log(`❌ SOLUTION: Call getTasks() first to get actual database IDs`);
         throw new Error(`Invalid taskId format: "${taskId}". You must call getTasks first to get the actual database ID (like "j57abc123def4gh8"), not the task title or description.`);
       }
+      
+      console.log(`✅ taskId format validation passed: "${taskId}"`);
+      console.log(`🔧 updateTask called with:`, toolArgs);
       
       const task = await ctx.runQuery(api.tasks.getTaskById, { taskId: taskId as Id<"tasks"> });
       if (!task) {
@@ -182,32 +205,71 @@ export const chatWithAI: any = action({
       const modelName = useHaiku ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620";
       console.log(`🤖 Using AI model: ${modelName}`);
       
+      // Enhanced logging: Track user request and AI planning phase
+      console.log(`🎯 User Request: "${message}"`);
+      console.log(`🤖 AI Planning Phase: Model will analyze request for tool usage`);
+      
       // STEP 1: Plan and Execute Tools
       // The AI is instructed to think, decide which tools to use, and call them.
       const executionResult: any = await generateText({
         model: anthropic(modelName),
-        system: `You are an expert AI assistant for task and project management.
+        system: `<task_description>
+You are a database-aware task management assistant. Your role is to execute user requests by calling the correct tools with valid database IDs, never human-readable text as identifiers.
+</task_description>
 
-        **CRITICAL ID REQUIREMENTS:**
-        - Task IDs and Project IDs are database-generated strings like "j57abc123def4gh8", NOT human-readable names
-        - BEFORE updating, deleting, or filtering tasks: MUST call getTasks to get actual task IDs
-        - BEFORE referencing projects: MUST call getProjects to get actual project IDs  
-        - NEVER use task titles like "Put dad's golf bag in the car" or project names like "Personal" as IDs
+<context>
+The system uses Convex database with auto-generated IDs like "j57abc123def4gh8" for tasks and projects. Users refer to items by human names, but tools require database IDs. You must translate between human descriptions and database identifiers.
+</context>
 
-        **CORE INSTRUCTIONS:**
-        1.  **READ-FIRST PATTERN**: For ANY operation involving specific tasks/projects, start with getTasks or getProjects
-        2.  **PLAN & EXECUTE**: Use the exact database IDs returned by get operations for all subsequent tool calls
-        3.  **NO ASSUMPTIONS**: Never assume you know IDs - always fetch current data first
-        4.  If no tool is required, you may respond directly to the user.
+<instructions>
+For ANY operation involving specific tasks or projects:
 
-        **MANDATORY WORKFLOW EXAMPLES:**
-        - To complete a task: 1) getTasks to find the task and get its _id, 2) updateTask with that exact _id
-        - To move a task to project: 1) getTasks for task _id, 2) getProjects for project _id, 3) updateTask
-        - To delete a task: 1) getTasks to confirm existence and get _id, 2) deleteTask with that _id`,
+1. **Read First**: Always call getTasks() or getProjects() to retrieve current data
+2. **Locate Item**: Find the item that matches the user's description in the results
+3. **Extract ID**: Copy the exact _id field value from the matching item
+4. **Execute Operation**: Use that database ID in subsequent tool calls
+
+**ID Format Validation**:
+- Valid database IDs: "j57abc123def4gh8" (8+ characters, lowercase, no spaces)
+- Invalid human text: "Put dad's golf bag in the car", "Personal", "Work"
+
+**Workflow Enforcement**:
+- Never assume you know database IDs
+- Never use task titles or project names as IDs
+- Always fetch fresh data before update/delete operations
+</instructions>
+
+<examples>
+**Correct workflow for completing a task**:
+User: "Mark the grocery shopping task as done"
+1. getTasks() → returns [{_id: "k89def456ghi", title: "Buy groceries"}, ...]
+2. updateTask(taskId: "k89def456ghi", isCompleted: true)
+
+**Correct workflow for project filtering**:
+User: "Show me tasks in my Personal project"  
+1. getProjects() → returns [{_id: "m12ghi789jkl", name: "Personal"}, ...]
+2. getTasks(projectId: "m12ghi789jkl")
+
+**Direct response (no tools needed)**:
+User: "What can you help me with?"
+Response: Explain your capabilities without calling tools.
+</examples>
+
+<task_reminder>
+Critical: Never use human-readable text as database IDs. Always follow the read-first pattern: get current data, locate the item, extract the _id, then execute the operation.
+</task_reminder>`,
         messages: validateMessages(initialMessages),
         tools: tools,
         stopWhen: stepCountIs(5),
       });
+
+      // Tool call inspection: Log what the AI decided to call and parameters
+      if (executionResult.toolCalls && executionResult.toolCalls.length > 0) {
+        console.log(`🔧 AI Generated ${executionResult.toolCalls.length} tool calls:`);
+        executionResult.toolCalls.forEach((call: any, idx: number) => {
+          console.log(`   ${idx + 1}. ${call.toolName}(${JSON.stringify(call.args, null, 2)})`);
+        });
+      }
 
       // If the model didn't call any tools, its text response is the final answer.
       if (executionResult.toolCalls === undefined || executionResult.toolCalls.length === 0) {
@@ -217,7 +279,7 @@ export const chatWithAI: any = action({
         return { response: executionResult.text };
       }
 
-      // Validate workflow: Check for read-first pattern compliance
+      // Enhanced workflow pattern analysis logging
       const hasUpdateOrDelete = executionResult.toolCalls.some((call: any) => 
         ['updateTask', 'deleteTask', 'deleteProject'].includes(call.toolName)
       );
@@ -225,11 +287,19 @@ export const chatWithAI: any = action({
         ['getTasks', 'getProjects'].includes(call.toolName)
       );
       
+      console.log(`📊 Workflow Analysis:`);
+      console.log(`   Update/Delete operations: ${hasUpdateOrDelete ? '✓' : '✗'}`);
+      console.log(`   Read operations: ${hasReadOperation ? '✓' : '✗'}`);
+      console.log(`   Tool sequence: ${executionResult.toolCalls.map((tc: any) => tc.toolName).join(' → ')}`);
+      
       if (hasUpdateOrDelete && !hasReadOperation) {
-        console.log(`⚠️  WORKFLOW VIOLATION: AI attempted update/delete without reading data first`);
-        console.log(`Tool calls: ${executionResult.toolCalls.map((tc: any) => tc.toolName).join(', ')}`);
+        console.log(`❌ WORKFLOW VIOLATION: Tools [${executionResult.toolCalls.filter((tc: any) => ['updateTask', 'deleteTask', 'deleteProject'].includes(tc.toolName)).map((tc: any) => tc.toolName).join(', ')}]`);
+        console.log(`❌ Missing required read operations before update/delete`);
+        console.log(`❌ AI must call getTasks or getProjects first to get database IDs`);
       } else if (hasReadOperation && hasUpdateOrDelete) {
         console.log(`✅ PROPER WORKFLOW: AI used read-first pattern`);
+      } else if (!hasUpdateOrDelete && !hasReadOperation) {
+        console.log(`ℹ️  NO CRITICAL OPERATIONS: Safe workflow (create/read only)`);
       }
 
       // STEP 2: Respond based on Tool Results
