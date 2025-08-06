@@ -61,11 +61,11 @@ export function ProjectsView() {
                 
                 <div className="flex justify-between items-center mb-3">
                   <div className="text-sm">
-                    <span className="font-semibold">{project.taskCounts?.total || 0}</span> 
+                    <span className="font-semibold">{project.taskCount || 0}</span> 
                     <span className="text-base-content/60"> tasks</span>
                   </div>
                   <div className="text-sm text-success">
-                    <span className="font-semibold">{project.taskCounts?.completed || 0}</span>
+                    <span className="font-semibold">{project.completedTaskCount || 0}</span>
                     <span className="text-base-content/60"> completed</span>
                   </div>
                 </div>
@@ -75,8 +75,8 @@ export function ProjectsView() {
                   <div 
                     className="bg-primary h-2 rounded-full transition-all duration-300"
                     style={{
-                      width: `${project.taskCounts?.total > 0 
-                        ? (project.taskCounts.completed / project.taskCounts.total) * 100 
+                      width: `${project.taskCount > 0 
+                        ? (project.completedTaskCount / project.taskCount) * 100 
                         : 0}%`
                     }}
                   ></div>
@@ -113,13 +113,13 @@ export function ProjectsView() {
           <div className="stat bg-base-100 rounded-lg shadow">
             <div className="stat-title">Total Tasks</div>
             <div className="stat-value text-accent">
-              {projects.reduce((total, p) => total + (p.taskCounts?.total || 0), 0)}
+              {projects.reduce((total, p) => total + (p.taskCount || 0), 0)}
             </div>
           </div>
           <div className="stat bg-base-100 rounded-lg shadow">
             <div className="stat-title">Completed Tasks</div>
             <div className="stat-value text-success">
-              {projects.reduce((total, p) => total + (p.taskCounts?.completed || 0), 0)}
+              {projects.reduce((total, p) => total + (p.completedTaskCount || 0), 0)}
             </div>
           </div>
         </div>

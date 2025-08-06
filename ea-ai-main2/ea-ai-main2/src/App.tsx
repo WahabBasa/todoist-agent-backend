@@ -7,7 +7,7 @@ import {
 } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { toast, Toaster } from "sonner";
+import { Toaster } from "sonner";
 
 // Import components
 import { Sidebar } from "./components/Sidebar";

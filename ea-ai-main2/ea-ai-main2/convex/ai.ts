@@ -16,13 +16,18 @@ const anthropic = createAnthropic({
 // Helper to create a typed set of tools
 const defineTools = (ctx: ActionCtx) => ({
   createTask: tool({
-    description: "Create a new task with title, optional description, priority (1-4), due date, and projectId",
+    description: "Create a new task with comprehensive options including recurring patterns, time estimation, tags, and due dates",
     inputSchema: z.object({
       title: z.string().describe("The task title or name"),
       description: z.string().optional().describe("Optional detailed description of the task"),
       priority: z.number().min(1).max(4).optional().describe("Task priority: 1=highest, 4=lowest (default: 3)"),
       dueDate: z.string().optional().describe("Due date in ISO format (YYYY-MM-DD or ISO datetime)"),
-      projectId: z.string().optional().describe("The ID of the project to associate the task with."),
+      projectId: z.string().optional().describe("The ID of the project to associate the task with"),
+      estimatedHours: z.number().min(0).optional().describe("Estimated hours to complete the task"),
+      estimatedMinutes: z.number().min(0).max(59).optional().describe("Estimated minutes to complete the task (0-59)"),
+      tags: z.array(z.string()).optional().describe("Array of tags for categorizing the task"),
+      isRecurring: z.boolean().optional().describe("Whether this task repeats on a schedule"),
+      recurringPattern: z.enum(['daily', 'weekly', 'monthly', 'yearly']).optional().describe("How often the task recurs (only if isRecurring is true)"),
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
       console.log(`🔧 createTask called with:`, toolArgs);
@@ -63,7 +68,7 @@ const defineTools = (ctx: ActionCtx) => ({
     },
   }),
   updateTask: tool({
-    description: "Update an existing task. Use getTasks first to get the exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Use projectId to move tasks between projects.",
+    description: "Update an existing task with comprehensive options. Use getTasks first to get the exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Supports recurring patterns, time estimation, and tags.",
     inputSchema: z.object({
       taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
       title: z.string().optional().describe("Updated task title"),
@@ -72,6 +77,11 @@ const defineTools = (ctx: ActionCtx) => ({
       isCompleted: z.boolean().optional().describe("Mark task as completed (true) or pending (false)"),
       priority: z.number().min(1).max(4).optional().describe("Updated priority: 1=highest, 4=lowest"),
       dueDate: z.string().optional().describe("Updated due date in ISO format"),
+      estimatedHours: z.number().min(0).optional().describe("Updated estimated hours to complete the task"),
+      estimatedMinutes: z.number().min(0).max(59).optional().describe("Updated estimated minutes (0-59)"),
+      tags: z.array(z.string()).optional().describe("Updated array of tags for the task"),
+      isRecurring: z.boolean().optional().describe("Whether this task should repeat on a schedule"),
+      recurringPattern: z.enum(['daily', 'weekly', 'monthly', 'yearly']).optional().describe("How often the task recurs"),
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
       console.log(`🔧 updateTask called with:`, toolArgs);
@@ -189,6 +199,64 @@ const defineTools = (ctx: ActionCtx) => ({
       }
     },
   }),
+  getUpcomingTasks: tool({
+    description: "Get tasks that are due within a specified number of days (default 7 days). Useful for deadline awareness and planning.",
+    inputSchema: z.object({
+      days: z.number().min(1).max(30).optional().describe("Number of days ahead to look for upcoming tasks (1-30, default: 7)"),
+    }),
+    execute: async (toolArgs): Promise<Doc<"tasks">[]> => {
+      console.log(`🔧 getUpcomingTasks called with:`, toolArgs);
+      try {
+        const result = await ctx.runQuery(api.tasks.getUpcomingTasks, {
+          days: toolArgs.days || 7,
+        });
+        console.log(`✅ getUpcomingTasks succeeded - found ${result.length} upcoming tasks`);
+        return result;
+      } catch (error) {
+        console.error(`❌ getUpcomingTasks failed:`, error);
+        throw error;
+      }
+    },
+  }),
+  getTasksByFilter: tool({
+    description: "Get tasks with advanced filtering and sorting options. Use this for complex task queries and organization.",
+    inputSchema: z.object({
+      completed: z.boolean().optional().describe("Filter by completion status (true=completed, false=active)"),
+      projectId: z.string().optional().describe("Filter by specific project ID"),
+      priority: z.number().min(1).max(4).optional().describe("Filter by priority level (1=highest, 4=lowest)"),
+      sortBy: z.enum(['priority', 'dueDate', 'createdAt']).optional().describe("Sort tasks by priority, due date, or creation date"),
+      sortOrder: z.enum(['asc', 'desc']).optional().describe("Sort order: ascending or descending"),
+    }),
+    execute: async (toolArgs): Promise<Doc<"tasks">[]> => {
+      console.log(`🔧 getTasksByFilter called with:`, toolArgs);
+      try {
+        const result = await ctx.runQuery(api.tasks.getTasksByFilter, {
+          ...toolArgs,
+          projectId: toolArgs.projectId as Id<"projects"> | undefined,
+        });
+        console.log(`✅ getTasksByFilter succeeded - found ${result.length} tasks`);
+        return result;
+      } catch (error) {
+        console.error(`❌ getTasksByFilter failed:`, error);
+        throw error;
+      }
+    },
+  }),
+  getTaskStats: tool({
+    description: "Get comprehensive statistics about tasks including totals, priority distribution, and overdue counts.",
+    inputSchema: z.object({}),
+    execute: async (): Promise<any> => {
+      console.log(`🔧 getTaskStats called`);
+      try {
+        const result = await ctx.runQuery(api.tasks.getTaskStats, {});
+        console.log(`✅ getTaskStats succeeded:`, result);
+        return result;
+      } catch (error) {
+        console.error(`❌ getTaskStats failed:`, error);
+        throw error;
+      }
+    },
+  }),
 });
 
 export const chatWithAI = action({
@@ -218,31 +286,49 @@ export const chatWithAI = action({
 
 CRITICAL: You MUST actually call the tools to perform actions - don't just describe what you would do!
 
+You have powerful task management tools at your disposal:
+- createTask: Supports recurring patterns, time estimation, tags, due dates, and project assignment
+- updateTask: Can modify any task property including recurring settings and time estimates
+- getUpcomingTasks: Shows tasks due within specified days for deadline awareness
+- getTasksByFilter: Advanced filtering and sorting by priority, project, completion status
+- getTaskStats: Comprehensive task analytics and priority distribution
+
 For multi-step operations, you have up to ${useHaiku ? 6 : 10} steps to complete complex tasks:
 
-1. ALWAYS call getTasks first to see current tasks and get their exact IDs
-2. Use the exact _id field from getTasks results when calling updateTask or deleteTask  
-3. For "complete all tasks" or "tick off all active tasks": 
-   - Step 1: Call getTasks with completed: false to get all pending tasks
-   - Step 2-N: Call updateTask for each task with isCompleted: true using their exact _id values
+1. ALWAYS call getTasks or getTasksByFilter first to see current tasks and get their exact IDs
+2. Use getUpcomingTasks to check for deadline-sensitive tasks when relevant
+3. Use getTaskStats to understand overall task distribution and priority levels
+4. For complex queries, use getTasksByFilter with appropriate filters and sorting
 
-4. For moving tasks between projects:
-   - Step 1: Call getProjects to see available projects and their IDs
-   - Step 2: Call getTasks to find tasks to move
-   - Step 3: Call updateTask with projectId to move each task
+Common Workflows:
 
-5. For task updates, use the isCompleted field - set to true when completing tasks
+🔄 **Creating Recurring Tasks:**
+- createTask with isRecurring: true and recurringPattern: 'daily/weekly/monthly/yearly'
+- Include estimatedHours/estimatedMinutes for time planning
+- Add tags for easy categorization
 
-Example multi-step workflow for "move tasks to project X":
-1. getProjects() -> find target project ID
-2. getTasks() -> find tasks to move  
-3. updateTask(taskId: "task1_id", projectId: "target_project_id")
-4. updateTask(taskId: "task2_id", projectId: "target_project_id")
-5. Continue for all tasks
+⏰ **Time Management:**
+- Use getUpcomingTasks to check deadlines
+- createTask or updateTask with estimatedHours and estimatedMinutes
+- Set priority levels based on urgency and importance
+
+📊 **Task Organization:**
+- Use getTasksByFilter for complex queries (filter by project, priority, completion)
+- Sort tasks by priority, dueDate, or createdAt
+- Use getTaskStats to understand workload distribution
+
+✅ **Bulk Operations:**
+- Step 1: Use getTasksByFilter to find specific tasks
+- Step 2-N: Apply updateTask to each task with desired changes
 
 IMPORTANT: Always execute the tool calls - don't just plan or describe actions!
 
-Be conversational and explain what you're doing step by step. Use the tools systematically to accomplish complex operations.`,
+Be conversational and explain what you're doing step by step. Use the enhanced task management capabilities systematically:
+- When users mention deadlines or time constraints, use getUpcomingTasks
+- For recurring tasks (daily standup, weekly reviews), use the recurring task features
+- For time estimation requests, use estimatedHours and estimatedMinutes
+- For filtering requests, use getTasksByFilter with appropriate parameters
+- Always provide task statistics when users ask for overviews or summaries`,
         messages: initialMessages,
         tools: tools,
         stopWhen: stepCountIs(useHaiku ? 6 : 10), // Reduce steps for Haiku

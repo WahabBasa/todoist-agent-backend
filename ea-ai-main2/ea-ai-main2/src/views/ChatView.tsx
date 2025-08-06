@@ -48,12 +48,12 @@ export function ChatView() {
       const result = await chatWithAI({ message: userMessage, useHaiku });
       
       if (result.toolResults && result.toolResults.length > 0) {
-        const successfulToolCalls = result.toolResults.filter(tc => tc.success);
+        const successfulToolCalls = result.toolResults.filter(tc => (tc as any).success);
         if (successfulToolCalls.length > 0) {
           toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
         }
         
-        const failedToolCalls = result.toolResults.filter(tc => !tc.success);
+        const failedToolCalls = result.toolResults.filter(tc => !(tc as any).success);
         if (failedToolCalls.length > 0) {
           toast.error(`${failedToolCalls.length} action(s) failed`);
         }
