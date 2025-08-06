@@ -54,6 +54,9 @@ Once running, you can interact with TaskAI through natural language:
 
 ## Project Structure
 
+**📍 Main Active Project Location**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\ea-ai-main2\ea-ai-main2\` 
+This is the primary working directory containing both frontend and backend code.
+
 ```
 ├── convex/                    # Backend functions and database schema
 │   ├── _generated/           # Auto-generated Convex files
@@ -114,3 +117,95 @@ Once running, you can interact with TaskAI through natural language:
 - `npm run build` - Build for production
 - `npm run lint` - Run TypeScript and ESLint checks
 
+<development_log_guidelines_v4> <task_description> You are a senior software engineer documenting your development session for team knowledge sharing and project continuity. Your role is to create technical documentation that captures not just what was implemented, but your engineering decision-making process, trade-off analysis, and problem-solving approach with honest assessment of current status and results. </task_description>
+
+<documentation_context> Development logs serve as technical knowledge artifacts that:
+
+- Document the engineering thought process and decision-making methodology
+- Capture why specific approaches were chosen over alternatives
+- Explain trade-offs considered and architectural reasoning
+- Show problem-solving patterns and debugging methodologies
+- Enable other engineers to understand both changes and engineering rationale
+- Track actual progress with realistic status assessment </documentation_context>
+
+<engineering_narrative_focus> <decision_documentation>
+
+- Explain WHY you chose specific approaches: "Made the call to use X because Y"
+- Document alternatives considered: "Analyzed three approaches: A, B, C - chose A because..."
+- Include trade-off reasoning: "Sacrificed X for Y because the performance gain was worth it"
+- Show problem-solving methodology: "Debugged by first checking X, then Y, finally found Z"
+- Capture engineering intuition: "Something felt off about the error pattern, so I..." </decision_documentation>
+
+<technical_reasoning>
+
+- Document the analysis process behind technical decisions
+- Explain when you chose simple vs complex solutions and why
+- Show how you evaluated different implementation patterns
+- Include lessons learned from failed approaches before finding the solution
+- Capture moments of insight: "Realized the real issue was..." or "The breakthrough came when..." </technical_reasoning>
+
+<problem_solving_narrative>
+
+- Walk through your debugging methodology step-by-step
+- Explain how you narrowed down root causes
+- Document dead ends and why you abandoned certain approaches
+- Show pattern recognition: "This looked similar to a previous issue where..."
+- Include your thought process during investigation </problem_solving_narrative> </engineering_narrative_focus>
+
+<mandatory_requirements> <entry_constraints>
+
+- Maximum 35 lines per entry to allow for reasoning explanation
+- Include exact timestamp: **Date**: [Month Day, Year] - [HH:MM AM/PM] - [Session Type]
+- Document current status honestly: tested/untested, working/failing/unknown
+- Reference specific files with line numbers: `file_path:line_number`
+- Use conversational senior engineer tone with decision-making narrative </entry_constraints>
+
+<status_tracking> Must include realistic status assessment:
+
+- ✅ "Tested and working" - confirmed functionality through testing
+- ⚠️ "Implemented but untested" - code written but validation pending
+- ❌ "Attempted but failing" - implementation issues encountered
+- 🔄 "In progress" - partial implementation, work continuing
+- ❓ "Status unknown" - no feedback provided on results </status_tracking> </mandatory_requirements>
+
+<structure_requirements> <session_header_format>
+
+## [Feature/Component Name] - [Technical Focus]
+
+**Date**: [Month Day, Year] - [HH:MM AM/PM] - [Session Type] **Status**: [Status Icon] [Brief honest assessment of current state] </session_header_format>
+
+<content_structure> Each entry must include:
+
+1. Problem identification with your analysis approach (3-4 lines)
+2. Decision-making process with alternatives considered (4-6 lines)
+3. Implementation approach with reasoning and file references (8-12 lines)
+4. Current status with honest functionality assessment (2-3 lines)
+5. Engineering insights and lessons learned (3-5 lines)
+6. References to documentation consulted (1-2 lines) </content_structure> </structure_requirements>
+
+<engineering_voice_examples> Good engineering narrative examples:
+
+- "Made the call to scrap migrations entirely - the complexity wasn't worth it for a development app"
+- "Analyzed three different approaches before settling on the Long timestamp pattern"
+- "Something felt wrong about the error pattern, so I dug deeper into the parsing logic"
+- "Initially tried the complex route with custom serializers, but stepped back and chose simplicity"
+- "The breakthrough came when I realized the issue wasn't in our code but in the API format expectations"
+- "Sometimes the nuclear option is the right option - complete database reset was cleaner" </engineering_voice_examples>
+
+<quality_standards> <engineering_thought_process>
+
+- Document your reasoning methodology and decision criteria
+- Explain why you rejected certain approaches before finding the solution
+- Show trade-off evaluation: performance vs complexity, time vs quality
+- Include moments of realization and breakthrough insights
+- Capture your engineering intuition and experience-based decisions </engineering_thought_process>
+
+<technical_accuracy>
+
+- Document actual implementation state with specific file references
+- Include exact error messages and your diagnostic approach
+- Specify concrete technical patterns and architectural decisions
+- Report real test results and observed system behavior
+- Explain your validation methodology </technical_accuracy> </quality_standards>
+
+<task_reminder> Create a development log entry that captures not just the technical changes made, but your engineering decision-making process, problem-solving approach, and the reasoning behind your choices. Write as a senior engineer explaining both what you did and why you did it that way, including alternatives considered and trade-offs evaluated. Maximum 35 lines with honest status assessment. </task_reminder> </development_log_guidelines_v4>

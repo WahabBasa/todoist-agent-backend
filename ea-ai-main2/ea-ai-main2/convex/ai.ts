@@ -8,6 +8,33 @@ import { z } from "zod";
 import { Id, Doc } from "./_generated/dataModel";
 import { ActionCtx } from "./_generated/server";
 
+// Helper function to extract action claims from AI response text
+function extractActionClaims(text: string): string[] {
+  const actionPatterns = [
+    /I['']?ll (create|delete|update|mark|remove|add|complete)/gi,
+    /I['']?m (creating|deleting|updating|marking|removing|adding|completing)/gi,
+    /(Creating|Deleting|Updating|Marking|Removing|Adding|Completing)/gi,
+    /Let me (create|delete|update|mark|remove|add|complete)/gi,
+    /I will (create|delete|update|mark|remove|add|complete)/gi,
+  ];
+  
+  const claims = [];
+  for (const pattern of actionPatterns) {
+    const matches = text.match(pattern);
+    if (matches) claims.push(...matches);
+  }
+  return claims;
+}
+
+// Helper function to validate messages before API calls
+function validateMessages(messages: CoreMessage[]): CoreMessage[] {
+  return messages.filter(msg => {
+    if (!msg.content) return false;
+    if (typeof msg.content === 'string' && msg.content.trim().length === 0) return false;
+    return true;
+  });
+}
+
 // Create configured Anthropic provider
 const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -68,7 +95,7 @@ const defineTools = (ctx: ActionCtx) => ({
     },
   }),
   updateTask: tool({
-    description: "Update an existing task with comprehensive options. Use getTasks first to get the exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Supports recurring patterns, time estimation, and tags.",
+    description: "Update an existing task with comprehensive options. REQUIRES calling getTasks first to get current task data and exact task ID (_id field). Use isCompleted: true to mark tasks as completed. Supports recurring patterns, time estimation, and tags.",
     inputSchema: z.object({
       taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
       title: z.string().optional().describe("Updated task title"),
@@ -85,10 +112,32 @@ const defineTools = (ctx: ActionCtx) => ({
     }),
     execute: async (toolArgs): Promise<Id<"tasks">> => {
       console.log(`🔧 updateTask called with:`, toolArgs);
+      
+      // ENFORCE READ-BEFORE-WRITE: Check if getTasks was called recently
+      const recentMessages = await ctx.runQuery(api.conversations.getMessages, { limit: 10 });
+      const hasRecentTaskRead = recentMessages.some(msg => 
+        msg.toolCalls?.some((tc: any) => 
+          ['getTasks', 'getTasksByFilter', 'getUpcomingTasks'].includes(tc.toolName)
+        )
+      );
+      
+      if (!hasRecentTaskRead) {
+        throw new Error(`PRECONDITION FAILED: You must call getTasks, getTasksByFilter, or getUpcomingTasks first to read current task data before updating. This ensures you have the correct task information and valid task ID.`);
+      }
+      
       if (!toolArgs.taskId) {
         console.error(`❌ updateTask missing taskId`);
-        throw new Error("taskId is required for updateTask");
+        throw new Error("taskId is required for updateTask. Call getTasks first to get valid task IDs.");
       }
+      
+      // Verify task exists with current data
+      const currentTasks = await ctx.runQuery(api.tasks.getTasks, {});
+      const currentTask = currentTasks.find(t => t._id === toolArgs.taskId);
+      
+      if (!currentTask) {
+        throw new Error(`Task with ID ${toolArgs.taskId} not found. Call getTasks first to get valid task IDs. Available tasks: ${currentTasks.map(t => `"${t.title}" (${t._id})`).join(', ')}`);
+      }
+      
       try {
         const { taskId, ...updateData } = toolArgs;
         const result = await ctx.runMutation(api.tasks.updateTask, {
@@ -97,7 +146,20 @@ const defineTools = (ctx: ActionCtx) => ({
           projectId: updateData.projectId as Id<"projects"> | undefined,
           dueDate: updateData.dueDate ? new Date(updateData.dueDate).getTime() : undefined,
         });
-        console.log(`✅ updateTask succeeded:`, result, `with data:`, updateData);
+        
+        // Get updated task for rich feedback
+        const updatedTasks = await ctx.runQuery(api.tasks.getTasks, {});
+        const updatedTask = updatedTasks.find(t => t._id === result);
+        
+        console.log(`✅ updateTask succeeded. Task "${updatedTask?.title}" was updated. Previous: ${JSON.stringify({
+          title: currentTask.title,
+          isCompleted: currentTask.isCompleted,
+          priority: currentTask.priority
+        })} | New: ${JSON.stringify({
+          title: updatedTask?.title,
+          isCompleted: updatedTask?.isCompleted, 
+          priority: updatedTask?.priority
+        })}`);
         return result;
       } catch (error) {
         console.error(`❌ updateTask failed:`, error);
@@ -106,19 +168,41 @@ const defineTools = (ctx: ActionCtx) => ({
     },
   }),
   deleteTask: tool({
-    description: "Delete a task by its ID. Use getTasks first to get the exact task ID (_id field).",
+    description: "Delete a task by its ID. REQUIRES calling getTasks first to confirm the task exists and get its details.",
     inputSchema: z.object({
       taskId: z.string().describe("The exact task ID from getTasks result (_id field)"),
     }),
     execute: async ({ taskId }): Promise<Id<"tasks">> => {
       console.log(`🔧 deleteTask called with taskId:`, taskId);
+      
+      // ENFORCE READ-BEFORE-WRITE: Check if getTasks was called recently
+      const recentMessages = await ctx.runQuery(api.conversations.getMessages, { limit: 10 });
+      const hasRecentTaskRead = recentMessages.some(msg => 
+        msg.toolCalls?.some((tc: any) => 
+          ['getTasks', 'getTasksByFilter', 'getUpcomingTasks'].includes(tc.toolName)
+        )
+      );
+      
+      if (!hasRecentTaskRead) {
+        throw new Error(`PRECONDITION FAILED: You must call getTasks first to read current tasks before deleting. This ensures the task actually exists and you have the correct ID.`);
+      }
+      
       if (!taskId) {
         console.error(`❌ deleteTask missing taskId`);
-        throw new Error("taskId is required for deleteTask");
+        throw new Error("taskId is required for deleteTask. Call getTasks first to get valid task IDs.");
       }
+      
+      // Verify and get task details before deletion
+      const currentTasks = await ctx.runQuery(api.tasks.getTasks, {});
+      const taskToDelete = currentTasks.find(t => t._id === taskId);
+      
+      if (!taskToDelete) {
+        throw new Error(`Task with ID ${taskId} not found. Call getTasks first to get valid task IDs. Available tasks: ${currentTasks.map(t => `"${t.title}" (${t._id})`).join(', ')}`);
+      }
+      
       try {
         const result = await ctx.runMutation(api.tasks.deleteTask, { id: taskId as Id<"tasks"> });
-        console.log(`✅ deleteTask succeeded:`, result);
+        console.log(`✅ deleteTask succeeded. Deleted task: "${taskToDelete.title}" (ID: ${taskId})`);
         return result;
       } catch (error) {
         console.error(`❌ deleteTask failed:`, error);
@@ -273,14 +357,15 @@ export const chatWithAI = action({
     const tools = defineTools(ctx);
 
     const conversation = await ctx.runQuery(api.conversations.getConversation, {});
-    const initialMessages: CoreMessage[] = (conversation?.messages as CoreMessage[]) || [];
-    initialMessages.push({ role: "user", content: message });
+    const rawMessages: CoreMessage[] = (conversation?.messages as CoreMessage[]) || [];
+    rawMessages.push({ role: "user", content: message });
+    const initialMessages = validateMessages(rawMessages);
     
     try {
       const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-5-sonnet-20240620";
       console.log(`🤖 Using AI model: ${modelName}`);
       
-      const result = await generateText({
+      let result = await generateText({
         model: useHaiku ? anthropic("claude-3-5-haiku-20241022") : anthropic("claude-3-5-sonnet-20240620"),
         system: `You are a helpful AI assistant for task and project management. You can create, read, update, and delete tasks and projects.
 
@@ -333,6 +418,100 @@ Be conversational and explain what you're doing step by step. Use the enhanced t
         tools: tools,
         stopWhen: stepCountIs(useHaiku ? 6 : 10), // Reduce steps for Haiku
       });
+
+      // TOOL EXECUTION VALIDATION: Validate claimed actions against actual tool executions
+      const claimedActions = extractActionClaims(result.text);
+      const actualToolCalls = result.toolCalls?.map(tc => tc.toolName) || [];
+
+      if (claimedActions.length > 0 && actualToolCalls.length === 0) {
+        console.log(`🚨 VALIDATION FAILED: AI claimed to perform ${claimedActions.length} actions but called NO TOOLS. Claims:`, claimedActions);
+        console.log(`🔄 Enforcing tool execution with retry...`);
+        
+        // Create more specific enforcement prompt based on claims
+        const enforcementPrompt = `You claimed to: ${claimedActions.join(', ')}. You must actually execute the required tools to perform these actions. Based on your original response, identify the specific tasks to update/complete and call the appropriate tools with the correct task IDs.`;
+        
+        // Limit enforcement messages to prevent API overload - only use last 5 messages plus the current exchange
+        const limitedMessages = initialMessages.slice(-5);
+        const enforcementMessages = validateMessages([
+          ...limitedMessages, 
+          { role: "assistant", content: result.text },
+          { role: "user", content: enforcementPrompt }
+        ]);
+        
+        let enforcementResult;
+        try {
+          enforcementResult = await generateText({
+            model: useHaiku ? anthropic("claude-3-5-haiku-20241022") : anthropic("claude-3-5-sonnet-20240620"),
+            system: `CRITICAL: Execute the tools needed to complete the actions you claimed. After executing tools, provide a brief confirmation of what was actually done.`,
+            messages: enforcementMessages,
+            tools: tools,
+            toolChoice: "required", // Force tool usage
+            stopWhen: stepCountIs(useHaiku ? 6 : 10),
+          });
+        } catch (error) {
+          console.log(`❌ ENFORCEMENT FAILED: ${error instanceof Error ? error.message : String(error)}`);
+          // Fall back to original result if enforcement fails
+          console.log(`🔄 Using original result due to enforcement failure`);
+          result = {
+            ...result,
+            text: result.text + "\n\n(Note: I intended to perform additional actions but encountered a temporary issue. Please try your request again if needed.)"
+          };
+          return result; // Return early to avoid further processing
+        }
+        
+        console.log(`✅ ENFORCEMENT SUCCEEDED: Retry generated ${enforcementResult.toolCalls?.length || 0} tool calls`);
+        
+        // If enforcement result has empty text, use a simple fallback message instead of another API call
+        if (!enforcementResult.text || enforcementResult.text.trim().length === 0) {
+          console.log(`🔄 Using fallback response for empty enforcement text...`);
+          
+          // Create a simple response based on what tools were executed
+          const toolSummary = enforcementResult.toolCalls?.map(tc => tc.toolName).join(', ') || 'tools';
+          const fallbackText = `I've executed the requested ${toolSummary} to complete your request.`;
+          
+          // Combine enforcement tool calls with fallback text
+          result = {
+            ...enforcementResult,
+            text: fallbackText,
+            toolCalls: enforcementResult.toolCalls,
+            toolResults: enforcementResult.toolResults,
+          };
+        } else {
+          // Use the enforcement result directly if it has proper text
+          result = enforcementResult;
+        }
+        
+        // Check if enforcement actually completed the claimed actions
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          const executedActions = result.toolCalls.map(tc => tc.toolName);
+          const missedActions = claimedActions.filter(claim => {
+            // Check if the claim type matches any executed tool
+            if (claim.toLowerCase().includes('mark') || claim.toLowerCase().includes('complete')) {
+              return !executedActions.includes('updateTask');
+            }
+            if (claim.toLowerCase().includes('create')) {
+              return !executedActions.includes('createTask');
+            }
+            if (claim.toLowerCase().includes('delete') || claim.toLowerCase().includes('remove')) {
+              return !executedActions.includes('deleteTask');
+            }
+            // If AI called getTasks but claimed an action, it might be preparing for the action
+            // Only count as missed if no relevant action tools were called at all
+            if (executedActions.includes('getTasks') || executedActions.includes('getTasksByFilter') || executedActions.includes('getUpcomingTasks')) {
+              return false; // Consider this as preparation, not a missed action
+            }
+            return false;
+          });
+          
+          if (missedActions.length > 0) {
+            console.log(`⚠️ PARTIAL ENFORCEMENT: Some claimed actions still not executed:`, missedActions);
+          } else {
+            console.log(`✅ FULL ENFORCEMENT: All claimed actions were successfully executed`);
+          }
+        }
+      } else if (claimedActions.length > 0 && actualToolCalls.length > 0) {
+        console.log(`✅ VALIDATION PASSED: AI claimed ${claimedActions.length} actions and executed ${actualToolCalls.length} tools`);
+      }
 
       // Log AI response details for debugging
       console.log(`🤖 AI Response - Tool Calls:`, result.toolCalls?.length || 0);

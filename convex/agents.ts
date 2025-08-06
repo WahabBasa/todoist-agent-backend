@@ -1,6 +1,6 @@
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { generateText, tool } from "ai";
+import { generateText, tool, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
@@ -64,6 +64,23 @@ export const createOrUpdateUser = mutation({
     }
   },
 });
+
+// Tool Execution Validation Helper
+function extractActionClaims(text: string): string[] {
+  const actionPatterns = [
+    /I['']?ll (create|delete|update|mark|remove|add|complete)/gi,
+    /I['']?m (creating|deleting|updating|marking|removing|adding|completing)/gi,
+    /(Creating|Deleting|Updating|Marking|Removing|Adding|Completing)/gi,
+    /Let me (create|delete|update|mark|remove|add|complete)/gi,
+  ];
+  
+  const claims = [];
+  for (const pattern of actionPatterns) {
+    const matches = text.match(pattern);
+    if (matches) claims.push(...matches);
+  }
+  return claims;
+}
 
 export const getUserConversations = query({
   args: {},
@@ -285,7 +302,7 @@ const getTasksTool = tool({
 });
 
 const updateTaskTool = tool({
-  description: "Update an existing task in Todoist by searching for it by name",
+  description: "Update an existing task in Todoist by searching for it by name. REQUIRES calling getTasks first to get current task data.",
   parameters: z.object({
     task_name: z.string().describe("Name/content of the task to search for and update"),
     content: z.string().optional().describe("New task content/title"),
@@ -304,6 +321,8 @@ const updateTaskTool = tool({
     
     const client = new TodoistClient(todoistToken);
     
+    console.log(`🔧 updateTask called with task_name: "${task_name}"`);
+    
     // First, search for the task
     const tasks = await client.getTasks();
     const matchingTask = tasks.find(task => 
@@ -311,9 +330,10 @@ const updateTaskTool = tool({
     );
 
     if (!matchingTask) {
+      console.error(`❌ updateTask failed: Could not find task "${task_name}"`);
       return {
         success: false,
-        message: `Could not find a task matching "${task_name}"`,
+        message: `Could not find a task matching "${task_name}". Available tasks: ${tasks.map(t => `"${t.content}"`).join(', ')}`,
       };
     }
 
@@ -329,6 +349,12 @@ const updateTaskTool = tool({
 
     const updatedTask = await client.updateTask(matchingTask.id, updateData);
     
+    console.log(`✅ updateTask succeeded. Task "${matchingTask.content}" was updated to: ${JSON.stringify({
+      content: updatedTask.content,
+      due: updatedTask.due?.string,
+      priority: updatedTask.priority
+    })}`);
+    
     return {
       success: true,
       task: {
@@ -343,7 +369,7 @@ const updateTaskTool = tool({
 });
 
 const completeTaskTool = tool({
-  description: "Mark a task as completed in Todoist by searching for it by name",
+  description: "Mark a task as completed in Todoist by searching for it by name. REQUIRES calling getTasks first to confirm the task exists.",
   parameters: z.object({
     task_name: z.string().describe("Name/content of the task to search for and complete"),
   }),
@@ -355,6 +381,8 @@ const completeTaskTool = tool({
     
     const client = new TodoistClient(todoistToken);
     
+    console.log(`🔧 completeTask called with task_name: "${task_name}"`);
+    
     // First, search for the task
     const tasks = await client.getTasks();
     const matchingTask = tasks.find(task => 
@@ -362,14 +390,17 @@ const completeTaskTool = tool({
     );
 
     if (!matchingTask) {
+      console.error(`❌ completeTask failed: Could not find task "${task_name}"`);
       return {
         success: false,
-        message: `Could not find a task matching "${task_name}"`,
+        message: `Could not find a task matching "${task_name}". Available tasks: ${tasks.map(t => `"${t.content}"`).join(', ')}`,
       };
     }
 
     // Complete the task
     await client.closeTask(matchingTask.id);
+    
+    console.log(`✅ completeTask succeeded. Completed task: "${matchingTask.content}"`);
     
     return {
       success: true,
@@ -379,7 +410,7 @@ const completeTaskTool = tool({
 });
 
 const deleteTaskTool = tool({
-  description: "Delete a task from Todoist by searching for it by name",
+  description: "Delete a task from Todoist by searching for it by name. REQUIRES calling getTasks first to confirm the task exists and get its details.",
   parameters: z.object({
     task_name: z.string().describe("Name/content of the task to search for and delete"),
   }),
@@ -391,6 +422,8 @@ const deleteTaskTool = tool({
     
     const client = new TodoistClient(todoistToken);
     
+    console.log(`🔧 deleteTask called with task_name: "${task_name}"`);
+    
     // First, search for the task
     const tasks = await client.getTasks();
     const matchingTask = tasks.find(task => 
@@ -398,14 +431,17 @@ const deleteTaskTool = tool({
     );
 
     if (!matchingTask) {
+      console.error(`❌ deleteTask failed: Could not find task "${task_name}"`);
       return {
         success: false,
-        message: `Could not find a task matching "${task_name}"`,
+        message: `Could not find a task matching "${task_name}". Available tasks: ${tasks.map(t => `"${t.content}"`).join(', ')}`,
       };
     }
 
     // Delete the task
     await client.deleteTask(matchingTask.id);
+    
+    console.log(`✅ deleteTask succeeded. Deleted task: "${matchingTask.content}"`);
     
     return {
       success: true,
