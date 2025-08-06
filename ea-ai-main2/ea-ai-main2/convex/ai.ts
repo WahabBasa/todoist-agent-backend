@@ -8,21 +8,77 @@ import { z } from "zod";
 import { Id, Doc } from "./_generated/dataModel";
 import { ActionCtx } from "./_generated/server";
 
-// Helper function to extract action claims from AI response text
-function extractActionClaims(text: string): string[] {
+// Action types and their required tools mapping
+interface ActionClaim {
+  type: 'complete' | 'create' | 'delete' | 'update' | 'move';
+  text: string;
+  requiredTools: string[];
+}
+
+// Strict action-to-tool mapping matrix
+const ACTION_TOOL_MAPPING: Record<ActionClaim['type'], string[]> = {
+  complete: ['updateTask'], // Must call updateTask with isCompleted: true
+  create: ['createTask'],   // Must call createTask
+  delete: ['deleteTask'],   // Must call deleteTask  
+  update: ['updateTask'],   // Must call updateTask
+  move: ['updateTask']      // Must call updateTask with projectId
+};
+
+// Enhanced function to extract structured action claims
+function extractActionClaims(text: string): ActionClaim[] {
   const actionPatterns = [
-    /I['']?ll (create|delete|update|mark|remove|add|complete)/gi,
-    /I['']?m (creating|deleting|updating|marking|removing|adding|completing)/gi,
-    /(Creating|Deleting|Updating|Marking|Removing|Adding|Completing)/gi,
-    /Let me (create|delete|update|mark|remove|add|complete)/gi,
-    /I will (create|delete|update|mark|remove|add|complete)/gi,
+    // Completion patterns
+    { regex: /I['']?ll (mark|complete|finish|done)/gi, type: 'complete' as const },
+    { regex: /I['']?m (marking|completing|finishing)/gi, type: 'complete' as const },
+    { regex: /(Marking|Completing|Finishing)/gi, type: 'complete' as const },
+    { regex: /Let me (mark|complete|finish)/gi, type: 'complete' as const },
+    { regex: /I will (mark|complete|finish)/gi, type: 'complete' as const },
+    { regex: /(mark|set) .* (as )?(complete|done|finished)/gi, type: 'complete' as const },
+    
+    // Creation patterns
+    { regex: /I['']?ll (create|add)/gi, type: 'create' as const },
+    { regex: /I['']?m (creating|adding)/gi, type: 'create' as const },
+    { regex: /(Creating|Adding)/gi, type: 'create' as const },
+    { regex: /Let me (create|add)/gi, type: 'create' as const },
+    { regex: /I will (create|add)/gi, type: 'create' as const },
+    
+    // Deletion patterns
+    { regex: /I['']?ll (delete|remove)/gi, type: 'delete' as const },
+    { regex: /I['']?m (deleting|removing)/gi, type: 'delete' as const },
+    { regex: /(Deleting|Removing)/gi, type: 'delete' as const },
+    { regex: /Let me (delete|remove)/gi, type: 'delete' as const },
+    { regex: /I will (delete|remove)/gi, type: 'delete' as const },
+    
+    // Update patterns
+    { regex: /I['']?ll update/gi, type: 'update' as const },
+    { regex: /I['']?m updating/gi, type: 'update' as const },
+    { regex: /Updating/gi, type: 'update' as const },
+    { regex: /Let me update/gi, type: 'update' as const },
+    { regex: /I will update/gi, type: 'update' as const },
+    
+    // Move patterns
+    { regex: /I['']?ll move/gi, type: 'move' as const },
+    { regex: /I['']?m moving/gi, type: 'move' as const },
+    { regex: /Moving/gi, type: 'move' as const },
+    { regex: /Let me move/gi, type: 'move' as const },
+    { regex: /I will move/gi, type: 'move' as const },
   ];
   
-  const claims = [];
-  for (const pattern of actionPatterns) {
-    const matches = text.match(pattern);
-    if (matches) claims.push(...matches);
+  const claims: ActionClaim[] = [];
+  
+  for (const { regex, type } of actionPatterns) {
+    const matches = text.match(regex);
+    if (matches) {
+      for (const match of matches) {
+        claims.push({
+          type,
+          text: match,
+          requiredTools: ACTION_TOOL_MAPPING[type]
+        });
+      }
+    }
   }
+  
   return claims;
 }
 
@@ -419,16 +475,59 @@ Be conversational and explain what you're doing step by step. Use the enhanced t
         stopWhen: stepCountIs(useHaiku ? 6 : 10), // Reduce steps for Haiku
       });
 
-      // TOOL EXECUTION VALIDATION: Validate claimed actions against actual tool executions
+      // TOOL EXECUTION VALIDATION: Strict validation of claimed actions against actual tool executions
       const claimedActions = extractActionClaims(result.text);
       const actualToolCalls = result.toolCalls?.map(tc => tc.toolName) || [];
+      
+      // Check if any action claims are completely unsatisfied (no tools called at all)
+      const hasUnfulfilledClaims = claimedActions.length > 0 && actualToolCalls.length === 0;
+      
+      // Check if action claims don't match required tools (strict validation)
+      const hasInvalidToolMapping = claimedActions.some(claim => {
+        const requiredTools = claim.requiredTools;
+        const hasRequiredTool = requiredTools.some(tool => actualToolCalls.includes(tool));
+        
+        // Special validation for completion actions - ensure updateTask was called with isCompleted: true
+        if (claim.type === 'complete' && actualToolCalls.includes('updateTask')) {
+          const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
+          const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
+          return !hasCompletionUpdate;
+        }
+        
+        return !hasRequiredTool;
+      });
 
-      if (claimedActions.length > 0 && actualToolCalls.length === 0) {
-        console.log(`🚨 VALIDATION FAILED: AI claimed to perform ${claimedActions.length} actions but called NO TOOLS. Claims:`, claimedActions);
+      if (hasUnfulfilledClaims || hasInvalidToolMapping) {
+        if (hasUnfulfilledClaims) {
+          console.log(`🚨 VALIDATION FAILED: AI claimed ${claimedActions.length} actions but called NO TOOLS. Claims:`, claimedActions.map(c => c.text));
+        }
+        if (hasInvalidToolMapping) {
+          const invalidClaims = claimedActions.filter(claim => {
+            const requiredTools = claim.requiredTools;
+            const hasRequiredTool = requiredTools.some(tool => actualToolCalls.includes(tool));
+            
+            if (claim.type === 'complete' && actualToolCalls.includes('updateTask')) {
+              const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
+              const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
+              return !hasCompletionUpdate;
+            }
+            
+            return !hasRequiredTool;
+          });
+          console.log(`🚨 VALIDATION FAILED: AI claimed actions but used wrong tools. Invalid claims:`, invalidClaims.map(c => ({ claim: c.text, required: c.requiredTools, actual: actualToolCalls })));
+        }
         console.log(`🔄 Enforcing tool execution with retry...`);
         
-        // Create more specific enforcement prompt based on claims
-        const enforcementPrompt = `You claimed to: ${claimedActions.join(', ')}. You must actually execute the required tools to perform these actions. Based on your original response, identify the specific tasks to update/complete and call the appropriate tools with the correct task IDs.`;
+        // Create highly specific enforcement prompt based on action types
+        const specificRequirements = claimedActions.map(claim => {
+          const toolList = claim.requiredTools.join(' or ');
+          if (claim.type === 'complete') {
+            return `For "${claim.text}": Call updateTask with isCompleted: true and the correct task ID`;
+          }
+          return `For "${claim.text}": Call ${toolList} with appropriate parameters`;
+        }).join('. ');
+        
+        const enforcementPrompt = `CRITICAL VALIDATION ERROR: You claimed specific actions but didn't execute the required tools. ${specificRequirements}. You MUST call the exact required tools now - do not just read data with getTasks.`;
         
         // Limit enforcement messages to prevent API overload - only use last 5 messages plus the current exchange
         const limitedMessages = initialMessages.slice(-5);
@@ -481,36 +580,40 @@ Be conversational and explain what you're doing step by step. Use the enhanced t
           result = enforcementResult;
         }
         
-        // Check if enforcement actually completed the claimed actions
+        // STRICT ENFORCEMENT VALIDATION: Check if enforcement actually completed the claimed actions
         if (result.toolCalls && result.toolCalls.length > 0) {
-          const executedActions = result.toolCalls.map(tc => tc.toolName);
+          const executedToolNames = result.toolCalls.map(tc => tc.toolName);
           const missedActions = claimedActions.filter(claim => {
-            // Check if the claim type matches any executed tool
-            if (claim.toLowerCase().includes('mark') || claim.toLowerCase().includes('complete')) {
-              return !executedActions.includes('updateTask');
+            const requiredTools = claim.requiredTools;
+            const hasRequiredTool = requiredTools.some(tool => executedToolNames.includes(tool));
+            
+            // Special strict validation for completion actions
+            if (claim.type === 'complete' && executedToolNames.includes('updateTask')) {
+              const updateCalls = result.toolCalls?.filter(tc => tc.toolName === 'updateTask') || [];
+              const hasCompletionUpdate = updateCalls.some((tc: any) => tc.args?.isCompleted === true);
+              if (!hasCompletionUpdate) {
+                console.log(`🚨 COMPLETION VALIDATION FAILED: updateTask called but isCompleted !== true for claim: "${claim.text}"`);
+                return true; // Mark as missed
+              }
             }
-            if (claim.toLowerCase().includes('create')) {
-              return !executedActions.includes('createTask');
+            
+            // NO TOLERANCE for read-only tools satisfying write actions
+            if (!hasRequiredTool) {
+              console.log(`🚨 TOOL MISMATCH: Claim "${claim.text}" requires ${requiredTools.join(' or ')} but got ${executedToolNames.join(', ')}`);
+              return true; // Mark as missed
             }
-            if (claim.toLowerCase().includes('delete') || claim.toLowerCase().includes('remove')) {
-              return !executedActions.includes('deleteTask');
-            }
-            // If AI called getTasks but claimed an action, it might be preparing for the action
-            // Only count as missed if no relevant action tools were called at all
-            if (executedActions.includes('getTasks') || executedActions.includes('getTasksByFilter') || executedActions.includes('getUpcomingTasks')) {
-              return false; // Consider this as preparation, not a missed action
-            }
+            
             return false;
           });
           
           if (missedActions.length > 0) {
-            console.log(`⚠️ PARTIAL ENFORCEMENT: Some claimed actions still not executed:`, missedActions);
+            console.log(`⚠️ ENFORCEMENT INCOMPLETE: ${missedActions.length}/${claimedActions.length} actions still not properly executed:`, missedActions.map(a => a.text));
           } else {
-            console.log(`✅ FULL ENFORCEMENT: All claimed actions were successfully executed`);
+            console.log(`✅ ENFORCEMENT SUCCESS: All ${claimedActions.length} claimed actions properly validated with correct tools`);
           }
         }
-      } else if (claimedActions.length > 0 && actualToolCalls.length > 0) {
-        console.log(`✅ VALIDATION PASSED: AI claimed ${claimedActions.length} actions and executed ${actualToolCalls.length} tools`);
+      } else if (claimedActions.length > 0 && actualToolCalls.length > 0 && !hasInvalidToolMapping) {
+        console.log(`✅ VALIDATION PASSED: AI claimed ${claimedActions.length} actions and executed correct tools:`, claimedActions.map(c => `${c.text} -> ${c.requiredTools.join('|')}`));
       }
 
       // Log AI response details for debugging
