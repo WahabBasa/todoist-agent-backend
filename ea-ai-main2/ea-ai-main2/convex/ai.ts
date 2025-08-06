@@ -46,8 +46,7 @@ const plannerTools = {
 // =================================================================
 namespace SystemExecutor {
   export async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<ToolResultPart> {
-    const { toolName, toolCallId } = toolCall;
-    const args = (toolCall as any).input; // ToolCallPart uses 'input' property
+    const { toolName, input: args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args: ${JSON.stringify(args)}`);
 
     try {
@@ -71,11 +70,13 @@ namespace SystemExecutor {
       }
       
       console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
-      return { type: 'tool-result', toolCallId, toolName, output: result } as unknown as ToolResultPart;
+      // --- FIX: Return object must use the 'result' property ---
+      return { type: 'tool-result', toolCallId, toolName, output: result } as ToolResultPart;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
       console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
-      return { type: 'tool-result', toolCallId, toolName, output: errorMessage, isError: true } as unknown as ToolResultPart;
+      // --- FIX: Errors must also be returned in the 'result' property ---
+      return { type: 'tool-result', toolCallId, toolName, output: { error: errorMessage }, isError: true } as unknown as ToolResultPart;
     }
   }
 }
@@ -109,10 +110,27 @@ export const chatWithAI = action({
       console.log(`[Orchestrator] -> Calling AI Planner...`);
       const plannerResult = await generateText({
         model: anthropic(modelName),
-        system: `You are the AI Planner. Your job is to analyze the user's request and create a step-by-step plan using the available tools.
-        - If an action is required, your ONLY output should be tool calls.
-        - If no action is required, you may respond conversationally.
-        - You MUST use database IDs returned from 'get' tools for any calls that reference existing items.`,
+        // --- FIX: Injected the new, stricter system prompt ---
+        system: `You are a database-aware AI Planner. Your only job is to create a sequence of tool calls to fulfill the user's request.
+
+<critical_rule>
+For ANY request that refers to a specific project or task by name (e.g., "my personal project", "the 'Deploy' task"), you MUST follow this exact sequence:
+1.  **READ**: Call \`getProjects()\` or \`getTasks()\` to retrieve a list of all items.
+2.  **FIND**: In your internal reasoning, find the item in the list that matches the user's description (e.g., the project where \`name\` is "Personal").
+3.  **EXTRACT**: Get the exact \`_id\` value from that item.
+4.  **EXECUTE**: Use that extracted \`_id\` in the next tool call (e.g., \`getTasks({ projectId: "jx123abc" })\`).
+
+You are forbidden from using human-readable names or invented placeholders like "PERSONAL_PROJECT_ID" as arguments for \`projectId\` or \`taskId\`.
+</critical_rule>
+
+<example_correct_workflow>
+User Request: "What are the tasks in my 'Personal' project?"
+Your Plan (Tool Calls):
+1. \`getProjects()\`
+2. \`getTasks({ projectId: "id_from_step_1_result" })\`
+</example_correct_workflow>
+
+If a request is conversational (e.g., "hello"), you may respond with text. Otherwise, your only output should be tool calls.`,
         messages,
         tools: plannerTools,
       });
@@ -135,21 +153,23 @@ export const chatWithAI = action({
       
       // --- Step 3: Call the AI Reporter ---
       console.log(`[Orchestrator] -> Calling AI Reporter to summarize results...`);
+      
+      const toolResultsContext = toolResults.map(tr => 
+        `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
+      ).join('\n');
+
+      const reporterMessages: CoreMessage[] = [
+        ...messages.slice(0, -1), // All messages except the current user message
+        { role: "user", content: message }, // Current user message as simple string
+      ];
+
       const reporterResult = await generateText({
         model: anthropic(modelName),
-        system: `You are the AI Reporter. You have been given the results of a plan that was just executed. Your job is to communicate these results to the user clearly and concisely.
-        - If the plan was successful, confirm the action.
-        - If any part of the plan failed, you MUST report the error clearly.`,
-        messages: [
-          ...messages,
-          { role: 'assistant', content: plannerResult.toolCalls.map(tc => ({
-            type: 'tool-call',
-            toolCallId: tc.toolCallId,
-            toolName: tc.toolName,
-            input: (tc as any).input
-          })) },
-          { role: 'tool', content: toolResults as ToolResultPart[] }
-        ],
+        system: `You are the AI Reporter. The following tools were executed successfully:
+${toolResultsContext}
+
+Summarize these results clearly for the user. If the plan was successful, confirm the action. If any part failed, report the error clearly.`,
+        messages: reporterMessages,
       });
 
       // --- Step 4: Persist and Return ---
@@ -164,7 +184,9 @@ export const chatWithAI = action({
             timestamp: Date.now(),
             toolCalls: plannerResult.toolCalls.map(tc => ({
               name: tc.toolName,
-              args: (tc as any).input,
+              // --- FIX: Use 'args' to match the ToolCallPart schema ---
+              args: tc.input,
+              // --- FIX: Use 'result' to match the ToolResultPart schema ---
               result: toolResults.find(tr => tr.toolCallId === tc.toolCallId)?.output,
             })),
           }
