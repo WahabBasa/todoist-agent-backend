@@ -4,9 +4,7 @@ import {
   generateText, 
   tool, 
   ModelMessage, 
-  ToolCallPart,
-  ToolResultPart,
-  TextPart
+  ToolResultPart
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
@@ -35,10 +33,6 @@ function diagnoseMessageStructure(messages: any[]): void {
   });
 }
 
-// Helper function to validate ModelMessage structure
-function validateModelMessage(msg: any): msg is ModelMessage {
-  return msg.role && ['user', 'assistant', 'tool'].includes(msg.role);
-}
 
 // Type definitions for message content (for documentation purposes)
 
@@ -107,18 +101,34 @@ function convertHistoryToModelMessages(
         case "tool":
           if (message.toolResults && message.toolResults.length > 0) {
             // Tool results - ensure exact AI SDK format  
+            console.log('[CONVERTER] Processing tool results:', JSON.stringify(message.toolResults, null, 2));
             const validToolResults = message.toolResults.filter(tr => 
               tr.toolCallId && typeof tr.toolCallId === 'string'
             );
             
             if (validToolResults.length > 0) {
-              const content = validToolResults.map((tr: any) => ({
-                type: "tool-result" as const,
-                toolCallId: tr.toolCallId,
-                toolName: tr.toolName || "unknown",
-                output: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result || {})
-              }));
+              const content = validToolResults.map((tr: any) => {
+                // Handle case where result might be stringified JSON
+                let output = tr.result || {};
+                if (typeof output === 'string') {
+                  try {
+                    output = JSON.parse(output);
+                  } catch {
+                    // If parsing fails, wrap string in object
+                    output = { message: output };
+                  }
+                }
+                
+                console.log(`[CONVERTER] Tool result ${tr.toolCallId} - original type: ${typeof tr.result}, final type: ${typeof output}`);
+                return {
+                  type: "tool-result" as const,
+                  toolCallId: tr.toolCallId,
+                  toolName: tr.toolName || "unknown",
+                  output
+                };
+              });
               
+              console.log('[CONVERTER] Final tool content:', JSON.stringify(content, null, 2));
               modelMessages.push({
                 role: "tool",
                 content
@@ -146,13 +156,13 @@ const plannerTools = {
     description: "Create a new task for the user. Use this when they want to add something to their to-do list. You can optionally assign it to a specific project to keep things organized.",
     inputSchema: z.object({
       title: z.string().describe("The task title or description (e.g., 'Call the dentist', 'Review quarterly reports', 'Buy groceries')"),
-      projectId: z.string().optional().describe("Optional: The project ID to categorize this task. Get project IDs by calling getProjects first."),
+      projectId: z.string().optional().describe("Optional: The project ID to categorize this task. Get project IDs by calling getProjectAndTaskMap first."),
     }),
   }),
   getTasks: tool({
-    description: "Retrieve the user's tasks. Use this to show their to-do list or find tasks within a specific project. Call without parameters to see all tasks, or with projectId to filter by project.",
+    description: "Retrieve the user's tasks with full details. Use this to show their to-do list or find tasks within a specific project. Call without parameters to see all tasks, or with projectId to filter by project.",
     inputSchema: z.object({
-      projectId: z.string().optional().describe("Optional: Filter tasks to show only those belonging to a specific project. Get project IDs using getProjects."),
+      projectId: z.string().optional().describe("Optional: Filter tasks to show only those belonging to a specific project. Get project IDs using getProjectAndTaskMap."),
     }),
   }),
   createProject: tool({
@@ -161,9 +171,21 @@ const plannerTools = {
         name: z.string().describe("The project name (e.g., 'Work Projects', 'Personal Goals', 'Home Renovation', 'Marketing Campaign')"),
     }),
   }),
-  getProjects: tool({
-    description: "Get a list of all the user's projects with their names and IDs. Use this to find project IDs needed for other operations, or to show the user their project categories.",
+  getProjectAndTaskMap: tool({
+    description: "Get a complete hierarchical overview of the user's entire workspace - all projects with their associated tasks (showing only _id and title for efficiency), plus unassigned tasks. This is your PRIMARY tool for understanding the user's data structure. Use this FIRST when the user asks about projects, tasks, or organization.",
     inputSchema: z.object({}),
+  }),
+  getProjectDetails: tool({
+    description: "Get detailed information about a specific project including all associated tasks with full details. Use this AFTER using getProjectAndTaskMap to identify the project ID.",
+    inputSchema: z.object({
+      projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
+    }),
+  }),
+  getTaskDetails: tool({
+    description: "Get detailed information about a specific task including associated project information. Use this AFTER using getProjectAndTaskMap to identify the task ID.",
+    inputSchema: z.object({
+      taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
+    }),
   }),
 };
 
@@ -219,7 +241,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
         if (toolName === "getTasks" && args.projectId) {
             // Validate that projectId looks like a Convex ID (not a project name)
             if (!/^[a-zA-Z0-9]{16,}$/.test(args.projectId)) {
-                throw new Error(`Invalid project ID format: "${args.projectId}". Use getProjects() first to get the correct project ID.`);
+                throw new Error(`Invalid project ID format: "${args.projectId}". Use getProjectAndTaskMap() first to get the correct project ID.`);
             }
         }
         
@@ -235,8 +257,14 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                 result = await ctx.runMutation(api.projects.createProject, { ...args, color });
                 break;
             }
-            case "getProjects":
-                result = await ctx.runQuery(api.projects.getProjects, {});
+            case "getProjectAndTaskMap":
+                result = await ctx.runQuery(api.projects.getProjectAndTaskMap, {});
+                break;
+            case "getProjectDetails":
+                result = await ctx.runQuery(api.projects.getProjectDetails, { projectId: args.projectId });
+                break;
+            case "getTaskDetails":
+                result = await ctx.runQuery(api.tasks.getTaskDetails, { taskId: args.taskId });
                 break;
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
@@ -349,6 +377,20 @@ export const chatWithAI = action({
             model: anthropic(modelName),
             system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects. Whether they're executives, professionals, or anyone looking to stay organized, you help them streamline their workflow and boost productivity.
 
+## PRIMARY WORKFLOW: Always Start with getProjectAndTaskMap()
+
+**CRITICAL**: For ANY user request about their tasks, projects, or workspace organization, your FIRST action must ALWAYS be to call \`getProjectAndTaskMap()\`. This gives you the complete hierarchical overview of their workspace and is the most efficient way to understand their data structure.
+
+The \`getProjectAndTaskMap()\` function returns:
+- \`projects\`: Array of all projects, each containing lightweight tasks (only _id and title)
+- \`unassignedTasks\`: Array of tasks not assigned to any project
+
+Use this map to:
+1. **Navigate efficiently**: Find any project or task the user mentions
+2. **Understand context**: See the complete organizational structure
+3. **Extract correct IDs**: Get the exact _id values needed for detailed operations
+4. **Provide overviews**: Show workspace structure without additional queries
+
 ## Your Role
 - **Personal Task Manager**: Help users create, organize, and track their tasks efficiently
 - **Project Coordinator**: Assist with project organization and task categorization
@@ -357,12 +399,13 @@ export const chatWithAI = action({
 ## Critical Multi-Step Workflow Rules
 
 <critical_rule>
-For ANY request that refers to a specific project or task by name (e.g., "my personal project", "tasks in the Website Redesign project", "the Deploy task"), you MUST follow this exact sequence:
+For ANY request that refers to projects, tasks, or workspace organization, you MUST follow this exact sequence:
 
-1. **READ FIRST**: Always call the appropriate list function (\`getProjects()\` or \`getTasks()\`) to retrieve current data
-2. **FIND & MATCH**: Look through the results array to find items that match the user's description (case-insensitive matching on the "name" field)
-3. **EXTRACT ID**: Get the exact \`_id\` field value from the matching item object
-4. **EXECUTE**: Use that extracted \`_id\` string in subsequent tool calls
+1. **MAP FIRST**: Always call \`getProjectAndTaskMap()\` to get a complete hierarchical overview of the user's workspace
+2. **IDENTIFY & MATCH**: Look through the hierarchical structure to find projects/tasks that match the user's description (case-insensitive matching on "name" or "title" fields)
+3. **EXTRACT ID**: Get the exact \`_id\` field value from the matching item in the map
+4. **GET DETAILS**: If you need full details about a specific project or task, call \`getProjectDetails()\` or \`getTaskDetails()\` with the extracted ID
+5. **EXECUTE**: Use the extracted \`_id\` string for any mutations or specific operations
 
 **ABSOLUTELY NEVER** use:
 - Human-readable names like "personal", "Personal", "work", "Work"  
@@ -376,24 +419,33 @@ For ANY request that refers to a specific project or task by name (e.g., "my per
 ## Examples of Correct Multi-Step Workflows
 
 **Example 1**: User asks "Show me tasks in my Personal project"
-1. Call \`getProjects()\` to get all projects
-2. Look through the results array for a project where \`name\` matches "Personal" (case-insensitive)
-3. Extract the \`_id\` field from that specific project object (e.g., "k9757z44g01adm9emm6eq32zy57n5yx9")
-4. Call \`getTasks({ projectId: "k9757z44g01adm9emm6eq32zy57n5yx9" })\` using the extracted ID
+1. Call \`getProjectAndTaskMap()\` to get the complete workspace overview
+2. Look through the \`projects\` array for a project where \`name\` matches "Personal" (case-insensitive)
+3. Extract the \`_id\` field from that project (e.g., "k9757z44g01adm9emm6eq32zy57n5yx9")
+4. Call \`getProjectDetails({ projectId: "k9757z44g01adm9emm6eq32zy57n5yx9" })\` to get full task details
 
-**CRITICAL: When you see project data like this:**
+**CRITICAL: When you see project data from getProjectAndTaskMap like this:**
 {
   "_id": "k9757z44g01adm9emm6eq32zy57n5yx9",
   "name": "Personal",
-  "taskCount": 6
+  "tasks": [
+    { "_id": "abc123", "title": "Buy groceries" },
+    { "_id": "def456", "title": "Call dentist" }
+  ]
 }
-**You MUST use the _id value "k9757z44g01adm9emm6eq32zy57n5yx9" in getTasks(), NOT "personal" or "Personal"**
+**You MUST use the _id value "k9757z44g01adm9emm6eq32zy57n5yx9", NOT "personal" or "Personal"**
 
 **Example 2**: User asks "Create a task called 'Review documents' in the Marketing project"
-1. Call \`getProjects()\` to find the Marketing project
-2. Find the project object where name matches "Marketing"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Find the project object where \`name\` matches "Marketing"
 3. Extract that project's \`_id\` field value
 4. Call \`createTask({ title: "Review documents", projectId: "extracted_id_value" })\`
+
+**Example 3**: User asks "Tell me more about my 'Call dentist' task"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Look through all project \`tasks\` arrays and \`unassignedTasks\` for a task where \`title\` matches "Call dentist"
+3. Extract that task's \`_id\` field value
+4. Call \`getTaskDetails({ taskId: "extracted_id_value" })\` to get full task information
 
 ## Communication Style
 - **Professional yet Friendly**: Use a warm, helpful tone like a trusted assistant
@@ -459,7 +511,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
 
         history.push({
           role: "assistant",
-          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: (tc as any).input, toolCallId: tc.toolCallId })),
+          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: tc.input, toolCallId: tc.toolCallId })),
           timestamp: Date.now(),
         });
 

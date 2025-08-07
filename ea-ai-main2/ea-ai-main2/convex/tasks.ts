@@ -1,7 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { Id } from "./_generated/dataModel";
 
 export const getTasks = query({
   args: {
@@ -244,7 +243,7 @@ export const getUpcomingTasks = query({
     },
   });
   
-  export const getTaskStats = query({
+export const getTaskStats = query({
     args: {},
     handler: async (ctx) => {
       const userId = await getAuthUserId(ctx);
@@ -269,3 +268,41 @@ export const getUpcomingTasks = query({
       };
     },
   });
+
+/**
+ * getTaskDetails - Gets detailed information about a specific task
+ * including associated project information if applicable.
+ * This is used after the AI has identified a task using getProjectAndTaskMap.
+ */
+export const getTaskDetails = query({
+  args: {
+    taskId: v.id("tasks"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const task = await ctx.db.get(args.taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error("Task not found or unauthorized");
+    }
+
+    // Get project information if task is assigned to a project
+    let project = null;
+    if (task.projectId) {
+      project = await ctx.db.get(task.projectId);
+    }
+
+    return {
+      ...task,
+      project: project ? {
+        _id: project._id,
+        name: project.name,
+        color: project.color,
+        description: project.description,
+      } : null,
+    };
+  },
+});
