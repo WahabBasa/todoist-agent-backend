@@ -80,9 +80,22 @@ namespace SystemExecutor {
 }
 
 // =================================================================
-// 3. THE ORCHESTRATOR: Manages the entire workflow.
+// 3. HELPER FUNCTIONS: Support multi-step planning
+// =================================================================
+function buildContextFromPreviousResults(allToolCalls: ToolCallPart[], allToolResults: ToolResultPart[]): string {
+  if (allToolResults.length === 0) return '';
+  
+  const resultsSummary = allToolResults.map(tr => 
+    `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
+  ).join('\n');
+  
+  return `\nPrevious tool execution results:\n${resultsSummary}\n\nUse this information to continue planning if needed.`;
+}
+
+// =================================================================
+// 4. THE ORCHESTRATOR: Manages the entire workflow.
 // This is the main action that coordinates between the user, the
-// AI Planner, and the System Executor.
+// AI Planner, and the System Executor with iterative planning.
 // =================================================================
 export const chatWithAI = action({
   args: {
@@ -104,11 +117,57 @@ export const chatWithAI = action({
     console.log(`[Orchestrator] Starting interaction for user message: "${message}"`);
 
     try {
-      // --- Step 1: Call the AI Planner ---
-      console.log(`[Orchestrator] -> Calling AI Planner...`);
-      const plannerResult = await generateText({
-        model: anthropic(modelName),
-        system: `You are a database-aware AI Planner. Your only job is to create a sequence of tool calls to fulfill the user's request.
+      // --- Step 1: Iterative Planning Loop ---
+      const allToolCalls: ToolCallPart[] = [];
+      const allToolResults: ToolResultPart[] = [];
+      let planningComplete = false;
+      let iterations = 0;
+      const MAX_ITERATIONS = 5;
+      
+      console.log(`[Orchestrator] Starting iterative planning loop...`);
+      
+      while (!planningComplete && iterations < MAX_ITERATIONS) {
+        console.log(`[Orchestrator] -> Planning iteration ${iterations + 1}...`);
+        
+        // Build proper conversation context  
+        const contextMessages: CoreMessage[] = [...messages];
+        
+        // Add all previous tool calls and results in proper sequence
+        for (let i = 0; i < allToolCalls.length; i++) {
+          // Add assistant message with tool call
+          contextMessages.push({
+            role: 'assistant',
+            content: [{
+              type: 'tool-call' as const,
+              toolCallId: allToolCalls[i].toolCallId,
+              toolName: allToolCalls[i].toolName,
+              input: allToolCalls[i].input
+            }]
+          });
+          
+          // Add corresponding tool result
+          if (allToolResults[i]) {
+            contextMessages.push({
+              role: 'tool',
+              content: [{
+                type: 'tool-result' as const,
+                toolCallId: allToolResults[i].toolCallId,
+                toolName: allToolResults[i].toolName,
+                output: allToolResults[i].output
+              }]
+            });
+          }
+        }
+        
+        const plannerResult = await generateText({
+          model: anthropic(modelName),
+          system: `You are a database-aware AI Planner that creates tool call sequences.
+  
+When previous results are provided, use them to continue the plan.
+If the user asks about specific items (like "tasks in project X"), you MUST:
+1. First call the appropriate list function if you don't have the data
+2. Use the results to get the specific ID
+3. Call the next function with that ID
 
 <critical_rule>
 For ANY request that refers to a specific project or task by name (e.g., "my personal project", "the 'Deploy' task"), you MUST follow this exact sequence:
@@ -127,38 +186,47 @@ Your Plan (Tool Calls):
 2. \`getTasks({ projectId: "id_from_step_1_result" })\`
 </example_correct_workflow>
 
-If a request is conversational (e.g., "hello"), you may respond with text. Otherwise, your only output should be tool calls.`,
-        messages,
-        tools: plannerTools,
-      });
-
-      // --- Step 2: Orchestrate Execution ---
-      
-      // Case A: The Planner decided no tools were needed.
-      if (!plannerResult.toolCalls || plannerResult.toolCalls.length === 0) {
-        console.log(`[Orchestrator] Planner decided no tools were needed. Responding directly.`);
-        // NEW LOGGING
-        console.log(`[Orchestrator] Planner's response: "${plannerResult.text}"`);
-        await ctx.runMutation(api.conversations.addMessage, { role: "user", content: message });
-        await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: plannerResult.text });
-        return { response: plannerResult.text };
+Respond with tool calls OR indicate completion with a text response when you have enough information to answer the user's question.`,
+          messages: contextMessages,
+          tools: plannerTools,
+        });
+        
+        // Check if planning is complete
+        if (!plannerResult.toolCalls || plannerResult.toolCalls.length === 0) {
+          console.log(`[Orchestrator] Planning complete after ${iterations + 1} iterations.`);
+          planningComplete = true;
+          
+          // If this is the first iteration and no tools needed, respond directly
+          if (iterations === 0) {
+            console.log(`[Orchestrator] No tools needed. Responding directly.`);
+            console.log(`[Orchestrator] Planner's response: "${plannerResult.text}"`);
+            await ctx.runMutation(api.conversations.addMessage, { role: "user", content: message });
+            await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: plannerResult.text });
+            return { response: plannerResult.text };
+          }
+          
+          break;
+        }
+        
+        // Execute new tool calls
+        console.log(`[Orchestrator] Executing ${plannerResult.toolCalls.length} tool(s) in iteration ${iterations + 1}...`);
+        console.log('[Orchestrator] Tool calls:', JSON.stringify(plannerResult.toolCalls, null, 2));
+        
+        for (const toolCall of plannerResult.toolCalls) {
+          const result = await SystemExecutor.executeTool(ctx, toolCall);
+          allToolCalls.push(toolCall);
+          allToolResults.push(result);
+        }
+        
+        iterations++;
       }
+      
+      console.log(`[Orchestrator] Planning completed with ${allToolCalls.length} total tool calls across ${iterations} iterations.`);
 
-      // Case B: The Planner created a plan. Now, the Executor runs it.
-      console.log(`[Orchestrator] Planner returned a plan with ${plannerResult.toolCalls.length} step(s).`);
-      // NEW LOGGING
-      console.log('[Orchestrator] Planner plan:', JSON.stringify(plannerResult.toolCalls, null, 2));
-      
-      const toolResults: ToolResultPart[] = [];
-      for (const toolCall of plannerResult.toolCalls) {
-        const result = await SystemExecutor.executeTool(ctx, toolCall);
-        toolResults.push(result);
-      }
-      
-      // --- Step 3: Call the AI Reporter ---
+      // --- Step 2: Call the AI Reporter ---
       console.log(`[Orchestrator] -> Calling AI Reporter to summarize results...`);
       
-      const toolResultsContext = toolResults.map(tr => 
+      const toolResultsContext = allToolResults.map(tr => 
         `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
       ).join('\n');
 
@@ -175,17 +243,17 @@ Summarize these results clearly for the user. If the plan was successful, confir
       // NEW LOGGING
       console.log(`[Orchestrator] Reporter's response: "${reporterResult.text}"`);
 
-      // --- Step 4: Persist and Return ---
+      // --- Step 3: Persist and Return ---
       console.log(`[Orchestrator] Interaction complete. Saving history and returning final response.`);
       
       const assistantMessage = { 
         role: "assistant", 
         content: reporterResult.text,
         timestamp: Date.now(),
-        toolCalls: plannerResult.toolCalls.map(tc => ({
+        toolCalls: allToolCalls.map((tc, idx) => ({
           name: tc.toolName,
           args: tc.input,
-          result: toolResults.find(tr => tr.toolCallId === tc.toolCallId)?.output,
+          result: allToolResults[idx]?.output,
         })),
       };
       
@@ -204,8 +272,8 @@ Summarize these results clearly for the user. If the plan was successful, confir
 
       return {
         response: reporterResult.text,
-        toolCalls: plannerResult.toolCalls,
-        toolResults,
+        toolCalls: allToolCalls,
+        toolResults: allToolResults,
       };
 
     } catch (error) {
