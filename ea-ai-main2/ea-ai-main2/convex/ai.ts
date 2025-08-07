@@ -13,6 +13,53 @@ import { ActionCtx } from "./_generated/server";
 // manage their personal and professional tasks and projects efficiently.
 // =================================================================
 
+// Helper function to translate your stored message format to the Vercel AI SDK's ModelMessage format
+function convertHistoryToModelMessages(
+  history: {
+    role: "user" | "assistant" | "tool";
+    content?: string;
+    toolCalls?: { name: string; args: any; toolCallId: string }[];
+    toolResults?: { toolCallId: string; result: any }[];
+  }[]
+): ModelMessage[] {
+  const modelMessages: ModelMessage[] = [];
+  for (const message of history) {
+    switch (message.role) {
+      case "user":
+        modelMessages.push({ role: "user", content: message.content ?? "" });
+        break;
+      case "assistant":
+        if (message.content) {
+          modelMessages.push({ role: "assistant", content: message.content });
+        } else if (message.toolCalls) {
+          modelMessages.push({
+            role: "assistant",
+            content: message.toolCalls.map((tc) => ({
+              type: "tool-call",
+              toolCallId: tc.toolCallId,
+              toolName: tc.name,
+              args: tc.args,
+            })),
+          });
+        }
+        break;
+      case "tool":
+        if (message.toolResults) {
+          modelMessages.push({
+            role: "tool",
+            content: message.toolResults.map((tr) => ({
+              type: "tool-result",
+              toolCallId: tr.toolCallId,
+              result: tr.result,
+            })),
+          });
+        }
+        break;
+    }
+  }
+  return modelMessages;
+}
+
 // =================================================================
 // 1. TOOL DEFINITIONS: What the executive assistant can do for users
 //    These define the assistant's capabilities for task and project management.
@@ -48,8 +95,7 @@ const plannerTools = {
 //    This implements the *how*.
 // =================================================================
 async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<ToolResultPart> {
-    // The property for arguments is 'input', not 'args'.
-    const { toolName, input: args, toolCallId } = toolCall;
+    const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, args);
 
     try {
@@ -61,10 +107,11 @@ async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<Tool
             case "getTasks":
                 result = await ctx.runQuery(api.tasks.getTasks, args as any);
                 break;
-            case "createProject":
+            case "createProject": {
                 const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
                 result = await ctx.runMutation(api.projects.createProject, { ...(args as any), color });
                 break;
+            }
             case "getProjects":
                 result = await ctx.runQuery(api.projects.getProjects, {});
                 break;
@@ -72,12 +119,11 @@ async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<Tool
                 throw new Error(`Unknown tool: ${toolName}`);
         }
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
-        // The property for the result is 'output', and it takes the raw JSON-serializable value.
         return {
             type: 'tool-result',
             toolCallId,
             toolName,
-            output: result,
+            result,
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -86,12 +132,11 @@ async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<Tool
             type: 'tool-result',
             toolCallId,
             toolName,
-            output: { error: errorMessage },
+            result: { error: errorMessage },
             isError: true,
         } as unknown as ToolResultPart;
     }
 }
-
 
 // =================================================================
 // 3. THE ORCHESTRATOR: Manages the agentic workflow.
@@ -109,15 +154,17 @@ export const chatWithAI = action({
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const conversation = await ctx.runQuery(api.conversations.getConversation);
-    const messages: ModelMessage[] = (conversation?.messages as ModelMessage[])?.slice(-10) || [];
-    messages.push({ role: "user", content: message });
+    const history = (conversation?.messages as any[]) || [];
+    history.push({ role: "user", content: message, timestamp: Date.now() });
 
     console.log(`[Orchestrator] Starting interaction for user message: "${message}"`);
 
     const MAX_ITERATIONS = 5;
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
-        console.log(`[Orchestrator] Messages count before AI call: ${messages.length}`);
+        
+        const modelMessages = convertHistoryToModelMessages(history.slice(-10));
+        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
         
         const { text, toolCalls } = await generateText({
             model: anthropic(modelName),
@@ -177,35 +224,33 @@ For ANY request that refers to a specific project or task by name (e.g., "my per
 - Help users prioritize by asking clarifying questions when needed
 
 Remember: You're here to make their life easier and more organized. Be the assistant they can rely on to keep everything running smoothly.`,
-            messages: messages,
+            messages: modelMessages,
             tools: plannerTools,
         });
 
-        // If there are no tool calls, the loop is complete.
         if (!toolCalls || toolCalls.length === 0) {
             console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
-            
-            // Add the final text response from the assistant to the history.
-            messages.push({ role: "assistant", content: text });
-            await ctx.runMutation(api.conversations.updateConversation, { messages: messages as any });
-            
+            history.push({ role: "assistant", content: text, timestamp: Date.now() });
+            await ctx.runMutation(api.conversations.updateConversation, { messages: history as any });
             return { response: text };
         }
 
-        // Add the assistant's plan (the tool calls) to the message history.
-        messages.push({ role: 'assistant', content: toolCalls });
+        history.push({
+          role: "assistant",
+          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: tc.args, toolCallId: tc.toolCallId })),
+          timestamp: Date.now(),
+        });
 
-        // Execute the planned tools.
         console.log(`[Orchestrator] Executing ${toolCalls.length} tool(s)...`);
         const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, call)));
 
-        // Add each tool result as a separate tool message
-        for (const toolResult of toolResults) {
-            messages.push({ role: 'tool', content: [toolResult] });
-        }
+        history.push({
+          role: "tool",
+          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, result: tr.result })),
+          timestamp: Date.now(),
+        });
     }
 
-    // If the loop finishes without a text response, throw an error.
     throw new Error("Maximum tool call iterations reached.");
   }
 });
