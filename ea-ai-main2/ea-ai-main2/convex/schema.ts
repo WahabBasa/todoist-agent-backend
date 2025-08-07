@@ -39,6 +39,7 @@ const applicationTables = {
       }))),
       toolResults: v.optional(v.array(v.object({
         toolCallId: v.string(),
+        toolName: v.string(),
         result: v.any(),
       }))),
       timestamp: v.number(),

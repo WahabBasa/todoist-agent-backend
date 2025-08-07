@@ -47,103 +47,46 @@ function convertHistoryToModelMessages(
 ): ModelMessage[] {
   const modelMessages: ModelMessage[] = [];
   
-  console.log('[CONVERTER] Processing history length:', history.length);
-  
-  for (let i = 0; i < history.length; i++) {
-    const message = history[i];
-    console.log(`[CONVERTER] Processing message ${i}:`, {
-      role: message.role,
-      hasContent: !!message.content,
-      hasToolCalls: !!(message.toolCalls && message.toolCalls.length > 0),
-      hasToolResults: !!(message.toolResults && message.toolResults.length > 0)
-    });
+  for (const message of history) {
+    if (message.role === "user" && message.content) {
+      modelMessages.push({
+        role: "user",
+        content: message.content
+      });
+    }
     
-    try {
-      switch (message.role) {
-        case "user":
-          if (message.content) {
-            modelMessages.push({
-              role: "user",
-              content: message.content
-            });
-          }
-          break;
-          
-        case "assistant":
-          if (message.content) {
-            // Text response
-            modelMessages.push({
-              role: "assistant", 
-              content: message.content
-            });
-          } else if (message.toolCalls && message.toolCalls.length > 0) {
-            // Tool calls - ensure exact AI SDK format
-            const validToolCalls = message.toolCalls.filter(tc => 
-              tc.toolCallId && tc.name && typeof tc.toolCallId === 'string'
-            );
-            
-            if (validToolCalls.length > 0) {
-              const content = validToolCalls.map((tc: any) => ({
-                type: "tool-call" as const,
-                toolCallId: tc.toolCallId,
-                toolName: tc.name,
-                input: tc.args || {}
-              }));
-              
-              modelMessages.push({
-                role: "assistant",
-                content
-              });
-            }
-          }
-          break;
-          
-        case "tool":
-          if (message.toolResults && message.toolResults.length > 0) {
-            // Tool results - ensure exact AI SDK format  
-            console.log('[CONVERTER] Processing tool results:', JSON.stringify(message.toolResults, null, 2));
-            const validToolResults = message.toolResults.filter(tr => 
-              tr.toolCallId && typeof tr.toolCallId === 'string'
-            );
-            
-            if (validToolResults.length > 0) {
-              const content = validToolResults.map((tr: any) => {
-                // Handle case where result might be stringified JSON
-                let output = tr.result || {};
-                if (typeof output === 'string') {
-                  try {
-                    output = JSON.parse(output);
-                  } catch {
-                    // If parsing fails, wrap string in object
-                    output = { message: output };
-                  }
-                }
-                
-                console.log(`[CONVERTER] Tool result ${tr.toolCallId} - original type: ${typeof tr.result}, final type: ${typeof output}`);
-                return {
-                  type: "tool-result" as const,
-                  toolCallId: tr.toolCallId,
-                  toolName: tr.toolName || "unknown",
-                  output
-                };
-              });
-              
-              console.log('[CONVERTER] Final tool content:', JSON.stringify(content, null, 2));
-              modelMessages.push({
-                role: "tool",
-                content
-              });
-            }
-          }
-          break;
+    else if (message.role === "assistant") {
+      if (message.content && typeof message.content === 'string') {
+        modelMessages.push({
+          role: "assistant",
+          content: message.content
+        });
+      } else if (message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
+        modelMessages.push({
+          role: "assistant",
+          content: message.toolCalls.map((tc: any) => ({
+            type: "tool-call" as const,
+            toolCallId: tc.toolCallId,
+            toolName: tc.name,
+            input: tc.args
+          }))
+        });
       }
-    } catch (error) {
-      console.error(`[CONVERTER] Error processing message ${i}:`, error);
-      // Skip this message and continue
+    }
+    
+    else if (message.role === "tool" && message.toolResults && Array.isArray(message.toolResults) && message.toolResults.length > 0) {
+      modelMessages.push({
+        role: "tool",
+        content: message.toolResults.map((tr: any) => ({
+          type: "tool-result" as const,
+          toolCallId: tr.toolCallId,
+          toolName: tr.toolName || "unknown",
+          output: tr.result
+        }))
+      });
     }
   }
   
-  console.log('[CONVERTER] Generated model messages count:', modelMessages.length);
   return modelMessages;
 }
 
@@ -342,32 +285,26 @@ export const chatWithAI = action({
         console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
         console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages, null, 2));
         
-        // Add diagnostic and validation
-        diagnoseMessageStructure(modelMessages);
-        
-        // Validate each message conforms to ModelMessage interface
-        modelMessages.forEach((msg, idx) => {
-          if (!msg.role || !['user', 'assistant', 'tool'].includes(msg.role)) {
-            throw new Error(`Invalid message role at index ${idx}: ${msg.role}`);
+        // Validate messages before AI SDK call
+        const isValidMessage = (msg: any): boolean => {
+          if (!msg.role || !['user', 'assistant', 'tool'].includes(msg.role)) return false;
+          if (msg.role === 'user') return typeof msg.content === 'string';
+          if (msg.role === 'assistant') {
+            return typeof msg.content === 'string' || (Array.isArray(msg.content) && 
+              msg.content.every((part: any) => part.type === 'tool-call' && part.toolCallId && part.toolName));
           }
-          if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-            msg.content.forEach((part: any, partIdx: number) => {
-              if (!part.type) {
-                throw new Error(`Missing type in assistant content part ${partIdx} at message ${idx}`);
-              }
-            });
+          if (msg.role === 'tool') {
+            return Array.isArray(msg.content) && msg.content.every((part: any) => 
+              part.type === 'tool-result' && part.toolCallId && part.toolName
+            );
           }
-          if (msg.role === 'tool' && Array.isArray(msg.content)) {
-            msg.content.forEach((part: any, partIdx: number) => {
-              if (!part.type || part.type !== 'tool-result') {
-                throw new Error(`Invalid type in tool content part ${partIdx} at message ${idx}: expected 'tool-result', got '${part.type}'`);
-              }
-              if (!part.toolCallId) {
-                throw new Error(`Missing toolCallId in tool content part ${partIdx} at message ${idx}`);
-              }
-            });
-          }
-        });
+          return false;
+        };
+
+        const validMessages = modelMessages.filter(isValidMessage);
+        if (validMessages.length !== modelMessages.length) {
+          console.warn(`[VALIDATION] Filtered ${modelMessages.length - validMessages.length} invalid messages`);
+        }
         
         let text: string;
         let toolCalls: any[];
@@ -470,7 +407,7 @@ For ANY request that refers to projects, tasks, or workspace organization, you M
 - Help users prioritize by asking clarifying questions when needed
 
 Remember: You're here to make their life easier and more organized. Be the assistant they can rely on to keep everything running smoothly.`,
-            messages: modelMessages,
+            messages: validMessages,
             tools: plannerTools,
         });
         

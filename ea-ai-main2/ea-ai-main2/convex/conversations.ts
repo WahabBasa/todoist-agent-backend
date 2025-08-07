@@ -73,6 +73,7 @@ export const updateConversation = mutation({
       }))),
       toolResults: v.optional(v.array(v.object({
         toolCallId: v.string(),
+        toolName: v.string(),
         result: v.any(),
       }))),
     })),
