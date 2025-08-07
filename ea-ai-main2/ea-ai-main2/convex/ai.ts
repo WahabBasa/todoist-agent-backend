@@ -1,6 +1,13 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { generateText, tool, ModelMessage, ToolCallPart, ToolResultPart } from "ai";
+import { 
+  generateText, 
+  tool, 
+  ModelMessage, 
+  ToolCallPart,
+  ToolResultPart,
+  TextPart
+} from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -13,6 +20,28 @@ import { ActionCtx } from "./_generated/server";
 // manage their personal and professional tasks and projects efficiently.
 // =================================================================
 
+// Diagnostic function to pinpoint exact type mismatches
+function diagnoseMessageStructure(messages: any[]): void {
+  messages.forEach((msg, idx) => {
+    console.log(`[DIAGNOSTIC] Message ${idx}:`, {
+      role: msg.role,
+      hasContent: !!msg.content,
+      contentType: typeof msg.content,
+      contentIsArray: Array.isArray(msg.content),
+      contentStructure: Array.isArray(msg.content) 
+        ? msg.content.map((c: any) => ({ type: c.type, hasRequiredFields: !!c.type }))
+        : 'string'
+    });
+  });
+}
+
+// Helper function to validate ModelMessage structure
+function validateModelMessage(msg: any): msg is ModelMessage {
+  return msg.role && ['user', 'assistant', 'tool'].includes(msg.role);
+}
+
+// Type definitions for message content (for documentation purposes)
+
 // Helper function to translate your stored message format to the Vercel AI SDK's ModelMessage format
 function convertHistoryToModelMessages(
   history: {
@@ -23,42 +52,65 @@ function convertHistoryToModelMessages(
   }[]
 ): ModelMessage[] {
   const modelMessages: ModelMessage[] = [];
+  
   for (const message of history) {
     switch (message.role) {
       case "user":
-        modelMessages.push({ role: "user", content: message.content ?? "" });
+        modelMessages.push({
+          role: "user",
+          content: message.content || ""
+        });
         break;
+        
       case "assistant":
         if (message.content) {
-          modelMessages.push({ role: "assistant", content: message.content });
+          // Text response
+          modelMessages.push({
+            role: "assistant", 
+            content: message.content
+          });
         } else if (message.toolCalls) {
+          // Fix: Ensure proper ToolCallPart structure
+          const content: ToolCallPart[] = message.toolCalls.map((tc: any): ToolCallPart => ({
+            type: "tool-call" as const,
+            toolCallId: tc.toolCallId,
+            toolName: tc.name,
+            input: tc.args
+          }));
+          
           modelMessages.push({
             role: "assistant",
-            content: message.toolCalls.map((tc) => ({
-              type: "tool-call" as const,
-              toolCallId: tc.toolCallId,
-              toolName: tc.name,
-              input: tc.args,
-            })),
-          } as ModelMessage);
+            content
+          });
         }
         break;
+        
       case "tool":
         if (message.toolResults) {
+          // Fix: Ensure proper ToolResultPart structure
+          const content: ToolResultPart[] = message.toolResults.map((tr: any): ToolResultPart => ({
+            type: "tool-result" as const,
+            toolCallId: tr.toolCallId,
+            toolName: tr.toolName || "unknown",
+            output: tr.result
+          }));
+          
           modelMessages.push({
             role: "tool",
-            content: message.toolResults.map((tr) => ({
-              type: "tool-result" as const,
-              toolCallId: tr.toolCallId,
-              toolName: tr.toolName || "unknown",
-              output: tr.result,
-            })),
-          } as ModelMessage);
+            content
+          });
         }
         break;
     }
   }
-  return modelMessages;
+  
+  // Validate all messages before returning
+  const validMessages = modelMessages.filter(validateModelMessage);
+  if (validMessages.length !== modelMessages.length) {
+    console.warn(`[Converter] Filtered ${modelMessages.length - validMessages.length} invalid messages`);
+  }
+  
+  return validMessages;
 }
 
 // =================================================================
@@ -164,11 +216,46 @@ export const chatWithAI = action({
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
         
-        const modelMessages = convertHistoryToModelMessages(history.slice(-10));
-        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
-        console.log(`[DEBUG] Model messages:`, JSON.stringify(modelMessages, null, 2));
+        // Add debug logging to verify message structure before conversion
+        const historySlice = history.slice(-10);
+        console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
-        const { text, toolCalls } = await generateText({
+        const modelMessages = convertHistoryToModelMessages(historySlice);
+        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
+        console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages, null, 2));
+        
+        // Add diagnostic and validation
+        diagnoseMessageStructure(modelMessages);
+        
+        // Validate each message conforms to ModelMessage interface
+        modelMessages.forEach((msg, idx) => {
+          if (!msg.role || !['user', 'assistant', 'tool'].includes(msg.role)) {
+            throw new Error(`Invalid message role at index ${idx}: ${msg.role}`);
+          }
+          if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, partIdx: number) => {
+              if (!part.type) {
+                throw new Error(`Missing type in assistant content part ${partIdx} at message ${idx}`);
+              }
+            });
+          }
+          if (msg.role === 'tool' && Array.isArray(msg.content)) {
+            msg.content.forEach((part: any, partIdx: number) => {
+              if (!part.type || part.type !== 'tool-result') {
+                throw new Error(`Invalid type in tool content part ${partIdx} at message ${idx}: expected 'tool-result', got '${part.type}'`);
+              }
+              if (!part.toolCallId) {
+                throw new Error(`Missing toolCallId in tool content part ${partIdx} at message ${idx}`);
+              }
+            });
+          }
+        });
+        
+        let text: string;
+        let toolCalls: any[];
+        
+        try {
+          const result = await generateText({
             model: anthropic(modelName),
             system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects. Whether they're executives, professionals, or anyone looking to stay organized, you help them streamline their workflow and boost productivity.
 
@@ -229,6 +316,26 @@ Remember: You're here to make their life easier and more organized. Be the assis
             messages: modelMessages,
             tools: plannerTools,
         });
+        
+        text = result.text;
+        toolCalls = result.toolCalls;
+        
+        } catch (error: any) {
+          if (error.message.includes('Invalid prompt')) {
+            console.warn('[FALLBACK] Using simplified message history due to format error');
+            // Fall back to just the current user message
+            const fallbackResult = await generateText({ 
+              model: anthropic(modelName),
+              system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects.`,
+              messages: [{ role: 'user', content: message }],
+              tools: plannerTools,
+            });
+            text = fallbackResult.text;
+            toolCalls = fallbackResult.toolCalls;
+          } else {
+            throw error;
+          }
+        }
 
         if (!toolCalls || toolCalls.length === 0) {
             console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
@@ -249,10 +356,16 @@ Remember: You're here to make their life easier and more organized. Be the assis
             args: call.input,
             toolCallId: call.toolCallId
         })));
+        
+        // Verify tool call ID consistency
+        console.log('[VALIDATION] Tool call IDs match:', {
+          toolCallIds: toolCalls.map(tc => tc.toolCallId),
+          toolResultIds: toolResults.map(tr => tr.toolCallId)
+        });
 
         history.push({
           role: "tool",
-          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: (tr as any).output })),
+          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.output })),
           timestamp: Date.now(),
         });
     }
