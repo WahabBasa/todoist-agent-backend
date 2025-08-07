@@ -19,7 +19,7 @@ function convertHistoryToModelMessages(
     role: "user" | "assistant" | "tool";
     content?: string;
     toolCalls?: { name: string; args: any; toolCallId: string }[];
-    toolResults?: { toolCallId: string; result: any }[];
+    toolResults?: { toolCallId: string; toolName?: string; result: any }[];
   }[]
 ): ModelMessage[] {
   const modelMessages: ModelMessage[] = [];
@@ -38,8 +38,8 @@ function convertHistoryToModelMessages(
               type: "tool-call" as const,
               toolCallId: tc.toolCallId,
               toolName: tc.name,
-              args: tc.args,
-            } as ToolCallPart)),
+              input: tc.args,
+            })),
           } as ModelMessage);
         }
         break;
@@ -50,8 +50,9 @@ function convertHistoryToModelMessages(
             content: message.toolResults.map((tr) => ({
               type: "tool-result" as const,
               toolCallId: tr.toolCallId,
-              result: tr.result,
-            } as ToolResultPart)),
+              toolName: tr.toolName || "unknown",
+              output: tr.result,
+            })),
           } as ModelMessage);
         }
         break;
@@ -123,7 +124,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             type: 'tool-result' as const,
             toolCallId,
             toolName,
-            result,
+            output: result || {},
         } as ToolResultPart;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -132,7 +133,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             type: 'tool-result' as const,
             toolCallId,
             toolName,
-            result: { error: errorMessage },
+            output: { error: errorMessage } as any,
             isError: true,
         } as ToolResultPart;
     }
@@ -165,6 +166,7 @@ export const chatWithAI = action({
         
         const modelMessages = convertHistoryToModelMessages(history.slice(-10));
         console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
+        console.log(`[DEBUG] Model messages:`, JSON.stringify(modelMessages, null, 2));
         
         const { text, toolCalls } = await generateText({
             model: anthropic(modelName),
@@ -237,16 +239,20 @@ Remember: You're here to make their life easier and more organized. Be the assis
 
         history.push({
           role: "assistant",
-          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: (tc as any).args, toolCallId: tc.toolCallId })),
+          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: (tc as any).input, toolCallId: tc.toolCallId })),
           timestamp: Date.now(),
         });
 
         console.log(`[Orchestrator] Executing ${toolCalls.length} tool(s)...`);
-        const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, call)));
+        const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, {
+            toolName: call.toolName,
+            args: call.input,
+            toolCallId: call.toolCallId
+        })));
 
         history.push({
           role: "tool",
-          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, result: (tr as any).result })),
+          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: (tr as any).output })),
           timestamp: Date.now(),
         });
     }
