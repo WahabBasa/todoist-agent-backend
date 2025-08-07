@@ -35,12 +35,12 @@ function convertHistoryToModelMessages(
           modelMessages.push({
             role: "assistant",
             content: message.toolCalls.map((tc) => ({
-              type: "tool-call",
+              type: "tool-call" as const,
               toolCallId: tc.toolCallId,
               toolName: tc.name,
               args: tc.args,
-            })),
-          });
+            } as ToolCallPart)),
+          } as ModelMessage);
         }
         break;
       case "tool":
@@ -48,11 +48,11 @@ function convertHistoryToModelMessages(
           modelMessages.push({
             role: "tool",
             content: message.toolResults.map((tr) => ({
-              type: "tool-result",
+              type: "tool-result" as const,
               toolCallId: tr.toolCallId,
               result: tr.result,
-            })),
-          });
+            } as ToolResultPart)),
+          } as ModelMessage);
         }
         break;
     }
@@ -94,7 +94,7 @@ const plannerTools = {
 // 2. SYSTEM EXECUTOR: A separate, deterministic function for execution.
 //    This implements the *how*.
 // =================================================================
-async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<ToolResultPart> {
+async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPart> {
     const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, args);
 
@@ -102,14 +102,14 @@ async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<Tool
         let result: any;
         switch (toolName) {
             case "createTask":
-                result = await ctx.runMutation(api.tasks.createTask, args as any);
+                result = await ctx.runMutation(api.tasks.createTask, args);
                 break;
             case "getTasks":
-                result = await ctx.runQuery(api.tasks.getTasks, args as any);
+                result = await ctx.runQuery(api.tasks.getTasks, args);
                 break;
             case "createProject": {
                 const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
-                result = await ctx.runMutation(api.projects.createProject, { ...(args as any), color });
+                result = await ctx.runMutation(api.projects.createProject, { ...args, color });
                 break;
             }
             case "getProjects":
@@ -120,21 +120,21 @@ async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<Tool
         }
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
         return {
-            type: 'tool-result',
+            type: 'tool-result' as const,
             toolCallId,
             toolName,
             result,
-        };
+        } as ToolResultPart;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
         return {
-            type: 'tool-result',
+            type: 'tool-result' as const,
             toolCallId,
             toolName,
             result: { error: errorMessage },
             isError: true,
-        } as unknown as ToolResultPart;
+        } as ToolResultPart;
     }
 }
 
@@ -237,7 +237,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
 
         history.push({
           role: "assistant",
-          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: tc.args, toolCallId: tc.toolCallId })),
+          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: (tc as any).args, toolCallId: tc.toolCallId })),
           timestamp: Date.now(),
         });
 
@@ -246,7 +246,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
 
         history.push({
           role: "tool",
-          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, result: tr.result })),
+          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, result: (tr as any).result })),
           timestamp: Date.now(),
         });
     }

@@ -23,8 +23,8 @@ export const addMessage = mutation({
     content: v.string(),
     toolCalls: v.optional(v.array(v.object({
       name: v.string(),
-      args: v.optional(v.any()),
-      result: v.any(),
+      args: v.any(),
+      toolCallId: v.string(),
     }))),
   },
   handler: async (ctx, args) => {
@@ -64,11 +64,15 @@ export const updateConversation = mutation({
     // This validator now correctly matches the updated schema
     messages: v.array(v.object({
       role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
-      content: v.any(),
+      content: v.optional(v.string()),
       timestamp: v.number(),
       toolCalls: v.optional(v.array(v.object({
         name: v.string(),
-        args: v.optional(v.any()),
+        args: v.any(),
+        toolCallId: v.string(),
+      }))),
+      toolResults: v.optional(v.array(v.object({
+        toolCallId: v.string(),
         result: v.any(),
       }))),
     })),
