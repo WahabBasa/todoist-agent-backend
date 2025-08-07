@@ -53,64 +53,88 @@ function convertHistoryToModelMessages(
 ): ModelMessage[] {
   const modelMessages: ModelMessage[] = [];
   
-  for (const message of history) {
-    switch (message.role) {
-      case "user":
-        modelMessages.push({
-          role: "user",
-          content: message.content || ""
-        });
-        break;
-        
-      case "assistant":
-        if (message.content) {
-          // Text response
-          modelMessages.push({
-            role: "assistant", 
-            content: message.content
-          });
-        } else if (message.toolCalls) {
-          // Fix: Ensure proper ToolCallPart structure
-          const content: ToolCallPart[] = message.toolCalls.map((tc: any): ToolCallPart => ({
-            type: "tool-call" as const,
-            toolCallId: tc.toolCallId,
-            toolName: tc.name,
-            input: tc.args
-          }));
+  console.log('[CONVERTER] Processing history length:', history.length);
+  
+  for (let i = 0; i < history.length; i++) {
+    const message = history[i];
+    console.log(`[CONVERTER] Processing message ${i}:`, {
+      role: message.role,
+      hasContent: !!message.content,
+      hasToolCalls: !!(message.toolCalls && message.toolCalls.length > 0),
+      hasToolResults: !!(message.toolResults && message.toolResults.length > 0)
+    });
+    
+    try {
+      switch (message.role) {
+        case "user":
+          if (message.content) {
+            modelMessages.push({
+              role: "user",
+              content: message.content
+            });
+          }
+          break;
           
-          modelMessages.push({
-            role: "assistant",
-            content
-          });
-        }
-        break;
-        
-      case "tool":
-        if (message.toolResults) {
-          // Fix: Ensure proper ToolResultPart structure
-          const content: ToolResultPart[] = message.toolResults.map((tr: any): ToolResultPart => ({
-            type: "tool-result" as const,
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName || "unknown",
-            output: tr.result
-          }));
+        case "assistant":
+          if (message.content) {
+            // Text response
+            modelMessages.push({
+              role: "assistant", 
+              content: message.content
+            });
+          } else if (message.toolCalls && message.toolCalls.length > 0) {
+            // Tool calls - ensure exact AI SDK format
+            const validToolCalls = message.toolCalls.filter(tc => 
+              tc.toolCallId && tc.name && typeof tc.toolCallId === 'string'
+            );
+            
+            if (validToolCalls.length > 0) {
+              const content = validToolCalls.map((tc: any) => ({
+                type: "tool-call" as const,
+                toolCallId: tc.toolCallId,
+                toolName: tc.name,
+                input: tc.args || {}
+              }));
+              
+              modelMessages.push({
+                role: "assistant",
+                content
+              });
+            }
+          }
+          break;
           
-          modelMessages.push({
-            role: "tool",
-            content
-          });
-        }
-        break;
+        case "tool":
+          if (message.toolResults && message.toolResults.length > 0) {
+            // Tool results - ensure exact AI SDK format  
+            const validToolResults = message.toolResults.filter(tr => 
+              tr.toolCallId && typeof tr.toolCallId === 'string'
+            );
+            
+            if (validToolResults.length > 0) {
+              const content = validToolResults.map((tr: any) => ({
+                type: "tool-result" as const,
+                toolCallId: tr.toolCallId,
+                toolName: tr.toolName || "unknown",
+                output: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result || {})
+              }));
+              
+              modelMessages.push({
+                role: "tool",
+                content
+              });
+            }
+          }
+          break;
+      }
+    } catch (error) {
+      console.error(`[CONVERTER] Error processing message ${i}:`, error);
+      // Skip this message and continue
     }
   }
   
-  // Validate all messages before returning
-  const validMessages = modelMessages.filter(validateModelMessage);
-  if (validMessages.length !== modelMessages.length) {
-    console.warn(`[Converter] Filtered ${modelMessages.length - validMessages.length} invalid messages`);
-  }
-  
-  return validMessages;
+  console.log('[CONVERTER] Generated model messages count:', modelMessages.length);
+  return modelMessages;
 }
 
 // =================================================================
@@ -147,12 +171,58 @@ const plannerTools = {
 // 2. SYSTEM EXECUTOR: A separate, deterministic function for execution.
 //    This implements the *how*.
 // =================================================================
+
+// Circuit breaker to prevent infinite tool execution loops
+const toolFailureTracker = new Map<string, { count: number; lastFailure: number }>();
+const MAX_TOOL_FAILURES = 3;
+const FAILURE_RESET_TIME = 5 * 60 * 1000; // 5 minutes
+
+function checkCircuitBreaker(toolName: string): boolean {
+  const failure = toolFailureTracker.get(toolName);
+  if (!failure) return true;
+  
+  // Reset if enough time has passed
+  if (Date.now() - failure.lastFailure > FAILURE_RESET_TIME) {
+    toolFailureTracker.delete(toolName);
+    return true;
+  }
+  
+  return failure.count < MAX_TOOL_FAILURES;
+}
+
+function recordToolFailure(toolName: string): void {
+  const failure = toolFailureTracker.get(toolName) || { count: 0, lastFailure: 0 };
+  failure.count++;
+  failure.lastFailure = Date.now();
+  toolFailureTracker.set(toolName, failure);
+}
+
 async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPart> {
     const { toolName, args, toolCallId } = toolCall;
-    console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, args);
+    console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
+    
+    // Circuit breaker check
+    if (!checkCircuitBreaker(toolName)) {
+        console.warn(`[Executor] 🚫 Circuit breaker active for tool: ${toolName}`);
+        return {
+            type: 'tool-result' as const,
+            toolCallId,
+            toolName,
+            output: "Tool temporarily unavailable due to repeated failures. Please try again later."
+        } as unknown as ToolResultPart;
+    }
 
     try {
         let result: any;
+        
+        // Add project ID validation for getTasks
+        if (toolName === "getTasks" && args.projectId) {
+            // Validate that projectId looks like a Convex ID (not a project name)
+            if (!/^[a-zA-Z0-9]{16,}$/.test(args.projectId)) {
+                throw new Error(`Invalid project ID format: "${args.projectId}". Use getProjects() first to get the correct project ID.`);
+            }
+        }
+        
         switch (toolName) {
             case "createTask":
                 result = await ctx.runMutation(api.tasks.createTask, args);
@@ -171,6 +241,10 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
+        
+        // Reset failure counter on success
+        toolFailureTracker.delete(toolName);
+        
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
         return {
             type: 'tool-result' as const,
@@ -181,13 +255,16 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
+        
+        // Record the failure for circuit breaker
+        recordToolFailure(toolName);
+        
         return {
             type: 'tool-result' as const,
             toolCallId,
             toolName,
-            output: { error: errorMessage } as any,
-            isError: true,
-        } as ToolResultPart;
+            output: `Error: ${errorMessage}`
+        } as unknown as ToolResultPart;
     }
 }
 
@@ -212,9 +289,22 @@ export const chatWithAI = action({
 
     console.log(`[Orchestrator] Starting interaction for user message: "${message}"`);
 
+    // Reset circuit breaker for new conversation to give tools a fresh start
+    toolFailureTracker.clear();
+
+    // Conversation state tracking to prevent infinite loops
+    const conversationStateTracker = new Set<string>();
+    
     const MAX_ITERATIONS = 5;
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
+        
+        // Conversation state tracking to detect loops
+        const stateKey = `${message}-${history.length}-${i}`;
+        if (conversationStateTracker.has(stateKey)) {
+            throw new Error(`Duplicate conversation state detected at iteration ${i + 1}. Preventing infinite loop.`);
+        }
+        conversationStateTracker.add(stateKey);
         
         // Add debug logging to verify message structure before conversion
         const historySlice = history.slice(-10);
@@ -270,25 +360,40 @@ export const chatWithAI = action({
 For ANY request that refers to a specific project or task by name (e.g., "my personal project", "tasks in the Website Redesign project", "the Deploy task"), you MUST follow this exact sequence:
 
 1. **READ FIRST**: Always call the appropriate list function (\`getProjects()\` or \`getTasks()\`) to retrieve current data
-2. **FIND & MATCH**: Look through the results to find items that match the user's description (case-insensitive matching)
-3. **EXTRACT ID**: Get the exact \`_id\` field from the matching item
-4. **EXECUTE**: Use that extracted \`_id\` in subsequent tool calls
+2. **FIND & MATCH**: Look through the results array to find items that match the user's description (case-insensitive matching on the "name" field)
+3. **EXTRACT ID**: Get the exact \`_id\` field value from the matching item object
+4. **EXECUTE**: Use that extracted \`_id\` string in subsequent tool calls
 
-**NEVER** use human-readable names, placeholders, or invented IDs like "PERSONAL_PROJECT_ID" or "personal" as arguments.
+**ABSOLUTELY NEVER** use:
+- Human-readable names like "personal", "Personal", "work", "Work"  
+- Placeholders like "PERSONAL_PROJECT_ID" or "PROJECT_ID"
+- Invented IDs or shortened versions
+- The name field value instead of the _id field value
+
+**ALWAYS use the full _id string like "k9757z44g01adm9emm6eq32zy57n5yx9"**
 </critical_rule>
 
 ## Examples of Correct Multi-Step Workflows
 
 **Example 1**: User asks "Show me tasks in my Personal project"
 1. Call \`getProjects()\` to get all projects
-2. Find project where \`name\` matches "Personal" (case-insensitive)
-3. Extract the \`_id\` from that project (e.g., "jx7891k2m3n4o5p6q7r8s9t0")
-4. Call \`getTasks({ projectId: "jx7891k2m3n4o5p6q7r8s9t0" })\`
+2. Look through the results array for a project where \`name\` matches "Personal" (case-insensitive)
+3. Extract the \`_id\` field from that specific project object (e.g., "k9757z44g01adm9emm6eq32zy57n5yx9")
+4. Call \`getTasks({ projectId: "k9757z44g01adm9emm6eq32zy57n5yx9" })\` using the extracted ID
+
+**CRITICAL: When you see project data like this:**
+{
+  "_id": "k9757z44g01adm9emm6eq32zy57n5yx9",
+  "name": "Personal",
+  "taskCount": 6
+}
+**You MUST use the _id value "k9757z44g01adm9emm6eq32zy57n5yx9" in getTasks(), NOT "personal" or "Personal"**
 
 **Example 2**: User asks "Create a task called 'Review documents' in the Marketing project"
 1. Call \`getProjects()\` to find the Marketing project
-2. Extract the Marketing project's \`_id\`
-3. Call \`createTask({ title: "Review documents", projectId: "extracted_id" })\`
+2. Find the project object where name matches "Marketing"
+3. Extract that project's \`_id\` field value
+4. Call \`createTask({ title: "Review documents", projectId: "extracted_id_value" })\`
 
 ## Communication Style
 - **Professional yet Friendly**: Use a warm, helpful tone like a trusted assistant
@@ -321,8 +426,16 @@ Remember: You're here to make their life easier and more organized. Be the assis
         toolCalls = result.toolCalls;
         
         } catch (error: any) {
+          console.error('[ERROR] AI SDK generateText failed:', {
+            message: error.message,
+            type: error.constructor.name,
+            modelMessagesCount: modelMessages.length,
+            lastMessageRoles: modelMessages.slice(-3).map(m => m.role),
+            detailedError: error
+          });
+          
           if (error.message.includes('Invalid prompt')) {
-            console.warn('[FALLBACK] Using simplified message history due to format error');
+            console.warn('[FALLBACK] Format error detected, trying with contextual fallback');
             // Fall back to just the current user message
             const fallbackResult = await generateText({ 
               model: anthropic(modelName),
@@ -357,15 +470,24 @@ Remember: You're here to make their life easier and more organized. Be the assis
             toolCallId: call.toolCallId
         })));
         
-        // Verify tool call ID consistency
+        // Validate tool call ID consistency and filter out mismatched results
+        const validatedResults = toolResults.filter(result => 
+            toolCalls.some(call => call.toolCallId === result.toolCallId)
+        );
+        
+        if (validatedResults.length !== toolResults.length) {
+            console.warn(`[VALIDATION] Filtered ${toolResults.length - validatedResults.length} mismatched tool results`);
+        }
+        
         console.log('[VALIDATION] Tool call IDs match:', {
           toolCallIds: toolCalls.map(tc => tc.toolCallId),
-          toolResultIds: toolResults.map(tr => tr.toolCallId)
+          toolResultIds: validatedResults.map(tr => tr.toolCallId),
+          allMatch: validatedResults.length === toolCalls.length
         });
 
         history.push({
           role: "tool",
-          toolResults: toolResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.output })),
+          toolResults: validatedResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.output })),
           timestamp: Date.now(),
         });
     }
