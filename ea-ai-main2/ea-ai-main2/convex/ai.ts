@@ -1,101 +1,100 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { generateText, tool, CoreMessage, ToolCallPart, ToolResultPart } from "ai";
+import { generateText, tool, ModelMessage, ToolCallPart, ToolResultPart } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { z } from "zod";
-import { Id } from "./_generated/dataModel";
 import { ActionCtx } from "./_generated/server";
 
 // =================================================================
-// 1. AI PLANNER'S VIEW: Tools the AI can *request*.
-// These definitions only describe what the tool does and what inputs
-// it needs. The actual execution logic is handled by the Executor.
+// EXECUTIVE ASSISTANT AI - TASK MANAGEMENT SYSTEM
+// This AI acts as an intelligent executive assistant that helps users
+// manage their personal and professional tasks and projects efficiently.
+// =================================================================
+
+// =================================================================
+// 1. TOOL DEFINITIONS: What the executive assistant can do for users
+//    These define the assistant's capabilities for task and project management.
 // =================================================================
 const plannerTools = {
   createTask: tool({
-    description: "Create a new task. The `title` is required.",
+    description: "Create a new task for the user. Use this when they want to add something to their to-do list. You can optionally assign it to a specific project to keep things organized.",
     inputSchema: z.object({
-      title: z.string().describe("The title for the new task."),
-      projectId: z.string().optional().describe("To add this task to a project, provide the project's database ID here. You can get this ID by calling `getProjects`."),
+      title: z.string().describe("The task title or description (e.g., 'Call the dentist', 'Review quarterly reports', 'Buy groceries')"),
+      projectId: z.string().optional().describe("Optional: The project ID to categorize this task. Get project IDs by calling getProjects first."),
     }),
   }),
   getTasks: tool({
-    description: "Retrieve a list of all tasks. Can be filtered by project.",
+    description: "Retrieve the user's tasks. Use this to show their to-do list or find tasks within a specific project. Call without parameters to see all tasks, or with projectId to filter by project.",
     inputSchema: z.object({
-      projectId: z.string().optional().describe("The database ID of a project to filter tasks by."),
+      projectId: z.string().optional().describe("Optional: Filter tasks to show only those belonging to a specific project. Get project IDs using getProjects."),
     }),
   }),
   createProject: tool({
-    description: "Create a new project. The `name` is required.",
+    description: "Create a new project category to help organize tasks. Use this when users want to group related tasks together (e.g., 'Work', 'Personal', 'Home Improvement', 'Vacation Planning').",
     inputSchema: z.object({
-        name: z.string().describe("The name for the new project."),
+        name: z.string().describe("The project name (e.g., 'Work Projects', 'Personal Goals', 'Home Renovation', 'Marketing Campaign')"),
     }),
   }),
   getProjects: tool({
-    description: "Retrieve a list of all projects to get their names and database IDs.",
+    description: "Get a list of all the user's projects with their names and IDs. Use this to find project IDs needed for other operations, or to show the user their project categories.",
     inputSchema: z.object({}),
   }),
 };
 
 // =================================================================
-// 2. SYSTEM EXECUTOR: The reliable "dumb" worker.
-// This part of the system doesn't think. It receives a plan from the
-// AI Planner and executes the corresponding functions deterministically.
+// 2. SYSTEM EXECUTOR: A separate, deterministic function for execution.
+//    This implements the *how*.
 // =================================================================
-namespace SystemExecutor {
-  export async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<ToolResultPart> {
+async function executeTool(ctx: ActionCtx, toolCall: ToolCallPart): Promise<ToolResultPart> {
+    // The property for arguments is 'input', not 'args'.
     const { toolName, input: args, toolCallId } = toolCall;
-    console.log(`[Executor] 🔧 Executing tool: ${toolName} with args: ${JSON.stringify(args)}`);
+    console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, args);
 
     try {
-      let result: any;
-      switch (toolName) {
-        case "createTask":
-          result = await ctx.runMutation(api.tasks.createTask, args as any);
-          break;
-        case "getTasks":
-          result = await ctx.runQuery(api.tasks.getTasks, args as any);
-          break;
-        case "createProject":
-          const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
-          result = await ctx.runMutation(api.projects.createProject, { ...(args as any), color });
-          break;
-        case "getProjects":
-          result = await ctx.runQuery(api.projects.getProjects, {});
-          break;
-        default:
-          throw new Error(`Unknown tool: ${toolName}`);
-      }
-      
-      console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
-      return { type: 'tool-result', toolCallId, toolName, output: result };
+        let result: any;
+        switch (toolName) {
+            case "createTask":
+                result = await ctx.runMutation(api.tasks.createTask, args as any);
+                break;
+            case "getTasks":
+                result = await ctx.runQuery(api.tasks.getTasks, args as any);
+                break;
+            case "createProject":
+                const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
+                result = await ctx.runMutation(api.projects.createProject, { ...(args as any), color });
+                break;
+            case "getProjects":
+                result = await ctx.runQuery(api.projects.getProjects, {});
+                break;
+            default:
+                throw new Error(`Unknown tool: ${toolName}`);
+        }
+        console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
+        // The property for the result is 'output', and it takes the raw JSON-serializable value.
+        return {
+            type: 'tool-result',
+            toolCallId,
+            toolName,
+            output: result,
+        };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-      console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
-      return { type: 'tool-result', toolCallId, toolName, output: { error: errorMessage }, isError: true } as unknown as ToolResultPart;
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
+        return {
+            type: 'tool-result',
+            toolCallId,
+            toolName,
+            output: { error: errorMessage },
+            isError: true,
+        } as unknown as ToolResultPart;
     }
-  }
 }
 
-// =================================================================
-// 3. HELPER FUNCTIONS: Support multi-step planning
-// =================================================================
-function buildContextFromPreviousResults(allToolCalls: ToolCallPart[], allToolResults: ToolResultPart[]): string {
-  if (allToolResults.length === 0) return '';
-  
-  const resultsSummary = allToolResults.map(tr => 
-    `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
-  ).join('\n');
-  
-  return `\nPrevious tool execution results:\n${resultsSummary}\n\nUse this information to continue planning if needed.`;
-}
 
 // =================================================================
-// 4. THE ORCHESTRATOR: Manages the entire workflow.
-// This is the main action that coordinates between the user, the
-// AI Planner, and the System Executor with iterative planning.
+// 3. THE ORCHESTRATOR: Manages the agentic workflow.
 // =================================================================
 export const chatWithAI = action({
   args: {
@@ -109,181 +108,104 @@ export const chatWithAI = action({
     const modelName = useHaiku ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620";
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    // --- Context Assembly ---
     const conversation = await ctx.runQuery(api.conversations.getConversation);
-    const messages: CoreMessage[] = (conversation?.messages as CoreMessage[])?.slice(-10) || [];
+    const messages: ModelMessage[] = (conversation?.messages as ModelMessage[])?.slice(-10) || [];
     messages.push({ role: "user", content: message });
-    
+
     console.log(`[Orchestrator] Starting interaction for user message: "${message}"`);
 
-    try {
-      // --- Step 1: Iterative Planning Loop ---
-      const allToolCalls: ToolCallPart[] = [];
-      const allToolResults: ToolResultPart[] = [];
-      let planningComplete = false;
-      let iterations = 0;
-      const MAX_ITERATIONS = 5;
-      
-      console.log(`[Orchestrator] Starting iterative planning loop...`);
-      
-      while (!planningComplete && iterations < MAX_ITERATIONS) {
-        console.log(`[Orchestrator] -> Planning iteration ${iterations + 1}...`);
+    const MAX_ITERATIONS = 5;
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+        console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
+        console.log(`[Orchestrator] Messages count before AI call: ${messages.length}`);
         
-        // Build proper conversation context  
-        const contextMessages: CoreMessage[] = [...messages];
-        
-        // Add all previous tool calls and results in proper sequence
-        for (let i = 0; i < allToolCalls.length; i++) {
-          // Add assistant message with tool call
-          contextMessages.push({
-            role: 'assistant',
-            content: [{
-              type: 'tool-call' as const,
-              toolCallId: allToolCalls[i].toolCallId,
-              toolName: allToolCalls[i].toolName,
-              input: allToolCalls[i].input
-            }]
-          });
-          
-          // Add corresponding tool result
-          if (allToolResults[i]) {
-            contextMessages.push({
-              role: 'tool',
-              content: [{
-                type: 'tool-result' as const,
-                toolCallId: allToolResults[i].toolCallId,
-                toolName: allToolResults[i].toolName,
-                output: allToolResults[i].output
-              }]
-            });
-          }
-        }
-        
-        const plannerResult = await generateText({
-          model: anthropic(modelName),
-          system: `You are a database-aware AI Planner that creates tool call sequences.
-  
-When previous results are provided, use them to continue the plan.
-If the user asks about specific items (like "tasks in project X"), you MUST:
-1. First call the appropriate list function if you don't have the data
-2. Use the results to get the specific ID
-3. Call the next function with that ID
+        const { text, toolCalls } = await generateText({
+            model: anthropic(modelName),
+            system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects. Whether they're executives, professionals, or anyone looking to stay organized, you help them streamline their workflow and boost productivity.
+
+## Your Role
+- **Personal Task Manager**: Help users create, organize, and track their tasks efficiently
+- **Project Coordinator**: Assist with project organization and task categorization
+- **Productivity Partner**: Provide proactive suggestions and maintain organized task lists
+
+## Critical Multi-Step Workflow Rules
 
 <critical_rule>
-For ANY request that refers to a specific project or task by name (e.g., "my personal project", "the 'Deploy' task"), you MUST follow this exact sequence:
-1.  **READ**: Call \`getProjects()\` or \`getTasks()\` to retrieve a list of all items.
-2.  **FIND**: In your internal reasoning, find the item in the list that matches the user's description (e.g., the project where \`name\` is "Personal").
-3.  **EXTRACT**: Get the exact \`_id\` value from that item.
-4.  **EXECUTE**: Use that extracted \`_id\` in the subsequent tool call (e.g., \`getTasks({ projectId: "jx123abc" })\`).
+For ANY request that refers to a specific project or task by name (e.g., "my personal project", "tasks in the Website Redesign project", "the Deploy task"), you MUST follow this exact sequence:
 
-You are forbidden from using human-readable names or invented placeholders like "PERSONAL_PROJECT_ID" as arguments for \`projectId\` or \`taskId\`.
+1. **READ FIRST**: Always call the appropriate list function (\`getProjects()\` or \`getTasks()\`) to retrieve current data
+2. **FIND & MATCH**: Look through the results to find items that match the user's description (case-insensitive matching)
+3. **EXTRACT ID**: Get the exact \`_id\` field from the matching item
+4. **EXECUTE**: Use that extracted \`_id\` in subsequent tool calls
+
+**NEVER** use human-readable names, placeholders, or invented IDs like "PERSONAL_PROJECT_ID" or "personal" as arguments.
 </critical_rule>
 
-<example_correct_workflow>
-User Request: "What are the tasks in my 'Personal' project?"
-Your Plan (Tool Calls):
-1. \`getProjects()\`
-2. \`getTasks({ projectId: "id_from_step_1_result" })\`
-</example_correct_workflow>
+## Examples of Correct Multi-Step Workflows
 
-Respond with tool calls OR indicate completion with a text response when you have enough information to answer the user's question.`,
-          messages: contextMessages,
-          tools: plannerTools,
+**Example 1**: User asks "Show me tasks in my Personal project"
+1. Call \`getProjects()\` to get all projects
+2. Find project where \`name\` matches "Personal" (case-insensitive)
+3. Extract the \`_id\` from that project (e.g., "jx7891k2m3n4o5p6q7r8s9t0")
+4. Call \`getTasks({ projectId: "jx7891k2m3n4o5p6q7r8s9t0" })\`
+
+**Example 2**: User asks "Create a task called 'Review documents' in the Marketing project"
+1. Call \`getProjects()\` to find the Marketing project
+2. Extract the Marketing project's \`_id\`
+3. Call \`createTask({ title: "Review documents", projectId: "extracted_id" })\`
+
+## Communication Style
+- **Professional yet Friendly**: Use a warm, helpful tone like a trusted assistant
+- **Proactive**: Anticipate needs and offer helpful suggestions
+- **Clear & Organized**: Present information in easy-to-read formats with bullet points or numbers
+- **Confirmative**: Always confirm completed actions (e.g., "✅ I've added 'Review quarterly reports' to your Work project")
+
+## Task Management Best Practices
+- **Categorize Wisely**: Suggest appropriate project categories when users create tasks
+- **Stay Organized**: Help users keep their projects and tasks well-structured
+- **Be Thorough**: When showing task lists, include relevant details like project context
+- **Offer Alternatives**: If something can't be found, suggest similar options or clarifications
+
+## Error Handling
+- **Be Helpful**: If a project or task isn't found, show available options
+- **Stay Positive**: Frame issues as opportunities to clarify and improve organization
+- **Provide Solutions**: Always offer next steps or alternatives when something goes wrong
+
+## Productivity Tips
+- Suggest creating projects for better organization when users have many loose tasks
+- Recommend breaking down complex tasks into smaller, manageable ones
+- Help users prioritize by asking clarifying questions when needed
+
+Remember: You're here to make their life easier and more organized. Be the assistant they can rely on to keep everything running smoothly.`,
+            messages: messages,
+            tools: plannerTools,
         });
-        
-        // Check if planning is complete
-        if (!plannerResult.toolCalls || plannerResult.toolCalls.length === 0) {
-          console.log(`[Orchestrator] Planning complete after ${iterations + 1} iterations.`);
-          planningComplete = true;
-          
-          // If this is the first iteration and no tools needed, respond directly
-          if (iterations === 0) {
-            console.log(`[Orchestrator] No tools needed. Responding directly.`);
-            console.log(`[Orchestrator] Planner's response: "${plannerResult.text}"`);
-            await ctx.runMutation(api.conversations.addMessage, { role: "user", content: message });
-            await ctx.runMutation(api.conversations.addMessage, { role: "assistant", content: plannerResult.text });
-            return { response: plannerResult.text };
-          }
-          
-          break;
+
+        // If there are no tool calls, the loop is complete.
+        if (!toolCalls || toolCalls.length === 0) {
+            console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
+            
+            // Add the final text response from the assistant to the history.
+            messages.push({ role: "assistant", content: text });
+            await ctx.runMutation(api.conversations.updateConversation, { messages: messages as any });
+            
+            return { response: text };
         }
-        
-        // Execute new tool calls
-        console.log(`[Orchestrator] Executing ${plannerResult.toolCalls.length} tool(s) in iteration ${iterations + 1}...`);
-        console.log('[Orchestrator] Tool calls:', JSON.stringify(plannerResult.toolCalls, null, 2));
-        
-        for (const toolCall of plannerResult.toolCalls) {
-          const result = await SystemExecutor.executeTool(ctx, toolCall);
-          allToolCalls.push(toolCall);
-          allToolResults.push(result);
+
+        // Add the assistant's plan (the tool calls) to the message history.
+        messages.push({ role: 'assistant', content: toolCalls });
+
+        // Execute the planned tools.
+        console.log(`[Orchestrator] Executing ${toolCalls.length} tool(s)...`);
+        const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, call)));
+
+        // Add each tool result as a separate tool message
+        for (const toolResult of toolResults) {
+            messages.push({ role: 'tool', content: [toolResult] });
         }
-        
-        iterations++;
-      }
-      
-      console.log(`[Orchestrator] Planning completed with ${allToolCalls.length} total tool calls across ${iterations} iterations.`);
-
-      // --- Step 2: Call the AI Reporter ---
-      console.log(`[Orchestrator] -> Calling AI Reporter to summarize results...`);
-      
-      const toolResultsContext = allToolResults.map(tr => 
-        `Tool ${tr.toolName}: ${JSON.stringify(tr.output)}`
-      ).join('\n');
-
-      const reporterResult = await generateText({
-        model: anthropic(modelName),
-        system: `You are the AI Reporter. The following tools were executed successfully:
-${toolResultsContext}
-
-Based on the user's request: "${message}"
-Summarize these results clearly for the user. If the plan was successful, confirm the action. If any part failed, report the error clearly.`,
-        messages: [{ role: "user", content: message }], // Provide the current user message
-      });
-      
-      // NEW LOGGING
-      console.log(`[Orchestrator] Reporter's response: "${reporterResult.text}"`);
-
-      // --- Step 3: Persist and Return ---
-      console.log(`[Orchestrator] Interaction complete. Saving history and returning final response.`);
-      
-      const assistantMessage = { 
-        role: "assistant", 
-        content: reporterResult.text,
-        timestamp: Date.now(),
-        toolCalls: allToolCalls.map((tc, idx) => ({
-          name: tc.toolName,
-          args: tc.input,
-          result: allToolResults[idx]?.output,
-        })),
-      };
-      
-      console.log('[Orchestrator] About to store assistant message:', {
-        content: assistantMessage.content,
-        toolCallsCount: assistantMessage.toolCalls?.length || 0
-      });
-      
-      await ctx.runMutation(api.conversations.updateConversation, {
-        messages: [
-          ...(conversation?.messages || []),
-          { role: "user", content: message, timestamp: Date.now() },
-          assistantMessage
-        ] as any,
-      });
-
-      return {
-        response: reporterResult.text,
-        toolCalls: allToolCalls,
-        toolResults: allToolResults,
-      };
-
-    } catch (error) {
-      console.error("[Orchestrator] ❌ An error occurred during the interaction:", error);
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-      await ctx.runMutation(api.conversations.addMessage, { 
-        role: "assistant", 
-        content: `I'm sorry, I encountered an internal error: ${errorMessage}` 
-      });
-      throw error;
     }
-  },
+
+    // If the loop finishes without a text response, throw an error.
+    throw new Error("Maximum tool call iterations reached.");
+  }
 });
