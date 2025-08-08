@@ -18,25 +18,11 @@ import { ActionCtx } from "./_generated/server";
 // manage their personal and professional tasks and projects efficiently.
 // =================================================================
 
-// Diagnostic function to pinpoint exact type mismatches
-function diagnoseMessageStructure(messages: any[]): void {
-  messages.forEach((msg, idx) => {
-    console.log(`[DIAGNOSTIC] Message ${idx}:`, {
-      role: msg.role,
-      hasContent: !!msg.content,
-      contentType: typeof msg.content,
-      contentIsArray: Array.isArray(msg.content),
-      contentStructure: Array.isArray(msg.content) 
-        ? msg.content.map((c: any) => ({ type: c.type, hasRequiredFields: !!c.type }))
-        : 'string'
-    });
-  });
-}
 
 
 // Type definitions for message content (for documentation purposes)
 
-// Helper function to translate your stored message format to the Vercel AI SDK's ModelMessage format
+// Robust message converter with validation pipeline for AI SDK v5 compliance
 function convertHistoryToModelMessages(
   history: {
     role: "user" | "assistant" | "tool";
@@ -46,8 +32,19 @@ function convertHistoryToModelMessages(
   }[]
 ): ModelMessage[] {
   const modelMessages: ModelMessage[] = [];
+  const toolCallIdMap = new Map<string, boolean>(); // Track tool calls for validation
+  
+  // First pass: collect all tool call IDs to validate results
+  for (const message of history) {
+    if (message.role === "assistant" && message.toolCalls) {
+      message.toolCalls.forEach(tc => {
+        if (tc.toolCallId) toolCallIdMap.set(tc.toolCallId, false);
+      });
+    }
+  }
   
   for (const message of history) {
+    // User messages: simple string content only
     if (message.role === "user" && message.content) {
       modelMessages.push({
         role: "user",
@@ -55,39 +52,83 @@ function convertHistoryToModelMessages(
       });
     }
     
+    // Assistant messages: text content or tool calls, never both
     else if (message.role === "assistant") {
-      if (message.content && typeof message.content === 'string') {
+      if (message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
+        // Validate tool calls have required fields
+        const validToolCalls = message.toolCalls.filter(tc => 
+          tc.toolCallId && tc.name && typeof tc.args !== 'undefined'
+        );
+        
+        if (validToolCalls.length > 0) {
+          modelMessages.push({
+            role: "assistant",
+            content: validToolCalls.map((tc: any) => ({
+              type: "tool-call" as const,
+              toolCallId: tc.toolCallId,
+              toolName: tc.name,
+              input: tc.args || {}
+            }))
+          });
+          
+          // Mark tool calls as having been processed
+          validToolCalls.forEach(tc => toolCallIdMap.set(tc.toolCallId, true));
+        }
+      } else if (message.content && typeof message.content === 'string') {
+        // Only add text content if no tool calls in this message
         modelMessages.push({
           role: "assistant",
           content: message.content
         });
-      } else if (message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
-        modelMessages.push({
-          role: "assistant",
-          content: message.toolCalls.map((tc: any) => ({
-            type: "tool-call" as const,
-            toolCallId: tc.toolCallId,
-            toolName: tc.name,
-            input: tc.args
-          }))
-        });
       }
     }
     
-    else if (message.role === "tool" && message.toolResults && Array.isArray(message.toolResults) && message.toolResults.length > 0) {
-      modelMessages.push({
-        role: "tool",
-        content: message.toolResults.map((tr: any) => ({
-          type: "tool-result" as const,
-          toolCallId: tr.toolCallId,
-          toolName: tr.toolName || "unknown",
-          output: tr.result
-        }))
-      });
+    // Tool results: must match existing tool calls
+    else if (message.role === "tool" && message.toolResults && Array.isArray(message.toolResults)) {
+      const validToolResults = message.toolResults.filter(tr => 
+        tr.toolCallId && toolCallIdMap.has(tr.toolCallId)
+      );
+      
+      if (validToolResults.length > 0) {
+        modelMessages.push({
+          role: "tool",
+          content: validToolResults.map((tr: any) => ({
+            type: "tool-result" as const,
+            toolCallId: tr.toolCallId,
+            toolName: tr.toolName || "unknown",
+            result: JSON.stringify(tr.result)
+          })) as any[]
+        });
+      }
     }
   }
   
   return modelMessages;
+}
+
+// Simplified message validation - pass through all valid messages
+function validateMessageSequence(messages: ModelMessage[]): ModelMessage[] {
+  // Simply validate structure without complex state tracking that was causing flow issues
+  return messages.filter(msg => {
+    if (msg.role === "user") {
+      return typeof msg.content === "string" && msg.content.length > 0;
+    }
+    if (msg.role === "assistant") {
+      if (typeof msg.content === "string") return msg.content.length > 0;
+      if (Array.isArray(msg.content)) {
+        return msg.content.every((part: any) => 
+          part.type === "tool-call" && part.toolCallId && part.toolName
+        );
+      }
+      return false;
+    }
+    if (msg.role === "tool") {
+      return Array.isArray(msg.content) && msg.content.every((part: any) => 
+        part.type === "tool-result" && part.toolCallId && part.toolName && part.result !== undefined
+      );
+    }
+    return false;
+  });
 }
 
 // =================================================================
@@ -281,29 +322,49 @@ export const chatWithAI = action({
         const historySlice = history.slice(-10);
         console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
-        const modelMessages = convertHistoryToModelMessages(historySlice);
-        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
-        console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages, null, 2));
+        // Convert and validate message sequence
+        const rawMessages = convertHistoryToModelMessages(historySlice);
+        const modelMessages = validateMessageSequence(rawMessages);
         
-        // Validate messages before AI SDK call
-        const isValidMessage = (msg: any): boolean => {
-          if (!msg.role || !['user', 'assistant', 'tool'].includes(msg.role)) return false;
-          if (msg.role === 'user') return typeof msg.content === 'string';
+        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
+        console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
+        
+        // Final validation layer - ensure messages meet AI SDK requirements
+        const validatedMessages = modelMessages.filter((msg: ModelMessage) => {
+          if (msg.role === 'user') {
+            return typeof msg.content === 'string' && msg.content.length > 0;
+          }
           if (msg.role === 'assistant') {
-            return typeof msg.content === 'string' || (Array.isArray(msg.content) && 
-              msg.content.every((part: any) => part.type === 'tool-call' && part.toolCallId && part.toolName));
+            if (typeof msg.content === 'string') return msg.content.length > 0;
+            if (Array.isArray(msg.content)) {
+              return msg.content.every((part: any) => 
+                part.type === 'tool-call' && 
+                part.toolCallId && 
+                part.toolName && 
+                part.input !== undefined
+              );
+            }
+            return false;
           }
           if (msg.role === 'tool') {
             return Array.isArray(msg.content) && msg.content.every((part: any) => 
-              part.type === 'tool-result' && part.toolCallId && part.toolName
+              part.type === 'tool-result' && 
+              part.toolCallId && 
+              part.toolName && 
+              part.result !== undefined
             );
           }
           return false;
-        };
-
-        const validMessages = modelMessages.filter(isValidMessage);
-        if (validMessages.length !== modelMessages.length) {
-          console.warn(`[VALIDATION] Filtered ${modelMessages.length - validMessages.length} invalid messages`);
+        });
+        
+        if (validatedMessages.length !== modelMessages.length) {
+          console.warn(`[VALIDATION] Filtered ${modelMessages.length - validatedMessages.length} invalid messages`);
+        }
+        
+        // Ensure we have a valid conversation structure
+        if (validatedMessages.length === 0) {
+          console.warn('[VALIDATION] No valid messages found, using fallback');
+          validatedMessages.push({ role: 'user', content: message });
         }
         
         let text: string;
@@ -407,7 +468,7 @@ For ANY request that refers to projects, tasks, or workspace organization, you M
 - Help users prioritize by asking clarifying questions when needed
 
 Remember: You're here to make their life easier and more organized. Be the assistant they can rely on to keep everything running smoothly.`,
-            messages: validMessages,
+            messages: validatedMessages,
             tools: plannerTools,
         });
         
@@ -418,18 +479,31 @@ Remember: You're here to make their life easier and more organized. Be the assis
           console.error('[ERROR] AI SDK generateText failed:', {
             message: error.message,
             type: error.constructor.name,
-            modelMessagesCount: modelMessages.length,
-            lastMessageRoles: modelMessages.slice(-3).map(m => m.role),
+            validatedMessagesCount: validatedMessages.length,
+            lastMessageRoles: validatedMessages.slice(-3).map(m => m.role),
             detailedError: error
           });
           
           if (error.message.includes('Invalid prompt')) {
             console.warn('[FALLBACK] Format error detected, trying with contextual fallback');
-            // Fall back to just the current user message
+            // Create minimal valid conversation context
+            const fallbackMessages: ModelMessage[] = [];
+            
+            // Include last user message
+            if (validatedMessages.length > 0) {
+              const lastUserMsg = validatedMessages.filter(m => m.role === 'user').pop();
+              if (lastUserMsg) fallbackMessages.push(lastUserMsg);
+            }
+            
+            // If no user message found, use current input
+            if (fallbackMessages.length === 0) {
+              fallbackMessages.push({ role: 'user', content: message });
+            }
+            
             const fallbackResult = await generateText({ 
               model: anthropic(modelName),
               system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects.`,
-              messages: [{ role: 'user', content: message }],
+              messages: fallbackMessages,
               tools: plannerTools,
             });
             text = fallbackResult.text;
@@ -448,7 +522,11 @@ Remember: You're here to make their life easier and more organized. Be the assis
 
         history.push({
           role: "assistant",
-          toolCalls: toolCalls.map(tc => ({ name: tc.toolName, args: tc.input, toolCallId: tc.toolCallId })),
+          toolCalls: toolCalls.map(tc => ({ 
+            name: tc.toolName, 
+            args: tc.input || {}, 
+            toolCallId: tc.toolCallId 
+          })),
           timestamp: Date.now(),
         });
 
@@ -460,9 +538,13 @@ Remember: You're here to make their life easier and more organized. Be the assis
         })));
         
         // Validate tool call ID consistency and filter out mismatched results
-        const validatedResults = toolResults.filter(result => 
-            toolCalls.some(call => call.toolCallId === result.toolCallId)
-        );
+        const validatedResults = toolResults.filter(result => {
+          const hasMatch = toolCalls.some(call => call.toolCallId === result.toolCallId);
+          if (!hasMatch) {
+            console.warn(`[VALIDATION] Orphaned tool result: ${result.toolCallId} (${result.toolName})`);
+          }
+          return hasMatch;
+        });
         
         if (validatedResults.length !== toolResults.length) {
             console.warn(`[VALIDATION] Filtered ${toolResults.length - validatedResults.length} mismatched tool results`);
@@ -474,11 +556,20 @@ Remember: You're here to make their life easier and more organized. Be the assis
           allMatch: validatedResults.length === toolCalls.length
         });
 
-        history.push({
-          role: "tool",
-          toolResults: validatedResults.map(tr => ({ toolCallId: tr.toolCallId, toolName: tr.toolName, result: tr.output })),
-          timestamp: Date.now(),
-        });
+        // Only add tool results if we have validated ones
+        if (validatedResults.length > 0) {
+          history.push({
+            role: "tool",
+            toolResults: validatedResults.map(tr => ({ 
+              toolCallId: tr.toolCallId, 
+              toolName: tr.toolName, 
+              result: tr.output 
+            })),
+            timestamp: Date.now(),
+          });
+        } else {
+          console.warn('[VALIDATION] No valid tool results to add to conversation');
+        }
     }
 
     throw new Error("Maximum tool call iterations reached.");
