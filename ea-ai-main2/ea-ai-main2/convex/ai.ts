@@ -4,7 +4,8 @@ import {
   generateText, 
   tool,
   ModelMessage,
-  ToolResultPart
+  ToolResultPart,
+  convertToModelMessages
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
@@ -21,6 +22,78 @@ import { ActionCtx } from "./_generated/server";
 
 
 // Type definitions for message content (for documentation purposes)
+
+// Convert Convex message format to AI SDK UIMessage format
+function convertConvexToUIMessages(
+  history: {
+    role: "user" | "assistant" | "tool";
+    content?: string;
+    toolCalls?: { name: string; args: any; toolCallId: string }[];
+    toolResults?: { toolCallId: string; toolName?: string; result: any }[];
+    timestamp?: number;
+  }[]
+): any[] {
+  const uiMessages: any[] = [];
+  
+  // Create a map of tool results for easy lookup
+  const toolResultsMap = new Map<string, any>();
+  
+  // First pass: collect all tool results
+  for (const message of history) {
+    if (message.role === "tool" && message.toolResults) {
+      for (const result of message.toolResults) {
+        if (result.toolCallId) {
+          toolResultsMap.set(result.toolCallId, result.result);
+        }
+      }
+    }
+  }
+  
+  for (const message of history) {
+    if (message.role === "user" && message.content) {
+      uiMessages.push({
+        id: `msg-${message.timestamp || Date.now()}-${Math.random()}`,
+        role: "user",
+        content: message.content,
+        createdAt: message.timestamp ? new Date(message.timestamp) : new Date()
+      });
+    }
+    
+    else if (message.role === "assistant") {
+      // Assistant message with tool calls
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        const toolInvocations = message.toolCalls.map(tc => ({
+          toolCallId: tc.toolCallId,
+          toolName: tc.name,
+          args: tc.args,
+          state: "result" as const,
+          result: toolResultsMap.get(tc.toolCallId) // Add the result if available
+        }));
+        
+        uiMessages.push({
+          id: `msg-${message.timestamp || Date.now()}-${Math.random()}`,
+          role: "assistant",
+          content: "", // Empty content for tool calls
+          toolInvocations,
+          createdAt: message.timestamp ? new Date(message.timestamp) : new Date()
+        });
+      }
+      // Assistant message with text content
+      else if (message.content) {
+        uiMessages.push({
+          id: `msg-${message.timestamp || Date.now()}-${Math.random()}`,
+          role: "assistant",
+          content: message.content,
+          createdAt: message.timestamp ? new Date(message.timestamp) : new Date()
+        });
+      }
+    }
+    
+    // Tool messages are handled by including results in tool invocations above
+  }
+  
+  return uiMessages;
+}
 
 // Three-phase conversion pipeline: validation → transformation → filtering
 function convertHistoryToModelMessages(
@@ -68,7 +141,7 @@ function convertHistoryToModelMessages(
               type: "tool-call" as const,
               toolCallId: tc.toolCallId,
               toolName: tc.name,
-              args: tc.args || {}
+              input: tc.args || {}
             }));
           
           if (validToolCalls.length > 0) {
@@ -96,7 +169,7 @@ function convertHistoryToModelMessages(
               type: "tool-result" as const,
               toolCallId: tr.toolCallId,
               toolName: toolCall.name, // Use registered tool name for consistency
-              result: tr.result
+              output: tr.result
             };
           });
         
@@ -166,7 +239,7 @@ function validateMessageSequence(messages: ModelMessage[], toolCallRegistry: Map
                    part.toolCallId && 
                    part.toolName && 
                    pendingToolCalls.has(part.toolCallId) &&
-                   part.result !== undefined;
+                   part.output !== undefined;
           });
           
           if (validResults.length > 0) {
@@ -399,11 +472,16 @@ export const chatWithAI = action({
         const historySlice = history.slice(-10);
         console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
-        // Convert and validate message sequence with fallback error handling
+        // Convert Convex history to UIMessages, then use AI SDK's convertToModelMessages
         let modelMessages: ModelMessage[];
         try {
-          modelMessages = convertHistoryToModelMessages(historySlice);
-          console.log(`[CONVERSION] Successfully converted ${modelMessages.length} messages`);
+          // Convert our Convex history to UIMessage format first
+          const uiMessages = convertConvexToUIMessages(historySlice);
+          console.log(`[CONVERSION] Converted ${historySlice.length} Convex messages to ${uiMessages.length} UI messages`);
+          
+          // Use AI SDK's convertToModelMessages for proper format
+          modelMessages = convertToModelMessages(uiMessages);
+          console.log(`[CONVERSION] AI SDK converted ${uiMessages.length} UI messages to ${modelMessages.length} model messages`);
         } catch (error) {
           console.warn('[FALLBACK] Message conversion failed, using minimal context:', error);
           // Fallback: create minimal valid conversation with just the current user message
@@ -428,7 +506,7 @@ export const chatWithAI = action({
                 part.type === 'tool-call' && 
                 part.toolCallId && 
                 part.toolName && 
-                part.args !== undefined
+                part.input !== undefined
               );
             }
             return false;
@@ -438,7 +516,7 @@ export const chatWithAI = action({
               part.type === 'tool-result' && 
               part.toolCallId && 
               part.toolName && 
-              part.result !== undefined
+              part.output !== undefined
             );
           }
           return false;
