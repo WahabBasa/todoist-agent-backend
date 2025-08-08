@@ -4,6 +4,8 @@ import {
   generateText, 
   tool,
   ModelMessage,
+  UIMessage,
+  convertToModelMessages,
   ToolResultPart
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -22,7 +24,7 @@ import { ActionCtx } from "./_generated/server";
 
 // Type definitions for message content (for documentation purposes)
 
-// OpenCode-inspired: Simple and reliable Convex to ModelMessage conversion
+// OpenCode-inspired: Build UIMessage objects then convert using AI SDK
 function convertConvexMessagesToModel(
   history: {
     role: "user" | "assistant" | "tool";
@@ -32,81 +34,79 @@ function convertConvexMessagesToModel(
     timestamp?: number;
   }[]
 ): ModelMessage[] {
-  const result: ModelMessage[] = [];
+  const uiMessages: UIMessage[] = [];
   
-  // Create tool results map for efficient lookup
-  const toolResultsMap = new Map<string, any>();
-  history.forEach(msg => {
-    if (msg.role === "tool" && msg.toolResults) {
-      msg.toolResults.forEach(tr => {
-        if (tr.toolCallId) {
-          toolResultsMap.set(tr.toolCallId, tr.result);
-        }
-      });
-    }
-  });
-  
-  for (const message of history) {
+  // Group messages by conversation flow (user -> assistant -> tool results)
+  for (let i = 0; i < history.length; i++) {
+    const message = history[i];
+    
     try {
       if (message.role === "user" && message.content && typeof message.content === 'string') {
-        result.push({
+        uiMessages.push({
+          id: `user-${i}`,
           role: "user",
-          content: message.content
+          parts: [{
+            type: "text",
+            text: message.content
+          }]
         });
       }
       
       else if (message.role === "assistant") {
+        const parts: UIMessage["parts"] = [];
+        
+        // Add text content if present
+        if (message.content && typeof message.content === 'string') {
+          parts.push({
+            type: "text",
+            text: message.content
+          });
+        }
+        
+        // Add tool calls if present
         if (message.toolCalls && message.toolCalls.length > 0) {
-          // Assistant message with tool calls
-          const toolCalls = message.toolCalls
-            .filter(tc => tc.toolCallId && tc.name)
-            .map(tc => ({
-              type: "tool-call" as const,
-              toolCallId: tc.toolCallId,
-              toolName: tc.name,
-              input: tc.args || {}
-            }));
-          
-          if (toolCalls.length > 0) {
-            result.push({
-              role: "assistant",
-              content: toolCalls as any
-            });
+          for (const tc of message.toolCalls) {
+            if (tc.toolCallId && tc.name) {
+              // Find corresponding tool result in the next tool message
+              const nextToolMsg = history.find((h, idx) => 
+                idx > i && h.role === "tool" && 
+                h.toolResults?.some(tr => tr.toolCallId === tc.toolCallId)
+              );
+              
+              const toolResult = nextToolMsg?.toolResults?.find(tr => tr.toolCallId === tc.toolCallId);
+              
+              if (toolResult) {
+                parts.push({
+                  type: `tool-${tc.name}` as `tool-${string}`,
+                  state: "output-available",
+                  toolCallId: tc.toolCallId,
+                  input: tc.args || {},
+                  output: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result)
+                });
+              }
+            }
           }
-        } else if (message.content && typeof message.content === 'string') {
-          // Assistant text message
-          result.push({
+        }
+        
+        if (parts.length > 0) {
+          uiMessages.push({
+            id: `assistant-${i}`,
             role: "assistant",
-            content: message.content
+            parts
           });
         }
       }
       
-      else if (message.role === "tool" && message.toolResults && message.toolResults.length > 0) {
-        // Tool results
-        const toolResults = message.toolResults
-          .filter(tr => tr.toolCallId && toolResultsMap.has(tr.toolCallId))
-          .map(tr => ({
-            type: "tool-result" as const,
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName || "unknown",
-            output: tr.result
-          }));
-        
-        if (toolResults.length > 0) {
-          result.push({
-            role: "tool",
-            content: toolResults as any
-          });
-        }
-      }
+      // Skip tool messages as they're handled above with assistant messages
+      
     } catch (error) {
       console.warn('[CONVERSION] Skipping invalid message:', error);
       continue;
     }
   }
   
-  return result;
+  // Use AI SDK's conversion function like OpenCode
+  return convertToModelMessages(uiMessages);
 }
 
 
