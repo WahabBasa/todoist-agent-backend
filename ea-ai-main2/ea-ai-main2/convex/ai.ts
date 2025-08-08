@@ -22,7 +22,7 @@ import { ActionCtx } from "./_generated/server";
 
 // Type definitions for message content (for documentation purposes)
 
-// Robust message converter with validation pipeline for AI SDK v5 compliance
+// Three-phase conversion pipeline: validation → transformation → filtering
 function convertHistoryToModelMessages(
   history: {
     role: "user" | "assistant" | "tool";
@@ -31,82 +31,161 @@ function convertHistoryToModelMessages(
     toolResults?: { toolCallId: string; toolName?: string; result: any }[];
   }[]
 ): ModelMessage[] {
-  const messages: ModelMessage[] = [];
+  // Phase 1: Tool call lifecycle tracking with Map-based registry
+  const toolCallRegistry = new Map<string, { name: string; args: any }>();
   
+  // First pass: register all valid tool calls
   for (const message of history) {
-    // User messages - simple string content
-    if (message.role === "user" && message.content) {
-      messages.push({
-        role: "user",
-        content: message.content
-      });
-    }
-    
-    // Assistant messages with tool calls
-    else if (message.role === "assistant" && message.toolCalls?.length) {
-      messages.push({
-        role: "assistant",
-        content: message.toolCalls
-          .filter(tc => tc.toolCallId && tc.name)
-          .map(tc => ({
-            type: "tool-call" as const,
-            toolCallId: tc.toolCallId,
-            toolName: tc.name,
-            input: tc.args || {}
-          }))
-      });
-    }
-    
-    // Assistant text messages
-    else if (message.role === "assistant" && message.content) {
-      messages.push({
-        role: "assistant",
-        content: message.content
-      });
-    }
-    
-    // Tool results
-    else if (message.role === "tool" && message.toolResults?.length) {
-      messages.push({
-        role: "tool",
-        content: message.toolResults
-          .filter(tr => tr.toolCallId && tr.toolName)
-          .map(tr => ({
-            type: "tool-result" as const,
-            toolCallId: tr.toolCallId,
-            toolName: tr.toolName!,
-            output: tr.result
-          })) as any[]
-      });
+    if (message.role === "assistant" && message.toolCalls?.length) {
+      for (const tc of message.toolCalls) {
+        if (tc.toolCallId && tc.name) {
+          toolCallRegistry.set(tc.toolCallId, { name: tc.name, args: tc.args });
+        }
+      }
     }
   }
   
-  return messages;
+  // Phase 2: Transform messages with strict type separation
+  const validMessages: ModelMessage[] = [];
+  
+  for (const message of history) {
+    try {
+      // User messages - strict string content only
+      if (message.role === "user" && message.content && typeof message.content === 'string') {
+        validMessages.push({
+          role: "user",
+          content: message.content
+        });
+      }
+      
+      // Assistant messages - NEVER mix tool calls with text content
+      else if (message.role === "assistant") {
+        if (message.toolCalls && message.toolCalls.length > 0) {
+          // Tool call mode: only valid, registered tool calls
+          const validToolCalls = message.toolCalls
+            .filter(tc => tc.toolCallId && tc.name && toolCallRegistry.has(tc.toolCallId))
+            .map(tc => ({
+              type: "tool-call" as const,
+              toolCallId: tc.toolCallId,
+              toolName: tc.name,
+              args: tc.args || {}
+            }));
+          
+          if (validToolCalls.length > 0) {
+            validMessages.push({
+              role: "assistant",
+              content: validToolCalls as any
+            });
+          }
+        } else if (message.content && typeof message.content === 'string' && message.content.trim().length > 0) {
+          // Text mode: only string content
+          validMessages.push({
+            role: "assistant",
+            content: message.content
+          });
+        }
+      }
+      
+      // Tool results - only for registered tool calls
+      else if (message.role === "tool" && message.toolResults?.length) {
+        const validResults = message.toolResults
+          .filter(tr => tr.toolCallId && toolCallRegistry.has(tr.toolCallId))
+          .map(tr => {
+            const toolCall = toolCallRegistry.get(tr.toolCallId)!;
+            return {
+              type: "tool-result" as const,
+              toolCallId: tr.toolCallId,
+              toolName: toolCall.name, // Use registered tool name for consistency
+              result: tr.result
+            };
+          });
+        
+        if (validResults.length > 0) {
+          validMessages.push({
+            role: "tool",
+            content: validResults as any
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('[CONVERSION] Skipping invalid message:', error);
+      continue;
+    }
+  }
+  
+  // Phase 3: Message sequence validation and orphan removal
+  return validateMessageSequence(validMessages, toolCallRegistry);
 }
 
-// Simplified message validation - pass through all valid messages
-function validateMessageSequence(messages: ModelMessage[]): ModelMessage[] {
-  // Simply validate structure without complex state tracking that was causing flow issues
-  return messages.filter(msg => {
-    if (msg.role === "user") {
-      return typeof msg.content === "string" && msg.content.length > 0;
-    }
-    if (msg.role === "assistant") {
-      if (typeof msg.content === "string") return msg.content.length > 0;
-      if (Array.isArray(msg.content)) {
-        return msg.content.every((part: any) => 
-          part.type === "tool-call" && part.toolCallId && part.toolName
-        );
+// Phase 3: Message sequence validation with orphan removal and flow consistency
+function validateMessageSequence(messages: ModelMessage[], toolCallRegistry: Map<string, any>): ModelMessage[] {
+  const validSequence: ModelMessage[] = [];
+  const pendingToolCalls = new Set<string>();
+  
+  for (const message of messages) {
+    try {
+      // Validate user messages
+      if (message.role === "user") {
+        if (typeof message.content === "string" && message.content.trim().length > 0) {
+          validSequence.push(message);
+          // Clear any pending tool calls when user starts new conversation
+          pendingToolCalls.clear();
+        }
       }
-      return false;
+      
+      // Validate assistant messages
+      else if (message.role === "assistant") {
+        if (typeof message.content === "string" && message.content.trim().length > 0) {
+          // Text response - valid
+          validSequence.push(message);
+        } else if (Array.isArray(message.content)) {
+          // Tool calls - validate each one
+          const validToolCalls = message.content.filter((part: any) => {
+            return part.type === "tool-call" && 
+                   part.toolCallId && 
+                   part.toolName && 
+                   toolCallRegistry.has(part.toolCallId);
+          });
+          
+          if (validToolCalls.length > 0) {
+            // Track pending tool calls
+            validToolCalls.forEach((tc: any) => pendingToolCalls.add(tc.toolCallId));
+            validSequence.push({
+              role: "assistant",
+              content: validToolCalls
+            });
+          }
+        }
+      }
+      
+      // Validate tool results - only include if they match pending tool calls
+      else if (message.role === "tool") {
+        if (Array.isArray(message.content)) {
+          const validResults = message.content.filter((part: any) => {
+            return part.type === "tool-result" && 
+                   part.toolCallId && 
+                   part.toolName && 
+                   pendingToolCalls.has(part.toolCallId) &&
+                   part.result !== undefined;
+          });
+          
+          if (validResults.length > 0) {
+            // Remove processed tool calls from pending
+            validResults.forEach((tr: any) => pendingToolCalls.delete(tr.toolCallId));
+            validSequence.push({
+              role: "tool",
+              content: validResults
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[VALIDATION] Skipping invalid message in sequence:', error);
+      continue;
     }
-    if (msg.role === "tool") {
-      return Array.isArray(msg.content) && msg.content.every((part: any) => 
-        part.type === "tool-result" && part.toolCallId && part.toolName && part.output !== undefined
-      );
-    }
-    return false;
-  });
+  }
+  
+  return validSequence;
 }
 
 // =================================================================
@@ -282,26 +361,57 @@ export const chatWithAI = action({
     // Reset circuit breaker for new conversation to give tools a fresh start
     toolFailureTracker.clear();
 
-    // Conversation state tracking to prevent infinite loops
+    // Enhanced conversation state deduplication to prevent infinite loops
     const conversationStateTracker = new Set<string>();
+    const toolCallTracker = new Map<string, number>(); // Track repeated tool calls
     
     const MAX_ITERATIONS = 5;
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
         
-        // Conversation state tracking to detect loops
-        const stateKey = `${message}-${history.length}-${i}`;
+        // Advanced state tracking: message content + history length + last 3 message types
+        const recentMessageTypes = history.slice(-3).map(h => h.role).join('-');
+        const lastToolCalls = history.slice(-1)[0]?.toolCalls?.map((tc: any) => tc.name).sort().join(',') || 'none';
+        const stateKey = `${message.slice(0, 50)}-${history.length}-${recentMessageTypes}-${lastToolCalls}`;
+        
         if (conversationStateTracker.has(stateKey)) {
-            throw new Error(`Duplicate conversation state detected at iteration ${i + 1}. Preventing infinite loop.`);
+            console.warn(`[CIRCUIT_BREAKER] Duplicate conversation state detected at iteration ${i + 1}`);
+            throw new Error(`Conversation loop detected. State: ${stateKey.slice(0, 100)}...`);
         }
         conversationStateTracker.add(stateKey);
+        
+        // Track repeated tool calls to detect oscillation patterns
+        if (history.length > 0) {
+          const lastMessage = history[history.length - 1];
+          if (lastMessage.toolCalls?.length > 0) {
+            for (const tc of lastMessage.toolCalls) {
+              const callCount = toolCallTracker.get(tc.name) || 0;
+              if (callCount >= 3) {
+                console.warn(`[CIRCUIT_BREAKER] Tool ${tc.name} called ${callCount} times, potential oscillation`);
+                throw new Error(`Tool oscillation detected: ${tc.name} called repeatedly`);
+              }
+              toolCallTracker.set(tc.name, callCount + 1);
+            }
+          }
+        }
         
         // Add debug logging to verify message structure before conversion
         const historySlice = history.slice(-10);
         console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
-        // Convert and validate message sequence
-        const modelMessages = convertHistoryToModelMessages(historySlice);
+        // Convert and validate message sequence with fallback error handling
+        let modelMessages: ModelMessage[];
+        try {
+          modelMessages = convertHistoryToModelMessages(historySlice);
+          console.log(`[CONVERSION] Successfully converted ${modelMessages.length} messages`);
+        } catch (error) {
+          console.warn('[FALLBACK] Message conversion failed, using minimal context:', error);
+          // Fallback: create minimal valid conversation with just the current user message
+          modelMessages = [{
+            role: "user",
+            content: message || "Please help me with my tasks."
+          }];
+        }
         
         console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
         console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
@@ -318,7 +428,7 @@ export const chatWithAI = action({
                 part.type === 'tool-call' && 
                 part.toolCallId && 
                 part.toolName && 
-                part.input !== undefined
+                part.args !== undefined
               );
             }
             return false;
@@ -328,7 +438,7 @@ export const chatWithAI = action({
               part.type === 'tool-result' && 
               part.toolCallId && 
               part.toolName && 
-              part.output !== undefined
+              part.result !== undefined
             );
           }
           return false;
