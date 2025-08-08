@@ -2,8 +2,8 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { 
   generateText, 
-  tool, 
-  ModelMessage, 
+  tool,
+  ModelMessage,
   ToolResultPart
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -31,79 +31,57 @@ function convertHistoryToModelMessages(
     toolResults?: { toolCallId: string; toolName?: string; result: any }[];
   }[]
 ): ModelMessage[] {
-  const modelMessages: ModelMessage[] = [];
-  const toolCallIdMap = new Map<string, boolean>(); // Track tool calls for validation
-  
-  // First pass: collect all tool call IDs to validate results
-  for (const message of history) {
-    if (message.role === "assistant" && message.toolCalls) {
-      message.toolCalls.forEach(tc => {
-        if (tc.toolCallId) toolCallIdMap.set(tc.toolCallId, false);
-      });
-    }
-  }
+  const messages: ModelMessage[] = [];
   
   for (const message of history) {
-    // User messages: simple string content only
+    // User messages - simple string content
     if (message.role === "user" && message.content) {
-      modelMessages.push({
+      messages.push({
         role: "user",
         content: message.content
       });
     }
     
-    // Assistant messages: text content or tool calls, never both
-    else if (message.role === "assistant") {
-      if (message.toolCalls && Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
-        // Validate tool calls have required fields
-        const validToolCalls = message.toolCalls.filter(tc => 
-          tc.toolCallId && tc.name && typeof tc.args !== 'undefined'
-        );
-        
-        if (validToolCalls.length > 0) {
-          modelMessages.push({
-            role: "assistant",
-            content: validToolCalls.map((tc: any) => ({
-              type: "tool-call" as const,
-              toolCallId: tc.toolCallId,
-              toolName: tc.name,
-              input: tc.args || {}
-            }))
-          });
-          
-          // Mark tool calls as having been processed
-          validToolCalls.forEach(tc => toolCallIdMap.set(tc.toolCallId, true));
-        }
-      } else if (message.content && typeof message.content === 'string') {
-        // Only add text content if no tool calls in this message
-        modelMessages.push({
-          role: "assistant",
-          content: message.content
-        });
-      }
+    // Assistant messages with tool calls
+    else if (message.role === "assistant" && message.toolCalls?.length) {
+      messages.push({
+        role: "assistant",
+        content: message.toolCalls
+          .filter(tc => tc.toolCallId && tc.name)
+          .map(tc => ({
+            type: "tool-call" as const,
+            toolCallId: tc.toolCallId,
+            toolName: tc.name,
+            input: tc.args || {}
+          }))
+      });
     }
     
-    // Tool results: must match existing tool calls
-    else if (message.role === "tool" && message.toolResults && Array.isArray(message.toolResults)) {
-      const validToolResults = message.toolResults.filter(tr => 
-        tr.toolCallId && toolCallIdMap.has(tr.toolCallId)
-      );
-      
-      if (validToolResults.length > 0) {
-        modelMessages.push({
-          role: "tool",
-          content: validToolResults.map((tr: any) => ({
+    // Assistant text messages
+    else if (message.role === "assistant" && message.content) {
+      messages.push({
+        role: "assistant",
+        content: message.content
+      });
+    }
+    
+    // Tool results
+    else if (message.role === "tool" && message.toolResults?.length) {
+      messages.push({
+        role: "tool",
+        content: message.toolResults
+          .filter(tr => tr.toolCallId && tr.toolName)
+          .map(tr => ({
             type: "tool-result" as const,
             toolCallId: tr.toolCallId,
-            toolName: tr.toolName || "unknown",
-            result: JSON.stringify(tr.result)
+            toolName: tr.toolName!,
+            output: tr.result
           })) as any[]
-        });
-      }
+      });
     }
   }
   
-  return modelMessages;
+  return messages;
 }
 
 // Simplified message validation - pass through all valid messages
@@ -124,7 +102,7 @@ function validateMessageSequence(messages: ModelMessage[]): ModelMessage[] {
     }
     if (msg.role === "tool") {
       return Array.isArray(msg.content) && msg.content.every((part: any) => 
-        part.type === "tool-result" && part.toolCallId && part.toolName && part.result !== undefined
+        part.type === "tool-result" && part.toolCallId && part.toolName && part.output !== undefined
       );
     }
     return false;
@@ -323,8 +301,7 @@ export const chatWithAI = action({
         console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
         // Convert and validate message sequence
-        const rawMessages = convertHistoryToModelMessages(historySlice);
-        const modelMessages = validateMessageSequence(rawMessages);
+        const modelMessages = convertHistoryToModelMessages(historySlice);
         
         console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
         console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
@@ -351,7 +328,7 @@ export const chatWithAI = action({
               part.type === 'tool-result' && 
               part.toolCallId && 
               part.toolName && 
-              part.result !== undefined
+              part.output !== undefined
             );
           }
           return false;
@@ -538,7 +515,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
         })));
         
         // Validate tool call ID consistency and filter out mismatched results
-        const validatedResults = toolResults.filter(result => {
+        const validatedResults = toolResults.filter((result: any) => {
           const hasMatch = toolCalls.some(call => call.toolCallId === result.toolCallId);
           if (!hasMatch) {
             console.warn(`[VALIDATION] Orphaned tool result: ${result.toolCallId} (${result.toolName})`);
@@ -552,7 +529,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
         
         console.log('[VALIDATION] Tool call IDs match:', {
           toolCallIds: toolCalls.map(tc => tc.toolCallId),
-          toolResultIds: validatedResults.map(tr => tr.toolCallId),
+          toolResultIds: validatedResults.map((tr: any) => tr.toolCallId),
           allMatch: validatedResults.length === toolCalls.length
         });
 
@@ -560,7 +537,7 @@ Remember: You're here to make their life easier and more organized. Be the assis
         if (validatedResults.length > 0) {
           history.push({
             role: "tool",
-            toolResults: validatedResults.map(tr => ({ 
+            toolResults: validatedResults.map((tr: any) => ({ 
               toolCallId: tr.toolCallId, 
               toolName: tr.toolName, 
               result: tr.output 
