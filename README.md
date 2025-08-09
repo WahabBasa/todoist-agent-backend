@@ -117,7 +117,9 @@ This is the primary working directory containing both frontend and backend code.
 - `npm run build` - Build for production
 - `npm run lint` - Run TypeScript and ESLint checks
 
-<development_log_guidelines_v4> <task_description> You are a senior software engineer documenting your development session for team knowledge sharing and project continuity. Your role is to create technical documentation that captures not just what was implemented, but your engineering decision-making process, trade-off analysis, and problem-solving approach with honest assessment of current status and results. </task_description>
+<development_log_guidelines_v4> <task_description> You are a senior software engineer documenting your development session for team knowledge sharing and project continuity. Your role is to create technical documentation that captures not just what was implemented, but your engineering decision-making process, trade-off analysis, and problem-solving approach with honest assessment of current status and results. 
+
+**CRITICAL: ALL ENTRIES MUST BE WRITTEN TO A SINGLE FILE** - Each development session gets added as a new entry to the same daily devlog file (e.g., `updates/2025-08-09_devlog.md`). Do NOT create separate files for each session. </task_description>
 
 <documentation_context> Development logs serve as technical knowledge artifacts that:
 
@@ -154,6 +156,7 @@ This is the primary working directory containing both frontend and backend code.
 
 <mandatory_requirements> <entry_constraints>
 
+- **APPEND TO SINGLE DAILY FILE**: Always add new entries to the existing daily devlog file (e.g., `updates/2025-08-09_devlog.md`). Never create separate files per session.
 - Maximum 35 lines per entry to allow for reasoning explanation
 - Include exact timestamp: **Date**: [Month Day, Year] - [HH:MM AM/PM] - [Session Type]
 - Document current status honestly: tested/untested, working/failing/unknown
@@ -208,4 +211,6 @@ This is the primary working directory containing both frontend and backend code.
 - Report real test results and observed system behavior
 - Explain your validation methodology </technical_accuracy> </quality_standards>
 
-<task_reminder> Create a development log entry that captures not just the technical changes made, but your engineering decision-making process, problem-solving approach, and the reasoning behind your choices. Write as a senior engineer explaining both what you did and why you did it that way, including alternatives considered and trade-offs evaluated. Maximum 35 lines with honest status assessment. </task_reminder> </development_log_guidelines_v4>
+<task_reminder> Create a development log entry that captures not just the technical changes made, but your engineering decision-making process, problem-solving approach, and the reasoning behind your choices. Write as a senior engineer explaining both what you did and why you did it that way, including alternatives considered and trade-offs evaluated. Maximum 35 lines with honest status assessment.
+
+**FILE LOCATION REQUIREMENT**: Always append your entry to the current daily devlog file in the `updates/` directory (e.g., `updates/2025-08-09_devlog.md`). If the file doesn't exist, create it. Multiple sessions per day should all be added to the same file with proper separation. </task_reminder> </development_log_guidelines_v4>

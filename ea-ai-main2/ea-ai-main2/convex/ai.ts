@@ -268,7 +268,7 @@ export const chatWithAI = action({
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
   },
-  handler: async (ctx, { message, useHaiku = false }) => {
+  handler: async (ctx, { message, useHaiku = true }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("User must be authenticated.");
 
