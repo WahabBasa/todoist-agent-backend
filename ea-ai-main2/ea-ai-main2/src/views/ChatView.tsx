@@ -92,40 +92,6 @@ export function ChatView() {
     });
   };
 
-  const renderToolCall = (toolCall: { name: string; args: any; result: any }) => {
-    const isSuccess = toolCall.result !== null && toolCall.result !== undefined;
-    const resultDisplay = isSuccess ? JSON.stringify(toolCall.result, null, 2) : "Not found or failed.";
-
-    return (
-      <div 
-        key={`${toolCall.name}-${JSON.stringify(toolCall.args)}`}
-        className={`
-          p-3 rounded-lg border-l-4 mt-2 text-left
-          ${isSuccess 
-            ? 'bg-success/10 border-success text-success-content' 
-            : 'bg-error/10 border-error text-error-content'
-          }
-        `}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <span className="font-semibold font-mono text-sm">{toolCall.name}</span>
-          <div className={`badge badge-sm ${isSuccess ? 'badge-success' : 'badge-error'}`}>
-            {isSuccess ? 'Success' : 'Failed'}
-          </div>
-        </div>
-        <div className="text-xs font-mono opacity-80 collapse">
-            <input type="checkbox" className="min-h-0" /> 
-            <div className="collapse-title text-xs p-0 min-h-0 font-medium">
-                Show Details
-            </div>
-            <div className="collapse-content p-0">
-                <p><strong>Arguments:</strong> {JSON.stringify(toolCall.args, null, 2)}</p>
-                <p><strong>Result:</strong> {resultDisplay}</p>
-            </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex flex-col h-full">
@@ -156,7 +122,7 @@ export function ChatView() {
             <div className="form-control">
               <label className="label cursor-pointer gap-2">
                 <span className="label-text text-xs">
-                  {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3.5 Sonnet'}
+                  {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3 Haiku'}
                 </span>
                 <input 
                   type="checkbox" 
@@ -196,7 +162,9 @@ export function ChatView() {
           </div>
         ) : (
           <div className="space-y-4">
-            {messages.map((msg, index) => (
+            {messages
+              .filter(msg => msg.role === "user" || msg.role === "assistant")
+              .map((msg, index) => (
               <div
                 key={index}
                 className={`chat ${msg.role === "user" ? "chat-end" : "chat-start"}`}
@@ -219,16 +187,6 @@ export function ChatView() {
                 }`}>
                   {typeof msg.content === 'string' && (
                     <div className="whitespace-pre-wrap">{msg.content}</div>
-                  )}
-                  
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {msg.toolCalls.map((toolCall, tcIndex) => (
-                        <div key={tcIndex}>
-                          {renderToolCall(toolCall)}
-                        </div>
-                      ))}
-                    </div>
                   )}
                 </div>
               </div>

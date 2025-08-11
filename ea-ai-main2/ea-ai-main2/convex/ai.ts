@@ -136,8 +136,10 @@ const plannerTools = {
     }),
   }),
   getProjectAndTaskMap: tool({
-    description: "Get a complete hierarchical overview of the user's entire workspace - all projects with their associated tasks (showing only _id and title for efficiency), plus unassigned tasks. This is your PRIMARY tool for understanding the user's data structure. Use this FIRST when the user asks about projects, tasks, or organization.",
-    inputSchema: z.object({}),
+    description: "Get a complete hierarchical overview of the user's entire workspace - all projects with their associated tasks (showing only _id and title for efficiency), plus unassigned tasks. This is your PRIMARY tool for understanding the user's data structure. Use this FIRST when the user asks about projects, tasks, or organization. By default shows only incomplete tasks to focus on actionable items.",
+    inputSchema: z.object({
+      includeCompleted: z.boolean().optional().describe("Set to true to include completed tasks in the results. Defaults to false (shows only incomplete tasks)."),
+    }),
   }),
   getProjectDetails: tool({
     description: "Get detailed information about a specific project including all associated tasks with full details. Use this AFTER using getProjectAndTaskMap to identify the project ID.",
@@ -149,6 +151,39 @@ const plannerTools = {
     description: "Get detailed information about a specific task including associated project information. Use this AFTER using getProjectAndTaskMap to identify the task ID.",
     inputSchema: z.object({
       taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
+    }),
+  }),
+  updateTask: tool({
+    description: "Update an existing task's properties such as completion status, title, priority, due date, or project assignment. Use this when users want to modify, complete, or move tasks. Always call getProjectAndTaskMap first to get the correct task ID.",
+    inputSchema: z.object({
+      taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
+      title: z.string().optional().describe("New task title (e.g., 'Review quarterly reports', 'Client strategy meeting')"),
+      description: z.string().optional().describe("Task description or notes"),
+      projectId: z.string().optional().describe("Project ID to move task to, or null to unassign from project. Get project IDs from getProjectAndTaskMap."),
+      priority: z.number().optional().describe("Task priority: 1=high/urgent, 2=medium/normal, 3=low"),
+      dueDate: z.number().optional().describe("Due date as timestamp (milliseconds since epoch). Use null to remove due date."),
+      isCompleted: z.boolean().optional().describe("Mark task as completed (true) or incomplete (false)"),
+    }),
+  }),
+  deleteTask: tool({
+    description: "Permanently delete a task from the system. Use this when users want to remove tasks that are no longer needed, duplicates, or canceled items. Always call getProjectAndTaskMap first to get the correct task ID.",
+    inputSchema: z.object({
+      taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
+    }),
+  }),
+  updateProject: tool({
+    description: "Update an existing project's properties such as name, color, or description. Use this when users want to rename projects, change colors, or modify project details. Always call getProjectAndTaskMap first to get the correct project ID.",
+    inputSchema: z.object({
+      projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
+      name: z.string().optional().describe("New project name (e.g., 'Client Projects', 'Personal Goals', 'Q1 Planning')"),
+      color: z.string().optional().describe("Project color as hex code (e.g., '#FF5722', '#2196F3'). Will be auto-generated if not specified."),
+      description: z.string().optional().describe("Project description or notes"),
+    }),
+  }),
+  deleteProject: tool({
+    description: "Delete a project from the system. Projects with existing tasks cannot be deleted unless tasks are moved or deleted first. Use this when users want to remove empty or unused projects. Always call getProjectAndTaskMap first to get the correct project ID.",
+    inputSchema: z.object({
+      projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
     }),
   }),
 };
@@ -216,13 +251,31 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             case "getTasks":
                 result = await ctx.runQuery(api.tasks.getTasks, args);
                 break;
+            case "updateTask": {
+                const { taskId, ...updateArgs } = args;
+                result = await ctx.runMutation(api.tasks.updateTask, { id: taskId, ...updateArgs });
+                break;
+            }
+            case "deleteTask":
+                result = await ctx.runMutation(api.tasks.deleteTask, { id: args.taskId });
+                break;
             case "createProject": {
                 const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
                 result = await ctx.runMutation(api.projects.createProject, { ...args, color });
                 break;
             }
+            case "updateProject": {
+                const { projectId, ...updateArgs } = args;
+                result = await ctx.runMutation(api.projects.updateProject, { id: projectId, ...updateArgs });
+                break;
+            }
+            case "deleteProject":
+                result = await ctx.runMutation(api.projects.deleteProject, { id: args.projectId });
+                break;
             case "getProjectAndTaskMap":
-                result = await ctx.runQuery(api.projects.getProjectAndTaskMap, {});
+                result = await ctx.runQuery(api.projects.getProjectAndTaskMap, {
+                    includeCompleted: args.includeCompleted || false
+                });
                 break;
             case "getProjectDetails":
                 result = await ctx.runQuery(api.projects.getProjectDetails, { projectId: args.projectId });
@@ -272,7 +325,7 @@ export const chatWithAI = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("User must be authenticated.");
 
-    const modelName = useHaiku ? "claude-3-haiku-20240307" : "claude-3-5-sonnet-20240620";
+    const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const conversation = await ctx.runQuery(api.conversations.getConversation);
@@ -361,6 +414,8 @@ The \`getProjectAndTaskMap()\` function returns:
 - \`projects\`: Array of all projects, each containing lightweight tasks (only _id and title)
 - \`unassignedTasks\`: Array of tasks not assigned to any project
 
+**IMPORTANT**: By default, \`getProjectAndTaskMap()\` only shows incomplete tasks to focus on actionable items. If you need to see completed tasks (e.g., user asks "show me everything I've completed" or "show me all tasks including completed ones"), call \`getProjectAndTaskMap({ includeCompleted: true })\`.
+
 Use this map to:
 1. **Navigate efficiently**: Find any project or task the user mentions
 2. **Understand context**: See the complete organizational structure
@@ -423,11 +478,61 @@ For ANY request that refers to projects, tasks, or workspace organization, you M
 3. Extract that task's \`_id\` field value
 4. Call \`getTaskDetails({ taskId: "extracted_id_value" })\` to get full task information
 
+**Example 4**: User asks "Mark my 'Buy groceries' task as completed"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Look through all project \`tasks\` arrays and \`unassignedTasks\` for a task where \`title\` matches "Buy groceries"
+3. Extract that task's \`_id\` field value
+4. Call \`updateTask({ taskId: "extracted_id_value", isCompleted: true })\`
+5. Confirm: "✓ I've marked 'Buy groceries' as completed"
+
+**Example 5**: User asks "Change the priority of my 'Client call' task to urgent"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Find the task where \`title\` matches "Client call"
+3. Extract that task's \`_id\` field value
+4. Call \`updateTask({ taskId: "extracted_id_value", priority: 1 })\`
+5. Confirm: "✓ I've set 'Client call' to high priority"
+
+**Example 6**: User asks "Move my 'Review documents' task to the Marketing project"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Find the task where \`title\` matches "Review documents" and extract its \`_id\`
+3. Find the project where \`name\` matches "Marketing" and extract its \`_id\`
+4. Call \`updateTask({ taskId: "task_id_value", projectId: "project_id_value" })\`
+5. Confirm: "✓ I've moved 'Review documents' to your Marketing project"
+
+**Example 7**: User asks "Delete that 'Old meeting' task"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Find the task where \`title\` matches "Old meeting"
+3. Extract that task's \`_id\` field value
+4. Call \`deleteTask({ taskId: "extracted_id_value" })\`
+5. Confirm: "✓ I've deleted the 'Old meeting' task"
+
+**Example 8**: User asks "Rename my 'Work' project to 'Client Projects'"
+1. Call \`getProjectAndTaskMap()\` to get the workspace overview
+2. Find the project where \`name\` matches "Work"
+3. Extract that project's \`_id\` field value
+4. Call \`updateProject({ projectId: "extracted_id_value", name: "Client Projects" })\`
+5. Confirm: "✓ I've renamed your project to 'Client Projects'"
+
+## CRUD Operations Available
+You have complete CRUD (Create, Read, Update, Delete) capabilities:
+
+**Tasks:**
+- **Create**: \`createTask\` - Add new tasks with optional project assignment
+- **Read**: \`getTasks\`, \`getTaskDetails\` - Retrieve tasks and detailed information
+- **Update**: \`updateTask\` - Modify task properties (completion, title, priority, due date, project)
+- **Delete**: \`deleteTask\` - Remove tasks permanently
+
+**Projects:**
+- **Create**: \`createProject\` - Create new project categories
+- **Read**: \`getProjectAndTaskMap\`, \`getProjectDetails\` - Get projects and hierarchy
+- **Update**: \`updateProject\` - Modify project properties (name, color, description)
+- **Delete**: \`deleteProject\` - Remove empty projects (projects with tasks cannot be deleted)
+
 ## Communication Style
 - **Professional yet Friendly**: Use a warm, helpful tone like a trusted assistant
 - **Proactive**: Anticipate needs and offer helpful suggestions
 - **Clear & Organized**: Present information in easy-to-read formats with bullet points or numbers
-- **Confirmative**: Always confirm completed actions (e.g., "✅ I've added 'Review quarterly reports' to your Work project")
+- **Confirmative**: Always confirm completed actions (e.g., "✓ I've added 'Review quarterly reports' to your Work project")
 
 ## Task Management Best Practices
 - **Categorize Wisely**: Suggest appropriate project categories when users create tasks

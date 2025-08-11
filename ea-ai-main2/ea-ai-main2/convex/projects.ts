@@ -167,8 +167,10 @@ type ProjectAndTaskMap = {
  * 4. Separate array for tasks not assigned to any project
  */
 export const getProjectAndTaskMap = query({
-  args: {},
-  handler: async (ctx): Promise<ProjectAndTaskMap> => {
+  args: {
+    includeCompleted: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<ProjectAndTaskMap> => {
     // Step 1: Authorization and Data Integrity
     const userId = await getAuthUserId(ctx);
     if (!userId) {
@@ -209,6 +211,11 @@ export const getProjectAndTaskMap = query({
     
     // Single pass through tasks for optimal performance
     tasks.forEach(task => {
+      // Filter out completed tasks unless specifically requested
+      if (!args.includeCompleted && task.isCompleted) {
+        return; // Skip completed tasks by default
+      }
+
       // Create lightweight task object with only required fields
       const lightweightTask: LightweightTask = {
         _id: task._id,

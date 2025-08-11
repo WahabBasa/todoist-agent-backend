@@ -32,15 +32,17 @@ An intelligent task management application powered by Claude AI, built with Conv
    ANTHROPIC_API_KEY=your-anthropic-api-key
    ```
 
-3. **Deploy Convex backend**:
+3. **Deploy Convex backend** (only when explicitly requested):
    ```bash
    npx convex dev
    ```
 
-4. **Start the development server**:
+4. **Start the development server** (only when explicitly requested):
    ```bash
    npm run dev
    ```
+
+   **⚠️ IMPORTANT**: Do not automatically run the backend or frontend servers. Only start these processes when explicitly requested by the user.
 
 ## Usage Examples
 
@@ -113,7 +115,10 @@ This is the primary working directory containing both frontend and backend code.
 
 ## Development
 
-- `npm run dev` - Start both frontend and backend in development mode
+**⚠️ Server Startup Policy**: Only start development servers when explicitly requested by the user.
+
+- `npm run dev` - Start both frontend and backend in development mode (user request required)
+- `npx convex dev` - Start Convex backend only (user request required)
 - `npm run build` - Build for production
 - `npm run lint` - Run TypeScript and ESLint checks
 
