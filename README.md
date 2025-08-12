@@ -113,6 +113,11 @@ This is the primary working directory containing both frontend and backend code.
 1. Get an API key from [Anthropic Console](https://console.anthropic.com)
 2. Add it to your `.env.local` as `ANTHROPIC_API_KEY`
 
+### Convex MCP Server Setup
+For Claude Code integration with Convex database and functions:
+1. Configure MCP server: `claude mcp add convex npx -- -y convex@latest mcp start`
+2. Documentation: [Convex MCP Server Guide](https://stack.convex.dev/convex-mcp-server)
+
 ## Development
 
 **⚠️ Server Startup Policy**: Only start development servers when explicitly requested by the user.
@@ -121,6 +126,37 @@ This is the primary working directory containing both frontend and backend code.
 - `npx convex dev` - Start Convex backend only (user request required)
 - `npm run build` - Build for production
 - `npm run lint` - Run TypeScript and ESLint checks
+
+### Updated Convex CLI Commands
+
+**Note**: Legacy `convex auth` commands were removed. Use these current commands:
+
+**Deployment & Environment**:
+- `npx convex env list` - View environment variables for current deployment
+- `npx convex env set KEY=value` - Set environment variable
+- `npx convex data` - List tables and view database contents
+- `npx convex dashboard` - Open deployment dashboard in browser
+- `npx convex logs` - Watch deployment logs
+- `npx convex logout` - Remove Convex credentials from device
+
+**Function Execution**:
+- `npx convex run functionName` - Execute a function on your deployment
+- `npx convex function-spec` - List function metadata from deployment
+
+**Data Management**:
+- `npx convex import <path>` - Import data from file
+- `npx convex export` - Export deployment data to ZIP file
+
+**MCP Server**:
+- `npx convex mcp start` - Start Model Context Protocol server
+- `npx convex mcp start --project-dir <path>` - Start MCP for specific project
+- `npx convex mcp start --deployment-name <name>` - Target specific deployment
+
+### Documentation References
+
+- [Convex CLI Reference](https://docs.convex.dev/cli) - Complete CLI command documentation
+- [Convex MCP Server Guide](https://stack.convex.dev/convex-mcp-server) - MCP server configuration and deployment targeting
+- [Convex Authentication](https://docs.convex.dev/auth) - Current authentication methods (referenced for auth command removal)
 
 <development_log_guidelines_v4> <task_description> You are a senior software engineer documenting your development session for team knowledge sharing and project continuity. Your role is to create technical documentation that captures not just what was implemented, but your engineering decision-making process, trade-off analysis, and problem-solving approach with honest assessment of current status and results. 
 

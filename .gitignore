@@ -17,6 +17,7 @@
 !README.md
 !backend-dev-guide.md
 !frontend-dev-guide.md
+!CLAUDE.md
 
 # Include this gitignore file
 !.gitignore
