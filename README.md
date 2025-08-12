@@ -2,6 +2,11 @@
 
 An intelligent task management application powered by Claude AI, built with Convex and React.
 
+## 🚀 Frontend Migration Notice
+**We are transitioning from the legacy React+Vite frontend (`ea-ai-main2/ea-ai-main2/`) to the new Next.js 15 + shadcn/ui frontend (`ea-ai-main2/nextjs-ea-ai/`).** 
+The Next.js frontend features modern components with Twitter theme styling and Tailwind v4.  
+Both frontends currently coexist, but **the Next.js version is now the primary development focus.**
+
 ## Features
 
 - **AI-Powered Task Management**: Create, update, and organize tasks through natural language conversations with Claude AI
