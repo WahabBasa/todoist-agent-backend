@@ -29,7 +29,7 @@ export default function App() {
         <MainApp />
       </Authenticated>
       <Unauthenticated>
-        <div className="min-h-screen bg-base-200 flex items-center justify-center">
+        <div className="min-h-screen bg-muted/30 flex items-center justify-center">
           <SignInForm />
         </div>
       </Unauthenticated>
@@ -146,19 +146,19 @@ function SignInForm() {
   const [isLoading, setIsLoading] = useState(false);
   
   return (
-    <div className="card w-96 bg-base-100 shadow-xl">
-      <div className="card-body">
-        <div className="text-center mb-6">
+    <div className="w-96 bg-card rounded-lg border border-border shadow-lg">
+      <div className="p-6 space-y-6">
+        <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-              <span className="text-primary-content font-bold text-2xl">T</span>
+              <span className="text-primary-foreground font-bold text-2xl">T</span>
             </div>
-            <span className="font-bold text-2xl">TaskAI</span>
+            <span className="font-bold text-2xl text-foreground">TaskAI</span>
           </div>
-          <h1 className="text-xl font-bold mb-2">
+          <h1 className="text-xl font-bold mb-2 text-foreground">
             Welcome to TaskAI
           </h1>
-          <p className="text-sm text-base-content/70">
+          <p className="text-sm text-muted-foreground">
             Your intelligent task management assistant
           </p>
         </div>
@@ -177,13 +177,15 @@ function SignInForm() {
                 setIsLoading(false);
               });
           }}
+          className="space-y-4"
         >
-          <div className="form-control mb-4">
-            <label className="label">
-              <span className="label-text">Email</span>
+          <div className="space-y-2">
+            <label htmlFor="email" className="text-sm font-medium text-foreground">
+              Email
             </label>
             <input
-              className="input input-bordered w-full"
+              id="email"
+              className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               type="email"
               name="email"
               placeholder="Enter your email"
@@ -191,12 +193,13 @@ function SignInForm() {
             />
           </div>
           
-          <div className="form-control mb-4">
-            <label className="label">
-              <span className="label-text">Password</span>
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-medium text-foreground">
+              Password
             </label>
             <input
-              className="input input-bordered w-full"
+              id="password"
+              className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               type="password"
               name="password"
               placeholder="Enter your password"
@@ -205,20 +208,20 @@ function SignInForm() {
           </div>
           
           <button
-            className={`btn btn-primary btn-block ${isLoading ? 'loading' : ''}`}
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
             type="submit"
             disabled={isLoading}
           >
             {isLoading ? "Signing in..." : flow === "signIn" ? "Sign In" : "Sign Up"}
           </button>
           
-          <div className="text-center mt-4">
-            <span className="text-sm">
+          <div className="text-center">
+            <span className="text-sm text-muted-foreground">
               {flow === "signIn" ? "Don't have an account? " : "Already have an account? "}
             </span>
             <button 
               type="button"
-              className="link link-hover font-medium"
+              className="text-sm font-medium text-primary hover:underline focus:outline-none focus:underline"
               onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}
             >
               {flow === "signIn" ? "Sign up" : "Sign in"}
@@ -226,11 +229,11 @@ function SignInForm() {
           </div>
           
           {error && (
-            <div className="alert alert-error mt-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>{error}</span>
+              <span className="text-sm">{error}</span>
             </div>
           )}
         </form>
