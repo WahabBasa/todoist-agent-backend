@@ -1,7 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@tailwind base;
-@tailwind components;  
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "daisyui";
 
 /* --- THIS IS THE FIX --- */
 /* Ensure the root elements take up the full viewport height, */
