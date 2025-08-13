@@ -15,11 +15,16 @@ import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
 import { ProjectsView } from "./views/ProjectsView";
 import { SettingsView } from "./views/SettingsView";
+import { ThemeTest, useThemeDebug } from "./components/ThemeTest";
 
 export default function App() {
   return (
     <div data-theme="ea-theme" className="h-full">
       <Toaster position="top-right" />
+      {/* DEBUG: Theme Test Component */}
+      <div data-testid="theme-test">
+        <ThemeTest />
+      </div>
       <Authenticated>
         <MainApp />
       </Authenticated>
