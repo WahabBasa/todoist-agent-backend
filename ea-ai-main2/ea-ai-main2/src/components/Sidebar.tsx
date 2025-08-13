@@ -1,5 +1,9 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { ChevronDown, Plus, Search, Inbox, Calendar, CalendarClock, Filter, CheckCircle, HelpCircle, Hash } from "lucide-react";
+import { useState } from "react";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,34 +15,46 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, activeView, onViewChange }: SidebarProps) {
   const stats = useQuery(api.myFunctions.getDashboardStats);
   const tasks = useQuery(api.tasks.getTasks, { completed: false });
+  const projects = useQuery(api.projects.getProjects);
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
 
-  const menuItems = [
+  const mainItems = [
     { 
-      id: "chat", 
-      label: "AI Chat", 
-      icon: "🤖",
-      description: "Chat with your AI assistant"
+      id: "tasks", 
+      label: "Inbox", 
+      icon: Inbox,
+      count: tasks?.filter(t => !t.projectId)?.length || 0,
     },
     { 
       id: "tasks", 
-      label: "Tasks", 
-      icon: "📝",
-      count: tasks?.length,
-      description: "Manage your tasks"
+      label: "Today", 
+      icon: Calendar,
+      count: 1,
+      isToday: true
     },
     { 
-      id: "projects", 
-      label: "Projects", 
-      icon: "📁",
-      count: stats?.totalProjects,
-      description: "Organize with projects"
+      id: "tasks", 
+      label: "Upcoming", 
+      icon: CalendarClock,
     },
     { 
-      id: "settings", 
-      label: "Settings", 
-      icon: "⚙️",
-      description: "App preferences"
+      id: "tasks", 
+      label: "Filters & Labels", 
+      icon: Filter,
     },
+    { 
+      id: "tasks", 
+      label: "Completed", 
+      icon: CheckCircle,
+    },
+  ];
+
+  const projectColors = [
+    "text-blue-500",
+    "text-purple-500", 
+    "text-green-500",
+    "text-orange-500",
+    "text-red-500"
   ];
 
   const handleItemClick = (viewId: "chat" | "tasks" | "projects" | "settings") => {
@@ -59,103 +75,133 @@ export function Sidebar({ isOpen, onClose, activeView, onViewChange }: SidebarPr
       
       {/* Fixed Sidebar */}
       <aside className={`
-        fixed top-0 left-0 h-full w-80 bg-base-100 shadow-xl z-50 
+        fixed top-0 left-0 h-full w-80 bg-background border-r border-border shadow-xl z-50 
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:w-64 lg:shadow-lg
+        lg:translate-x-0 lg:w-80 lg:shadow-lg
       `}>
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-base-200">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-content font-bold text-lg">T</span>
+          {/* Header - User Profile */}
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                <span className="text-primary-foreground font-medium text-sm">A</span>
               </div>
-              <span className="font-bold text-xl">TaskAI</span>
+              <div className="flex items-center gap-1">
+                <span className="font-medium text-sm">Abdul</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </div>
             </div>
-            <button 
-              className="btn btn-ghost btn-sm lg:hidden hover:bg-base-200"
-              onClick={onClose}
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <div className="h-4 w-4 rounded-full bg-orange-500" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <div className="h-4 w-4 border border-muted-foreground rounded" />
+              </Button>
+              <button 
+                className="lg:hidden"
+                onClick={onClose}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Add Task Button */}
+          <div className="p-4">
+            <Button 
+              className="w-full justify-start gap-2 bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => handleItemClick("tasks")}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <Plus className="h-4 w-4" />
+              Add task
+            </Button>
+          </div>
+
+          {/* Search */}
+          <div className="px-4 pb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search" 
+                className="pl-9 h-9 bg-muted/50 border-none"
+              />
+            </div>
           </div>
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto">
-            <div className="p-6 space-y-6">
-              {/* Quick Stats */}
-              {stats && (
-                <div className="p-4 bg-base-200 rounded-lg">
-                  <div className="text-sm font-medium text-base-content/70 mb-3">Quick Overview</div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="text-center">
-                      <div className="font-semibold text-2xl text-primary">{stats.totalTasks}</div>
-                      <div className="text-base-content/60">Total Tasks</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold text-2xl text-success">{stats.completedTasks}</div>
-                      <div className="text-base-content/60">Completed</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Navigation Menu */}
-              <nav className="space-y-2">
-                <div className="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-3">
-                  Navigation
-                </div>
-                {menuItems.map((item) => (
+            <div className="px-4 space-y-1">
+              {/* Main Navigation Items */}
+              {mainItems.map((item) => {
+                const Icon = item.icon;
+                return (
                   <button
-                    key={item.id}
+                    key={`${item.id}-${item.label}`}
                     onClick={() => handleItemClick(item.id as "chat" | "tasks" | "projects" | "settings")}
                     className={`
-                      w-full text-left p-3 rounded-lg transition-all duration-200
-                      flex items-center gap-3 group relative
-                      ${activeView === item.id 
-                        ? 'bg-primary text-primary-content shadow-sm' 
-                        : 'hover:bg-base-200 hover:shadow-sm'
-                      }
+                      w-full text-left px-3 py-2 rounded-lg transition-colors
+                      flex items-center justify-between group
+                      hover:bg-muted/50
+                      ${activeView === item.id && item.label === "Inbox" ? 'bg-muted' : ''}
                     `}
                   >
-                    <span className="text-xl">{item.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium truncate">{item.label}</span>
-                        {item.count !== undefined && (
-                          <span className={`
-                            badge badge-sm font-medium
-                            ${activeView === item.id ? 'badge-primary-content' : 'badge-primary'}
-                          `}>
-                            {item.count}
-                          </span>
-                        )}
-                      </div>
-                      <div className={`text-xs mt-1 truncate ${
-                        activeView === item.id 
-                          ? 'text-primary-content/70' 
-                          : 'text-base-content/60'
-                      }`}>
-                        {item.description}
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{item.label}</span>
                     </div>
-                    {activeView === item.id && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary-content rounded-r"></div>
+                    {item.count !== undefined && item.count > 0 && (
+                      <span className={`
+                        text-xs px-1.5 py-0.5 rounded
+                        ${item.isToday ? 'text-orange-600' : 'text-muted-foreground'}
+                      `}>
+                        {item.count}
+                      </span>
                     )}
                   </button>
-                ))}
-              </nav>
+                );
+              })}
+
+              {/* My Projects Section */}
+              <div className="pt-6">
+                <button
+                  onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span>My Projects</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">USED: {projects?.length || 0}/5</span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isProjectsExpanded ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+
+                {isProjectsExpanded && (
+                  <div className="mt-2 space-y-1">
+                    {projects?.map((project, index) => (
+                      <button
+                        key={project._id}
+                        onClick={() => handleItemClick("projects")}
+                        className="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center gap-3 hover:bg-muted/50"
+                      >
+                        <Hash className={`h-4 w-4 ${projectColors[index % projectColors.length]}`} />
+                        <span className="text-sm truncate">{project.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-base-200">
-            <div className="text-xs text-base-content/50 text-center">
-              TaskAI v1.0 • Powered by Claude
-            </div>
+          <div className="p-4 border-t border-border">
+            <button className="w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center gap-3 hover:bg-muted/50">
+              <HelpCircle className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Help & resources</span>
+            </button>
           </div>
         </div>
       </aside>
