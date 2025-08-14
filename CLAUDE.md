@@ -4,6 +4,7 @@
 1. **Project Overview**: Read `README.md` for complete architecture, tech stack, and directory structure
 2. **Recent Context**: Check latest devlog in `updates/` folder for recent debugging sessions and lessons learned
 3. **MCP Tools Ready**: GitHub + Graphite integrations are working (see devlog 2025-08-01 for setup details)
+4. **Documentation Research**: Always use the docs-researcher subagent for any documentation lookup or research tasks
 
 ## 📁 Key File Locations
 - **Main Project**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend` (current directory)
@@ -80,11 +81,21 @@ gt submit --stack
 1. **Check Latest Devlog** - Review `updates/YYYY-MM-DD_devlog.md` for recent debugging sessions
 2. **Review README Architecture** - Understand current system state
 3. **Architecture Alignment** - Ensure changes fit the React → Convex → AI SDK flow
+4. **Check Someday Tasks** - Review `personal/someday/todolist.md` for conditional tasks that may now be ready
 
 **For Feature Development:**
 1. **Plan with TodoWrite** - Break features into 3-5 logical, stackable PRs
 2. **Validate Stacking Logic** - Ensure each PR can pass CI independently
 3. **Check Dependencies** - Map PR dependencies before coding
+
+**📚 Documentation Research Protocol:**
+- **ALWAYS use docs-researcher subagent** for any documentation lookup, API reference, or research task
+- **Examples of when to use docs-researcher**:
+  - Looking up framework APIs (React, Convex, TailwindCSS, etc.)
+  - Understanding integration patterns or best practices
+  - Finding version-specific implementation guides
+  - Researching library compatibility or migration guides
+- **Never attempt manual documentation research** - delegate to the specialized subagent
 
 **Quality Assurance:**
 1. **File Location Verification** - Confirm working in correct project directory
@@ -155,6 +166,21 @@ React Frontend → Convex Backend → Claude AI (Anthropic SDK) → Convex Datab
 - **TypeScript Compilation**: Check for smart quotes and Unicode characters breaking builds
 - **MCP Connection Issues**: Use CMD.exe wrapper for Windows path resolution
 - **AI SDK Integration**: Ensure proper message format for CoreMessage interface
+
+## 🔒 User Base & Security Monitoring
+
+**User Detection Trigger:**
+- **Monitor Devlogs**: Check `updates/` for mentions of "users", "signups", "payments", or user metrics
+- **When Users Detected**: Review `personal/someday/todolist.md` for security-sensitive tasks
+- **Security Protocol**: Any browser automation or advanced tooling requires security review first
+
+**AgentDeskAI Setup Trigger:**
+- **Condition**: Application has confirmed paying users (documented in devlogs)
+- **Action Required**: 
+  1. Run security audit on current codebase
+  2. Review browser automation security implications
+  3. Test AgentDeskAI MCP in isolated environment
+  4. Set up with: `claude mcp add browser-tools npx -- @agentdeskai/browser-tools-mcp@1.2.0`
 
 ## 📚 Reference Links
 - **README.md** - Complete project documentation

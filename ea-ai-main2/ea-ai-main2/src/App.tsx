@@ -16,6 +16,7 @@ import { TasksView } from "./views/TasksView";
 import { ProjectsView } from "./views/ProjectsView";
 import { SettingsView } from "./views/SettingsView";
 import { ThemeTest, useThemeDebug } from "./components/ThemeTest";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/sidebar";
 
 export default function App() {
   return (
@@ -37,9 +38,6 @@ export default function App() {
 
 function MainApp() {
   const [activeView, setActiveView] = useState<"chat" | "tasks" | "projects" | "settings">("chat");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -57,50 +55,25 @@ function MainApp() {
   };
 
   return (
-    // The root div now manages the sidebar's presence
-    <div className="h-full w-full bg-base-200">
+    <SidebarProvider>
       <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
         activeView={activeView}
         onViewChange={setActiveView}
       />
-
-      {/* --- THIS LAYOUT IS NOW SIMPLIFIED AND MORE ROBUST --- */}
-      {/* This div is the main content area that sits to the right of the sidebar */}
-      <div className="lg:ml-64 flex flex-col h-screen">
-        {/* Header: Fixed height, does not grow or shrink */}
-        <div className="navbar bg-base-100 shadow-sm sticky top-0 z-30 flex-shrink-0">
-          <div className="flex-none lg:hidden">
-            <button 
-              className="btn btn-square btn-ghost"
-              onClick={toggleSidebar}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-          
+      <SidebarInset>
+        {/* Header */}
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <div className="lg:hidden">
-                <span className="font-bold text-xl">TaskAI</span>
-              </div>
-            </div>
+            {/* Header content can go here if needed */}
           </div>
-          
-          <div className="flex-none">
-            <SignOutButton />
-          </div>
-        </div>
-
-        {/* Main Content Area: Takes up all remaining vertical space */}
-        <main className="flex-1 overflow-y-auto">
-            {renderActiveView()}
+        </header>
+        
+        {/* Main Content Area */}
+        <main className="flex flex-1 flex-col gap-4 p-4">
+          {renderActiveView()}
         </main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
