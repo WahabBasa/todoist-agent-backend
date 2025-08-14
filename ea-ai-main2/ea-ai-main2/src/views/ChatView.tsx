@@ -2,6 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Trash2, Send, Loader2 } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant" | "system" | "tool";
@@ -96,41 +102,40 @@ export function ChatView() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-none bg-base-100 border-b border-base-300 p-4">
+      <div className="flex-none bg-background border-b border-border p-4">
         <div className="flex items-center gap-3">
-          <div className="avatar">
-            <div className="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center">
+          <Avatar className="w-10 h-10">
+            <AvatarFallback className="bg-primary text-primary-foreground">
               <span className="text-lg">🤖</span>
-            </div>
-          </div>
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1">
             <h2 className="font-semibold">AI Task Assistant</h2>
-            <p className="text-sm text-base-content/70">
+            <p className="text-sm text-muted-foreground">
               Ask me to create tasks, manage projects, or help with your workflow
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              className="btn btn-ghost btn-sm text-error hover:bg-error/20"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleClearChat}
               title="Clear chat history"
+              className="text-destructive hover:bg-destructive/10"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-            <div className="form-control">
-              <label className="label cursor-pointer gap-2">
-                <span className="label-text text-xs">
-                  {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3 Haiku'}
-                </span>
-                <input 
-                  type="checkbox" 
-                  className="toggle toggle-sm toggle-primary" 
-                  checked={useHaiku}
-                  onChange={(e) => setUseHaiku(e.target.checked)}
-                />
-              </label>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="haiku-toggle" className="text-xs cursor-pointer">
+                {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3 Haiku'}
+              </Label>
+              <input
+                id="haiku-toggle"
+                type="checkbox"
+                className="w-4 h-4"
+                checked={useHaiku}
+                onChange={(e) => setUseHaiku(e.target.checked)}
+              />
             </div>
           </div>
         </div>
@@ -143,20 +148,22 @@ export function ChatView() {
             <div className="text-center max-w-md">
               <div className="text-6xl mb-4">🤖</div>
               <h3 className="text-xl font-semibold mb-2">Welcome to TaskAI</h3>
-              <p className="text-base-content/70 mb-6">
+              <p className="text-muted-foreground mb-6">
                 I'm your AI task management assistant. I can help you create tasks, 
                 organize projects, and manage your workflow through natural language.
               </p>
               <div className="space-y-2 text-sm">
-                <div className="bg-base-200 rounded-lg p-3">
-                  <strong>Try asking:</strong>
-                  <ul className="mt-2 space-y-1 text-left">
-                    <li>• "Create a task to review the quarterly report"</li>
-                    <li>• "Show me my active tasks"</li>
-                    <li>• "Create a project for the website redesign"</li>
-                    <li>• "Delete the 'Old Project'"</li>
-                  </ul>
-                </div>
+                <Card className="p-3">
+                  <CardContent className="p-0">
+                    <strong>Try asking:</strong>
+                    <ul className="mt-2 space-y-1 text-left">
+                      <li>• "Create a task to review the quarterly report"</li>
+                      <li>• "Show me my active tasks"</li>
+                      <li>• "Create a project for the website redesign"</li>
+                      <li>• "Delete the 'Old Project'"</li>
+                    </ul>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>
@@ -167,43 +174,51 @@ export function ChatView() {
               .map((msg, index) => (
               <div
                 key={index}
-                className={`chat ${msg.role === "user" ? "chat-end" : "chat-start"}`}
+                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
               >
-                <div className="chat-image avatar">
-                  <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+                <Avatar className="w-8 h-8 flex-shrink-0">
+                  <AvatarFallback className="bg-muted">
                     {msg.role === "user" ? "👤" : "🤖"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 max-w-[80%]">
+                  <div className={`flex items-center gap-2 mb-1 ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}>
+                    <span className="text-sm font-medium">
+                      {msg.role === "user" ? "You" : "AI Assistant"}
+                    </span>
+                    <time className="text-xs text-muted-foreground">
+                      {formatTimestamp(msg.timestamp)}
+                    </time>
                   </div>
-                </div>
-                <div className="chat-header">
-                  {msg.role === "user" ? "You" : "AI Assistant"}
-                  <time className="text-xs opacity-50 ml-2">
-                    {formatTimestamp(msg.timestamp)}
-                  </time>
-                </div>
-                <div className={`chat-bubble ${
-                  msg.role === "user" 
-                    ? "chat-bubble-primary" 
-                    : "chat-bubble-secondary"
-                }`}>
-                  {typeof msg.content === 'string' && (
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
-                  )}
+                  <Card className={`${msg.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"}`}>
+                    <CardContent className="p-3">
+                      {typeof msg.content === 'string' && (
+                        <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             ))}
             
             {isLoading && (
-              <div className="chat chat-start">
-                <div className="chat-image avatar">
-                  <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center">
+              <div className="flex gap-3">
+                <Avatar className="w-8 h-8 flex-shrink-0">
+                  <AvatarFallback className="bg-muted">
                     🤖
-                  </div>
-                </div>
-                <div className="chat-bubble chat-bubble-secondary">
-                  <div className="flex items-center gap-2">
-                    <span className="loading loading-dots loading-sm"></span>
-                    <span>Thinking...</span>
-                  </div>
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 max-w-[80%]">
+                  <Card className="bg-muted">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Thinking...</span>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             )}
@@ -213,12 +228,12 @@ export function ChatView() {
       </div>
 
       {/* Input */}
-      <div className="flex-none bg-base-100 border-t border-base-300 p-4">
+      <div className="flex-none bg-background border-t border-border p-4">
         <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
+          <Input
             ref={inputRef}
             type="text"
-            className="input input-bordered flex-1"
+            className="flex-1"
             placeholder="Ask me to create a task, show your projects, or help with your workflow..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -226,19 +241,18 @@ export function ChatView() {
             disabled={isLoading}
             autoFocus
           />
-          <button
+          <Button
             type="submit"
-            className={`btn btn-primary ${isLoading ? 'loading' : ''}`}
             disabled={!message.trim() || isLoading}
           >
-            {isLoading ? '' : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
             )}
-          </button>
+          </Button>
         </form>
-        <div className="text-xs text-center text-base-content/50 mt-2">
+        <div className="text-xs text-center text-muted-foreground mt-2">
           Press Enter to send, Shift+Enter for new line
         </div>
       </div>
