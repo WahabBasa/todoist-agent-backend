@@ -16,6 +16,9 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarTrigger,
 } from "./ui/sidebar";
 
 interface SidebarProps {
@@ -83,12 +86,15 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
 
   return (
     <ShadcnSidebar collapsible="icon">
-      {/* User Profile Header */}
-      <UserProfile />
+      {/* App Header */}
+      <SidebarHeader className="flex flex-row items-center justify-between p-3 border-b border-border">
+        <h1 className="font-semibold text-lg account-blue-text group-data-[collapsible=icon]:hidden">TaskAI</h1>
+        <SidebarTrigger className="h-8 w-8" />
+      </SidebarHeader>
 
-      <SidebarContent className="px-3">
+      <SidebarContent className="px-3 py-0">
         {/* Add Task Button */}
-        <div className="py-3">
+        <div className="py-2">
           <Button 
             className="w-full bg-red-500 hover:bg-red-600 text-white flex items-center gap-2 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
             onClick={() => handleItemClick("tasks")}
@@ -99,9 +105,9 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         </div>
 
         {/* Main Navigation */}
-        <SidebarGroup className="p-0">
-          <SidebarGroupContent>
-            <SidebarMenu>
+        <SidebarGroup className="p-0 gap-0">
+          <SidebarGroupContent className="gap-0">
+            <SidebarMenu className="gap-0">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -131,10 +137,10 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator className="my-4" />
+        <SidebarSeparator className="my-2" />
 
         {/* Projects Section */}
-        <SidebarGroup className="p-0">
+        <SidebarGroup className="p-0 gap-0">
           <SidebarGroupLabel asChild>
             <Button
               variant="ghost"
@@ -154,8 +160,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           </SidebarGroupLabel>
           
           {isProjectsExpanded && (
-            <SidebarGroupContent>
-              <SidebarMenu>
+            <SidebarGroupContent className="gap-0">
+              <SidebarMenu className="gap-0">
                 {projects?.map((project, index) => (
                   <SidebarMenuItem key={project._id}>
                     <SidebarMenuButton
@@ -184,6 +190,11 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           )}
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Account at Bottom */}
+      <SidebarFooter>
+        <UserProfile />
+      </SidebarFooter>
     </ShadcnSidebar>
   );
 }

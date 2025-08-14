@@ -11,24 +11,24 @@
   default: true;
   color-scheme: light;
 
-  /* Cool Blue Brand Colors - converted to OKLCH */
-  --color-primary: oklch(58% 0.15 225);        /* Cool Blue (#4a90e2) */
+  /* Account Logo Blue (#3B82F6 - Tailwind blue-500) */
+  --color-primary: oklch(59.69% 0.165 252.12); /* Account logo blue #3B82F6 */
   --color-primary-content: oklch(100% 0 0);    /* White text on blue */
-  --color-secondary: oklch(91% 0.02 225);      /* Light blue-gray */
-  --color-secondary-content: oklch(25% 0.02 225); /* Dark text on light secondary */
-  --color-accent: oklch(52% 0.15 158);         /* Success green accent */
+  --color-secondary: oklch(96% 0 0);           /* Light grey */
+  --color-secondary-content: oklch(13% 0 0);   /* Black text on light secondary */
+  --color-accent: oklch(59.69% 0.165 252.12);  /* Use same blue for accents */
   --color-accent-content: oklch(100% 0 0);     /* White text on accent */
-  --color-neutral: oklch(34% 0.02 225);        /* Dark neutral slate */
+  --color-neutral: oklch(13% 0 0);             /* Pure black */
   --color-neutral-content: oklch(100% 0 0);    /* White text on neutral */
 
-  /* Base Colors - Light Theme Hierarchy */
+  /* Base Colors - Black/Grey/White Theme */
   --color-base-100: oklch(100% 0 0);           /* Pure white backgrounds */
-  --color-base-200: oklch(98% 0.02 225);       /* Very light blue-gray cards */
-  --color-base-300: oklch(91% 0.03 225);       /* Light blue-gray hover states */
-  --color-base-content: oklch(20% 0.02 225);   /* Dark text on light backgrounds */
+  --color-base-200: oklch(98% 0 0);            /* Very light grey cards */
+  --color-base-300: oklch(90% 0 0);            /* Light grey hover states */
+  --color-base-content: oklch(13% 0 0);        /* Black text on light backgrounds */
 
   /* Semantic Colors */
-  --color-info: oklch(54% 0.18 207);           /* Info blue */
+  --color-info: oklch(59.69% 0.165 252.12);    /* Use account blue for info */
   --color-info-content: oklch(100% 0 0);       /* White text on info */
   --color-success: oklch(52% 0.15 158);        /* Success green */
   --color-success-content: oklch(100% 0 0);    /* White text on success */
@@ -97,37 +97,37 @@ body {
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(100% 0 0);
-  --foreground: oklch(20% 0.02 225);
-  --card: oklch(100% 0 0);
-  --card-foreground: oklch(20% 0.02 225);
-  --popover: oklch(100% 0 0);
-  --popover-foreground: oklch(20% 0.02 225);
-  --primary: oklch(58% 0.15 225);
-  --primary-foreground: oklch(100% 0 0);
-  --secondary: oklch(91% 0.02 225);
-  --secondary-foreground: oklch(25% 0.02 225);
-  --muted: oklch(98% 0.02 225);
-  --muted-foreground: oklch(56% 0.02 225);
-  --accent: oklch(52% 0.15 158);
-  --accent-foreground: oklch(100% 0 0);
-  --destructive: oklch(60% 0.20 0);
-  --border: oklch(91% 0.03 225);
-  --input: oklch(91% 0.03 225);
-  --ring: oklch(58% 0.15 225);
-  --chart-1: oklch(58% 0.15 225);
-  --chart-2: oklch(52% 0.15 158);
-  --chart-3: oklch(54% 0.18 207);
-  --chart-4: oklch(56% 0.18 43);
-  --chart-5: oklch(60% 0.20 0);
-  --sidebar: oklch(100% 0 0);
-  --sidebar-foreground: oklch(20% 0.02 225);
-  --sidebar-primary: oklch(58% 0.15 225);
-  --sidebar-primary-foreground: oklch(100% 0 0);
-  --sidebar-accent: oklch(91% 0.02 225);
-  --sidebar-accent-foreground: oklch(25% 0.02 225);
-  --sidebar-border: oklch(91% 0.03 225);
-  --sidebar-ring: oklch(58% 0.15 225);
+  --background: oklch(100% 0 0);                /* Pure white */
+  --foreground: oklch(13% 0 0);                 /* Pure black */
+  --card: oklch(100% 0 0);                      /* Pure white */
+  --card-foreground: oklch(13% 0 0);            /* Pure black */
+  --popover: oklch(100% 0 0);                   /* Pure white */
+  --popover-foreground: oklch(13% 0 0);         /* Pure black */
+  --primary: oklch(45% 0 0);                    /* Medium grey - no blue */
+  --primary-foreground: oklch(100% 0 0);        /* White */
+  --secondary: oklch(96% 0 0);                  /* Light grey */
+  --secondary-foreground: oklch(13% 0 0);       /* Black */
+  --muted: oklch(96% 0 0);                      /* Light grey */
+  --muted-foreground: oklch(45% 0 0);           /* Medium grey */
+  --accent: oklch(90% 0 0);                     /* Very light grey */
+  --accent-foreground: oklch(13% 0 0);          /* Black */
+  --destructive: oklch(60% 0.20 0);             /* Error red */
+  --border: oklch(90% 0 0);                     /* Light grey border */
+  --input: oklch(96% 0 0);                      /* Very light grey input */
+  --ring: oklch(45% 0 0);                       /* Medium grey focus */
+  --chart-1: oklch(45% 0 0);                    /* Medium grey */
+  --chart-2: oklch(52% 0.15 158);               /* Green */
+  --chart-3: oklch(60% 0 0);                    /* Dark grey */
+  --chart-4: oklch(56% 0.18 43);                /* Yellow */
+  --chart-5: oklch(60% 0.20 0);                 /* Red */
+  --sidebar: oklch(100% 0 0);                   /* Pure white */
+  --sidebar-foreground: oklch(13% 0 0);         /* Pure black */
+  --sidebar-primary: oklch(45% 0 0);            /* Medium grey */
+  --sidebar-primary-foreground: oklch(100% 0 0); /* White */
+  --sidebar-accent: oklch(96% 0 0);             /* Light grey */
+  --sidebar-accent-foreground: oklch(13% 0 0);  /* Black */
+  --sidebar-border: oklch(90% 0 0);             /* Light grey border */
+  --sidebar-ring: oklch(45% 0 0);               /* Medium grey */
 }
 
 .dark {
@@ -170,5 +170,20 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Account Logo Blue - Used sparingly on key components only */
+@layer components {
+  .account-blue {
+    background-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
+  }
+  
+  .account-blue-text {
+    color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
+  }
+  
+  .account-blue-border {
+    border-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
   }
 }
