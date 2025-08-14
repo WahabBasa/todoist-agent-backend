@@ -21,14 +21,14 @@ export function UserProfile({ userName = "Abdul" }: UserProfileProps) {
     <div className="p-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2 h-auto p-2 w-full justify-start group-data-[collapsible=icon]:justify-center">
-            <Avatar className="h-8 w-8">
+          <Button variant="ghost" className="flex items-center gap-2 h-auto p-2 w-full justify-start group-data-[collapsible=icon]:justify-center min-w-0">
+            <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="account-blue text-white text-sm">
                 {userName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">{userName}</span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+            <span className="font-medium text-sm group-data-[collapsible=icon]:hidden truncate">{userName}</span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground group-data-[collapsible=icon]:hidden shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
