@@ -15,7 +15,8 @@ export function SettingsView() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="overflow-y-auto h-full p-4">
+      <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold">Settings</h2>
@@ -216,6 +217,7 @@ export function SettingsView() {
             This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

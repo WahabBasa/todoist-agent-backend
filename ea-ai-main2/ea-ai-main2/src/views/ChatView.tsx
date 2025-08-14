@@ -7,7 +7,6 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { ScrollArea } from "../components/ui/scroll-area";
 import { Trash2, Send, Loader2 } from "lucide-react";
 
 interface Message {
@@ -143,8 +142,7 @@ export function ChatView() {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 scroll-area-hide-scrollbar">
-        <div className="p-4">
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center max-w-md">
@@ -227,8 +225,7 @@ export function ChatView() {
             </div>
           )}
           <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+      </div>
 
       {/* Input */}
       <div className="flex-none bg-background border-t border-border p-4">

@@ -13,7 +13,8 @@ export function ProjectsView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="overflow-y-auto h-full p-4">
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -124,6 +125,7 @@ export function ProjectsView() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -69,7 +69,7 @@ function MainApp() {
         </header>
         
         {/* Main Content Area */}
-        <main className="flex flex-1 flex-col p-4 overflow-hidden">
+        <main className="flex-1 h-0 overflow-hidden">
           {renderActiveView()}
         </main>
       </SidebarInset>
