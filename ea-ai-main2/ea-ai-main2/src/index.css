@@ -51,7 +51,7 @@ html, body, #root {
   width: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Use overflow instead of overflow-x to prevent browser bugs */
+
 }
 
 /* Hide scrollbars but allow scrolling */
@@ -61,7 +61,8 @@ body::-webkit-scrollbar {
 
 body {
   -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox */
+  scrollbar-width: none; 
+     
 }
 
 body {

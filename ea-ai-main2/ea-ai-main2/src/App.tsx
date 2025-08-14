@@ -20,7 +20,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/s
 
 export default function App() {
   return (
-    <div data-theme="ea-theme" className="h-full overflow-hidden">
+    <div data-theme="ea-theme" className="h-full">
       <Toaster position="top-right" />
       {/* DEBUG: Theme Test Component */}
       <div data-testid="theme-test">
@@ -69,7 +69,7 @@ function MainApp() {
         </header>
         
         {/* Main Content Area */}
-        <main className="flex flex-1 flex-col p-4">
+        <main className="flex flex-1 flex-col p-4 overflow-hidden">
           {renderActiveView()}
         </main>
       </SidebarInset>

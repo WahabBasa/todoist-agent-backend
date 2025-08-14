@@ -143,7 +143,7 @@ export function ChatView() {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 h-full scroll-area-hide-scrollbar">
+      <ScrollArea className="flex-1 scroll-area-hide-scrollbar">
         <div className="p-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
