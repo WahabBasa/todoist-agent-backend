@@ -55,12 +55,12 @@ function MainApp() {
   };
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-full flex">
       <Sidebar
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col h-full">
         {/* Header */}
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <div className="flex-1">
@@ -69,7 +69,7 @@ function MainApp() {
         </header>
         
         {/* Main Content Area */}
-        <main className="flex-1 h-0 overflow-hidden">
+        <main className="flex-1 overflow-hidden">
           {renderActiveView()}
         </main>
       </SidebarInset>

@@ -100,9 +100,9 @@ export function ChatView() {
 
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header - Fixed */}
-      <div className="flex-none bg-background border-b border-border p-4">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header - Fixed at top */}
+      <div className="flex-shrink-0 bg-background border-b border-border p-4">
         <div className="flex items-center gap-3">
           <Avatar className="w-10 h-10">
             <AvatarFallback className="bg-primary text-primary-foreground">
@@ -141,8 +141,8 @@ export function ChatView() {
         </div>
       </div>
 
-      {/* Messages - Scrollable Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
+      {/* Messages - Scrollable Area with proper constraints */}
+      <div className="flex-1 overflow-y-auto p-4">
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center max-w-md">
@@ -227,8 +227,8 @@ export function ChatView() {
           <div ref={messagesEndRef} />
       </div>
 
-      {/* Input - Fixed */}
-      <div className="flex-none bg-background border-t border-border p-4">
+      {/* Input - Fixed at bottom */}
+      <div className="flex-shrink-0 bg-background border-t border-border p-4">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
