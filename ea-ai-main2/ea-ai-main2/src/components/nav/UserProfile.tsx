@@ -27,8 +27,10 @@ export function UserProfile({ userName = "Abdul" }: UserProfileProps) {
                 {userName.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium text-sm group-data-[collapsible=icon]:hidden truncate">{userName}</span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground group-data-[collapsible=icon]:hidden shrink-0" />
+            <div className="flex items-center gap-2 min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+              <span className="font-medium text-sm truncate">{userName}</span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+            </div>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">

@@ -85,9 +85,9 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
   };
 
   return (
-    <ShadcnSidebar collapsible="icon">
+    <ShadcnSidebar collapsible="icon" className="w-[280px]">
       {/* App Header */}
-      <SidebarHeader className="flex flex-row items-center justify-between p-3 border-b border-border min-w-0">
+      <SidebarHeader className="flex flex-row items-center justify-between p-3 border-b border-border">
         <h1 className="font-semibold text-lg account-blue-text group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
         <SidebarTrigger className="h-8 w-8 shrink-0" />
       </SidebarHeader>
@@ -96,7 +96,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {/* Add Task Button */}
         <div className="py-2">
           <Button 
-            className="w-full bg-red-500 hover:bg-red-600 text-white flex items-center gap-2 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center min-w-0"
+            className="w-full bg-red-500 hover:bg-red-600 text-white flex items-center gap-2 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center"
             onClick={() => handleItemClick("tasks")}
           >
             <Plus className="h-4 w-4 shrink-0" />
@@ -115,10 +115,12 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.id as "chat" | "tasks" | "projects" | "settings")}
                       isActive={activeView === item.id && item.label === "Inbox"}
-                      className="h-8 px-2 gap-3 hover:bg-muted/50 min-w-0"
+                      className="h-8 px-2 gap-3 hover:bg-muted/50"
                     >
-                      <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate">{item.label}</span>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm truncate">{item.label}</span>
+                      </div>
                       {item.count !== undefined && item.count > 0 && (
                         <Badge 
                           variant="secondary" 
@@ -145,17 +147,19 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
             <Button
               variant="ghost"
               onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-              className="w-full justify-between h-8 px-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 min-w-0"
+              className="w-full justify-between h-8 px-2 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="truncate">My Projects</span>
-                <span className="text-xs shrink-0">{projects?.length || 0}/5</span>
+                <span className="text-xs shrink-0 whitespace-nowrap">{projects?.length || 0}/5</span>
               </div>
-              {isProjectsExpanded ? (
-                <ChevronDown className="h-3 w-3 shrink-0" />
-              ) : (
-                <ChevronRight className="h-3 w-3 shrink-0" />
-              )}
+              <div className="shrink-0">
+                {isProjectsExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+              </div>
             </Button>
           </SidebarGroupLabel>
           
@@ -167,10 +171,12 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick("projects")}
                       isActive={activeView === "projects"}
-                      className="h-8 px-2 gap-3 hover:bg-muted/50 min-w-0"
+                      className="h-8 px-2 gap-3 hover:bg-muted/50"
                     >
-                      <Hash className={`h-4 w-4 shrink-0 ${projectColors[index % projectColors.length]}`} />
-                      <span className="text-sm truncate">{project.name}</span>
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Hash className={`h-4 w-4 shrink-0 ${projectColors[index % projectColors.length]}`} />
+                        <span className="text-sm truncate">{project.name}</span>
+                      </div>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -179,10 +185,12 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     onClick={() => handleItemClick("projects")}
-                    className="h-8 px-2 gap-3 hover:bg-muted/50 text-muted-foreground min-w-0"
+                    className="h-8 px-2 gap-3 hover:bg-muted/50 text-muted-foreground"
                   >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    <span className="text-sm truncate">Add project</span>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Plus className="h-4 w-4 shrink-0" />
+                      <span className="text-sm truncate">Add project</span>
+                    </div>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
