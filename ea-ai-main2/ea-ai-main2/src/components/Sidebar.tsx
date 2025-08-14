@@ -72,24 +72,17 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     <ShadcnSidebar collapsible="icon">
       <SidebarHeader className="p-0 gap-0">
         {/* App Name and Collapse Button */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-3 py-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-2xl">TaskAI</span>
           </div>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            className="h-[48px] w-[48px] p-0 hover:bg-muted/50 [&_svg]:size-[28px]" 
-            onClick={toggleSidebar}
-          >
-            {open ? <PanelLeftClose /> : <PanelLeft />}
-          </Button>
+          <SidebarTrigger className="h-8 w-8 [&_svg]:size-5 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:[&_svg]:size-6" />
         </div>
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
         {/* Main Navigation */}
-        <SidebarGroup className="p-1">
+        <SidebarGroup className="p-1 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
           <SidebarGroupContent className="gap-0">
             <SidebarMenu className="gap-0">
               {mainItems.map((item) => {
@@ -101,10 +94,12 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                       isActive={activeView === item.id}
                       className={`
                         h-[32px] px-2 rounded-md gap-2
+                        group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0
                         ${item.isNewChat ? 'bg-orange-500 hover:bg-orange-600 text-white' : ''}
                       `}
+                      tooltip={item.label}
                     >
-                      <Icon className="h-4 w-4 shrink-0" />
+                      <Icon className="h-4 w-4 shrink-0 group-data-[collapsible=icon]:h-5 group-data-[collapsible=icon]:w-5" />
                       <span className="text-sm">{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -116,9 +111,9 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
 
         <SidebarSeparator className="my-2" />
 
-        {/* Recents Section */}
-        <SidebarGroup className="p-1">
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-2 pb-1 group-data-[collapsible=icon]:hidden">
+        {/* Recents Section - Hidden when collapsed */}
+        <SidebarGroup className="p-1 group-data-[collapsible=icon]:hidden">
+          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-2 pb-1">
             Recents
           </SidebarGroupLabel>
           <SidebarGroupContent className="gap-0">
@@ -143,11 +138,11 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-1 gap-0">
+      <SidebarFooter className="p-1 gap-0 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center">
         <SidebarMenu className="gap-0">
           <SidebarMenuItem className="gap-0">
-            <SidebarMenuButton className="h-[32px] px-2 rounded-md gap-2">
-              <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+            <SidebarMenuButton className="h-[32px] px-2 rounded-md gap-2 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0" tooltip="User">
+              <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0 group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7">
                 <span className="text-primary-foreground font-medium text-xs">U</span>
               </div>
               <span className="group-data-[collapsible=icon]:hidden text-sm font-medium">User</span>
