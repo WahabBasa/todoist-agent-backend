@@ -251,4 +251,20 @@ body {
   .account-blue-border {
     border-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
   }
+
+  /* REMOVE DAISYUI AVATAR BORDERS - Fix for persistent black borders */
+  .avatar,
+  [data-slot="avatar"],
+  [data-slot="avatar-fallback"] {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  
+  .avatar-group .avatar,
+  .avatar-group [data-slot="avatar"] {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
 }

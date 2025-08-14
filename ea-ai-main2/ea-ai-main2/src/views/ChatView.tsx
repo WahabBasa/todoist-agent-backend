@@ -1,17 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
-import { Button } from "../components/ui/button";
+import { PromptSuggestions } from "../components/ui/prompt-suggestions";
+import { MessageInput } from "../components/ui/message-input";
 import { Card, CardContent } from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Trash2, Send, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface Message {
+  id: string;
   role: "user" | "assistant" | "system" | "tool";
-  content: any;
+  content: string;
+  createdAt?: Date;
   timestamp: number;
   toolCalls?: Array<{
     name: string;
@@ -21,239 +22,186 @@ interface Message {
 }
 
 export function ChatView() {
-  const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [useHaiku, setUseHaiku] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const chatWithAI = useAction(api.ai.chatWithAI);
-  const clearConversation = useMutation(api.conversations.clearConversation);
   const conversation = useQuery(api.conversations.getConversation);
   
-  // --- THIS IS THE FIX ---
-  // Cast to `any[]` first for robustness before casting to `Message[]`
-  const messages: Message[] = (conversation?.messages as any[]) || [];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Transform conversation messages to Chat component format
+  const rawMessages = (conversation?.messages as any[]) || [];
+  const messages: Message[] = rawMessages
+    .filter(msg => msg.role === "user" || msg.role === "assistant")
+    .map((msg, index) => ({
+      id: `${msg.timestamp}-${index}`,
+      role: msg.role,
+      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      createdAt: new Date(msg.timestamp),
+      timestamp: msg.timestamp,
+      toolCalls: msg.toolCalls
+    }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || isLoading) return;
+    if (!input.trim() || isGenerating) return;
 
-    const userMessage = message.trim();
-    setMessage("");
-    setIsLoading(true);
+    const userMessage = input.trim();
+    setInput("");
+    setIsGenerating(true);
 
     try {
       const result = await chatWithAI({ message: userMessage, useHaiku });
       
-      if (result.toolResults && result.toolResults.length > 0) {
-        const successfulToolCalls = result.toolResults.filter(tc => (tc as any).success);
-        if (successfulToolCalls.length > 0) {
-          toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
-        }
-        
-        const failedToolCalls = result.toolResults.filter(tc => !(tc as any).success);
-        if (failedToolCalls.length > 0) {
-          toast.error(`${failedToolCalls.length} action(s) failed`);
+      // Check if result has toolResults property (handle different API response formats)
+      if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
+        const toolResults = (result as any).toolResults;
+        if (toolResults.length > 0) {
+          const successfulToolCalls = toolResults.filter((tc: any) => tc.success);
+          if (successfulToolCalls.length > 0) {
+            toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
+          }
+          
+          const failedToolCalls = toolResults.filter((tc: any) => !tc.success);
+          if (failedToolCalls.length > 0) {
+            toast.error(`${failedToolCalls.length} action(s) failed`);
+          }
         }
       }
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to send message");
     } finally {
-      setIsLoading(false);
-      inputRef.current?.focus();
+      setIsGenerating(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
   };
 
-  const handleClearChat = async () => {
+  const handleAppend = async (message: { role: "user"; content: string }) => {
+    setInput(message.content);
+    // Auto-submit the suggestion
+    setIsGenerating(true);
     try {
-      await clearConversation();
-      toast.success("Chat history cleared");
+      const result = await chatWithAI({ message: message.content, useHaiku });
+      
+      // Check if result has toolResults property (handle different API response formats)
+      if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
+        const toolResults = (result as any).toolResults;
+        if (toolResults.length > 0) {
+          const successfulToolCalls = toolResults.filter((tc: any) => tc.success);
+          if (successfulToolCalls.length > 0) {
+            toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
+          }
+          
+          const failedToolCalls = toolResults.filter((tc: any) => !tc.success);
+          if (failedToolCalls.length > 0) {
+            toast.error(`${failedToolCalls.length} action(s) failed`);
+          }
+        }
+      }
     } catch (error) {
-      console.error("Clear chat error:", error);
-      toast.error("Failed to clear chat history");
+      console.error("Chat error:", error);
+      toast.error("Failed to send message");
+    } finally {
+      setIsGenerating(false);
+      setInput("");
     }
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
+
+  const suggestions = [
+    "Create a task to review the quarterly report",
+    "Show me all my active tasks",
+    "Create a project for the website redesign",
+    "Delete the 'Old Project'",
+    "Mark all high priority tasks as completed",
+    "Move all marketing tasks to the Website Redesign project"
+  ];
 
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header - Fixed at top */}
-      <div className="flex-shrink-0 bg-background border-b border-border p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-10 h-10">
-            <AvatarFallback className="bg-primary text-primary-foreground">
-              <span className="text-lg">🤖</span>
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1">
-            <h2 className="font-semibold">AI Task Assistant</h2>
-            <p className="text-sm text-muted-foreground">
-              Ask me to create tasks, manage projects, or help with your workflow
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearChat}
-              title="Clear chat history"
-              className="text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="haiku-toggle" className="text-xs cursor-pointer">
-                {useHaiku ? 'Claude 3.5 Haiku' : 'Claude 3 Haiku'}
-              </Label>
-              <input
-                id="haiku-toggle"
-                type="checkbox"
-                className="w-4 h-4"
-                checked={useHaiku}
-                onChange={(e) => setUseHaiku(e.target.checked)}
+    <div className="h-full flex flex-col bg-background">
+      {/* Messages Container - Full height, seamless background */}
+      <div className="flex-1 overflow-hidden flex flex-col bg-background">
+        {messages.length === 0 ? (
+          /* Empty State */
+          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">💬</div>
+              <h3 className="text-lg font-medium mb-2">Start a conversation</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Ask me to create tasks, manage projects, or help with your workflow
+              </p>
+            </div>
+            
+            <div className="w-full max-w-md">
+              <PromptSuggestions
+                label="Quick actions:"
+                append={handleAppend}
+                suggestions={suggestions}
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Messages - Scrollable Area with proper constraints */}
-      <div className="flex-1 overflow-y-auto p-4">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <div className="text-6xl mb-4">🤖</div>
-                <h3 className="text-xl font-semibold mb-2">Welcome to TaskAI</h3>
-                <p className="text-muted-foreground mb-6">
-                  I'm your AI task management assistant. I can help you create tasks, 
-                  organize projects, and manage your workflow through natural language.
-                </p>
-                <div className="space-y-2 text-sm">
-                  <Card className="p-3">
-                    <CardContent className="p-0">
-                      <strong>Try asking:</strong>
-                      <ul className="mt-2 space-y-1 text-left">
-                        <li>• "Create a task to review the quarterly report"</li>
-                        <li>• "Show me my active tasks"</li>
-                        <li>• "Create a project for the website redesign"</li>
-                        <li>• "Delete the 'Old Project'"</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {messages
-                .filter(msg => msg.role === "user" || msg.role === "assistant")
-                .map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                >
-                  <Avatar className="w-8 h-8 flex-shrink-0">
-                    <AvatarFallback className="bg-muted">
-                      {msg.role === "user" ? "👤" : "🤖"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 max-w-[80%]">
-                    <div className={`flex items-center gap-2 mb-1 ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
-                    }`}>
-                      <span className="text-sm font-medium">
-                        {msg.role === "user" ? "You" : "AI Assistant"}
-                      </span>
-                      <time className="text-xs text-muted-foreground">
-                        {formatTimestamp(msg.timestamp)}
-                      </time>
+        ) : (
+          /* Messages List */
+          <div className="flex-1 overflow-y-auto p-4 bg-background">
+            <div className="max-w-3xl mx-auto space-y-3 px-8">
+              {messages.map((msg) => (
+                <div key={msg.id}>
+                  {msg.role === "user" ? (
+                    /* User Message - Left aligned within centered container */
+                    <div className="flex justify-start">
+                      <div className="bg-primary text-primary-foreground rounded-lg px-3 py-2 shadow-sm flex items-center gap-2 max-w-[90%]">
+                        <Avatar className="w-5 h-5 flex-shrink-0">
+                          <AvatarFallback className="bg-primary-foreground text-primary text-xs font-medium">W</AvatarFallback>
+                        </Avatar>
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
                     </div>
-                    <Card className={`${msg.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"}`}>
-                      <CardContent className="p-3">
-                        {typeof msg.content === 'string' && (
-                          <div className="whitespace-pre-wrap text-sm">{msg.content}</div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
+                  ) : (
+                    /* AI Message - Left aligned within centered container */
+                    <div className="flex justify-start">
+                      <div className="bg-muted/30 rounded-lg px-3 py-2 max-w-[90%]">
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               
-              {isLoading && (
-                <div className="flex gap-3">
-                  <Avatar className="w-8 h-8 flex-shrink-0">
-                    <AvatarFallback className="bg-muted">
-                      🤖
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 max-w-[80%]">
-                    <Card className="bg-muted">
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Thinking...</span>
-                        </div>
-                      </CardContent>
-                    </Card>
+              {/* Typing Indicator */}
+              {isGenerating && (
+                <div className="flex justify-start">
+                  <div className="bg-muted/30 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Typing...</span>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          )}
-          <div ref={messagesEndRef} />
+          </div>
+        )}
       </div>
 
-      {/* Input - Fixed at bottom */}
-      <div className="flex-shrink-0 bg-background border-t border-border p-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
-            type="text"
-            className="flex-1"
-            placeholder="Ask me to create a task, show your projects, or help with your workflow..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isLoading}
-            autoFocus
-          />
-          <Button
-            type="submit"
-            disabled={!message.trim() || isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </Button>
-        </form>
-        <div className="text-xs text-center text-muted-foreground mt-2">
-          Press Enter to send, Shift+Enter for new line
+      {/* Input Area - Clean single border */}
+      <div className="bg-background p-6 flex justify-center">
+        <div className="w-full max-w-3xl">
+          <form onSubmit={handleSubmit}>
+            <MessageInput
+              value={input}
+              onChange={handleInputChange}
+              isGenerating={isGenerating}
+              placeholder="Type a message..."
+              allowAttachments={false}
+              className="bg-card/90 border-0 rounded-xl shadow-lg"
+              stop={isGenerating ? () => setIsGenerating(false) : undefined}
+            />
+          </form>
         </div>
       </div>
     </div>
