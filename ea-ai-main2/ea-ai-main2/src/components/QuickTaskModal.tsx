@@ -92,19 +92,19 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md border-gray-200 shadow-sm">
-        <DialogHeader className="border-b border-gray-100 pb-4">
-          <DialogTitle className="text-lg font-medium">Quick Add Task</DialogTitle>
+      <DialogContent className="sm:max-w-md md:max-w-lg border-border shadow-sm">
+        <DialogHeader className="border-b border-border/30 pb-3 sm:pb-4">
+          <DialogTitle className="text-base sm:text-lg font-medium">Quick Add Task</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 pt-2">
           <div className="space-y-2">
             <Input
               placeholder="Task name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
-              className="border-gray-200 text-sm font-medium focus:border-gray-300 focus:ring-0"
+              className="border-border text-sm sm:text-base font-medium focus:border-ring/50 focus:ring-ring/20"
             />
           </div>
           

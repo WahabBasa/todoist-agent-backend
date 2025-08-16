@@ -64,6 +64,41 @@ Once running, you can interact with TaskAI through natural language:
 **📍 Main Active Project Location**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\ea-ai-main2\ea-ai-main2\` 
 This is the primary working directory containing both frontend and backend code.
 
+### Design Reference - TodoVex
+
+**📍 Reference Project Location**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\references\todoist-clone-todovex\`
+
+This is the TodoVex project - a high-quality Todoist clone that serves as our primary design and architecture reference. We use this project to guide our UI/UX decisions, component structure, and overall application design patterns.
+
+#### TodoVex Directory Structure
+```
+├── app/                       # Next.js 13+ App Router structure
+│   ├── api/auth/              # NextAuth.js authentication endpoints
+│   ├── loggedin/              # Protected routes (main app pages)
+│   │   ├── projects/          # Project-specific pages
+│   │   ├── today/             # Today view page
+│   │   ├── upcoming/          # Upcoming tasks page
+│   │   └── search/            # Search functionality
+│   └── globals.css            # Global styles
+├── components/                # React components organized by feature
+│   ├── add-tasks/             # Task creation components
+│   ├── containers/            # Page container components
+│   ├── nav/                   # Navigation components
+│   ├── projects/              # Project management components
+│   ├── todos/                 # Task/todo components
+│   └── ui/                    # shadcn/ui components
+├── convex/                    # Convex backend (similar to our structure)
+│   ├── auth.ts               # Authentication functions
+│   ├── projects.ts           # Project management
+│   ├── todos.ts              # Task operations
+│   ├── labels.ts             # Label/tag system
+│   └── schema.ts             # Database schema
+├── actions/                   # Server actions
+├── lib/                       # Utility functions
+└── public/                    # Static assets
+```
+
+### Main Project Structure
 ```
 ├── convex/                    # Backend functions and database schema
 │   ├── _generated/           # Auto-generated Convex files

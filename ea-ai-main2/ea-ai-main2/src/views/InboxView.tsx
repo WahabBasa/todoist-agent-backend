@@ -63,7 +63,7 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="flex items-center space-x-3 border-b border-gray-100 p-3 animate-in fade-in hover:bg-gray-50/50 transition-colors"
+      className="flex items-center space-x-3 p-3 sm:p-4 mb-2 rounded-lg bg-card hover:bg-accent/50 border border-border/50 transition-all duration-200 hover:shadow-sm"
     >
       <Checkbox
         checked={isCompleted}
@@ -74,8 +74,8 @@ export function InboxView() {
       <div className="flex flex-col items-start flex-1">
         <div className="flex items-center gap-2 w-full">
           <h3 
-            className={`text-sm font-medium ${
-              isCompleted ? 'line-through text-foreground/30' : 'text-foreground'
+            className={`text-base font-semibold ${
+              isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
             }`}
           >
             {task.title}
@@ -135,41 +135,41 @@ export function InboxView() {
 
   const AddTaskButton = () => (
     <button 
-      className="flex items-center gap-2 p-3 text-left w-full hover:bg-gray-50/50 transition-colors border-b border-gray-100"
+      className="flex items-center gap-2 p-3 sm:p-4 text-left w-full hover:bg-accent/50 transition-all duration-200 rounded-lg border border-dashed border-border/60 mt-2"
       onClick={() => setShowAddTask(true)}
     >
-      <Plus className="h-4 w-4 text-primary hover:bg-primary hover:rounded-xl hover:text-white transition-colors" />
-      <span className="text-sm font-light text-foreground/70">
+      <Plus className="h-4 w-4 text-muted-foreground" />
+      <span className="text-sm font-medium text-muted-foreground">
         Add task
       </span>
     </button>
   );
 
   return (
-    <div className="xl:px-40">
+    <div className="h-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-24 py-4 sm:py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold md:text-2xl">Inbox</h1>
+      <div className="flex items-center justify-between mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">Inbox</h1>
       </div>
 
       {/* Incomplete Tasks */}
       <div className="flex flex-col gap-0">
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-              <InboxIcon className="h-8 w-8 text-foreground/50" />
+          <div className="flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 text-center">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-accent rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-border/30">
+              <InboxIcon className="h-8 w-8 sm:h-10 sm:w-10 text-foreground/70" />
             </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">
+            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-3">
               Your inbox is empty
             </h3>
-            <p className="text-foreground/70 mb-6 max-w-sm">
+            <p className="text-base sm:text-lg text-muted-foreground mb-8 max-w-md leading-relaxed">
               When you add a task, it'll show up here.
             </p>
             <Button 
               onClick={() => setShowAddTask(true)}
-              variant="outline"
-              className="border-gray-200 hover:bg-gray-50"
+              size="lg"
+              className="bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-sm"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first task
@@ -196,9 +196,9 @@ export function InboxView() {
 
       {/* Completed Tasks */}
       {completedTasks && completedTasks.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center gap-2 mb-4 p-3">
-            <h2 className="text-sm font-medium text-foreground/70">
+        <div className="mt-6 sm:mt-8">
+          <div className="flex items-center gap-2 mb-4 p-3 sm:p-4">
+            <h2 className="text-sm font-medium text-muted-foreground">
               Completed ({completedTasks.length})
             </h2>
           </div>

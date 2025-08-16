@@ -62,11 +62,10 @@ body::-webkit-scrollbar {
 body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none; 
-     
-}
-
-body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @theme inline {
@@ -116,36 +115,36 @@ body {
 :root {
   --radius: 0.5rem;
   --background: oklch(100% 0 0);                /* Pure white */
-  --foreground: oklch(13% 0 0);                 /* Pure black */
+  --foreground: oklch(8% 0 0);                  /* Much darker text */
   --card: oklch(100% 0 0);                      /* Pure white */
-  --card-foreground: oklch(13% 0 0);            /* Pure black */
+  --card-foreground: oklch(8% 0 0);             /* Much darker text */
   --popover: oklch(100% 0 0);                   /* Pure white */
-  --popover-foreground: oklch(13% 0 0);         /* Pure black */
-  --primary: oklch(45% 0 0);                    /* Medium grey - no blue */
+  --popover-foreground: oklch(8% 0 0);          /* Much darker text */
+  --primary: oklch(25% 0 0);                    /* Much darker primary */
   --primary-foreground: oklch(100% 0 0);        /* White */
-  --secondary: oklch(96% 0 0);                  /* Light grey */
-  --secondary-foreground: oklch(13% 0 0);       /* Black */
-  --muted: oklch(96% 0 0);                      /* Light grey */
-  --muted-foreground: oklch(45% 0 0);           /* Medium grey */
-  --accent: oklch(90% 0 0);                     /* Very light grey */
-  --accent-foreground: oklch(13% 0 0);          /* Black */
+  --secondary: oklch(96% 0 0);                  /* Light grey background */
+  --secondary-foreground: oklch(8% 0 0);        /* Dark text */
+  --muted: oklch(94% 0 0);                      /* More visible muted bg */
+  --muted-foreground: oklch(35% 0 0);           /* Much darker muted text */
+  --accent: oklch(94% 0 0);                     /* Light accent bg */
+  --accent-foreground: oklch(8% 0 0);           /* Dark accent text */
   --destructive: oklch(60% 0.20 0);             /* Error red */
-  --border: oklch(90% 0 0);                     /* Light grey border */
-  --input: oklch(96% 0 0);                      /* Very light grey input */
-  --ring: oklch(45% 0 0);                       /* Medium grey focus */
+  --border: oklch(88% 0 0);                     /* More visible borders */
+  --input: oklch(98% 0 0);                      /* Input background */
+  --ring: oklch(25% 0 0);                       /* Darker focus ring */
   --chart-1: oklch(45% 0 0);                    /* Medium grey */
   --chart-2: oklch(52% 0.15 158);               /* Green */
   --chart-3: oklch(60% 0 0);                    /* Dark grey */
   --chart-4: oklch(56% 0.18 43);                /* Yellow */
   --chart-5: oklch(60% 0.20 0);                 /* Red */
-  --sidebar: oklch(100% 0 0);                   /* Pure white */
-  --sidebar-foreground: oklch(13% 0 0);         /* Pure black */
-  --sidebar-primary: oklch(45% 0 0);            /* Medium grey */
+  --sidebar: oklch(98% 0 0);                    /* Slightly off-white */
+  --sidebar-foreground: oklch(8% 0 0);          /* Much darker text */
+  --sidebar-primary: oklch(25% 0 0);            /* Dark primary */
   --sidebar-primary-foreground: oklch(100% 0 0); /* White */
-  --sidebar-accent: oklch(96% 0 0);             /* Light grey */
-  --sidebar-accent-foreground: oklch(13% 0 0);  /* Black */
-  --sidebar-border: oklch(90% 0 0);             /* Light grey border */
-  --sidebar-ring: oklch(45% 0 0);               /* Medium grey */
+  --sidebar-accent: oklch(92% 0 0);             /* More visible accent */
+  --sidebar-accent-foreground: oklch(8% 0 0);   /* Dark text */
+  --sidebar-border: oklch(85% 0 0);             /* More visible border */
+  --sidebar-ring: oklch(25% 0 0);               /* Darker ring */
   
   /* Shiki syntax highlighting (light theme) */
   --shiki-light: oklch(13% 0 0);                /* Dark text for light theme */
@@ -199,7 +198,27 @@ body {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-medium;
+  }
+  
+  /* Enhanced typography hierarchy */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-foreground;
+  }
+  
+  /* Better sidebar text */
+  [data-sidebar="sidebar"] {
+    @apply text-sidebar-foreground font-medium;
+  }
+  
+  /* Improved button text */
+  button {
+    @apply font-medium;
+  }
+  
+  /* Better navigation text */
+  [data-sidebar="menu-button"] {
+    @apply font-medium text-sidebar-foreground;
   }
 }
 
@@ -212,6 +231,36 @@ body {
   
   .scrollbar-hide::-webkit-scrollbar {
     display: none;            /* Chrome, Safari, Opera */
+  }
+
+  /* Responsive spacing utilities */
+  .space-responsive {
+    @apply space-y-2 sm:space-y-3 md:space-y-4;
+  }
+  
+  /* Better focus states for mobile */
+  .focus-mobile {
+    @apply focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none;
+  }
+  
+  /* Improved touch targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Enhanced card shadows */
+  .card-shadow {
+    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+  
+  /* Better text contrast */
+  .text-enhanced {
+    @apply text-foreground font-medium;
+  }
+  
+  /* Improved hover states */
+  .hover-enhanced {
+    @apply hover:bg-accent/60 transition-all duration-200;
   }
 }
 
