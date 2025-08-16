@@ -122,7 +122,7 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="flex items-center space-x-3 p-system-3 rounded-lg theme-bg-ultra-light backdrop-blur-sm border theme-border-light shadow-sm hover:shadow-md theme-hover transition-all duration-200"
+      className="flex items-center space-x-3 p-system-3 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md hover:bg-gray-50/50 transition-all duration-200"
     >
       <Checkbox
         checked={isCompleted}
@@ -133,8 +133,8 @@ export function InboxView() {
       <div className="flex flex-col items-start flex-1">
         <div className="flex items-center gap-2 w-full">
           <h3 
-            className={`text-system-base font-system-medium ${
-              isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
+            className={`text-base font-medium ${
+              isCompleted ? 'line-through text-gray-400' : 'text-gray-800'
             }`}
           >
             {task.title}
@@ -142,7 +142,7 @@ export function InboxView() {
           {task.priority && task.priority !== 3 && (
             <Badge 
               variant={getPriorityVariant(task.priority)}
-              className="text-system-xs font-system-medium"
+              className="text-sm text-gray-600 font-medium"
             >
               {getPriorityLabel(task.priority)}
             </Badge>
@@ -150,12 +150,12 @@ export function InboxView() {
         </div>
         
         {task.description && (
-          <p className="text-system-sm text-foreground/85 mt-0.5">
+          <p className="text-base text-gray-600 mt-0.5">
             {task.description}
           </p>
         )}
         
-        <div className="flex items-center gap-system-3 mt-1.5 text-system-xs text-foreground/75">
+        <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
           {task.dueDate && (
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
@@ -181,7 +181,7 @@ export function InboxView() {
           {task.tags && task.tags.length > 0 && (
             <div className="flex gap-1">
               {task.tags.map((tag, index) => (
-                <span key={index} className="text-xs text-foreground/70">
+                <span key={index} className="text-sm text-gray-500">
                   #{tag}
                 </span>
               ))}
@@ -194,22 +194,22 @@ export function InboxView() {
 
   const AddTaskButton = () => (
     <button 
-      className="flex items-center gap-2 p-3 text-left w-full theme-bg-extra-light border border-dashed theme-border-light theme-hover transition-all duration-200 rounded-lg mt-2"
+      className="flex items-center gap-2 p-3 text-left w-full bg-white border border-dashed border-gray-200 hover:bg-gray-50 transition-all duration-200 rounded-lg mt-2"
       onClick={() => setShowAddTask(true)}
     >
       <Plus className="h-4 w-4 text-muted-foreground/70" />
-      <span className="text-sm text-muted-foreground/70">
+      <span className="text-base text-gray-500">
         Add task
       </span>
     </button>
   );
 
   return (
-    <div className="h-screen theme-bg-light">
-      <div className="max-w-system-content mx-auto space-y-4 px-system-8 pt-system-16 pb-system-6">
+    <div className="h-screen bg-gray-50">
+      <div className="max-w-3xl mx-auto space-y-4 px-8 pt-16 pb-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-system-xl font-system-semibold text-foreground">Inbox</h1>
+          <h1 className="text-lg font-semibold text-gray-900">Inbox</h1>
         </div>
 
         {/* Incomplete Tasks */}
@@ -217,19 +217,19 @@ export function InboxView() {
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-12 h-12 theme-bg-extra-light border theme-border-light rounded-xl flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center mb-4">
               <InboxIcon className="h-6 w-6 text-muted-foreground/70" />
             </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">
+            <h3 className="text-lg font-medium text-gray-800 mb-2">
               Your inbox is empty
             </h3>
-            <p className="text-sm text-muted-foreground/80 mb-6 max-w-sm">
+            <p className="text-base text-gray-600 mb-6 max-w-sm">
               When you add a task, it'll show up here.
             </p>
             <Button 
               onClick={() => setShowAddTask(true)}
               size="sm"
-              className="text-sm btn-primary-blue"
+              className="text-base bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first task

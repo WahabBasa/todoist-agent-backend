@@ -246,6 +246,12 @@ body {
   .text-system-lg { font-size: var(--text-lg); }
   .text-system-xl { font-size: var(--text-xl); }
   .text-system-2xl { font-size: var(--text-2xl); }
+  
+  /* Text Lightness Utilities */
+  .text-lightness-primary { color: var(--text-primary); }
+  .text-lightness-main { color: var(--text-main); }
+  .text-lightness-secondary { color: var(--text-secondary); }
+  .text-lightness-tertiary { color: var(--text-tertiary); }
 
   .font-system-normal { font-weight: var(--font-normal); }
   .font-system-medium { font-weight: var(--font-medium); }
@@ -284,6 +290,13 @@ body {
   /* Layout Utilities */
   .max-w-system-content { max-width: 48rem; }
   .sidebar-w { width: var(--sidebar-width); }
+  
+  /* Border & Background Utilities */
+  .border-system-default { border-color: var(--border-default); }
+  .border-system-subtle { border-color: var(--border-subtle); }
+  .bg-system-subtle { background-color: var(--bg-subtle); }
+  .bg-system-hover { background-color: var(--bg-hover); }
+  .hover-system { @apply hover:bg-system-hover transition-colors duration-200; }
 }
 
 /* Hide ScrollArea scrollbars specifically */
@@ -377,19 +390,25 @@ body {
 
 /* === CENTRALIZED DESIGN SYSTEM === */
 
-/* Typography Scale */
+/* Typography Scale - Simplified 3-size system */
 :root {
-  --text-xs: 0.75rem;     /* 12px */
-  --text-sm: 0.875rem;    /* 14px */
-  --text-base: 1rem;      /* 16px */
-  --text-lg: 1.125rem;    /* 18px */
-  --text-xl: 1.25rem;     /* 20px */
-  --text-2xl: 1.5rem;     /* 24px */
+  --text-xs: 0.75rem;     /* 12px - keep for compatibility */
+  --text-sm: 0.875rem;    /* 14px - metadata, small text */
+  --text-base: 1rem;      /* 16px - main content */
+  --text-lg: 1.125rem;    /* 18px - headings, important text */
+  --text-xl: 1.25rem;     /* 20px - keep for compatibility */
+  --text-2xl: 1.5rem;     /* 24px - keep for compatibility */
   
   --font-normal: 400;
   --font-medium: 500;
   --font-semibold: 600;
   --font-bold: 700;
+  
+  /* Text Lightness Hierarchy */
+  --text-primary: oklch(8% 0 0);     /* 100% attention - user input, primary actions */
+  --text-main: oklch(20% 0 0);       /* 85% attention - main content, active items */
+  --text-secondary: oklch(35% 0 0);  /* 65% attention - descriptions, inactive items */
+  --text-tertiary: oklch(55% 0 0);   /* 45% attention - metadata, placeholders */
 }
 
 /* Spacing Scale */
@@ -402,6 +421,12 @@ body {
   --space-8: 2rem;        /* 32px */
   --space-12: 3rem;       /* 48px */
   --space-16: 4rem;       /* 64px */
+  
+  /* Border & Background System */
+  --border-default: oklch(92% 0 0);
+  --border-subtle: oklch(96% 0 0);
+  --bg-subtle: oklch(98% 0 0);
+  --bg-hover: oklch(96% 0 0);
 }
 
 /* Component Sizes */

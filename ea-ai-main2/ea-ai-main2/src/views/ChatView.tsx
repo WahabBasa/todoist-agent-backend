@@ -123,16 +123,16 @@ export function ChatView() {
 
 
   return (
-    <div className="h-full flex flex-col theme-bg-ultra-light">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Messages Container - Full height, seamless background */}
-      <div className="flex-1 overflow-hidden flex flex-col theme-bg-ultra-light">
+      <div className="flex-1 overflow-hidden flex flex-col bg-gray-50">
         {messages.length === 0 ? (
           /* Empty State */
-          <div className="flex-1 flex flex-col items-center justify-center p-6 theme-bg-ultra-light">
+          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
             <div className="text-center mb-6">
-              <div className="text-4xl mb-3">💬</div>
-              <h3 className="text-lg font-medium mb-2">Start a conversation</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
+              <div className="mb-3"></div>
+              <h3 className="text-system-lg font-system-medium text-lightness-main mb-2">Start a conversation</h3>
+              <p className="text-system-base text-lightness-secondary max-w-md">
                 Ask me to create tasks, manage projects, or help with your workflow
               </p>
             </div>
@@ -147,7 +147,7 @@ export function ChatView() {
           </div>
         ) : (
           /* Messages List */
-          <div className="flex-1 overflow-y-auto p-4 theme-bg-ultra-light">
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
             <div className="max-w-3xl mx-auto space-y-3 px-8">
               {messages.map((msg) => (
                 <div key={msg.id}>
@@ -158,14 +158,14 @@ export function ChatView() {
                         <Avatar className="w-5 h-5 flex-shrink-0">
                           <AvatarFallback className="bg-primary-foreground text-primary text-xs font-medium">W</AvatarFallback>
                         </Avatar>
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-system-base text-lightness-primary whitespace-pre-wrap">{msg.content}</p>
                       </div>
                     </div>
                   ) : (
                     /* AI Message - Left aligned within centered container */
                     <div className="flex justify-start">
                       <div className="bg-muted/30 rounded-lg px-3 py-2 max-w-[90%]">
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-system-base text-lightness-main whitespace-pre-wrap">{msg.content}</p>
                       </div>
                     </div>
                   )}
@@ -176,7 +176,7 @@ export function ChatView() {
               {isGenerating && (
                 <div className="flex justify-start">
                   <div className="bg-muted/30 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-system-base text-lightness-secondary">
                       <Loader2 className="w-3 h-3 animate-spin" />
                       <span>Typing...</span>
                     </div>

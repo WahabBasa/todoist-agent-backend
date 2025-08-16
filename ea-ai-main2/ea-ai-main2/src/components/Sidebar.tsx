@@ -64,7 +64,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     <ShadcnSidebar collapsible="icon" className="w-[240px] sm:w-[260px] md:w-[280px]">
       {/* App Header */}
       <SidebarHeader className="flex flex-row items-center justify-between p-system-3 sm:p-system-4 border-b border-sidebar-border">
-        <h1 className="font-system-bold text-system-lg sm:text-system-xl account-blue-text group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
+        <h1 className="font-bold text-lg text-blue-600 group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
         <SidebarTrigger className="h-8 w-8 shrink-0" />
       </SidebarHeader>
 
@@ -72,7 +72,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {/* Add Task Button */}
         <div className="py-system-3">
           <Button 
-            className="w-full flex items-center gap-system-2 text-system-sm font-system-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-system-md shadow-sm btn-primary-blue"
+            className="w-full flex items-center gap-2 text-base font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
             onClick={() => handleItemClick("tasks")}
           >
             <Plus className="h-4 w-4 shrink-0" />
@@ -91,11 +91,11 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
                       isActive={activeView === item.id}
-                      className="h-system-sm sm:h-system-md px-system-3 gap-system-3 hover:bg-sidebar-accent text-system-sm font-system-medium"
+                      className="h-system-sm sm:h-system-md px-system-3 gap-system-3 hover:bg-sidebar-accent text-system-base font-system-medium"
                     >
                       <div className="flex items-center gap-system-3 min-w-0 flex-1">
                         <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate text-lightness-main">{item.label}</span>
                       </div>
                       {item.count !== undefined && item.count > 0 && (
                         <Badge 
@@ -121,7 +121,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
             <Button
               variant="ghost"
               onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-              className="w-full justify-between h-system-sm px-system-3 text-system-sm font-system-semibold text-sidebar-foreground hover:bg-sidebar-accent"
+              className="w-full justify-between h-system-sm px-system-3 text-system-base font-system-semibold text-lightness-secondary hover:bg-sidebar-accent"
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="truncate">My Projects</span>
@@ -145,7 +145,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick("projects")}
                       isActive={activeView === "projects"}
-                      className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-sm font-medium"
+                      className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-system-base font-system-medium text-lightness-secondary"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Hash className={`h-4 w-4 shrink-0 ${getProjectIconColor()}`} />
@@ -159,7 +159,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     onClick={() => handleItemClick("projects")}
-                    className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-sidebar-foreground/70 text-sm font-medium"
+                    className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-system-base font-system-medium text-lightness-tertiary"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <Plus className="h-4 w-4 shrink-0" />
