@@ -123,12 +123,12 @@ export function ChatView() {
 
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="h-full flex flex-col theme-bg-ultra-light">
       {/* Messages Container - Full height, seamless background */}
-      <div className="flex-1 overflow-hidden flex flex-col bg-background">
+      <div className="flex-1 overflow-hidden flex flex-col theme-bg-ultra-light">
         {messages.length === 0 ? (
           /* Empty State */
-          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background">
+          <div className="flex-1 flex flex-col items-center justify-center p-6 theme-bg-ultra-light">
             <div className="text-center mb-6">
               <div className="text-4xl mb-3">💬</div>
               <h3 className="text-lg font-medium mb-2">Start a conversation</h3>
@@ -147,7 +147,7 @@ export function ChatView() {
           </div>
         ) : (
           /* Messages List */
-          <div className="flex-1 overflow-y-auto p-4 bg-background">
+          <div className="flex-1 overflow-y-auto p-4 theme-bg-ultra-light">
             <div className="max-w-3xl mx-auto space-y-3 px-8">
               {messages.map((msg) => (
                 <div key={msg.id}>

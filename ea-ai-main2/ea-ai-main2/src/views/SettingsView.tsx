@@ -29,7 +29,7 @@ export function SettingsView() {
   }
 
   return (
-    <div className="overflow-y-auto h-full p-4">
+    <div className="overflow-y-auto h-full p-4 theme-bg-light">
       <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div>

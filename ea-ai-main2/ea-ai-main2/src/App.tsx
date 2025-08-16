@@ -111,8 +111,8 @@ function LandingPage() {
     <div className="min-h-screen relative">
       {/* Two-tone Background */}
       <div className="absolute inset-0 flex">
-        <div className="flex-1 bg-muted/60"></div> {/* Left half - darker */}
-        <div className="flex-1 bg-background"></div> {/* Right half - lighter */}
+        <div className="flex-1 theme-bg-medium"></div> {/* Left half - darker */}
+        <div className="flex-1 theme-bg-ultra-light"></div> {/* Right half - lighter */}
       </div>
       
       {/* Header */}

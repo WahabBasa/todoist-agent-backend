@@ -128,7 +128,7 @@ export function TasksView() {
                       filterCompleted === "all" ? filteredTasks : activeTasks;
 
   return (
-    <div className="overflow-y-auto h-full p-4">
+    <div className="overflow-y-auto h-full p-4 theme-bg-light">
       <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
