@@ -15,6 +15,7 @@ import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
 import { ProjectsView } from "./views/ProjectsView";
 import { SettingsView } from "./views/SettingsView";
+import { InboxView } from "./views/InboxView";
 import { ThemeTest, useThemeDebug } from "./components/ThemeTest";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/sidebar";
 
@@ -37,12 +38,14 @@ export default function App() {
 }
 
 function MainApp() {
-  const [activeView, setActiveView] = useState<"chat" | "tasks" | "projects" | "settings">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "inbox" | "tasks" | "projects" | "settings">("chat");
 
   const renderActiveView = () => {
     switch (activeView) {
       case "chat":
         return <ChatView />;
+      case "inbox":
+        return <InboxView />;
       case "tasks":
         return <TasksView />;
       case "projects":

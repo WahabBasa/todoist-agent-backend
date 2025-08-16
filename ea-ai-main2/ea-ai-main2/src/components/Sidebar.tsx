@@ -22,8 +22,8 @@ import {
 } from "./ui/sidebar";
 
 interface SidebarProps {
-  activeView: "chat" | "tasks" | "projects" | "settings";
-  onViewChange: (view: "chat" | "tasks" | "projects" | "settings") => void;
+  activeView: "chat" | "inbox" | "tasks" | "projects" | "settings";
+  onViewChange: (view: "chat" | "inbox" | "tasks" | "projects" | "settings") => void;
 }
 
 export function Sidebar({ activeView, onViewChange }: SidebarProps) {
@@ -43,7 +43,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
 
   const navigationItems = [
     { 
-      id: "tasks", 
+      id: "inbox", 
       label: "Inbox", 
       icon: Inbox, 
       count: inboxCount
@@ -80,7 +80,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     "text-red-500"
   ];
 
-  const handleItemClick = (viewId: "chat" | "tasks" | "projects" | "settings") => {
+  const handleItemClick = (viewId: "chat" | "inbox" | "tasks" | "projects" | "settings") => {
     onViewChange(viewId);
   };
 
@@ -113,8 +113,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 return (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton
-                      onClick={() => handleItemClick(item.id as "chat" | "tasks" | "projects" | "settings")}
-                      isActive={activeView === item.id && item.label === "Inbox"}
+                      onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
+                      isActive={activeView === item.id}
                       className="h-8 px-2 gap-3 hover:bg-muted/50"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">

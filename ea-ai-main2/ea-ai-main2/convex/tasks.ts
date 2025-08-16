@@ -306,3 +306,36 @@ export const getTaskDetails = query({
     };
   },
 });
+
+export const getInboxTasks = query({
+  args: {
+    completed: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get tasks that don't belong to any project (inbox tasks)
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    // Filter for inbox tasks (no projectId) and completion status
+    const inboxTasks = tasks.filter(task => {
+      const isInboxTask = !task.projectId;
+      const matchesCompletionFilter = args.completed !== undefined 
+        ? task.isCompleted === args.completed 
+        : !task.isCompleted; // Default to active tasks
+      
+      return isInboxTask && matchesCompletionFilter;
+    });
+
+    // Sort by creation time (newest first)
+    inboxTasks.sort((a, b) => b._creationTime - a._creationTime);
+
+    return inboxTasks;
+  },
+});

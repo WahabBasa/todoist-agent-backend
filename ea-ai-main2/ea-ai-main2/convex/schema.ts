@@ -29,7 +29,7 @@ const applicationTables = {
 
   conversations: defineTable({
     userId: v.id("users"),
-    messages: v.array(v.object({
+    messages: v.optional(v.array(v.object({
       role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
       content: v.optional(v.string()),
       toolCalls: v.optional(v.array(v.object({
@@ -43,7 +43,7 @@ const applicationTables = {
         result: v.any(),
       }))),
       timestamp: v.number(),
-    })),
+    }))),
   }).index("by_user", ["userId"]),
 };
 
