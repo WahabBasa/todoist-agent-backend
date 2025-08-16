@@ -262,4 +262,34 @@ body {
     border-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
   }
 
+  /* Grey-Blue Background Theme */
+  .inbox-bg {
+    background-color: oklch(98.5% 0.005 252.12); /* Extremely light silver-blue tint */
+  }
+  
+  /* Primary Blue Theme Components */
+  .btn-primary-blue {
+    background-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
+    color: white;
+    border: 1px solid oklch(59.69% 0.165 252.12);
+  }
+  
+  .btn-primary-blue:hover {
+    background-color: oklch(54% 0.165 252.12); /* Darker blue on hover */
+    border-color: oklch(54% 0.165 252.12);
+  }
+  
+  /* Checkbox Primary Blue */
+  .checkbox-primary-blue[data-state="checked"] {
+    background-color: oklch(59.69% 0.165 252.12);
+    border-color: oklch(59.69% 0.165 252.12);
+  }
+  
+  /* Blue Priority Theme */
+  .priority-blue {
+    color: oklch(59.69% 0.165 252.12);
+    background-color: oklch(96% 0.02 252.12);
+    border-color: oklch(89% 0.03 252.12);
+  }
+
 }

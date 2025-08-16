@@ -16,7 +16,6 @@ import { TasksView } from "./views/TasksView";
 import { ProjectsView } from "./views/ProjectsView";
 import { SettingsView } from "./views/SettingsView";
 import { InboxView } from "./views/InboxView";
-import { ThemeTest, useThemeDebug } from "./components/ThemeTest";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/sidebar";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "./components/ui/dropdown-menu";
@@ -27,10 +26,6 @@ export default function App() {
   return (
     <div className="h-full">
       <Toaster position="top-right" />
-      {/* DEBUG: Theme Test Component */}
-      <div data-testid="theme-test">
-        <ThemeTest />
-      </div>
       <Authenticated>
         <MainApp />
       </Authenticated>
@@ -68,15 +63,8 @@ function MainApp() {
         onViewChange={setActiveView}
       />
       <SidebarInset className="flex flex-col min-h-screen flex-1">
-        {/* Header */}
-        <header className="flex h-12 md:h-14 lg:h-16 shrink-0 items-center gap-2 px-3 sm:px-4 md:px-6">
-          <div className="flex-1">
-            {/* Header content can go here if needed */}
-          </div>
-        </header>
-        
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto">
+        {/* Main Content Area - Full Screen */}
+        <main className="flex-1 h-screen overflow-auto">
           {renderActiveView()}
         </main>
       </SidebarInset>

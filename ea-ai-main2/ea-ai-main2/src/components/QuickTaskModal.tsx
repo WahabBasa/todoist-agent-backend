@@ -82,11 +82,11 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
 
   const getPriorityColor = (priority: number) => {
     switch (priority) {
-      case 1: return "text-red-600 bg-red-50 border-red-200";
-      case 2: return "text-orange-600 bg-orange-50 border-orange-200";
-      case 3: return "text-blue-600 bg-blue-50 border-blue-200";
-      case 4: return "text-green-600 bg-green-50 border-green-200";
-      default: return "text-blue-600 bg-blue-50 border-blue-200";
+      case 1: return "priority-blue font-semibold"; // High priority - bold blue
+      case 2: return "priority-blue"; // Medium priority - blue
+      case 3: return "priority-blue"; // Normal priority - blue
+      case 4: return "priority-blue opacity-70"; // Low priority - muted blue
+      default: return "priority-blue";
     }
   };
 
@@ -135,28 +135,28 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
               <SelectContent className="border-gray-200">
                 <SelectItem value="1">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs text-red-600 bg-red-50 border-red-200">
+                    <Badge variant="outline" className="text-xs priority-blue font-semibold">
                       High
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs text-orange-600 bg-orange-50 border-orange-200">
+                    <Badge variant="outline" className="text-xs priority-blue">
                       Medium
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="3">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs text-blue-600 bg-blue-50 border-blue-200">
+                    <Badge variant="outline" className="text-xs priority-blue">
                       Normal
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="4">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs text-green-600 bg-green-50 border-green-200">
+                    <Badge variant="outline" className="text-xs priority-blue opacity-70">
                       Low
                     </Badge>
                   </div>
@@ -177,7 +177,7 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
             <Button 
               type="submit" 
               disabled={isSubmitting || !title.trim()}
-              className="flex-1 bg-primary hover:bg-primary/90 text-white border-0"
+              className="flex-1 btn-primary-blue border-0"
             >
               {isSubmitting ? "Adding..." : "Add Task"}
             </Button>

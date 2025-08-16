@@ -91,8 +91,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {/* Add Task Button */}
         <div className="py-3">
           <Button 
-            variant="destructive"
-            className="w-full flex items-center gap-2 text-sm font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm"
+            className="w-full flex items-center gap-2 text-sm font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm btn-primary-blue"
             onClick={() => handleItemClick("tasks")}
           >
             <Plus className="h-4 w-4 shrink-0" />

@@ -6,12 +6,17 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
 import { Skeleton } from "../components/ui/skeleton";
+import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { QuickTaskModal } from "../components/QuickTaskModal";
-import { Plus, Inbox as InboxIcon, Calendar, Clock } from "lucide-react";
+import { Plus, Inbox as InboxIcon, Calendar, Clock, Save, X } from "lucide-react";
 
 export function InboxView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<any>(null);
   
   const inboxTasks = useQuery(api.tasks.getInboxTasks, { completed: false });
   const completedTasks = useQuery(api.tasks.getInboxTasks, { completed: true });
@@ -27,6 +32,51 @@ export function InboxView() {
     } catch (error) {
       toast.error("Failed to update task");
     }
+  };
+
+  const handleTaskClick = (task: any, isCompleted: boolean) => {
+    if (isCompleted) return; // Don't expand completed tasks
+    
+    if (expandedTaskId === task._id) {
+      // Collapse if already expanded
+      setExpandedTaskId(null);
+      setEditingTask(null);
+    } else {
+      // Expand and set editing state
+      setExpandedTaskId(task._id);
+      setEditingTask({
+        ...task,
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+        tags: task.tags ? task.tags.join(', ') : ''
+      });
+    }
+  };
+
+  const handleSaveTask = async () => {
+    if (!editingTask) return;
+    
+    try {
+      await updateTask({
+        id: editingTask._id as any,
+        title: editingTask.title,
+        description: editingTask.description || undefined,
+        priority: editingTask.priority,
+        dueDate: editingTask.dueDate ? new Date(editingTask.dueDate).getTime() : undefined,
+        estimatedTime: editingTask.estimatedTime || undefined,
+        tags: editingTask.tags ? editingTask.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : undefined
+      });
+      
+      toast.success("Task updated!");
+      setExpandedTaskId(null);
+      setEditingTask(null);
+    } catch (error) {
+      toast.error("Failed to update task");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setExpandedTaskId(null);
+    setEditingTask(null);
   };
 
   const getPriorityLabel = (priority: number) => {
@@ -72,18 +122,18 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="flex items-center space-x-3 p-2.5 rounded-md bg-muted/20 hover:bg-muted/40 transition-colors duration-200"
+      className="flex items-center space-x-3 p-3 rounded-lg bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all duration-200"
     >
       <Checkbox
         checked={isCompleted}
         onCheckedChange={() => handleToggleTask(task._id as string, isCompleted)}
-        className="w-4 h-4 rounded-md"
+        className="w-5 h-5 rounded-md checkbox-primary-blue border-2 border-gray-400 hover:border-gray-500"
       />
       
       <div className="flex flex-col items-start flex-1">
         <div className="flex items-center gap-2 w-full">
           <h3 
-            className={`text-sm font-medium ${
+            className={`text-base font-medium ${
               isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
             }`}
           >
@@ -92,7 +142,7 @@ export function InboxView() {
           {task.priority && task.priority !== 3 && (
             <Badge 
               variant={getPriorityVariant(task.priority)}
-              className="text-xs"
+              className="text-xs font-medium"
             >
               {getPriorityLabel(task.priority)}
             </Badge>
@@ -100,12 +150,12 @@ export function InboxView() {
         </div>
         
         {task.description && (
-          <p className="text-xs text-muted-foreground/80 mt-0.5">
+          <p className="text-sm text-foreground/85 mt-0.5">
             {task.description}
           </p>
         )}
         
-        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground/70">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-foreground/75">
           {task.dueDate && (
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
@@ -131,7 +181,7 @@ export function InboxView() {
           {task.tags && task.tags.length > 0 && (
             <div className="flex gap-1">
               {task.tags.map((tag, index) => (
-                <span key={index} className="text-xs">
+                <span key={index} className="text-xs text-foreground/70">
                   #{tag}
                 </span>
               ))}
@@ -144,7 +194,7 @@ export function InboxView() {
 
   const AddTaskButton = () => (
     <button 
-      className="flex items-center gap-2 p-2.5 text-left w-full hover:bg-muted/30 transition-colors duration-200 rounded-md border border-dashed border-muted-foreground/30 mt-2"
+      className="flex items-center gap-2 p-3 text-left w-full bg-white border border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 rounded-lg mt-2"
       onClick={() => setShowAddTask(true)}
     >
       <Plus className="h-4 w-4 text-muted-foreground/70" />
@@ -155,19 +205,19 @@ export function InboxView() {
   );
 
   return (
-    <div className="h-full py-4">
-      <div className="max-w-3xl mx-auto space-y-4 px-8">
+    <div className="h-screen inbox-bg">
+      <div className="max-w-3xl mx-auto space-y-4 px-8 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold text-foreground">Inbox</h1>
         </div>
 
         {/* Incomplete Tasks */}
-        <div className="space-y-1">
+        <div className="space-y-2">
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-12 h-12 bg-muted/40 rounded-xl flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center mb-4">
               <InboxIcon className="h-6 w-6 text-muted-foreground/70" />
             </div>
             <h3 className="text-lg font-medium text-foreground mb-2">
@@ -179,7 +229,7 @@ export function InboxView() {
             <Button 
               onClick={() => setShowAddTask(true)}
               size="sm"
-              className="text-sm"
+              className="text-sm btn-primary-blue"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first task
@@ -204,21 +254,6 @@ export function InboxView() {
         )}
         </div>
 
-        {/* Completed Tasks */}
-        {completedTasks && completedTasks.length > 0 && (
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <h2 className="text-sm font-medium text-muted-foreground/80">
-                Completed ({completedTasks.length})
-              </h2>
-            </div>
-            <div className="space-y-1">
-              {completedTasks.map((task) => (
-                <TaskItem key={task._id} task={task} isCompleted={true} />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
