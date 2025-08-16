@@ -29,6 +29,7 @@ const applicationTables = {
 
   conversations: defineTable({
     userId: v.id("users"),
+    // New schema - messages array
     messages: v.optional(v.array(v.object({
       role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
       content: v.optional(v.string()),
@@ -44,7 +45,18 @@ const applicationTables = {
       }))),
       timestamp: v.number(),
     }))),
+    // Legacy schema - temporary optional fields for migration
+    message: v.optional(v.string()),
+    response: v.optional(v.string()),
+    timestamp: v.optional(v.number()),
+    toolCalls: v.optional(v.array(v.any())),
+    // Migration tracking
+    schemaVersion: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+
+  numbers: defineTable({
+    value: v.number(),
+  }),
 };
 
 // The schema is normally optional, but Convex Auth
