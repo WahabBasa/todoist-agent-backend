@@ -1,6 +1,13 @@
 import { useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Switch } from "../components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Skeleton } from "../components/ui/skeleton";
+import { User, Settings, Brain, Shield, AlertTriangle, Download, Trash2, LogOut } from "lucide-react";
 
 export function SettingsView() {
   const user = useQuery(api.myFunctions.getCurrentUser);
@@ -8,8 +15,15 @@ export function SettingsView() {
   
   if (user === undefined) {
     return (
-      <div className="flex justify-center items-center min-h-96">
-        <div className="loading loading-spinner loading-lg"></div>
+      <div className="overflow-y-auto h-full p-4">
+        <div className="space-y-6 max-w-2xl">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
       </div>
     );
   }
@@ -19,205 +33,208 @@ export function SettingsView() {
       <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold">Settings</h2>
-        <p className="text-base-content/70">Manage your account and app preferences</p>
+        <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+        <p className="text-muted-foreground">Manage your account and app preferences</p>
       </div>
       
       {/* User Profile */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title mb-4">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
             Profile
-          </h3>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="flex items-center gap-4">
-            <div className="avatar placeholder">
-              <div className="bg-primary text-primary-content rounded-full w-16">
-                <span className="text-2xl font-bold">
-                  {user?.email?.[0]?.toUpperCase() || "U"}
-                </span>
-              </div>
+            <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+              <span className="text-2xl font-bold">
+                {user?.email?.[0]?.toUpperCase() || "U"}
+              </span>
             </div>
-            <div>
-              <div className="font-semibold text-lg">{user?.email || "User"}</div>
-              <div className="text-sm text-base-content/70">
+            <div className="space-y-1">
+              <div className="font-semibold text-lg text-foreground">{user?.email || "User"}</div>
+              <div className="text-sm text-muted-foreground">
                 Member since {new Date().toLocaleDateString()}
               </div>
-              <div className="badge badge-primary badge-sm mt-1">Active</div>
+              <Badge variant="default" className="mt-1">Active</Badge>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
       
       {/* App Preferences */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title mb-4">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
             Preferences
-          </h3>
-          <div className="space-y-4">
-            <div className="form-control">
-              <label className="label cursor-pointer">
-                <span className="label-text">
-                  <div className="flex items-center gap-2">
-                    <span>Email notifications</span>
-                    <div className="badge badge-info badge-xs">Recommended</div>
-                  </div>
-                </span>
-                <input type="checkbox" className="toggle toggle-primary" defaultChecked />
-              </label>
-              <div className="text-xs text-base-content/60 mt-1 ml-0">
-                Get notified about task deadlines and project updates
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Email notifications</span>
+                  <Badge variant="secondary" className="text-xs">Recommended</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Get notified about task deadlines and project updates
+                </p>
               </div>
-            </div>
-            
-            <div className="form-control">
-              <label className="label cursor-pointer">
-                <span className="label-text">Desktop notifications</span>
-                <input type="checkbox" className="toggle toggle-primary" />
-              </label>
-              <div className="text-xs text-base-content/60 mt-1 ml-0">
-                Show browser notifications for important updates
-              </div>
-            </div>
-            
-            <div className="form-control">
-              <label className="label cursor-pointer">
-                <span className="label-text">AI suggestions</span>
-                <input type="checkbox" className="toggle toggle-primary" defaultChecked />
-              </label>
-              <div className="text-xs text-base-content/60 mt-1 ml-0">
-                Let AI help optimize your workflow and suggest improvements
-              </div>
-            </div>
-
-            <div className="form-control">
-              <label className="label cursor-pointer">
-                <span className="label-text">Dark mode</span>
-                <input type="checkbox" className="toggle toggle-primary" />
-              </label>
-              <div className="text-xs text-base-content/60 mt-1 ml-0">
-                Use dark theme for better visibility in low light
-              </div>
+              <Switch defaultChecked />
             </div>
           </div>
-        </div>
-      </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-sm font-medium">Desktop notifications</span>
+                <p className="text-xs text-muted-foreground">
+                  Show browser notifications for important updates
+                </p>
+              </div>
+              <Switch />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-sm font-medium">AI suggestions</span>
+                <p className="text-xs text-muted-foreground">
+                  Let AI help optimize your workflow and suggest improvements
+                </p>
+              </div>
+              <Switch defaultChecked />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-sm font-medium">Dark mode</span>
+                <p className="text-xs text-muted-foreground">
+                  Use dark theme for better visibility in low light
+                </p>
+              </div>
+              <Switch />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* AI Settings */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title mb-4">
-            <span className="text-xl">🤖</span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
             AI Assistant
-          </h3>
-          <div className="space-y-4">
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Response style</span>
-              </label>
-              <select className="select select-bordered w-full">
-                <option>Professional</option>
-                <option>Casual</option>
-                <option>Detailed</option>
-                <option>Concise</option>
-              </select>
-            </div>
-            
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Default task priority</span>
-              </label>
-              <select className="select select-bordered w-full">
-                <option value={3}>Normal</option>
-                <option value={1}>High</option>
-                <option value={2}>Medium</option>
-                <option value={4}>Low</option>
-              </select>
-            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Response style</label>
+            <Select defaultValue="professional">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="professional">Professional</SelectItem>
+                <SelectItem value="casual">Casual</SelectItem>
+                <SelectItem value="detailed">Detailed</SelectItem>
+                <SelectItem value="concise">Concise</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Default task priority</label>
+            <Select defaultValue="normal">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="form-control">
-              <label className="label cursor-pointer">
-                <span className="label-text">Auto-categorize tasks</span>
-                <input type="checkbox" className="toggle toggle-primary" defaultChecked />
-              </label>
-              <div className="text-xs text-base-content/60 mt-1 ml-0">
-                Let AI automatically assign tasks to appropriate projects
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-sm font-medium">Auto-categorize tasks</span>
+                <p className="text-xs text-muted-foreground">
+                  Let AI automatically assign tasks to appropriate projects
+                </p>
               </div>
+              <Switch defaultChecked />
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Data & Privacy */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title mb-4">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
             Data & Privacy
-          </h3>
-          <div className="space-y-3">
-            <button className="btn btn-outline w-full justify-start">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Export my data
-            </button>
-            
-            <button className="btn btn-outline w-full justify-start">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Clear conversation history
-            </button>
-          </div>
-        </div>
-      </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button variant="outline" className="w-full justify-start gap-2">
+            <Download className="h-4 w-4" />
+            Export my data
+          </Button>
+          
+          <Button variant="outline" className="w-full justify-start gap-2">
+            <Trash2 className="h-4 w-4" />
+            Clear conversation history
+          </Button>
+        </CardContent>
+      </Card>
       
       {/* Danger Zone */}
-      <div className="card bg-base-100 shadow-xl border border-error/20">
-        <div className="card-body">
-          <h3 className="card-title text-error mb-4">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.664-.833-2.464 0L5.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+      <Card className="border-destructive/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
             Danger Zone
-          </h3>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="space-y-3">
-            <button 
-              className="btn btn-outline btn-error w-full justify-start"
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-2 text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
               onClick={() => {
                 if (confirm("Are you sure you want to sign out?")) {
                   void signOut();
                 }
               }}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <LogOut className="h-4 w-4" />
               Sign Out
-            </button>
+            </Button>
             
-            <button className="btn btn-outline btn-error w-full justify-start">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-2 text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+            >
+              <Trash2 className="h-4 w-4" />
               Delete Account
-            </button>
+            </Button>
           </div>
-          <div className="text-xs text-base-content/60 mt-2">
+          <p className="text-xs text-muted-foreground">
             This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
-          </div>
-        </div>
-      </div>
+          </p>
+        </CardContent>
+      </Card>
       </div>
     </div>
   );

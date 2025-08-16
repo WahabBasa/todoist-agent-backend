@@ -72,13 +72,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     }
   ];
 
-  const projectColors = [
-    "text-blue-500",
-    "text-purple-500", 
-    "text-green-500",
-    "text-orange-500",
-    "text-red-500"
-  ];
+  // Use consistent muted foreground color for all project icons
+  const getProjectIconColor = () => "text-muted-foreground";
 
   const handleItemClick = (viewId: "chat" | "inbox" | "tasks" | "projects" | "settings") => {
     onViewChange(viewId);
@@ -96,7 +91,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {/* Add Task Button */}
         <div className="py-3">
           <Button 
-            className="w-full bg-red-500 hover:bg-red-600 text-white flex items-center gap-2 text-sm font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm"
+            variant="destructive"
+            className="w-full flex items-center gap-2 text-sm font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm"
             onClick={() => handleItemClick("tasks")}
           >
             <Plus className="h-4 w-4 shrink-0" />
@@ -123,10 +119,8 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                       </div>
                       {item.count !== undefined && item.count > 0 && (
                         <Badge 
-                          variant="secondary" 
-                          className={`ml-auto h-4 sm:h-5 text-xs shrink-0 px-1.5 ${
-                            item.isToday ? 'bg-orange-500/20 text-orange-600' : 'bg-muted text-muted-foreground'
-                          }`}
+                          variant={item.isToday ? "outline" : "secondary"}
+                          className="ml-auto h-4 sm:h-5 text-xs shrink-0 px-1.5"
                         >
                           {item.count}
                         </Badge>
@@ -174,7 +168,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                       className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-sm font-medium"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Hash className={`h-4 w-4 shrink-0 ${projectColors[index % projectColors.length]}`} />
+                        <Hash className={`h-4 w-4 shrink-0 ${getProjectIconColor()}`} />
                         <span className="truncate">{project.name}</span>
                       </div>
                     </SidebarMenuButton>

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
+import { Skeleton } from "../components/ui/skeleton";
 import { QuickTaskModal } from "../components/QuickTaskModal";
 import { Plus, Inbox as InboxIcon, Calendar, Clock } from "lucide-react";
 
@@ -38,13 +39,13 @@ export function InboxView() {
     }
   };
 
-  const getPriorityColor = (priority: number) => {
+  const getPriorityVariant = (priority: number) => {
     switch (priority) {
-      case 1: return "text-red-600 bg-red-50 border-red-200";
-      case 2: return "text-orange-600 bg-orange-50 border-orange-200";
-      case 3: return "text-blue-600 bg-blue-50 border-blue-200";
-      case 4: return "text-green-600 bg-green-50 border-green-200";
-      default: return "text-blue-600 bg-blue-50 border-blue-200";
+      case 1: return "outline" as const; // High priority - subtle red outline
+      case 2: return "secondary" as const; // Medium priority - muted
+      case 3: return "secondary" as const; // Normal priority - muted
+      case 4: return "secondary" as const; // Low priority - muted
+      default: return "secondary" as const;
     }
   };
 
@@ -54,8 +55,16 @@ export function InboxView() {
 
   if (inboxTasks === undefined || completedTasks === undefined) {
     return (
-      <div className="flex justify-center items-center min-h-96">
-        <div className="loading loading-spinner loading-lg"></div>
+      <div className="max-w-3xl mx-auto space-y-4 px-8">
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
       </div>
     );
   }
@@ -63,18 +72,18 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="flex items-center space-x-3 p-3 sm:p-4 mb-2 rounded-lg bg-card hover:bg-accent/50 border border-border/50 transition-all duration-200 hover:shadow-sm"
+      className="flex items-center space-x-3 p-2.5 rounded-md bg-muted/20 hover:bg-muted/40 transition-colors duration-200"
     >
       <Checkbox
         checked={isCompleted}
         onCheckedChange={() => handleToggleTask(task._id as string, isCompleted)}
-        className="w-5 h-5 rounded-xl"
+        className="w-4 h-4 rounded-md"
       />
       
       <div className="flex flex-col items-start flex-1">
         <div className="flex items-center gap-2 w-full">
           <h3 
-            className={`text-base font-semibold ${
+            className={`text-sm font-medium ${
               isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
             }`}
           >
@@ -82,8 +91,8 @@ export function InboxView() {
           </h3>
           {task.priority && task.priority !== 3 && (
             <Badge 
-              variant="outline" 
-              className={`text-xs ${getPriorityColor(task.priority)}`}
+              variant={getPriorityVariant(task.priority)}
+              className="text-xs"
             >
               {getPriorityLabel(task.priority)}
             </Badge>
@@ -91,12 +100,12 @@ export function InboxView() {
         </div>
         
         {task.description && (
-          <p className="text-xs text-foreground/70 mt-1">
+          <p className="text-xs text-muted-foreground/80 mt-0.5">
             {task.description}
           </p>
         )}
         
-        <div className="flex items-center gap-3 mt-2 text-xs text-foreground/70">
+        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground/70">
           {task.dueDate && (
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
@@ -135,41 +144,42 @@ export function InboxView() {
 
   const AddTaskButton = () => (
     <button 
-      className="flex items-center gap-2 p-3 sm:p-4 text-left w-full hover:bg-accent/50 transition-all duration-200 rounded-lg border border-dashed border-border/60 mt-2"
+      className="flex items-center gap-2 p-2.5 text-left w-full hover:bg-muted/30 transition-colors duration-200 rounded-md border border-dashed border-muted-foreground/30 mt-2"
       onClick={() => setShowAddTask(true)}
     >
-      <Plus className="h-4 w-4 text-muted-foreground" />
-      <span className="text-sm font-medium text-muted-foreground">
+      <Plus className="h-4 w-4 text-muted-foreground/70" />
+      <span className="text-sm text-muted-foreground/70">
         Add task
       </span>
     </button>
   );
 
   return (
-    <div className="h-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-24 py-4 sm:py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">Inbox</h1>
-      </div>
+    <div className="h-full py-4">
+      <div className="max-w-3xl mx-auto space-y-4 px-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-semibold text-foreground">Inbox</h1>
+        </div>
 
-      {/* Incomplete Tasks */}
-      <div className="flex flex-col gap-0">
+        {/* Incomplete Tasks */}
+        <div className="space-y-1">
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
-          <div className="flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 text-center">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-accent rounded-2xl flex items-center justify-center mb-6 shadow-sm border border-border/30">
-              <InboxIcon className="h-8 w-8 sm:h-10 sm:w-10 text-foreground/70" />
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 bg-muted/40 rounded-xl flex items-center justify-center mb-4">
+              <InboxIcon className="h-6 w-6 text-muted-foreground/70" />
             </div>
-            <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-3">
+            <h3 className="text-lg font-medium text-foreground mb-2">
               Your inbox is empty
             </h3>
-            <p className="text-base sm:text-lg text-muted-foreground mb-8 max-w-md leading-relaxed">
+            <p className="text-sm text-muted-foreground/80 mb-6 max-w-sm">
               When you add a task, it'll show up here.
             </p>
             <Button 
               onClick={() => setShowAddTask(true)}
-              size="lg"
-              className="bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-sm"
+              size="sm"
+              className="text-sm"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first task
@@ -192,23 +202,24 @@ export function InboxView() {
         ) : (
           inboxTasks.length > 0 && <AddTaskButton />
         )}
-      </div>
-
-      {/* Completed Tasks */}
-      {completedTasks && completedTasks.length > 0 && (
-        <div className="mt-6 sm:mt-8">
-          <div className="flex items-center gap-2 mb-4 p-3 sm:p-4">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Completed ({completedTasks.length})
-            </h2>
-          </div>
-          <div className="flex flex-col gap-0">
-            {completedTasks.map((task) => (
-              <TaskItem key={task._id} task={task} isCompleted={true} />
-            ))}
-          </div>
         </div>
-      )}
+
+        {/* Completed Tasks */}
+        {completedTasks && completedTasks.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground/80">
+                Completed ({completedTasks.length})
+              </h2>
+            </div>
+            <div className="space-y-1">
+              {completedTasks.map((task) => (
+                <TaskItem key={task._id} task={task} isCompleted={true} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

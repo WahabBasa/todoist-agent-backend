@@ -18,10 +18,14 @@ import { SettingsView } from "./views/SettingsView";
 import { InboxView } from "./views/InboxView";
 import { ThemeTest, useThemeDebug } from "./components/ThemeTest";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/sidebar";
+import { Avatar, AvatarFallback } from "./components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "./components/ui/dropdown-menu";
+import { Badge } from "./components/ui/badge";
+import { Button } from "./components/ui/button";
 
 export default function App() {
   return (
-    <div data-theme="ea-theme" className="h-full">
+    <div className="h-full">
       <Toaster position="top-right" />
       {/* DEBUG: Theme Test Component */}
       <div data-testid="theme-test">
@@ -87,27 +91,28 @@ function SignOutButton() {
   return (
     <>
       {isAuthenticated && (
-        <div className="dropdown dropdown-end">
-          <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
-            <div className="w-8 rounded-full bg-primary text-primary-content flex items-center justify-center">
-              <span className="text-sm font-bold">U</span>
-            </div>
-          </div>
-          <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-            <li>
-              <a className="justify-between">
-                Profile
-                <span className="badge">New</span>
-              </a>
-            </li>
-            <li><a>Settings</a></li>
-            <li>
-              <button onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </li>
-          </ul>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                  U
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem className="justify-between">
+              Profile
+              <Badge variant="secondary" className="text-xs">New</Badge>
+            </DropdownMenuItem>
+            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => void signOut()}>
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </>
   );
