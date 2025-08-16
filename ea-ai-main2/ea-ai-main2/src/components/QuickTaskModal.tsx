@@ -92,19 +92,19 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Quick Add Task</DialogTitle>
+      <DialogContent className="sm:max-w-md border-gray-200 shadow-sm">
+        <DialogHeader className="border-b border-gray-100 pb-4">
+          <DialogTitle className="text-lg font-medium">Quick Add Task</DialogTitle>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-2">
             <Input
               placeholder="Task name"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
-              className="text-base"
+              className="border-gray-200 text-sm font-medium focus:border-gray-300 focus:ring-0"
             />
           </div>
           
@@ -114,25 +114,25 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="resize-none"
+              className="resize-none border-gray-200 text-xs focus:border-gray-300 focus:ring-0"
             />
           </div>
           
           <div className="space-y-2">
             <Select value={priority.toString()} onValueChange={(value) => setPriority(Number(value))}>
-              <SelectTrigger>
+              <SelectTrigger className="border-gray-200 focus:border-gray-300 focus:ring-0">
                 <SelectValue>
                   <div className="flex items-center gap-2">
                     <Badge 
                       variant="outline" 
-                      className={`text-xs ${getPriorityColor(priority)}`}
+                      className={`text-xs border-gray-200 ${getPriorityColor(priority)}`}
                     >
                       {getPriorityLabel(priority)}
                     </Badge>
                   </div>
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="border-gray-200">
                 <SelectItem value="1">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs text-red-600 bg-red-50 border-red-200">
@@ -165,14 +165,19 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
             </Select>
           </div>
           
-          <div className="flex gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
+          <div className="flex gap-2 pt-4 border-t border-gray-100">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleClose} 
+              className="flex-1 border-gray-200 text-foreground/70 hover:bg-gray-50"
+            >
               Cancel
             </Button>
             <Button 
               type="submit" 
               disabled={isSubmitting || !title.trim()}
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+              className="flex-1 bg-primary hover:bg-primary/90 text-white border-0"
             >
               {isSubmitting ? "Adding..." : "Add Task"}
             </Button>

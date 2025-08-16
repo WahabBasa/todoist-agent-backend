@@ -4,15 +4,16 @@ import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Card } from "../components/ui/card";
 import { Checkbox } from "../components/ui/checkbox";
 import { QuickTaskModal } from "../components/QuickTaskModal";
-import { Plus, Inbox as InboxIcon } from "lucide-react";
+import { Plus, Inbox as InboxIcon, Calendar, Clock } from "lucide-react";
 
 export function InboxView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
   
   const inboxTasks = useQuery(api.tasks.getInboxTasks, { completed: false });
+  const completedTasks = useQuery(api.tasks.getInboxTasks, { completed: true });
   const updateTask = useMutation(api.tasks.updateTask);
 
   const handleToggleTask = async (taskId: string, isCompleted: boolean) => {
@@ -51,7 +52,7 @@ export function InboxView() {
     return new Date(timestamp).toLocaleDateString();
   };
 
-  if (inboxTasks === undefined) {
+  if (inboxTasks === undefined || completedTasks === undefined) {
     return (
       <div className="flex justify-center items-center min-h-96">
         <div className="loading loading-spinner loading-lg"></div>
@@ -59,131 +60,155 @@ export function InboxView() {
     );
   }
 
-  return (
-    <div className="relative h-full flex flex-col">
-      {/* Header */}
-      <div className="flex-shrink-0 p-6 border-b border-border">
-        <div className="flex items-center gap-3">
-          <InboxIcon className="h-6 w-6 text-blue-600" />
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Inbox</h1>
-            <p className="text-sm text-muted-foreground">
-              {inboxTasks.length} {inboxTasks.length === 1 ? 'task' : 'tasks'}
-            </p>
-          </div>
+  const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
+    <div
+      key={task._id}
+      className="flex items-center space-x-3 border-b border-gray-100 p-3 animate-in fade-in hover:bg-gray-50/50 transition-colors"
+    >
+      <Checkbox
+        checked={isCompleted}
+        onCheckedChange={() => handleToggleTask(task._id as string, isCompleted)}
+        className="w-5 h-5 rounded-xl"
+      />
+      
+      <div className="flex flex-col items-start flex-1">
+        <div className="flex items-center gap-2 w-full">
+          <h3 
+            className={`text-sm font-medium ${
+              isCompleted ? 'line-through text-foreground/30' : 'text-foreground'
+            }`}
+          >
+            {task.title}
+          </h3>
+          {task.priority && task.priority !== 3 && (
+            <Badge 
+              variant="outline" 
+              className={`text-xs ${getPriorityColor(task.priority)}`}
+            >
+              {getPriorityLabel(task.priority)}
+            </Badge>
+          )}
         </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
-          {inboxTasks.length === 0 ? (
-            // Empty State
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                <InboxIcon className="h-8 w-8 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-medium text-foreground mb-2">
-                Your inbox is empty
-              </h3>
-              <p className="text-muted-foreground mb-6 max-w-sm">
-                When you add a task, it'll show up here. Use the + button to get started.
-              </p>
-              <Button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-red-500 hover:bg-red-600 text-white"
+        
+        {task.description && (
+          <p className="text-xs text-foreground/70 mt-1">
+            {task.description}
+          </p>
+        )}
+        
+        <div className="flex items-center gap-3 mt-2 text-xs text-foreground/70">
+          {task.dueDate && (
+            <div className="flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              <span 
+                className={
+                  task.dueDate < Date.now() && !isCompleted 
+                    ? 'text-red-600' 
+                    : ''
+                }
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add your first task
-              </Button>
+                {formatDate(task.dueDate)}
+              </span>
             </div>
-          ) : (
-            // Task List
-            <div className="space-y-2">
-              {inboxTasks.map((task) => (
-                <Card key={task._id} className="p-4 hover:shadow-sm transition-shadow">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      checked={task.isCompleted}
-                      onCheckedChange={() => handleToggleTask(task._id as string, task.isCompleted)}
-                      className="mt-1"
-                    />
-                    
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <h3 
-                          className={`font-medium ${
-                            task.isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
-                          }`}
-                        >
-                          {task.title}
-                        </h3>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-xs ${getPriorityColor(task.priority)}`}
-                        >
-                          {getPriorityLabel(task.priority)}
-                        </Badge>
-                      </div>
-                      
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {task.description}
-                        </p>
-                      )}
-                      
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>Added {formatDate(task._creationTime)}</span>
-                        {task.dueDate && (
-                          <span 
-                            className={
-                              task.dueDate < Date.now() && !task.isCompleted 
-                                ? 'text-red-600' 
-                                : ''
-                            }
-                          >
-                            Due {formatDate(task.dueDate)}
-                          </span>
-                        )}
-                        {task.estimatedTime && (
-                          <span>
-                            ⏱️ {Math.floor(task.estimatedTime / 60)}h {task.estimatedTime % 60}m
-                          </span>
-                        )}
-                      </div>
-                      
-                      {task.tags && task.tags.length > 0 && (
-                        <div className="flex gap-1 flex-wrap">
-                          {task.tags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs">
-                              #{tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Card>
+          )}
+          {task.estimatedTime && (
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span>
+                {Math.floor(task.estimatedTime / 60)}h {task.estimatedTime % 60}m
+              </span>
+            </div>
+          )}
+          {task.tags && task.tags.length > 0 && (
+            <div className="flex gap-1">
+              {task.tags.map((tag, index) => (
+                <span key={index} className="text-xs">
+                  #{tag}
+                </span>
               ))}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
 
-      {/* Floating Add Button */}
-      <Button
-        onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg hover:shadow-xl transition-all p-0"
-        size="icon"
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
+  const AddTaskButton = () => (
+    <button 
+      className="flex items-center gap-2 p-3 text-left w-full hover:bg-gray-50/50 transition-colors border-b border-gray-100"
+      onClick={() => setShowAddTask(true)}
+    >
+      <Plus className="h-4 w-4 text-primary hover:bg-primary hover:rounded-xl hover:text-white transition-colors" />
+      <span className="text-sm font-light text-foreground/70">
+        Add task
+      </span>
+    </button>
+  );
 
-      {/* Quick Task Modal */}
-      <QuickTaskModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+  return (
+    <div className="xl:px-40">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-lg font-semibold md:text-2xl">Inbox</h1>
+      </div>
+
+      {/* Incomplete Tasks */}
+      <div className="flex flex-col gap-0">
+        {inboxTasks.length === 0 && !showAddTask ? (
+          // Empty State
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+              <InboxIcon className="h-8 w-8 text-foreground/50" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Your inbox is empty
+            </h3>
+            <p className="text-foreground/70 mb-6 max-w-sm">
+              When you add a task, it'll show up here.
+            </p>
+            <Button 
+              onClick={() => setShowAddTask(true)}
+              variant="outline"
+              className="border-gray-200 hover:bg-gray-50"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add your first task
+            </Button>
+          </div>
+        ) : (
+          <>
+            {inboxTasks.map((task) => (
+              <TaskItem key={task._id} task={task} isCompleted={false} />
+            ))}
+          </>
+        )}
+        
+        {/* Add Task Section */}
+        {showAddTask ? (
+          <QuickTaskModal 
+            isOpen={true}
+            onClose={() => setShowAddTask(false)}
+          />
+        ) : (
+          inboxTasks.length > 0 && <AddTaskButton />
+        )}
+      </div>
+
+      {/* Completed Tasks */}
+      {completedTasks && completedTasks.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-4 p-3">
+            <h2 className="text-sm font-medium text-foreground/70">
+              Completed ({completedTasks.length})
+            </h2>
+          </div>
+          <div className="flex flex-col gap-0">
+            {completedTasks.map((task) => (
+              <TaskItem key={task._id} task={task} isCompleted={true} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
