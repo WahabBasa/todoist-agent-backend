@@ -10,13 +10,13 @@ import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 
 // Import components
-import { Sidebar } from "./components/Sidebar";
+import { AppSidebar } from "./components/Sidebar";
 import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
 import { ProjectsView } from "./views/ProjectsView";
 import { SettingsView } from "./views/SettingsView";
 import { InboxView } from "./views/InboxView";
-import { SidebarProvider, SidebarTrigger, SidebarInset } from "./components/ui/sidebar";
+import { SidebarProvider } from "./components/ui/sidebar";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "./components/ui/dropdown-menu";
 import { Badge } from "./components/ui/badge";
@@ -57,17 +57,16 @@ function MainApp() {
   };
 
   return (
-    <SidebarProvider className="min-h-screen flex">
-      <Sidebar
+    <SidebarProvider defaultOpen>
+      <AppSidebar
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      <SidebarInset className="min-h-screen">
-        {/* Main Content Area - Full Screen */}
+      <div className="flex flex-col flex-1">
         <main className="flex flex-1 min-h-0">
           {renderActiveView()}
         </main>
-      </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

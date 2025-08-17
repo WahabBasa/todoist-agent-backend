@@ -1,13 +1,12 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { ChevronDown, ChevronRight, Plus, Inbox, MessageSquare, CheckCircle, Hash } from "lucide-react";
 import { useState } from "react";
 import { UserProfile } from "./nav/UserProfile";
 import {
-  Sidebar as ShadcnSidebar,
+  Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
@@ -19,14 +18,15 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarTrigger,
+  SidebarRail,
 } from "./ui/sidebar";
 
-interface SidebarProps {
+interface AppSidebarProps {
   activeView: "chat" | "inbox" | "tasks" | "projects" | "settings";
   onViewChange: (view: "chat" | "inbox" | "tasks" | "projects" | "settings") => void;
 }
 
-export function Sidebar({ activeView, onViewChange }: SidebarProps) {
+export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const tasks = useQuery(api.tasks.getTasks, { completed: false });
   const projects = useQuery(api.projects.getProjects);
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
@@ -53,104 +53,94 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     }
   ];
 
-  // Use consistent muted foreground color for all project icons
-  const getProjectIconColor = () => "text-muted-foreground";
-
   const handleItemClick = (viewId: "chat" | "inbox" | "tasks" | "projects" | "settings") => {
     onViewChange(viewId);
   };
 
   return (
-    <ShadcnSidebar collapsible="icon" className="w-[240px] sm:w-[260px] md:w-[280px]">
+    <Sidebar side="left" variant="sidebar" collapsible="icon">
       {/* App Header */}
-      <SidebarHeader className="flex flex-row items-center justify-between p-system-3 sm:p-system-4 border-b border-sidebar-border">
-        <h1 className="font-semibold text-lg text-primary group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
-        <SidebarTrigger className="h-8 w-8 shrink-0" />
+      <SidebarHeader className="flex flex-row justify-between items-center">
+        <h1 className="font-semibold text-sm px-2 py-3 group-data-[collapsible=icon]:hidden">TaskAI</h1>
+        <SidebarTrigger />
       </SidebarHeader>
 
-      <SidebarContent className="px-system-2 sm:px-system-3 py-0">
-        {/* Add Task Button */}
-        <div className="py-system-3">
-          <Button 
-            className="w-full flex items-center gap-2 text-base font-semibold group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:justify-center h-9 shadow-sm bg-blue-600 hover:bg-blue-700 text-white"
-            onClick={() => handleItemClick("tasks")}
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="group-data-[collapsible=icon]:hidden truncate">Add task</span>
-          </Button>
-        </div>
+      <SidebarContent>
+        {/* New Chat Button */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={() => handleItemClick("chat")}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              tooltip="New Chat"
+            >
+              <Plus className="size-4" />
+              <span>New Chat</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
         {/* Main Navigation */}
-        <SidebarGroup className="p-0 gap-0">
-          <SidebarGroupContent className="gap-0">
-            <SidebarMenu className="gap-0">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton
-                      onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
-                      isActive={activeView === item.id}
-                      className="h-8 sm:h-9 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium"
+        <SidebarMenu>
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <SidebarMenuItem key={item.label}>
+                <SidebarMenuButton
+                  onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
+                  isActive={activeView === item.id}
+                  tooltip={item.label}
+                >
+                  <Icon className="size-4" />
+                  <span>{item.label}</span>
+                  {item.count !== undefined && item.count > 0 && (
+                    <Badge 
+                      variant="secondary"
+                      className="ml-auto h-5 px-1.5 text-xs"
                     >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate text-main">{item.label}</span>
-                      </div>
-                      {item.count !== undefined && item.count > 0 && (
-                        <Badge 
-                          variant="secondary"
-                          className="ml-auto h-4 sm:h-5 text-meta shrink-0 px-1.5"
-                        >
-                          {item.count}
-                        </Badge>
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      {item.count}
+                    </Badge>
+                  )}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
 
-        <SidebarSeparator className="my-1.5 sm:my-2" />
+        <SidebarSeparator />
 
         {/* Projects Section */}
-        <SidebarGroup className="p-0 gap-0">
+        <SidebarGroup>
           <SidebarGroupLabel asChild>
             <Button
               variant="ghost"
               onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
-              className="w-full justify-between h-system-sm px-system-3 text-system-base font-system-semibold text-lightness-secondary hover:bg-sidebar-accent"
+              className="w-full justify-between px-2 hover:bg-sidebar-accent"
             >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="truncate">My Projects</span>
-                <span className="text-meta shrink-0 whitespace-nowrap">{projects?.length || 0}/5</span>
+              <div className="flex items-center gap-2">
+                <span>My Projects</span>
+                <span className="text-xs text-muted-foreground">{projects?.length || 0}/5</span>
               </div>
-              <div className="shrink-0">
-                {isProjectsExpanded ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
-              </div>
+              {isProjectsExpanded ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
             </Button>
           </SidebarGroupLabel>
           
           {isProjectsExpanded && (
-            <SidebarGroupContent className="gap-0">
-              <SidebarMenu className="gap-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
                 {projects?.map((project, index) => (
                   <SidebarMenuItem key={project._id}>
                     <SidebarMenuButton
                       onClick={() => handleItemClick("projects")}
                       isActive={activeView === "projects"}
-                      className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium text-secondary"
+                      tooltip={project.name}
                     >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Hash className={`h-4 w-4 shrink-0 ${getProjectIconColor()}`} />
-                        <span className="truncate">{project.name}</span>
-                      </div>
+                      <Hash className="size-4 text-muted-foreground" />
+                      <span>{project.name}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -159,12 +149,10 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     onClick={() => handleItemClick("projects")}
-                    className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium text-tertiary"
+                    tooltip="Add project"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <Plus className="h-4 w-4 shrink-0" />
-                      <span className="truncate">Add project</span>
-                    </div>
+                    <Plus className="size-4" />
+                    <span>Add project</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -177,6 +165,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
       <SidebarFooter>
         <UserProfile />
       </SidebarFooter>
-    </ShadcnSidebar>
+      <SidebarRail />
+    </Sidebar>
   );
 }
