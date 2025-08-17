@@ -122,86 +122,88 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="flex items-center space-x-3 p-system-3 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md hover:bg-gray-50/50 transition-all duration-200"
+      className="group flex items-start gap-3 py-1.5 px-2 hover:bg-gray-50/50 transition-colors duration-150 border-l-2 border-transparent hover:border-l-blue-400 border-b border-gray-200"
     >
       <Checkbox
         checked={isCompleted}
         onCheckedChange={() => handleToggleTask(task._id as string, isCompleted)}
-        className="w-5 h-5 rounded-md checkbox-primary-blue border-2 border-gray-400 hover:border-gray-500"
+        className="mt-0.5 w-4 h-4 rounded-sm border border-gray-300 hover:border-gray-400"
       />
       
-      <div className="flex flex-col items-start flex-1">
-        <div className="flex items-center gap-2 w-full">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
           <h3 
-            className={`text-base font-medium ${
+            className={`text-sm font-normal truncate ${
               isCompleted ? 'line-through text-gray-400' : 'text-gray-800'
             }`}
           >
             {task.title}
           </h3>
+          
+          {/* Compact priority indicator */}
           {task.priority && task.priority !== 3 && (
-            <Badge 
-              variant={getPriorityVariant(task.priority)}
-              className="text-sm text-gray-600 font-medium"
-            >
-              {getPriorityLabel(task.priority)}
-            </Badge>
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+              task.priority === 1 ? 'bg-red-400' : 
+              task.priority === 2 ? 'bg-orange-400' : 'bg-blue-400'
+            }`} />
           )}
         </div>
         
+        {/* Description on same line if short, or below if longer */}
         {task.description && (
-          <p className="text-base text-gray-600 mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5 truncate">
             {task.description}
           </p>
         )}
         
-        <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
-          {task.dueDate && (
-            <div className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
+        {/* Compact metadata - only show on hover or if has due date */}
+        {(task.dueDate || task.estimatedTime || (task.tags && task.tags.length > 0)) && (
+          <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 group-hover:text-gray-500">
+            {task.dueDate && (
               <span 
-                className={
+                className={`flex items-center gap-1 ${
                   task.dueDate < Date.now() && !isCompleted 
-                    ? 'text-red-600' 
+                    ? 'text-red-500 font-medium' 
                     : ''
-                }
+                }`}
               >
+                <Calendar className="w-3 h-3" />
                 {formatDate(task.dueDate)}
               </span>
-            </div>
-          )}
-          {task.estimatedTime && (
-            <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>
+            )}
+            {task.estimatedTime && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
                 {Math.floor(task.estimatedTime / 60)}h {task.estimatedTime % 60}m
               </span>
-            </div>
-          )}
-          {task.tags && task.tags.length > 0 && (
-            <div className="flex gap-1">
-              {task.tags.map((tag, index) => (
-                <span key={index} className="text-sm text-gray-500">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+            )}
+            {task.tags && task.tags.length > 0 && (
+              <div className="flex gap-1">
+                {task.tags.slice(0, 2).map((tag, index) => (
+                  <span key={index} className="text-xs text-gray-400">
+                    #{tag}
+                  </span>
+                ))}
+                {task.tags.length > 2 && (
+                  <span className="text-xs text-gray-400">+{task.tags.length - 2}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 
   const AddTaskButton = () => (
-    <button 
-      className="flex items-center gap-2 p-3 text-left w-full bg-white border border-dashed border-gray-200 hover:bg-gray-50 transition-all duration-200 rounded-lg mt-2"
+    <div className="flex items-center gap-3 py-1.5 px-2 hover:bg-gray-50/50 transition-colors duration-150 cursor-pointer text-gray-400 hover:text-gray-600 border-l-2 border-transparent border-b border-gray-200"
       onClick={() => setShowAddTask(true)}
     >
-      <Plus className="h-4 w-4 text-muted-foreground/70" />
-      <span className="text-base text-gray-500">
-        Add task
-      </span>
-    </button>
+      <div className="w-4 h-4 flex items-center justify-center">
+        <Plus className="h-3 w-3" />
+      </div>
+      <span className="text-sm">Add task</span>
+    </div>
   );
 
   return (
@@ -213,7 +215,7 @@ export function InboxView() {
         </div>
 
         {/* Incomplete Tasks */}
-        <div className="space-y-2">
+        <div className="space-y-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
           <div className="flex flex-col items-center justify-center py-12 text-center">

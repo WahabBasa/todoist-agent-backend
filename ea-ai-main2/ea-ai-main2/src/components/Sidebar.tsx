@@ -91,11 +91,11 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
                       isActive={activeView === item.id}
-                      className="h-system-sm sm:h-system-md px-system-3 gap-system-3 hover:bg-sidebar-accent text-system-base font-system-medium"
+                      className="h-8 sm:h-9 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium"
                     >
-                      <div className="flex items-center gap-system-3 min-w-0 flex-1">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate text-lightness-main">{item.label}</span>
+                        <span className="truncate text-main">{item.label}</span>
                       </div>
                       {item.count !== undefined && item.count > 0 && (
                         <Badge 
@@ -145,7 +145,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                     <SidebarMenuButton
                       onClick={() => handleItemClick("projects")}
                       isActive={activeView === "projects"}
-                      className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-system-base font-system-medium text-lightness-secondary"
+                      className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium text-secondary"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Hash className={`h-4 w-4 shrink-0 ${getProjectIconColor()}`} />
@@ -159,7 +159,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton 
                     onClick={() => handleItemClick("projects")}
-                    className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-system-base font-system-medium text-lightness-tertiary"
+                    className="h-8 px-3 gap-3 hover:bg-sidebar-accent text-base font-medium text-tertiary"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <Plus className="h-4 w-4 shrink-0" />

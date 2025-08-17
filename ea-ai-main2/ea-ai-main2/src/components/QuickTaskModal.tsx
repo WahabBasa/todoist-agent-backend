@@ -94,7 +94,7 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md md:max-w-lg border border-gray-200 shadow-lg bg-white">
         <DialogHeader className="border-b border-gray-200 pb-3 sm:pb-4">
-          <DialogTitle className="text-system-lg font-system-medium text-lightness-main">Quick Add Task</DialogTitle>
+          <DialogTitle className="text-lg font-medium text-main">Quick Add Task</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 pt-2">
@@ -104,7 +104,7 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
-              className="border-system-default text-system-base text-lightness-primary font-system-medium focus:border-ring/50 focus:ring-ring/20"
+              className="border-border text-base text-primary font-medium focus:border-ring/50 focus:ring-ring/20"
             />
           </div>
           
@@ -114,49 +114,49 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="resize-none border-system-default text-system-base text-lightness-secondary focus:border-gray-300 focus:ring-0"
+              className="resize-none border-border text-base text-secondary focus:border-gray-300 focus:ring-0"
             />
           </div>
           
           <div className="space-y-2">
             <Select value={priority.toString()} onValueChange={(value) => setPriority(Number(value))}>
-              <SelectTrigger className="border-system-default focus:border-gray-300 focus:ring-0">
+              <SelectTrigger className="border-border focus:border-gray-300 focus:ring-0">
                 <SelectValue>
                   <div className="flex items-center gap-2">
                     <Badge 
                       variant="outline" 
-                      className="text-system-sm border-system-default text-lightness-secondary"
+                      className="text-sm border-border text-secondary"
                     >
                       {getPriorityLabel(priority)}
                     </Badge>
                   </div>
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent className="border-system-default">
+              <SelectContent className="border-border">
                 <SelectItem value="1">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-system-sm text-lightness-primary font-system-semibold">
+                    <Badge variant="outline" className="text-sm text-primary font-semibold">
                       High
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="2">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-system-sm text-lightness-main">
+                    <Badge variant="outline" className="text-sm text-main">
                       Medium
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="3">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-system-sm text-lightness-main">
+                    <Badge variant="outline" className="text-sm text-main">
                       Normal
                     </Badge>
                   </div>
                 </SelectItem>
                 <SelectItem value="4">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-system-sm text-lightness-tertiary">
+                    <Badge variant="outline" className="text-sm text-tertiary">
                       Low
                     </Badge>
                   </div>
@@ -165,12 +165,12 @@ export function QuickTaskModal({ isOpen, onClose }: QuickTaskModalProps) {
             </Select>
           </div>
           
-          <div className="flex gap-2 pt-4 border-t border-system-subtle">
+          <div className="flex gap-2 pt-4 border-t border-gray-200">
             <Button 
               type="button" 
               variant="outline" 
               onClick={handleClose} 
-              className="flex-1 border-system-default text-lightness-secondary hover:bg-system-hover"
+              className="flex-1 border-border text-secondary hover:bg-gray-100"
             >
               Cancel
             </Button>

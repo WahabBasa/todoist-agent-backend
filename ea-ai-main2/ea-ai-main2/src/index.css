@@ -71,6 +71,25 @@ body {
   --color-shiki-light-bg: var(--background);
   --color-shiki-dark: var(--foreground);
   --color-shiki-dark-bg: var(--background);
+
+  /* Custom Design System Colors */
+  --color-text-primary: oklch(8% 0 0);
+  --color-text-main: oklch(20% 0 0);
+  --color-text-secondary: oklch(35% 0 0);
+  --color-text-tertiary: oklch(55% 0 0);
+
+  /* Typography Scale */
+  --font-size-system-sm: 0.875rem;
+  --font-size-system-base: 1rem;
+  --font-size-system-lg: 1.125rem;
+
+  /* Spacing Scale */
+  --spacing-system-1: 0.25rem;
+  --spacing-system-2: 0.5rem;
+  --spacing-system-3: 0.75rem;
+  --spacing-system-4: 1rem;
+  --spacing-system-6: 1.5rem;
+  --spacing-system-8: 2rem;
 }
 
 :root {
@@ -237,66 +256,13 @@ body {
     background-color: oklch(97.5% 0.005 252.12);
   }
   
-  /* Design System Utilities */
+  /* Design System Utilities - Now using standard Tailwind classes */
   
-  /* Typography Utilities */
-  .text-system-xs { font-size: var(--text-xs); }
-  .text-system-sm { font-size: var(--text-sm); }
-  .text-system-base { font-size: var(--text-base); }
-  .text-system-lg { font-size: var(--text-lg); }
-  .text-system-xl { font-size: var(--text-xl); }
-  .text-system-2xl { font-size: var(--text-2xl); }
-  
-  /* Text Lightness Utilities */
-  .text-lightness-primary { color: var(--text-primary); }
-  .text-lightness-main { color: var(--text-main); }
-  .text-lightness-secondary { color: var(--text-secondary); }
-  .text-lightness-tertiary { color: var(--text-tertiary); }
-
-  .font-system-normal { font-weight: var(--font-normal); }
-  .font-system-medium { font-weight: var(--font-medium); }
-  .font-system-semibold { font-weight: var(--font-semibold); }
-  .font-system-bold { font-weight: var(--font-bold); }
-
-  /* Spacing Utilities */
-  .p-system-1 { padding: var(--space-1); }
-  .p-system-2 { padding: var(--space-2); }
-  .p-system-3 { padding: var(--space-3); }
-  .p-system-4 { padding: var(--space-4); }
-  .p-system-6 { padding: var(--space-6); }
-  .p-system-8 { padding: var(--space-8); }
-  
-  .px-system-2 { padding-left: var(--space-2); padding-right: var(--space-2); }
-  .px-system-3 { padding-left: var(--space-3); padding-right: var(--space-3); }
-  .px-system-4 { padding-left: var(--space-4); padding-right: var(--space-4); }
-  .px-system-8 { padding-left: var(--space-8); padding-right: var(--space-8); }
-  
-  .py-system-3 { padding-top: var(--space-3); padding-bottom: var(--space-3); }
-  .py-system-6 { padding-top: var(--space-6); padding-bottom: var(--space-6); }
-  
-  .pt-system-16 { padding-top: var(--space-16); }
-  .pb-system-6 { padding-bottom: var(--space-6); }
-
-  /* Gap Utilities */
-  .gap-system-2 { gap: var(--space-2); }
-  .gap-system-3 { gap: var(--space-3); }
-  .gap-system-4 { gap: var(--space-4); }
-
-  /* Component Size Utilities */
-  .h-system-sm { height: var(--component-height-sm); }
-  .h-system-md { height: var(--component-height-md); }
-  .h-system-lg { height: var(--component-height-lg); }
-
-  /* Layout Utilities */
-  .max-w-system-content { max-width: 48rem; }
-  .sidebar-w { width: var(--sidebar-width); }
-  
-  /* Border & Background Utilities */
-  .border-system-default { border-color: var(--border-default); }
-  .border-system-subtle { border-color: var(--border-subtle); }
-  .bg-system-subtle { background-color: var(--bg-subtle); }
-  .bg-system-hover { background-color: var(--bg-hover); }
-  .hover-system { @apply hover:bg-system-hover transition-colors duration-200; }
+  /* Text Color Utilities */
+  .text-primary { @apply text-text-primary; }
+  .text-main { @apply text-text-main; }
+  .text-secondary { @apply text-text-secondary; }
+  .text-tertiary { @apply text-text-tertiary; }
 }
 
 /* Hide ScrollArea scrollbars specifically */
@@ -390,26 +356,7 @@ body {
 
 /* === CENTRALIZED DESIGN SYSTEM === */
 
-/* Typography Scale - Simplified 3-size system */
-:root {
-  --text-xs: 0.75rem;     /* 12px - keep for compatibility */
-  --text-sm: 0.875rem;    /* 14px - metadata, small text */
-  --text-base: 1rem;      /* 16px - main content */
-  --text-lg: 1.125rem;    /* 18px - headings, important text */
-  --text-xl: 1.25rem;     /* 20px - keep for compatibility */
-  --text-2xl: 1.5rem;     /* 24px - keep for compatibility */
-  
-  --font-normal: 400;
-  --font-medium: 500;
-  --font-semibold: 600;
-  --font-bold: 700;
-  
-  /* Text Lightness Hierarchy */
-  --text-primary: oklch(8% 0 0);     /* 100% attention - user input, primary actions */
-  --text-main: oklch(20% 0 0);       /* 85% attention - main content, active items */
-  --text-secondary: oklch(35% 0 0);  /* 65% attention - descriptions, inactive items */
-  --text-tertiary: oklch(55% 0 0);   /* 45% attention - metadata, placeholders */
-}
+/* Typography and colors now defined in @theme block above */
 
 /* Spacing Scale */
 :root {

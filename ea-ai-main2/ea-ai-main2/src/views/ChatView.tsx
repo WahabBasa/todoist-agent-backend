@@ -29,18 +29,19 @@ export function ChatView() {
   const chatWithAI = useAction(api.ai.chatWithAI);
   const conversation = useQuery(api.conversations.getConversation);
   
-  // Transform conversation messages to Chat component format
-  const rawMessages = (conversation?.messages as any[]) || [];
-  const messages: Message[] = rawMessages
-    .filter(msg => msg.role === "user" || msg.role === "assistant")
-    .map((msg, index) => ({
-      id: `${msg.timestamp}-${index}`,
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      createdAt: new Date(msg.timestamp),
-      timestamp: msg.timestamp,
-      toolCalls: msg.toolCalls
-    }));
+  // Only transform messages if conversation has loaded to prevent flash
+  const messages: Message[] = conversation ? 
+    ((conversation.messages as any[]) || [])
+      .filter(msg => msg.role === "user" || msg.role === "assistant")
+      .map((msg, index) => ({
+        id: `${msg.timestamp}-${index}`,
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        createdAt: new Date(msg.timestamp),
+        timestamp: msg.timestamp,
+        toolCalls: msg.toolCalls
+      }))
+    : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,8 +132,8 @@ export function ChatView() {
           <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
             <div className="text-center mb-6">
               <div className="mb-3"></div>
-              <h3 className="text-system-lg font-system-medium text-lightness-main mb-2">Start a conversation</h3>
-              <p className="text-system-base text-lightness-secondary max-w-md">
+              <h3 className="text-lg font-medium text-main mb-2">Start a conversation</h3>
+              <p className="text-base text-secondary max-w-md">
                 Ask me to create tasks, manage projects, or help with your workflow
               </p>
             </div>
@@ -158,14 +159,14 @@ export function ChatView() {
                         <Avatar className="w-5 h-5 flex-shrink-0">
                           <AvatarFallback className="bg-primary-foreground text-primary text-xs font-medium">W</AvatarFallback>
                         </Avatar>
-                        <p className="text-system-base text-lightness-primary whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-base text-primary whitespace-pre-wrap">{msg.content}</p>
                       </div>
                     </div>
                   ) : (
                     /* AI Message - Left aligned within centered container */
                     <div className="flex justify-start">
                       <div className="bg-muted/30 rounded-lg px-3 py-2 max-w-[90%]">
-                        <p className="text-system-base text-lightness-main whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-base text-main whitespace-pre-wrap">{msg.content}</p>
                       </div>
                     </div>
                   )}
