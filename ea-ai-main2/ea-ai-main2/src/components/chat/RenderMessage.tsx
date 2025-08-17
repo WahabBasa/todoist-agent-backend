@@ -7,10 +7,17 @@ interface Message {
 interface RenderMessageProps {
   message: Message
   messageId?: string
+  getIsOpen?: (id: string) => boolean
+  onOpenChange?: (id: string, open: boolean) => void
+  onQuerySelect?: (query: string) => void
 }
 
 export function RenderMessage({
-  message
+  message,
+  messageId,
+  getIsOpen,
+  onOpenChange,
+  onQuerySelect
 }: RenderMessageProps) {
   
   if (message.role === 'user') {

@@ -1,119 +1,108 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import "tailwindcss";
-@import "tw-animate-css";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme {
-  --default-transition: all 0.2s ease;
-  --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  
-  /* Typography Scale Standardization - Chat Input Inspired */
-  --font-size-xs: 12px;
-  --line-height-xs: 1.4;
-  --font-weight-xs: 500;
-  
-  --font-size-sm: 14px;
-  --line-height-sm: 1.5;
-  --font-weight-sm: 500;
-  
-  --font-size-base: 14px;     /* Make base same as sm for consistency */
-  --line-height-base: 1.5;
-  --font-weight-base: 500;
-  
-  --font-size-lg: 18px;       /* Section headings */
-  --line-height-lg: 1.4;
-  --font-weight-lg: 600;
-  
-  --font-size-xl: 20px;       /* Page headings */
-  --line-height-xl: 1.3;
-  --font-weight-xl: 600;
-  
-  --font-size-2xl: 24px;      /* Large headings */
-  --line-height-2xl: 1.2;
-  --font-weight-2xl: 600;
-  
-  --font-size-3xl: 30px;      /* Hero text */
-  --line-height-3xl: 1.2;
-  --font-weight-3xl: 600;
-  
-  /* Colors */
-  --color-background: #ffffff;
-  --color-foreground: #0d0d0d;
-  --color-card: #ffffff;
-  --color-card-foreground: #0d0d0d;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0d0d0d;
-  --color-primary: #404040;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f5f5f5;
-  --color-secondary-foreground: #0d0d0d;
-  --color-muted: #f8f9fb;
-  --color-muted-foreground: #595959;
-  --color-accent: #f7f8fc;
-  --color-accent-foreground: #0d0d0d;
-  --color-destructive: #dc2626;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #e5e5e5;
-  --color-input: #fafafa;
-  --color-ring: #404040;
-  
-  /* Custom colors - preserved */
-  --color-sidebar-background: #f8f9fb;
-  --color-sidebar-foreground: #0d0d0d;
-  --color-sidebar-primary: #404040;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #f7f8fc;
-  --color-sidebar-accent-foreground: #0d0d0d;
-  --color-sidebar-border: #f0f1f5;
-  --color-sidebar-ring: #404040;
-  
-  --color-accent-blue: #eff6ff;
-  --color-accent-blue-foreground: #2563eb;
-  --color-accent-blue-border: #bfdbfe;
-  
-  /* Radius */
-  --radius: 0.5rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: #171717;
-    --color-foreground: #fafafa;
-    --color-card: #262626;
-    --color-card-foreground: #fafafa;
-    --color-popover: #262626;
-    --color-popover-foreground: #fafafa;
-    --color-primary: #e5e5e5;
-    --color-primary-foreground: #262626;
-    --color-secondary: #404040;
-    --color-secondary-foreground: #fafafa;
-    --color-muted: #404040;
-    --color-muted-foreground: #a3a3a3;
-    --color-accent: #404040;
-    --color-accent-foreground: #fafafa;
-    --color-destructive: #ef4444;
-    --color-destructive-foreground: #fafafa;
-    --color-border: #262626;
-    --color-input: #404040;
-    --color-ring: #737373;
-    
-    --color-sidebar-background: #262626;
-    --color-sidebar-foreground: #fafafa;
-    --color-sidebar-primary: #3b82f6;
-    --color-sidebar-primary-foreground: #fafafa;
-    --color-sidebar-accent: #404040;
-    --color-sidebar-accent-foreground: #fafafa;
-    --color-sidebar-border: #262626;
-    --color-sidebar-ring: #737373;
-    
-    --color-accent-blue: #1e3a8a;
-    --color-accent-blue-foreground: #93c5fd;
-    --color-accent-blue-border: #1e40af;
-  }
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 89.8%;
+
+    --radius: 0.5rem;
+
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+
+    --accent-blue: 210 100% 97%;
+    --accent-blue-foreground: 210 100% 50%;
+    --accent-blue-border: 210 100% 90%;
+    
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 14.9%;
+    --card-foreground: 0 0% 63.9%;
+
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 14.9%;
+    
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    --accent-blue: 210 100% 10%;
+    --accent-blue-foreground: 210 100% 80%;
+    --accent-blue-border: 210 100% 25%;
+    
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
 
   /* Global layout setup */
   html, body, #root {
@@ -128,21 +117,20 @@
     display: none;
   }
   
+  * {
+    @apply border-border;
+  }
+  
   body {
+    @apply bg-background text-foreground;
     -ms-overflow-style: none;
     scrollbar-width: none;
-    font-family: var(--default-font-family);
-    font-size: 14px;                      /* Match text-sm/text-base standard */
-    font-weight: 500;                     /* font-medium consistency */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-  }
-  
-  * {
-    border-color: var(--color-border);
   }
   
   /* Ensure all text elements inherit consistent sizing */
@@ -154,45 +142,39 @@
   
   /* Typography hierarchy with professional standards */
   h1 { 
-    font-size: 20px;        /* text-xl */
-    font-weight: 600;       /* font-semibold */
+    font-size: 20px;
+    font-weight: 600;
     line-height: 1.3;
-    color: var(--color-foreground);
   }
   
   h2, h3 { 
-    font-size: 18px;        /* text-lg */
-    font-weight: 600;       /* font-semibold */
+    font-size: 18px;
+    font-weight: 600;
     line-height: 1.4;
-    color: var(--color-foreground);
   }
   
   h4, h5, h6 { 
-    font-size: 14px;        /* text-sm */
-    font-weight: 600;       /* font-semibold */
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1.5;
-    color: var(--color-foreground);
   }
   
-  /* Standardize interactive elements to match chat input */
+  /* Standardize interactive elements */
   button, input, textarea, select {
-    font-size: 14px;        /* text-sm standard */
-    font-weight: 500;       /* font-medium consistency */
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1.5;
   }
   
   label {
-    font-size: 14px;        /* text-sm standard */
-    font-weight: 500;       /* font-medium consistency */
-    color: var(--color-foreground);
+    font-size: 14px;
+    font-weight: 500;
   }
   
-  /* Meta text standardization */
   small {
-    font-size: 12px;        /* text-xs */
-    font-weight: 500;       /* font-medium consistency */
+    font-size: 12px;
+    font-weight: 500;
     line-height: 1.4;
-    color: var(--color-muted-foreground);
   }
 }
 
@@ -210,26 +192,16 @@
 
 /* Essential component utilities */
 @layer components {
-  /* Custom account blue components - preserved for branding */
+  /* Custom account blue components - using HSL variables */
   .account-blue {
-    background-color: var(--color-accent-blue-foreground);
+    background-color: hsl(var(--accent-blue-foreground));
   }
   
   .account-blue-text {
-    color: var(--color-accent-blue-foreground);
+    color: hsl(var(--accent-blue-foreground));
   }
   
   .account-blue-border {
-    border-color: var(--color-accent-blue-border);
-  }
-  
-  /* Typing indicator animation */
-  @keyframes typing-dot-bounce {
-    0%, 40% { transform: translateY(0); }
-    20% { transform: translateY(-0.25rem); }
-  }
-  
-  .animate-typing-dot-bounce {
-    animation: typing-dot-bounce 1.25s ease-out infinite;
+    border-color: hsl(var(--accent-blue-border));
   }
 }

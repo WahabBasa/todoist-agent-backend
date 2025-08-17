@@ -91,7 +91,7 @@ export function ChatPanel({
           </Button>
         )}
 
-        <div className="relative flex flex-col w-full gap-2 bg-secondary rounded-3xl border border-input">
+        <div className="relative flex flex-col w-full gap-2 bg-muted rounded-3xl border border-input">
           <Textarea
             ref={inputRef}
             name="input"
@@ -124,7 +124,7 @@ export function ChatPanel({
             }}
           />
 
-          {/* Bottom control bar */}
+          {/* Bottom control bar - Morphic-style */}
           <div className="flex items-center justify-between p-3">
             <div className="flex items-center gap-2">
               <div className="text-xs text-muted-foreground">
@@ -137,21 +137,23 @@ export function ChatPanel({
                   variant="outline"
                   size="icon"
                   onClick={handleNewChat}
-                  className="shrink-0 rounded-full group"
+                  className="shrink-0 rounded-full group transition-all hover:bg-accent"
                   type="button"
                   disabled={isLoading}
                 >
-                  <MessageCirclePlus className="size-4 group-hover:rotate-12 transition-all" />
+                  <MessageCirclePlus className="size-4 group-hover:rotate-12 transition-all duration-200" />
                 </Button>
               )}
               <Button
                 type={isLoading ? 'button' : 'submit'}
                 size="icon"
                 variant="outline"
-                className={cn(isLoading && 'animate-pulse', 'rounded-full')}
-                disabled={
-                  (input.length === 0 && !isLoading)
-                }
+                className={cn(
+                  'rounded-full transition-all duration-200',
+                  isLoading ? 'animate-pulse' : 'hover:bg-accent',
+                  input.trim().length > 0 && !isLoading ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+                )}
+                disabled={input.length === 0 && !isLoading}
                 onClick={isLoading ? () => {} : undefined}
               >
                 {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
