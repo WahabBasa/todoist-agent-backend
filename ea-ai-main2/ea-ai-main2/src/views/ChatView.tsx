@@ -106,20 +106,24 @@ export function ChatView() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Scroll to the section when a new user message is sent
+  // Scroll to bottom when messages change (user or assistant)
   useEffect(() => {
-    if (sections.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.role === 'user') {
-        // If the last message is from user, find the corresponding section
-        const sectionId = lastMessage.id;
-        requestAnimationFrame(() => {
-          const sectionElement = document.getElementById(`section-${sectionId}`);
-          sectionElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      }
+    if (messages.length > 0) {
+      requestAnimationFrame(() => {
+        handleScrollToBottom();
+      });
     }
-  }, [sections, messages]);
+  }, [messages.length]);
+
+  // Initial scroll to bottom when conversation first loads
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Delay to ensure DOM is rendered
+      setTimeout(() => {
+        handleScrollToBottom();
+      }, 100);
+    }
+  }, [conversation]);
 
   const handleSubmit = async (inputValue: string) => {
     if (!inputValue.trim() || isGenerating) return;
@@ -215,99 +219,95 @@ export function ChatView() {
 
   return (
     <div 
-      className={cn(
-        'relative flex h-full min-w-0 flex-1 flex-col bg-background',
-        messages.length === 0 ? 'items-center justify-center' : ''
-      )}
+      className="relative flex h-full min-w-0 flex-1 flex-col bg-background"
       data-testid="full-chat"
     >
-      {/* Messages Container */}
-      <div
-        id="scroll-container"
-        ref={scrollContainerRef}
-        role="list"
-        aria-roledescription="chat messages"
-        className={cn(
-          'relative size-full pt-14',
-          sections.length > 0 ? 'flex-1 overflow-y-auto' : ''
-        )}
-      >
-        {sections.length === 0 ? (
-          /* Empty State - Centered */
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-medium text-foreground mb-2">Start a conversation</h3>
-              <p className="text-base text-muted-foreground max-w-md">
-                Ask me to create tasks, manage projects, or help with your workflow
-              </p>
+      {/* Messages Container - Takes available space */}
+      <div className="flex-1 relative">
+        <div
+          id="scroll-container"
+          ref={scrollContainerRef}
+          role="list"
+          aria-roledescription="chat messages"
+          className="h-full overflow-y-auto pt-14"
+        >
+          {sections.length === 0 ? (
+            /* Empty State - Centered */
+            <div className="h-full flex flex-col items-center justify-center p-6">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-medium text-foreground mb-2">Start a conversation</h3>
+                <p className="text-base text-muted-foreground max-w-md">
+                  Ask me to create tasks, manage projects, or help with your workflow
+                </p>
+              </div>
+              
+              <div className="w-full max-w-md">
+                <PromptSuggestions
+                  label="Quick actions:"
+                  append={handleAppend}
+                  suggestions={suggestions}
+                />
+              </div>
             </div>
-            
-            <div className="w-full max-w-md">
-              <PromptSuggestions
-                label="Quick actions:"
-                append={handleAppend}
-                suggestions={suggestions}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Messages - Scrollable */
-          <div className="relative mx-auto w-full max-w-3xl px-4">
-            {sections.map((section, sectionIndex) => (
-              <div
-                key={section.id}
-                id={`section-${section.id}`}
-                className="chat-section mb-8"
-                style={
-                  sectionIndex === sections.length - 1
-                    ? { minHeight: 'calc(-228px + 100dvh)' }
-                    : {}
-                }
-              >
-                {/* User message */}
-                <div className="flex flex-col gap-4 mb-4">
-                  <Message from={section.userMessage.role}>
-                    <MessageContent>
-                      {section.userMessage.content}
-                    </MessageContent>
-                  </Message>
-                </div>
-
-                {/* Assistant messages */}
-                {section.assistantMessages.map(assistantMessage => (
-                  <div key={assistantMessage.id} className="flex flex-col gap-4 mb-4">
-                    <Message from={assistantMessage.role}>
+          ) : (
+            /* Messages - Scrollable */
+            <div className="relative mx-auto w-full max-w-3xl px-4">
+              {sections.map((section, sectionIndex) => (
+                <div
+                  key={section.id}
+                  id={`section-${section.id}`}
+                  className="chat-section mb-8"
+                  style={
+                    sectionIndex === sections.length - 1
+                      ? { minHeight: 'calc(-228px + 100dvh)' }
+                      : {}
+                  }
+                >
+                  {/* User message */}
+                  <div className="flex flex-col gap-4 mb-4">
+                    <Message from={section.userMessage.role}>
                       <MessageContent>
-                        <Response>{assistantMessage.content}</Response>
+                        {section.userMessage.content}
                       </MessageContent>
                     </Message>
                   </div>
-                ))}
-              </div>
-            ))}
-            
-            {/* Loading indicator - show after last section */}
-            {isGenerating && (
-              <div className="mb-4">
-                <Message from="assistant">
-                  <MessageContent>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="w-3 h-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      <span>Thinking...</span>
+
+                  {/* Assistant messages */}
+                  {section.assistantMessages.map(assistantMessage => (
+                    <div key={assistantMessage.id} className="flex flex-col gap-4 mb-4">
+                      <Message from={assistantMessage.role}>
+                        <MessageContent>
+                          <Response>{assistantMessage.content}</Response>
+                        </MessageContent>
+                      </Message>
                     </div>
-                  </MessageContent>
-                </Message>
-              </div>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              ))}
+              
+              {/* Loading indicator - show after last section */}
+              {isGenerating && (
+                <div className="mb-4">
+                  <Message from="assistant">
+                    <MessageContent>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="w-3 h-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <span>Thinking...</span>
+                      </div>
+                    </MessageContent>
+                  </Message>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Input Panel - Sticky at Bottom */}
+      {/* Input Panel - Natural bottom position */}
       <div 
         className={cn(
           'w-full bg-background group/form-container shrink-0',
-          messages.length > 0 ? 'sticky bottom-0 px-2 pb-4' : 'px-6'
+          messages.length > 0 ? 'px-2 pb-4' : 'px-6'
         )}
       >
         {messages.length === 0 && (
