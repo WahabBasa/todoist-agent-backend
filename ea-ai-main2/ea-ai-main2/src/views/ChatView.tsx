@@ -1,60 +1,46 @@
 import { useState } from "react";
-import { useAction, useQuery, useMutation } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
-import { Avatar, AvatarFallback } from "../components/ui/avatar";
-import { PromptSuggestions } from "../components/ui/prompt-suggestions";
-import { MessageInput } from "../components/ui/message-input";
-import { Card, CardContent } from "../components/ui/card";
-import { Loader2 } from "lucide-react";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  createdAt?: Date;
-  timestamp: number;
-  toolCalls?: Array<{
-    name: string;
-    args: any;
-    result: any;
-  }>;
-}
+// AI SDK Elements imports
+import { Conversation, ConversationContent, ConversationScrollButton } from "../components/ai-elements/conversation";
+import { Message, MessageContent } from "../components/ai-elements/message";
+import { Response } from "../components/ai-elements/response";
+import { PromptInput, PromptInputTextarea, PromptInputToolbar, PromptInputSubmit } from "../components/ai-elements/prompt-input";
+
+// Keep existing prompt suggestions for now
+import { PromptSuggestions } from "../components/ui/prompt-suggestions";
 
 export function ChatView() {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [useHaiku, setUseHaiku] = useState(false);
-
+  const [useHaiku] = useState(false);
+  
   const chatWithAI = useAction(api.ai.chatWithAI);
   const conversation = useQuery(api.conversations.getConversation);
-  
-  // Only transform messages if conversation has loaded to prevent flash
-  const messages: Message[] = conversation ? 
+
+  // Convert existing conversation messages to display format
+  const messages = conversation ? 
     ((conversation.messages as any[]) || [])
       .filter(msg => msg.role === "user" || msg.role === "assistant")
       .map((msg, index) => ({
         id: `${msg.timestamp}-${index}`,
-        role: msg.role,
+        role: msg.role as 'user' | 'assistant',
         content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        createdAt: new Date(msg.timestamp),
-        timestamp: msg.timestamp,
-        toolCalls: msg.toolCalls
       }))
     : [];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isGenerating) return;
+  const handleSubmit = async (inputValue: string) => {
+    if (!inputValue.trim() || isGenerating) return;
 
-    const userMessage = input.trim();
-    setInput("");
     setIsGenerating(true);
+    setInput("");
 
     try {
-      const result = await chatWithAI({ message: userMessage, useHaiku });
+      const result = await chatWithAI({ message: inputValue.trim(), useHaiku });
       
-      // Check if result has toolResults property (handle different API response formats)
+      // Handle tool results feedback
       if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
         const toolResults = (result as any).toolResults;
         if (toolResults.length > 0) {
@@ -75,43 +61,11 @@ export function ChatView() {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
   };
 
   const handleAppend = async (message: { role: "user"; content: string }) => {
-    setInput(message.content);
-    // Auto-submit the suggestion
-    setIsGenerating(true);
-    try {
-      const result = await chatWithAI({ message: message.content, useHaiku });
-      
-      // Check if result has toolResults property (handle different API response formats)
-      if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
-        const toolResults = (result as any).toolResults;
-        if (toolResults.length > 0) {
-          const successfulToolCalls = toolResults.filter((tc: any) => tc.success);
-          if (successfulToolCalls.length > 0) {
-            toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`);
-          }
-          
-          const failedToolCalls = toolResults.filter((tc: any) => !tc.success);
-          if (failedToolCalls.length > 0) {
-            toast.error(`${failedToolCalls.length} action(s) failed`);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Chat error:", error);
-      toast.error("Failed to send message");
-    } finally {
-      setIsGenerating(false);
-      setInput("");
-    }
+    await handleSubmit(message.content);
   };
-
 
   const suggestions = [
     "Create a task to review the quarterly report",
@@ -122,87 +76,104 @@ export function ChatView() {
     "Move all marketing tasks to the Website Redesign project"
   ];
 
+  // Show loading state while conversation is loading
+  if (conversation === undefined) {
+    return (
+      <div className="h-full flex flex-col bg-gray-50">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="w-5 h-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span className="text-base">Loading conversation...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Messages Container - Full height, seamless background */}
-      <div className="flex-1 overflow-hidden flex flex-col bg-gray-50">
-        {messages.length === 0 ? (
-          /* Empty State */
-          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50">
-            <div className="text-center mb-6">
-              <div className="mb-3"></div>
-              <h3 className="text-lg font-medium text-main mb-2">Start a conversation</h3>
-              <p className="text-base text-secondary max-w-md">
-                Ask me to create tasks, manage projects, or help with your workflow
-              </p>
+      <Conversation className="flex-1 relative">
+        <ConversationContent className="p-4">
+          {messages.length === 0 ? (
+            /* Empty State */
+            <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[60vh]">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-medium text-foreground mb-2">Start a conversation</h3>
+                <p className="text-base text-muted-foreground max-w-md">
+                  Ask me to create tasks, manage projects, or help with your workflow
+                </p>
+              </div>
+              
+              <div className="w-full max-w-md">
+                <PromptSuggestions
+                  label="Quick actions:"
+                  append={handleAppend}
+                  suggestions={suggestions}
+                />
+              </div>
             </div>
-            
-            <div className="w-full max-w-md">
-              <PromptSuggestions
-                label="Quick actions:"
-                append={handleAppend}
-                suggestions={suggestions}
-              />
-            </div>
-          </div>
-        ) : (
-          /* Messages List */
-          <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+          ) : (
+            /* Messages */
             <div className="max-w-3xl mx-auto space-y-3 px-8">
-              {messages.map((msg) => (
-                <div key={msg.id}>
-                  {msg.role === "user" ? (
-                    /* User Message - Left aligned within centered container */
-                    <div className="flex justify-start">
-                      <div className="bg-primary text-primary-foreground rounded-lg px-3 py-2 shadow-sm flex items-center gap-2 max-w-[90%]">
-                        <Avatar className="w-5 h-5 flex-shrink-0">
-                          <AvatarFallback className="bg-primary-foreground text-primary text-xs font-medium">W</AvatarFallback>
-                        </Avatar>
-                        <p className="text-base text-primary whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    /* AI Message - Left aligned within centered container */
-                    <div className="flex justify-start">
-                      <div className="bg-muted/30 rounded-lg px-3 py-2 max-w-[90%]">
-                        <p className="text-base text-main whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              {messages.map((message) => (
+                <Message key={message.id} from={message.role}>
+                  <MessageContent>
+                    {message.role === 'assistant' ? (
+                      <Response>{message.content}</Response>
+                    ) : (
+                      message.content
+                    )}
+                  </MessageContent>
+                </Message>
               ))}
               
-              {/* Typing Indicator */}
+              {/* Loading indicator */}
               {isGenerating && (
-                <div className="flex justify-start">
-                  <div className="bg-muted/30 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2 text-system-base text-lightness-secondary">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Typing...</span>
+                <Message from="assistant">
+                  <MessageContent>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="w-3 h-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>Thinking...</span>
                     </div>
-                  </div>
-                </div>
+                  </MessageContent>
+                </Message>
               )}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </ConversationContent>
+        
+        <ConversationScrollButton />
+      </Conversation>
 
-      {/* Input Area - Clean single border */}
+      {/* Input Area */}
       <div className="bg-background p-6 flex justify-center">
         <div className="w-full max-w-3xl">
-          <form onSubmit={handleSubmit}>
-            <MessageInput
+          <PromptInput 
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const inputValue = formData.get('message') as string;
+              if (inputValue) {
+                handleSubmit(inputValue);
+              }
+            }}
+            className="bg-card/90 border-0 rounded-xl shadow-lg"
+          >
+            <PromptInputTextarea 
+              name="message"
               value={input}
-              onChange={handleInputChange}
-              isGenerating={isGenerating}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message..."
-              allowAttachments={false}
-              className="bg-card/90 border-0 rounded-xl shadow-lg"
-              stop={isGenerating ? () => setIsGenerating(false) : undefined}
+              className="min-h-[60px] resize-none"
             />
-          </form>
+            <PromptInputToolbar>
+              <PromptInputSubmit
+                className="absolute right-2 bottom-2"
+                disabled={isGenerating}
+                status={isGenerating ? 'streaming' : 'ready'}
+              />
+            </PromptInputToolbar>
+          </PromptInput>
         </div>
       </div>
     </div>
