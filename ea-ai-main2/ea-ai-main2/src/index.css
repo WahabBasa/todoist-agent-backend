@@ -8,6 +8,35 @@
   --default-transition: all 0.2s ease;
   --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
+  /* Typography Scale Standardization - Chat Input Inspired */
+  --font-size-xs: 12px;
+  --line-height-xs: 1.4;
+  --font-weight-xs: 500;
+  
+  --font-size-sm: 14px;
+  --line-height-sm: 1.5;
+  --font-weight-sm: 500;
+  
+  --font-size-base: 14px;     /* Make base same as sm for consistency */
+  --line-height-base: 1.5;
+  --font-weight-base: 500;
+  
+  --font-size-lg: 18px;       /* Section headings */
+  --line-height-lg: 1.4;
+  --font-weight-lg: 600;
+  
+  --font-size-xl: 20px;       /* Page headings */
+  --line-height-xl: 1.3;
+  --font-weight-xl: 600;
+  
+  --font-size-2xl: 24px;      /* Large headings */
+  --line-height-2xl: 1.2;
+  --font-weight-2xl: 600;
+  
+  --font-size-3xl: 30px;      /* Hero text */
+  --line-height-3xl: 1.2;
+  --font-weight-3xl: 600;
+  
   /* Colors */
   --color-background: #ffffff;
   --color-foreground: #0d0d0d;
@@ -103,38 +132,67 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
     font-family: var(--default-font-family);
+    font-size: 14px;                      /* Match text-sm/text-base standard */
+    font-weight: 500;                     /* font-medium consistency */
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-weight: 500;
   }
   
   * {
     border-color: var(--color-border);
   }
   
-  /* Typography standards */
-  h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
+  /* Ensure all text elements inherit consistent sizing */
+  p, span, div {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+  }
+  
+  /* Typography hierarchy with professional standards */
+  h1 { 
+    font-size: 20px;        /* text-xl */
+    font-weight: 600;       /* font-semibold */
+    line-height: 1.3;
     color: var(--color-foreground);
   }
   
-  button {
-    font-weight: 500;
-    font-size: 0.875rem;
+  h2, h3 { 
+    font-size: 18px;        /* text-lg */
+    font-weight: 600;       /* font-semibold */
+    line-height: 1.4;
+    color: var(--color-foreground);
   }
   
-  input, textarea {
-    font-size: 0.875rem;
-    font-weight: 500;
+  h4, h5, h6 { 
+    font-size: 14px;        /* text-sm */
+    font-weight: 600;       /* font-semibold */
+    line-height: 1.5;
+    color: var(--color-foreground);
+  }
+  
+  /* Standardize interactive elements to match chat input */
+  button, input, textarea, select {
+    font-size: 14px;        /* text-sm standard */
+    font-weight: 500;       /* font-medium consistency */
+    line-height: 1.5;
   }
   
   label {
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-size: 14px;        /* text-sm standard */
+    font-weight: 500;       /* font-medium consistency */
     color: var(--color-foreground);
+  }
+  
+  /* Meta text standardization */
+  small {
+    font-size: 12px;        /* text-xs */
+    font-weight: 500;       /* font-medium consistency */
+    line-height: 1.4;
+    color: var(--color-muted-foreground);
   }
 }
 

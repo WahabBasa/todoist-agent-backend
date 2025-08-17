@@ -156,7 +156,7 @@ const Sidebar = React.forwardRef<
       return (
         <div
           className={cn(
-            'flex h-full w-80 flex-col bg-sidebar text-sidebar-foreground',
+            'flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground',
             className
           )}
           ref={ref}
@@ -173,7 +173,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-88 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-80 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
             side={side}
           >
             <SheetHeader className="sr-only">
@@ -198,7 +198,7 @@ const Sidebar = React.forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
-            'relative w-80 bg-transparent transition-[width] duration-200 ease-linear',
+            'relative w-72 bg-transparent transition-[width] duration-200 ease-linear',
             'group-data-[collapsible=offcanvas]:w-0',
             'group-data-[side=right]:rotate-180',
             variant === 'floating' || variant === 'inset'
@@ -208,7 +208,7 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            'fixed inset-y-0 z-10 hidden h-svh w-80 transition-[left,right,width] duration-200 ease-linear md:flex',
+            'fixed inset-y-0 z-10 hidden h-svh w-72 transition-[left,right,width] duration-200 ease-linear md:flex',
             side === 'left'
               ? 'left-0 group-data-[collapsible=offcanvas]:-left-80'
               : 'right-0 group-data-[collapsible=offcanvas]:-right-80',
@@ -378,7 +378,7 @@ const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        'flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden',
+        'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden group-data-[collapsible=icon]:overflow-hidden',
         className
       )}
       {...props}
