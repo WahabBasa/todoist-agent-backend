@@ -4,417 +4,174 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* --- THIS IS THE FIX --- */
-/* Ensure the root elements take up the full viewport height, */
-/* which allows child elements with h-full to expand correctly. */
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-
-}
-
-/* Hide scrollbars but allow scrolling */
-body::-webkit-scrollbar {
-  display: none;
-}
-
-body {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none; 
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-@theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+@theme {
+  --default-transition: all 0.2s ease;
+  --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Shiki syntax highlighting colors */
-  --color-shiki-light: var(--foreground);
-  --color-shiki-light-bg: var(--background);
-  --color-shiki-dark: var(--foreground);
-  --color-shiki-dark-bg: var(--background);
-
-  /* Custom Design System Colors */
-  --color-text-primary: oklch(8% 0 0);
-  --color-text-main: oklch(20% 0 0);
-  --color-text-secondary: oklch(35% 0 0);
-  --color-text-tertiary: oklch(55% 0 0);
-
-  /* Typography Scale */
-  --font-size-system-sm: 0.875rem;
-  --font-size-system-base: 1rem;
-  --font-size-system-lg: 1.125rem;
-
-  /* Spacing Scale */
-  --spacing-system-1: 0.25rem;
-  --spacing-system-2: 0.5rem;
-  --spacing-system-3: 0.75rem;
-  --spacing-system-4: 1rem;
-  --spacing-system-6: 1.5rem;
-  --spacing-system-8: 2rem;
-}
-
-:root {
+  /* Colors */
+  --color-background: #ffffff;
+  --color-foreground: #0d0d0d;
+  --color-card: #ffffff;
+  --color-card-foreground: #0d0d0d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0d0d0d;
+  --color-primary: #404040;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f5f5f5;
+  --color-secondary-foreground: #0d0d0d;
+  --color-muted: #f8f9fb;
+  --color-muted-foreground: #595959;
+  --color-accent: #f7f8fc;
+  --color-accent-foreground: #0d0d0d;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e5e5e5;
+  --color-input: #fafafa;
+  --color-ring: #404040;
+  
+  /* Custom colors - preserved */
+  --color-sidebar-background: #f8f9fb;
+  --color-sidebar-foreground: #0d0d0d;
+  --color-sidebar-primary: #404040;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #f7f8fc;
+  --color-sidebar-accent-foreground: #0d0d0d;
+  --color-sidebar-border: #f0f1f5;
+  --color-sidebar-ring: #404040;
+  
+  --color-accent-blue: #eff6ff;
+  --color-accent-blue-foreground: #2563eb;
+  --color-accent-blue-border: #bfdbfe;
+  
+  /* Radius */
   --radius: 0.5rem;
-  --background: oklch(100% 0 0);                /* Pure white */
-  --foreground: oklch(8% 0 0);                  /* Much darker text */
-  --card: oklch(100% 0 0);                      /* Pure white */
-  --card-foreground: oklch(8% 0 0);             /* Much darker text */
-  --popover: oklch(100% 0 0);                   /* Pure white */
-  --popover-foreground: oklch(8% 0 0);          /* Much darker text */
-  --primary: oklch(25% 0 0);                    /* Much darker primary */
-  --primary-foreground: oklch(100% 0 0);        /* White */
-  --secondary: oklch(96% 0 0);                  /* Light grey background */
-  --secondary-foreground: oklch(8% 0 0);        /* Dark text */
-  --muted: oklch(98.5% 0.004 252.12);          /* Silver-blue muted bg */
-  --muted-foreground: oklch(35% 0 0);           /* Much darker muted text */
-  --accent: oklch(97.5% 0.005 252.12);         /* Silver-blue accent bg */
-  --accent-foreground: oklch(8% 0 0);           /* Dark accent text */
-  --destructive: oklch(60% 0.20 0);             /* Error red */
-  --border: oklch(92% 0 0);                     /* Subtle light borders */
-  --input: oklch(98% 0 0);                      /* Input background */
-  --ring: oklch(25% 0 0);                       /* Darker focus ring */
-  --chart-1: oklch(45% 0 0);                    /* Medium grey */
-  --chart-2: oklch(52% 0.15 158);               /* Green */
-  --chart-3: oklch(60% 0 0);                    /* Dark grey */
-  --chart-4: oklch(56% 0.18 43);                /* Yellow */
-  --chart-5: oklch(60% 0.20 0);                 /* Red */
-  --sidebar: oklch(98.0% 0.006 252.12);        /* Silver-blue medium shade */
-  --sidebar-foreground: oklch(8% 0 0);          /* Much darker text */
-  --sidebar-primary: oklch(25% 0 0);            /* Dark primary */
-  --sidebar-primary-foreground: oklch(100% 0 0); /* White */
-  --sidebar-accent: oklch(97.0% 0.005 252.12);  /* Silver-blue hover state */
-  --sidebar-accent-foreground: oklch(8% 0 0);   /* Dark text */
-  --sidebar-border: oklch(96.0% 0.008 252.12);  /* Silver-blue border */
-  --sidebar-ring: oklch(25% 0 0);               /* Darker ring */
-  
-  /* Shiki syntax highlighting (light theme) */
-  --shiki-light: oklch(13% 0 0);                /* Dark text for light theme */
-  --shiki-light-bg: oklch(96% 0 0);             /* Light background */
-  --shiki-dark: oklch(13% 0 0);                 /* Fallback for dark */
-  --shiki-dark-bg: oklch(96% 0 0);              /* Fallback for dark */
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  
-  /* Shiki syntax highlighting (dark theme) */
-  --shiki-light: oklch(0.985 0 0);              /* Light text for dark theme */
-  --shiki-light-bg: oklch(0.269 0 0);           /* Dark background */
-  --shiki-dark: oklch(0.985 0 0);               /* Light text for dark theme */
-  --shiki-dark-bg: oklch(0.269 0 0);            /* Dark background */
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: #171717;
+    --color-foreground: #fafafa;
+    --color-card: #262626;
+    --color-card-foreground: #fafafa;
+    --color-popover: #262626;
+    --color-popover-foreground: #fafafa;
+    --color-primary: #e5e5e5;
+    --color-primary-foreground: #262626;
+    --color-secondary: #404040;
+    --color-secondary-foreground: #fafafa;
+    --color-muted: #404040;
+    --color-muted-foreground: #a3a3a3;
+    --color-accent: #404040;
+    --color-accent-foreground: #fafafa;
+    --color-destructive: #ef4444;
+    --color-destructive-foreground: #fafafa;
+    --color-border: #262626;
+    --color-input: #404040;
+    --color-ring: #737373;
+    
+    --color-sidebar-background: #262626;
+    --color-sidebar-foreground: #fafafa;
+    --color-sidebar-primary: #3b82f6;
+    --color-sidebar-primary-foreground: #fafafa;
+    --color-sidebar-accent: #404040;
+    --color-sidebar-accent-foreground: #fafafa;
+    --color-sidebar-border: #262626;
+    --color-sidebar-ring: #737373;
+    
+    --color-accent-blue: #1e3a8a;
+    --color-accent-blue-foreground: #93c5fd;
+    --color-accent-blue-border: #1e40af;
+  }
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+
+  /* Global layout setup */
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
   }
+  
+  /* Hide scrollbars but preserve scroll functionality */
+  body::-webkit-scrollbar {
+    display: none;
+  }
+  
   body {
-    @apply bg-background text-foreground font-medium;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    font-family: var(--default-font-family);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-weight: 500;
   }
   
-  /* Enhanced typography hierarchy matching chat standards */
+  * {
+    border-color: var(--color-border);
+  }
+  
+  /* Typography standards */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold text-foreground;
+    font-weight: 600;
+    color: var(--color-foreground);
   }
   
-  /* Chat-inspired typography standards */
-  .text-input-primary {
-    @apply text-sm font-medium text-foreground;
-  }
-  
-  .text-meta {
-    @apply text-xs text-muted-foreground;
-  }
-  
-  .text-secondary-content {
-    @apply text-sm text-muted-foreground;
-  }
-  
-  /* Better sidebar text */
-  [data-sidebar="sidebar"] {
-    @apply text-sidebar-foreground font-medium;
-  }
-  
-  /* Improved button text - matching chat controls */
   button {
-    @apply font-medium text-sm;
+    font-weight: 500;
+    font-size: 0.875rem;
   }
   
-  /* Better navigation text */
-  [data-sidebar="menu-button"] {
-    @apply font-medium text-sm text-sidebar-foreground;
-  }
-  
-  /* Input elements should match chat input */
   input, textarea {
-    @apply text-sm font-medium;
+    font-size: 0.875rem;
+    font-weight: 500;
   }
   
-  /* Form labels should be consistent */
   label {
-    @apply text-sm font-medium text-foreground;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-foreground);
   }
 }
 
-/* Utility for hiding scrollbars while preserving scroll functionality */
 @layer utilities {
+  /* Scrollbar utilities */
   .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;     /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   
   .scrollbar-hide::-webkit-scrollbar {
-    display: none;            /* Chrome, Safari, Opera */
-  }
-
-  /* Responsive spacing utilities */
-  .space-responsive {
-    @apply space-y-2 sm:space-y-3 md:space-y-4;
-  }
-  
-  /* Better focus states for mobile */
-  .focus-mobile {
-    @apply focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none;
-  }
-  
-  /* Improved touch targets */
-  .touch-target {
-    @apply min-h-[44px] min-w-[44px];
-  }
-  
-  /* Enhanced card shadows */
-  .card-shadow {
-    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
-  }
-  
-  /* Better text contrast */
-  .text-enhanced {
-    @apply text-foreground font-medium;
-  }
-  
-  /* Improved hover states */
-  .hover-enhanced {
-    @apply hover:bg-accent/60 transition-all duration-200;
-  }
-  
-  /* Theme system utilities */
-  .theme-border-light {
-    border-color: oklch(96.0% 0.008 252.12);
-  }
-  
-  .theme-hover {
-    transition: background-color 0.2s ease;
-  }
-  
-  .theme-hover:hover {
-    background-color: oklch(97.5% 0.005 252.12);
-  }
-  
-  /* Design System Utilities - Chat-inspired typography */
-  
-  /* Text Color Utilities - standardized to match chat */
-  .text-primary { @apply text-foreground font-medium; }
-  .text-main { @apply text-foreground font-medium; }
-  .text-secondary { @apply text-muted-foreground; }
-  .text-tertiary { @apply text-muted-foreground; }
-  
-  /* Chat-inspired utility classes */
-  .text-chat-input { @apply text-sm font-medium placeholder:text-muted-foreground; }
-  .text-chat-meta { @apply text-xs text-muted-foreground; }
-  .text-chat-content { @apply text-sm text-foreground; }
-}
-
-/* Hide ScrollArea scrollbars specifically */
-@layer components {
-  .scroll-area-hide-scrollbar [data-slot="scroll-area-scrollbar"] {
     display: none;
   }
 }
 
-/* Typing indicator animations for shadcn-chatbot-kit */
-@keyframes typing-dot-bounce {
-  0%, 40% { 
-    transform: translateY(0); 
-  }
-  20% { 
-    transform: translateY(-0.25rem); 
-  }
-}
-
-@layer utilities {
-  .animate-typing-dot-bounce {
-    animation: typing-dot-bounce 1.25s ease-out infinite;
-  }
-}
-
-/* Account Logo Blue - Used sparingly on key components only */
+/* Essential component utilities */
 @layer components {
+  /* Custom account blue components - preserved for branding */
   .account-blue {
-    background-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
+    background-color: var(--color-accent-blue-foreground);
   }
   
   .account-blue-text {
-    color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
+    color: var(--color-accent-blue-foreground);
   }
   
   .account-blue-border {
-    border-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
-  }
-
-  /* Silver-Blue Theme System - Base Color: oklch(99.2% 0.003 252.12) */
-  .theme-bg-ultra-light {
-    background-color: oklch(99.5% 0.002 252.12); /* Lightest - for subtle accents */
+    border-color: var(--color-accent-blue-border);
   }
   
-  .theme-bg-extra-light {
-    background-color: oklch(99.2% 0.003 252.12); /* Original inbox color - for cards */
+  /* Typing indicator animation */
+  @keyframes typing-dot-bounce {
+    0%, 40% { transform: translateY(0); }
+    20% { transform: translateY(-0.25rem); }
   }
   
-  .theme-bg-light {
-    background-color: oklch(98.8% 0.004 252.12); /* Slightly darker - new inbox background */
+  .animate-typing-dot-bounce {
+    animation: typing-dot-bounce 1.25s ease-out infinite;
   }
-  
-  .theme-bg-medium {
-    background-color: oklch(98.0% 0.006 252.12); /* Medium shade - sidebar background */
-  }
-  
-  .theme-bg-accent {
-    background-color: oklch(96.5% 0.008 252.12); /* Accent shade - for emphasis */
-  }
-  
-  /* Legacy class for backward compatibility */
-  .inbox-bg {
-    background-color: oklch(98.8% 0.004 252.12); /* Maps to theme-bg-light */
-  }
-  
-  /* Primary Blue Theme Components */
-  .btn-primary-blue {
-    background-color: oklch(59.69% 0.165 252.12); /* #3B82F6 */
-    color: white;
-    border: 1px solid oklch(59.69% 0.165 252.12);
-  }
-  
-  .btn-primary-blue:hover {
-    background-color: oklch(54% 0.165 252.12); /* Darker blue on hover */
-    border-color: oklch(54% 0.165 252.12);
-  }
-  
-  /* Checkbox Primary Blue */
-  .checkbox-primary-blue[data-state="checked"] {
-    background-color: oklch(59.69% 0.165 252.12);
-    border-color: oklch(59.69% 0.165 252.12);
-  }
-  
-  /* Blue Priority Theme */
-  .priority-blue {
-    color: oklch(59.69% 0.165 252.12);
-    background-color: oklch(96% 0.02 252.12);
-    border-color: oklch(89% 0.03 252.12);
-  }
-}
-
-/* === CENTRALIZED DESIGN SYSTEM === */
-
-/* Typography and colors now defined in @theme block above */
-
-/* Spacing Scale */
-:root {
-  --space-1: 0.25rem;     /* 4px */
-  --space-2: 0.5rem;      /* 8px */
-  --space-3: 0.75rem;     /* 12px */
-  --space-4: 1rem;        /* 16px */
-  --space-6: 1.5rem;      /* 24px */
-  --space-8: 2rem;        /* 32px */
-  --space-12: 3rem;       /* 48px */
-  --space-16: 4rem;       /* 64px */
-  
-  /* Border & Background System */
-  --border-default: oklch(92% 0 0);
-  --border-subtle: oklch(96% 0 0);
-  --bg-subtle: oklch(98% 0 0);
-  --bg-hover: oklch(96% 0 0);
-}
-
-/* Component Sizes */
-:root {
-  --component-height-sm: 2rem;      /* 32px */
-  --component-height-md: 2.25rem;   /* 36px */
-  --component-height-lg: 2.5rem;    /* 40px */
-  
-  --button-padding-sm: var(--space-2) var(--space-3);
-  --button-padding-md: var(--space-3) var(--space-4);
-  --button-padding-lg: var(--space-4) var(--space-6);
-  
-  --card-padding: var(--space-6);
-  --page-padding: var(--space-4);
-  --sidebar-width: 16rem;
 }
