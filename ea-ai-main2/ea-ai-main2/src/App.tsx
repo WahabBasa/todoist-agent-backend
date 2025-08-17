@@ -62,9 +62,9 @@ function MainApp() {
         activeView={activeView}
         onViewChange={setActiveView}
       />
-      <SidebarInset className="flex flex-col min-h-screen flex-1">
+      <SidebarInset className="min-h-screen">
         {/* Main Content Area - Full Screen */}
-        <main className="flex-1 h-screen overflow-auto">
+        <main className="flex flex-1 min-h-0">
           {renderActiveView()}
         </main>
       </SidebarInset>

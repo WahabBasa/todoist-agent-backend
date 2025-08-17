@@ -222,15 +222,14 @@ export function ChatView() {
       className="relative flex h-full min-w-0 flex-1 flex-col bg-background"
       data-testid="full-chat"
     >
-      {/* Messages Container - Takes available space */}
-      <div className="flex-1 relative">
-        <div
-          id="scroll-container"
-          ref={scrollContainerRef}
-          role="list"
-          aria-roledescription="chat messages"
-          className="h-full overflow-y-auto pt-14"
-        >
+      {/* Messages Container - Direct scroll container */}
+      <div
+        id="scroll-container"
+        ref={scrollContainerRef}
+        role="list"
+        aria-roledescription="chat messages"
+        className="flex-1 overflow-y-auto pt-14"
+      >
           {sections.length === 0 ? (
             /* Empty State - Centered */
             <div className="h-full flex flex-col items-center justify-center p-6">
@@ -301,7 +300,6 @@ export function ChatView() {
             </div>
           )}
         </div>
-      </div>
 
       {/* Input Panel - Natural bottom position */}
       <div 
