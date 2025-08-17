@@ -181,9 +181,22 @@ body {
     @apply bg-background text-foreground font-medium;
   }
   
-  /* Enhanced typography hierarchy */
+  /* Enhanced typography hierarchy matching chat standards */
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold text-foreground;
+  }
+  
+  /* Chat-inspired typography standards */
+  .text-input-primary {
+    @apply text-sm font-medium text-foreground;
+  }
+  
+  .text-meta {
+    @apply text-xs text-muted-foreground;
+  }
+  
+  .text-secondary-content {
+    @apply text-sm text-muted-foreground;
   }
   
   /* Better sidebar text */
@@ -191,14 +204,24 @@ body {
     @apply text-sidebar-foreground font-medium;
   }
   
-  /* Improved button text */
+  /* Improved button text - matching chat controls */
   button {
-    @apply font-medium;
+    @apply font-medium text-sm;
   }
   
   /* Better navigation text */
   [data-sidebar="menu-button"] {
-    @apply font-medium text-sidebar-foreground;
+    @apply font-medium text-sm text-sidebar-foreground;
+  }
+  
+  /* Input elements should match chat input */
+  input, textarea {
+    @apply text-sm font-medium;
+  }
+  
+  /* Form labels should be consistent */
+  label {
+    @apply text-sm font-medium text-foreground;
   }
 }
 
@@ -256,13 +279,18 @@ body {
     background-color: oklch(97.5% 0.005 252.12);
   }
   
-  /* Design System Utilities - Now using standard Tailwind classes */
+  /* Design System Utilities - Chat-inspired typography */
   
-  /* Text Color Utilities */
-  .text-primary { @apply text-text-primary; }
-  .text-main { @apply text-text-main; }
-  .text-secondary { @apply text-text-secondary; }
-  .text-tertiary { @apply text-text-tertiary; }
+  /* Text Color Utilities - standardized to match chat */
+  .text-primary { @apply text-foreground font-medium; }
+  .text-main { @apply text-foreground font-medium; }
+  .text-secondary { @apply text-muted-foreground; }
+  .text-tertiary { @apply text-muted-foreground; }
+  
+  /* Chat-inspired utility classes */
+  .text-chat-input { @apply text-sm font-medium placeholder:text-muted-foreground; }
+  .text-chat-meta { @apply text-xs text-muted-foreground; }
+  .text-chat-content { @apply text-sm text-foreground; }
 }
 
 /* Hide ScrollArea scrollbars specifically */

@@ -18,11 +18,11 @@ export function ProjectsView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Projects</h2>
-          <p className="text-base-content/70">Organize your tasks into projects</p>
+          <h2 className="text-2xl font-semibold">Projects</h2>
+          <p className="text-secondary-content">Organize your tasks into projects</p>
         </div>
-        <button className="btn btn-primary">
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button className="bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-md hover:bg-primary/90 transition-all flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
           New Project
@@ -33,12 +33,12 @@ export function ProjectsView() {
         <div className="text-center py-16">
           <div className="text-6xl mb-4">📁</div>
           <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
-          <p className="text-base-content/70 mb-6">
+          <p className="text-secondary-content mb-6">
             Create your first project to organize your tasks and improve your workflow
           </p>
           <div className="space-y-3">
-            <button className="btn btn-primary">Create Project</button>
-            <div className="text-sm text-base-content/50">
+            <button className="bg-primary text-primary-foreground text-sm font-medium px-6 py-2 rounded-md hover:bg-primary/90 transition-all">Create Project</button>
+            <div className="text-meta">
               💡 Try asking the AI: "Create a project for website redesign"
             </div>
           </div>
@@ -57,17 +57,17 @@ export function ProjectsView() {
                 </div>
                 
                 {project.description && (
-                  <p className="text-sm text-base-content/70 mb-4">{project.description}</p>
+                  <p className="text-secondary-content mb-4">{project.description}</p>
                 )}
                 
                 <div className="flex justify-between items-center mb-3">
                   <div className="text-sm">
                     <span className="font-semibold">{project.taskCount || 0}</span> 
-                    <span className="text-base-content/60"> tasks</span>
+                    <span className="text-muted-foreground"> tasks</span>
                   </div>
                   <div className="text-sm text-success">
                     <span className="font-semibold">{project.completedTaskCount || 0}</span>
-                    <span className="text-base-content/60"> completed</span>
+                    <span className="text-muted-foreground"> completed</span>
                   </div>
                 </div>
                 
@@ -84,13 +84,13 @@ export function ProjectsView() {
                 </div>
                 
                 <div className="card-actions justify-end">
-                  <button className="btn btn-ghost btn-sm">
+                  <button className="text-sm font-medium px-3 py-1 rounded-md hover:bg-accent transition-all flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                     Edit
                   </button>
-                  <button className="btn btn-primary btn-sm">
+                  <button className="bg-primary text-primary-foreground text-sm font-medium px-3 py-1 rounded-md hover:bg-primary/90 transition-all flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -108,17 +108,17 @@ export function ProjectsView() {
       {projects.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="stat-title">Total Projects</div>
+            <div className="text-meta">Total Projects</div>
             <div className="stat-value text-primary">{projects.length}</div>
           </div>
           <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="stat-title">Total Tasks</div>
+            <div className="text-meta">Total Tasks</div>
             <div className="stat-value text-accent">
               {projects.reduce((total, p) => total + (p.taskCount || 0), 0)}
             </div>
           </div>
           <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="stat-title">Completed Tasks</div>
+            <div className="text-meta">Completed Tasks</div>
             <div className="stat-value text-success">
               {projects.reduce((total, p) => total + (p.completedTaskCount || 0), 0)}
             </div>

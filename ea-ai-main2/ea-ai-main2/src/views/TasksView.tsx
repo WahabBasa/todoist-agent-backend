@@ -133,31 +133,31 @@ export function TasksView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Tasks</h2>
-          <p className="text-base-content/70">Manage your tasks and track progress</p>
+          <h2 className="text-2xl font-semibold">Tasks</h2>
+          <p className="text-secondary-content">Manage your tasks and track progress</p>
         </div>
       </div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="stat bg-base-100 rounded-lg shadow">
-          <div className="stat-title">Total Tasks</div>
+          <div className="text-meta">Total Tasks</div>
           <div className="stat-value text-primary">{stats.total}</div>
         </div>
         <div className="stat bg-base-100 rounded-lg shadow">
-          <div className="stat-title">Active</div>
+          <div className="text-meta">Active</div>
           <div className="stat-value text-warning">{stats.active}</div>
         </div>
         <div className="stat bg-base-100 rounded-lg shadow">
-          <div className="stat-title">Completed</div>
+          <div className="text-meta">Completed</div>
           <div className="stat-value text-success">{stats.completed}</div>
         </div>
         <div className="stat bg-base-100 rounded-lg shadow">
-          <div className="stat-title">Overdue</div>
+          <div className="text-meta">Overdue</div>
           <div className="stat-value text-error">{stats.overdue}</div>
         </div>
         <div className="stat bg-base-100 rounded-lg shadow">
-          <div className="stat-title">Recurring</div>
+          <div className="text-meta">Recurring</div>
           <div className="stat-value text-info">{stats.recurring}</div>
         </div>
       </div>
@@ -169,7 +169,7 @@ export function TasksView() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="form-control">
               <label className="label">
-                <span className="label-text text-sm">Status</span>
+                <span className="text-input-primary">Status</span>
               </label>
               <select 
                 className="select select-sm select-bordered"
@@ -184,7 +184,7 @@ export function TasksView() {
             
             <div className="form-control">
               <label className="label">
-                <span className="label-text text-sm">Project</span>
+                <span className="text-input-primary">Project</span>
               </label>
               <select 
                 className="select select-sm select-bordered"
@@ -200,7 +200,7 @@ export function TasksView() {
             
             <div className="form-control">
               <label className="label">
-                <span className="label-text text-sm">Priority</span>
+                <span className="text-input-primary">Priority</span>
               </label>
               <select 
                 className="select select-sm select-bordered"
@@ -217,7 +217,7 @@ export function TasksView() {
             
             <div className="form-control">
               <label className="label">
-                <span className="label-text text-sm">Sort By</span>
+                <span className="text-input-primary">Sort By</span>
               </label>
               <select 
                 className="select select-sm select-bordered"
@@ -232,7 +232,7 @@ export function TasksView() {
             
             <div className="form-control">
               <label className="label">
-                <span className="label-text text-sm">Order</span>
+                <span className="text-input-primary">Order</span>
               </label>
               <select 
                 className="select select-sm select-bordered"
@@ -270,7 +270,7 @@ export function TasksView() {
               Add New Task
             </h3>
             <button 
-              className="btn btn-primary btn-sm"
+              className="bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-md hover:bg-primary/90 transition-all"
               onClick={() => setIsFormOpen(!isFormOpen)}
             >
               {isFormOpen ? "Cancel" : "New Task"}
@@ -281,7 +281,7 @@ export function TasksView() {
             <form onSubmit={handleCreateTask} className="space-y-4 mt-4">
               <div className="form-control">
                 <label className="label">
-                  <span className="label-text">Task Title *</span>
+                  <span className="text-input-primary">Task Title *</span>
                 </label>
                 <input
                   type="text"
@@ -295,7 +295,7 @@ export function TasksView() {
               
               <div className="form-control">
                 <label className="label">
-                  <span className="label-text">Description</span>
+                  <span className="text-input-primary">Description</span>
                 </label>
                 <textarea
                   className="textarea textarea-bordered"
@@ -309,7 +309,7 @@ export function TasksView() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text">Priority</span>
+                    <span className="text-input-primary">Priority</span>
                   </label>
                   <select
                     className="select select-bordered w-full"
@@ -325,7 +325,7 @@ export function TasksView() {
                 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text">Project</span>
+                    <span className="text-input-primary">Project</span>
                   </label>
                   <select
                     className="select select-bordered w-full"
@@ -343,7 +343,7 @@ export function TasksView() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text">Due Date</span>
+                    <span className="text-input-primary">Due Date</span>
                   </label>
                   <input
                     type="datetime-local"
@@ -355,7 +355,7 @@ export function TasksView() {
                 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text">Tags (comma-separated)</span>
+                    <span className="text-input-primary">Tags (comma-separated)</span>
                   </label>
                   <input
                     type="text"
@@ -369,7 +369,7 @@ export function TasksView() {
               
               <div className="form-control">
                 <label className="label">
-                  <span className="label-text">Estimated Time</span>
+                  <span className="text-input-primary">Estimated Time</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -394,7 +394,7 @@ export function TasksView() {
               
               <div className="form-control">
                 <label className="label cursor-pointer">
-                  <span className="label-text">Recurring Task</span>
+                  <span className="text-input-primary">Recurring Task</span>
                   <input 
                     type="checkbox" 
                     className="checkbox checkbox-primary"
@@ -417,7 +417,7 @@ export function TasksView() {
               </div>
               
               <div className="form-control">
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="bg-primary text-primary-foreground text-sm font-medium px-6 py-2 rounded-md hover:bg-primary/90 transition-all">
                   Create Task
                 </button>
               </div>
@@ -442,12 +442,12 @@ export function TasksView() {
           {displayTasks.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-4xl mb-2">✅</div>
-              <p className="text-base-content/70 mb-4">
+              <p className="text-secondary-content mb-4">
                 No {filterCompleted === "completed" ? "completed" : "active"} tasks found.
                 {filterCompleted === "active" && " Create one to get started!"}
               </p>
               {filterCompleted === "active" && (
-                <div className="text-sm text-base-content/50">
+                <div className="text-meta">
                   💡 Try asking the AI: "Create a task to review the project documentation"
                 </div>
               )}
@@ -469,7 +469,7 @@ export function TasksView() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className={`font-medium ${
-                            task.isCompleted ? 'line-through text-base-content/60' : ''
+                            task.isCompleted ? 'line-through text-muted-foreground' : ''
                           }`}>{task.title}</h4>
                           <div className={`badge badge-sm ${getPriorityColor(task.priority)}`}>
                             {getPriorityLabel(task.priority)}
@@ -480,7 +480,7 @@ export function TasksView() {
                         </div>
                         
                         {task.description && (
-                          <p className="text-sm text-base-content/70 mb-2">{task.description}</p>
+                          <p className="text-secondary-content mb-2">{task.description}</p>
                         )}
                         
                         <div className="flex flex-wrap gap-2 text-sm">

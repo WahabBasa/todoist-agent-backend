@@ -122,19 +122,19 @@ export function InboxView() {
   const TaskItem = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
     <div
       key={task._id}
-      className="group flex items-start gap-3 py-1.5 px-2 hover:bg-gray-50/50 transition-colors duration-150 border-l-2 border-transparent hover:border-l-blue-400 border-b border-gray-200"
+      className="group flex items-start gap-3 py-1.5 px-2 hover:bg-accent/50 transition-colors duration-150 border-l-2 border-transparent hover:border-l-primary border-b border-border"
     >
       <Checkbox
         checked={isCompleted}
         onCheckedChange={() => handleToggleTask(task._id as string, isCompleted)}
-        className="mt-0.5 w-4 h-4 rounded-sm border border-gray-300 hover:border-gray-400"
+        className="mt-0.5 w-4 h-4 rounded-sm border border-input hover:border-ring"
       />
       
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h3 
-            className={`text-sm font-normal truncate ${
-              isCompleted ? 'line-through text-gray-400' : 'text-gray-800'
+            className={`text-sm font-medium truncate ${
+              isCompleted ? 'line-through text-muted-foreground' : 'text-foreground'
             }`}
           >
             {task.title}
@@ -151,19 +151,19 @@ export function InboxView() {
         
         {/* Description on same line if short, or below if longer */}
         {task.description && (
-          <p className="text-xs text-gray-500 mt-0.5 truncate">
+          <p className="text-meta mt-0.5 truncate">
             {task.description}
           </p>
         )}
         
         {/* Compact metadata - only show on hover or if has due date */}
         {(task.dueDate || task.estimatedTime || (task.tags && task.tags.length > 0)) && (
-          <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 group-hover:text-gray-500">
+          <div className="flex items-center gap-2 mt-1 text-meta">
             {task.dueDate && (
               <span 
                 className={`flex items-center gap-1 ${
                   task.dueDate < Date.now() && !isCompleted 
-                    ? 'text-red-500 font-medium' 
+                    ? 'text-destructive font-medium' 
                     : ''
                 }`}
               >
@@ -180,12 +180,12 @@ export function InboxView() {
             {task.tags && task.tags.length > 0 && (
               <div className="flex gap-1">
                 {task.tags.slice(0, 2).map((tag, index) => (
-                  <span key={index} className="text-xs text-gray-400">
+                  <span key={index} className="text-meta">
                     #{tag}
                   </span>
                 ))}
                 {task.tags.length > 2 && (
-                  <span className="text-xs text-gray-400">+{task.tags.length - 2}</span>
+                  <span className="text-meta">+{task.tags.length - 2}</span>
                 )}
               </div>
             )}
@@ -196,42 +196,42 @@ export function InboxView() {
   );
 
   const AddTaskButton = () => (
-    <div className="flex items-center gap-3 py-1.5 px-2 hover:bg-gray-50/50 transition-colors duration-150 cursor-pointer text-gray-400 hover:text-gray-600 border-l-2 border-transparent border-b border-gray-200"
+    <div className="flex items-center gap-3 py-1.5 px-2 hover:bg-accent/50 transition-colors duration-150 cursor-pointer text-muted-foreground hover:text-foreground border-l-2 border-transparent border-b border-border"
       onClick={() => setShowAddTask(true)}
     >
       <div className="w-4 h-4 flex items-center justify-center">
         <Plus className="h-3 w-3" />
       </div>
-      <span className="text-sm">Add task</span>
+      <span className="text-sm font-medium">Add task</span>
     </div>
   );
 
   return (
-    <div className="h-screen bg-gray-50">
+    <div className="h-screen bg-background">
       <div className="max-w-3xl mx-auto space-y-4 px-8 pt-16 pb-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-gray-900">Inbox</h1>
+          <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
         </div>
 
         {/* Incomplete Tasks */}
-        <div className="space-y-0 bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="space-y-0 bg-card rounded-lg border border-border overflow-hidden">
         {inboxTasks.length === 0 && !showAddTask ? (
           // Empty State
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-12 h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center mb-4">
+            <div className="w-12 h-12 bg-card border border-border rounded-xl flex items-center justify-center mb-4">
               <InboxIcon className="h-6 w-6 text-muted-foreground/70" />
             </div>
-            <h3 className="text-lg font-medium text-gray-800 mb-2">
+            <h3 className="text-lg font-medium text-foreground mb-2">
               Your inbox is empty
             </h3>
-            <p className="text-base text-gray-600 mb-6 max-w-sm">
+            <p className="text-secondary-content mb-6 max-w-sm">
               When you add a task, it'll show up here.
             </p>
             <Button 
               onClick={() => setShowAddTask(true)}
               size="sm"
-              className="text-base bg-blue-600 hover:bg-blue-700 text-white"
+              className="text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add your first task

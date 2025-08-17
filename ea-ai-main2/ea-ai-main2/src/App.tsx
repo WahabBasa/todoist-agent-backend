@@ -83,7 +83,7 @@ function SignOutButton() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
                   U
                 </AvatarFallback>
               </Avatar>
@@ -119,9 +119,9 @@ function LandingPage() {
       <header className="absolute top-0 left-0 right-0 z-50 p-6">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-lg">T</span>
+            <span className="text-primary-foreground font-semibold text-lg">T</span>
           </div>
-          <span className="font-bold text-xl text-foreground">TaskAI</span>
+          <span className="font-semibold text-xl text-foreground">TaskAI</span>
         </div>
       </header>
 
@@ -132,7 +132,7 @@ function LandingPage() {
           {/* Left Column - Hero Content */}
           <div className="space-y-8">
             <div className="space-y-4">
-              <h1 className="text-5xl lg:text-6xl font-bold text-foreground leading-tight">
+              <h1 className="text-5xl lg:text-6xl font-semibold text-foreground leading-tight">
                 Your tasks,{" "}
                 <span className="block">amplified</span>
               </h1>
@@ -340,7 +340,7 @@ function TaskAIDemo() {
             {message.type === "assistant" && (
               <div className="flex items-start gap-2">
                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-xs">T</span>
+                  <span className="text-primary-foreground font-semibold text-xs">T</span>
                 </div>
                 <div className="bg-muted px-4 py-2 rounded-2xl rounded-tl-sm max-w-xs">
                   <p className="text-sm text-foreground">{message.content}</p>
@@ -351,7 +351,7 @@ function TaskAIDemo() {
             {message.type === "code" && (
               <div className="flex items-start gap-2 w-full">
                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-xs">T</span>
+                  <span className="text-primary-foreground font-semibold text-xs">T</span>
                 </div>
                 <div className="bg-muted rounded-2xl rounded-tl-sm p-4 flex-1">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap">
@@ -366,7 +366,7 @@ function TaskAIDemo() {
         {isTyping && (
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xs">T</span>
+              <span className="text-primary-foreground font-semibold text-xs">T</span>
             </div>
             <div className="bg-muted px-4 py-2 rounded-2xl rounded-tl-sm">
               <div className="flex gap-1">

@@ -112,9 +112,16 @@ This is the TodoVex project - a high-quality Todoist clone that serves as our pr
 │   └── http.ts             # HTTP routes for auth
 ├── src/
 │   ├── components/         # Reusable UI components
+│   │   ├── chat/          # Chat interface components (Morphic-style architecture)
+│   │   │   ├── Chat.tsx           # Main chat controller with Convex integration
+│   │   │   ├── ChatMessages.tsx   # Message container with scroll management
+│   │   │   ├── ChatPanel.tsx      # Input panel with sticky positioning
+│   │   │   └── RenderMessage.tsx  # User/assistant message rendering
+│   │   ├── ai-elements/   # AI SDK Elements components
+│   │   ├── ui/            # shadcn/ui and custom UI components
 │   │   └── Sidebar.tsx    # Navigation sidebar with stats
 │   ├── views/             # Main application views
-│   │   ├── ChatView.tsx   # AI chat interface
+│   │   ├── ChatView.tsx   # AI chat interface (imports Chat component)
 │   │   ├── TasksView.tsx  # Task management interface
 │   │   ├── ProjectsView.tsx # Project overview
 │   │   └── SettingsView.tsx # User preferences
@@ -137,7 +144,12 @@ This is the TodoVex project - a high-quality Todoist clone that serves as our pr
 - `schema.ts` - Type-safe database schema with proper indexes
 
 **Frontend (React Components)**
-- `ChatView.tsx` - Real-time AI chat with tool execution feedback and model switching
+- **Chat Architecture (Morphic-style)** - Modular chat interface with clean separation of concerns
+  - `Chat.tsx` - Main controller with Convex integration and state management
+  - `ChatMessages.tsx` - Scroll container with section-based message rendering  
+  - `ChatPanel.tsx` - Sticky input panel with scroll controls and form handling
+  - `RenderMessage.tsx` - Clean user/assistant message display with integrated styling
+- `ChatView.tsx` - Main chat interface wrapper (imports Chat component)
 - `TasksView.tsx` - Interactive task management with manual creation and status updates
 - `ProjectsView.tsx` - Visual project overview with progress bars and statistics
 - `Sidebar.tsx` - Dynamic navigation with live stats and responsive design

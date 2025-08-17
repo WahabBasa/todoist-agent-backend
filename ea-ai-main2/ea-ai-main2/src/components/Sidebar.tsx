@@ -64,7 +64,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
     <ShadcnSidebar collapsible="icon" className="w-[240px] sm:w-[260px] md:w-[280px]">
       {/* App Header */}
       <SidebarHeader className="flex flex-row items-center justify-between p-system-3 sm:p-system-4 border-b border-sidebar-border">
-        <h1 className="font-bold text-lg text-blue-600 group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
+        <h1 className="font-semibold text-lg text-primary group-data-[collapsible=icon]:hidden truncate">TaskAI</h1>
         <SidebarTrigger className="h-8 w-8 shrink-0" />
       </SidebarHeader>
 
@@ -100,7 +100,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
                       {item.count !== undefined && item.count > 0 && (
                         <Badge 
                           variant="secondary"
-                          className="ml-auto h-4 sm:h-5 text-xs shrink-0 px-1.5"
+                          className="ml-auto h-4 sm:h-5 text-meta shrink-0 px-1.5"
                         >
                           {item.count}
                         </Badge>
@@ -125,7 +125,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span className="truncate">My Projects</span>
-                <span className="text-xs shrink-0 whitespace-nowrap">{projects?.length || 0}/5</span>
+                <span className="text-meta shrink-0 whitespace-nowrap">{projects?.length || 0}/5</span>
               </div>
               <div className="shrink-0">
                 {isProjectsExpanded ? (

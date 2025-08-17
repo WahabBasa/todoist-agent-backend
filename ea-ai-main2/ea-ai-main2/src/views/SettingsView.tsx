@@ -29,11 +29,11 @@ export function SettingsView() {
   }
 
   return (
-    <div className="overflow-y-auto h-full p-4 bg-gray-50">
+    <div className="overflow-y-auto h-full p-4 bg-background">
       <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Settings</h2>
         <p className="text-muted-foreground">Manage your account and app preferences</p>
       </div>
       
@@ -48,13 +48,13 @@ export function SettingsView() {
         <CardContent>
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-semibold">
                 {user?.email?.[0]?.toUpperCase() || "U"}
               </span>
             </div>
             <div className="space-y-1">
               <div className="font-semibold text-lg text-foreground">{user?.email || "User"}</div>
-              <div className="text-sm text-muted-foreground">
+              <div className="text-secondary-content">
                 Member since {new Date().toLocaleDateString()}
               </div>
               <Badge variant="default" className="mt-1">Active</Badge>
@@ -76,10 +76,10 @@ export function SettingsView() {
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Email notifications</span>
+                  <span className="text-input-primary">Email notifications</span>
                   <Badge variant="secondary" className="text-xs">Recommended</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-meta">
                   Get notified about task deadlines and project updates
                 </p>
               </div>
@@ -90,8 +90,8 @@ export function SettingsView() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-sm font-medium">Desktop notifications</span>
-                <p className="text-xs text-muted-foreground">
+                <span className="text-input-primary">Desktop notifications</span>
+                <p className="text-meta">
                   Show browser notifications for important updates
                 </p>
               </div>
@@ -102,8 +102,8 @@ export function SettingsView() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-sm font-medium">AI suggestions</span>
-                <p className="text-xs text-muted-foreground">
+                <span className="text-input-primary">AI suggestions</span>
+                <p className="text-meta">
                   Let AI help optimize your workflow and suggest improvements
                 </p>
               </div>
@@ -114,8 +114,8 @@ export function SettingsView() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-sm font-medium">Dark mode</span>
-                <p className="text-xs text-muted-foreground">
+                <span className="text-input-primary">Dark mode</span>
+                <p className="text-meta">
                   Use dark theme for better visibility in low light
                 </p>
               </div>
@@ -135,7 +135,7 @@ export function SettingsView() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Response style</label>
+            <label className="text-input-primary">Response style</label>
             <Select defaultValue="professional">
               <SelectTrigger>
                 <SelectValue />
@@ -150,7 +150,7 @@ export function SettingsView() {
           </div>
           
           <div className="space-y-2">
-            <label className="text-sm font-medium">Default task priority</label>
+            <label className="text-input-primary">Default task priority</label>
             <Select defaultValue="normal">
               <SelectTrigger>
                 <SelectValue />
@@ -167,8 +167,8 @@ export function SettingsView() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-sm font-medium">Auto-categorize tasks</span>
-                <p className="text-xs text-muted-foreground">
+                <span className="text-input-primary">Auto-categorize tasks</span>
+                <p className="text-meta">
                   Let AI automatically assign tasks to appropriate projects
                 </p>
               </div>
@@ -230,7 +230,7 @@ export function SettingsView() {
               Delete Account
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-meta">
             This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
           </p>
         </CardContent>
