@@ -18,8 +18,10 @@ import type * as auth from "../auth.js";
 import type * as cleanup from "../cleanup.js";
 import type * as conversations from "../conversations.js";
 import type * as http from "../http.js";
+import type * as labels from "../labels.js";
 import type * as myFunctions from "../myFunctions.js";
 import type * as projects from "../projects.js";
+import type * as subTodos from "../subTodos.js";
 import type * as tasks from "../tasks.js";
 
 /**
@@ -36,8 +38,10 @@ declare const fullApi: ApiFromModules<{
   cleanup: typeof cleanup;
   conversations: typeof conversations;
   http: typeof http;
+  labels: typeof labels;
   myFunctions: typeof myFunctions;
   projects: typeof projects;
+  subTodos: typeof subTodos;
   tasks: typeof tasks;
 }>;
 export declare const api: FilterApi<

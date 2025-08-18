@@ -62,6 +62,7 @@ export const createTask = mutation({
     title: v.string(),
     description: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
+    labelId: v.optional(v.id("labels")),
     priority: v.optional(v.number()),
     dueDate: v.optional(v.number()),
     estimatedHours: v.optional(v.number()),
@@ -79,15 +80,21 @@ export const createTask = mutation({
 
     return await ctx.db.insert("tasks", {
       userId,
+      // TodoVex compatibility
+      taskName: args.title,
+      labelId: args.labelId,
+      // Legacy compatibility
       title: args.title,
+      // Standard fields
       description: args.description,
       projectId: args.projectId,
       priority: args.priority ?? 3,
       dueDate: args.dueDate,
-      estimatedTime: totalEstimatedTime > 0 ? totalEstimatedTime : undefined,
       isCompleted: false,
+      // AI-specific fields
+      estimatedTime: totalEstimatedTime > 0 ? totalEstimatedTime : undefined,
       tags: args.tags ?? [],
-      isRecurring: false, // Simplified for now
+      isRecurring: false,
     });
   },
 });
@@ -337,5 +344,305 @@ export const getInboxTasks = query({
     inboxTasks.sort((a, b) => b._creationTime - a._creationTime);
 
     return inboxTasks;
+  },
+});
+
+// TodoVex-compatible functions
+export const getTodosByProjectId = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("projectId"), projectId))
+      .collect();
+  },
+});
+
+export const getCompletedTodosByProjectId = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("projectId"), projectId))
+      .filter((q) => q.eq(q.field("isCompleted"), true))
+      .collect();
+  },
+});
+
+export const getIncompleteTodosByProjectId = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("projectId"), projectId))
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .collect();
+  },
+});
+
+export const todayTodos = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => 
+        q.gte(q.field("dueDate"), todayStart.getTime()) &&
+        q.lte(q.field("dueDate"), todayEnd.getTime())
+      )
+      .collect();
+  },
+});
+
+export const overdueTodos = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .filter((q) => q.lt(q.field("dueDate"), todayStart.getTime()))
+      .collect();
+  },
+});
+
+export const completedTodos = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("isCompleted"), true))
+      .collect();
+  },
+});
+
+export const incompleteTodos = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .collect();
+  },
+});
+
+export const checkATodo = mutation({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, { taskId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error("Task not found or unauthorized");
+    }
+
+    await ctx.db.patch(taskId, { isCompleted: true });
+    return taskId;
+  },
+});
+
+export const uncheckATodo = mutation({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, { taskId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error("Task not found or unauthorized");
+    }
+
+    await ctx.db.patch(taskId, { isCompleted: false });
+    return taskId;
+  },
+});
+
+export const createATodo = mutation({
+  args: {
+    taskName: v.string(),
+    description: v.optional(v.string()),
+    priority: v.optional(v.number()),
+    dueDate: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
+    labelId: v.optional(v.id("labels")),
+  },
+  handler: async (ctx, { taskName, description, priority, dueDate, projectId, labelId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    return await ctx.db.insert("tasks", {
+      userId,
+      taskName,
+      title: taskName, // Legacy compatibility
+      description,
+      priority: priority ?? 3,
+      dueDate,
+      projectId,
+      labelId,
+      isCompleted: false,
+      // Default AI fields
+      estimatedTime: undefined,
+      tags: [],
+      isRecurring: false,
+    });
+  },
+});
+
+export const groupTodosByDate = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const todos = await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .filter((q) => q.gt(q.field("dueDate"), new Date().getTime()))
+      .collect();
+
+    const groupedTodos = todos.reduce<any>((acc, todo) => {
+      if (todo.dueDate) {
+        const dueDate = new Date(todo.dueDate).toDateString();
+        acc[dueDate] = (acc[dueDate] || []).concat(todo);
+      }
+      return acc;
+    }, {});
+
+    return groupedTodos;
+  },
+});
+
+// Enhanced delete that also deletes subtodos
+export const deleteATodo = mutation({
+  args: {
+    taskId: v.id("tasks"),
+  },
+  handler: async (ctx, { taskId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const task = await ctx.db.get(taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error("Task not found or unauthorized");
+    }
+
+    // Delete all subtodos first
+    const subTodos = await ctx.db
+      .query("subTodos")
+      .filter((q) => q.eq(q.field("parentId"), taskId))
+      .collect();
+
+    for (const subTodo of subTodos) {
+      await ctx.db.delete(subTodo._id);
+    }
+
+    // Delete the main task
+    await ctx.db.delete(taskId);
+    return taskId;
+  },
+});
+
+/**
+ * Migration function to populate missing 'taskName' field from 'title' field
+ * This function migrates legacy tasks to TodoVex compatibility format
+ */
+export const migrateTaskNames = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Find all tasks without a taskName field but with a title field
+    const tasksNeedingMigration = await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("taskName"), undefined))
+      .collect();
+    
+    const migrationResults = {
+      migratedFromTitle: 0,
+      skippedNoTitle: 0,
+      total: tasksNeedingMigration.length,
+    };
+
+    // Update each task with taskName populated from title
+    for (const task of tasksNeedingMigration) {
+      if (task.title) {
+        // Copy title to taskName field
+        await ctx.db.patch(task._id, {
+          taskName: task.title,
+        });
+        migrationResults.migratedFromTitle++;
+      } else {
+        // Task has no title field - provide a default
+        await ctx.db.patch(task._id, {
+          taskName: "Untitled Task",
+        });
+        migrationResults.skippedNoTitle++;
+      }
+    }
+    
+    return migrationResults;
   },
 });

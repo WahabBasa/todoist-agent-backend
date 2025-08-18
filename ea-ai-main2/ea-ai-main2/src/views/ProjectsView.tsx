@@ -1,131 +1,300 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
+import { ProjectView } from "../components/projects/ProjectView";
+import { AddProjectDialog } from "../components/projects/AddProjectDialog";
+import { DeleteProject } from "../components/projects/DeleteProject";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Progress } from "../components/ui/progress";
+import { Input } from "../components/ui/input";
+import { 
+  Folder, 
+  Plus, 
+  Search,
+  CheckCircle2,
+  Circle,
+  MoreVertical,
+  Edit,
+  Star
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 export function ProjectsView() {
+  const [selectedProject, setSelectedProject] = useState<Id<"projects"> | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const projects = useQuery(api.projects.getProjects);
-  
+
+  // Filter projects based on search
+  const filteredProjects = projects?.filter(project =>
+    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Separate system and user projects
+  const systemProjects = filteredProjects?.filter(p => p.type === "system") || [];
+  const userProjects = filteredProjects?.filter(p => p.type === "user") || [];
+
+  if (selectedProject) {
+    return (
+      <div className="space-y-4">
+        <Button 
+          variant="ghost" 
+          onClick={() => setSelectedProject(null)}
+          className="gap-2"
+        >
+          ← Back to Projects
+        </Button>
+        <ProjectView projectId={selectedProject} />
+      </div>
+    );
+  }
+
   if (projects === undefined) {
     return (
       <div className="flex justify-center items-center min-h-96">
-        <div className="loading loading-spinner loading-lg"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-y-auto h-full p-4 theme-bg-light">
-      <div className="space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Projects</h2>
-          <p className="text-secondary-content">Organize your tasks into projects</p>
+          <h1 className="text-2xl font-bold">Projects</h1>
+          <p className="text-sm text-foreground/60">Organize your tasks into projects</p>
         </div>
-        <button className="bg-primary text-primary-foreground text-sm font-medium px-4 py-2 rounded-md hover:bg-primary/90 transition-all flex items-center gap-2">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          New Project
-        </button>
+        <AddProjectDialog
+          trigger={
+            <Button className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Project
+            </Button>
+          }
+        />
       </div>
-      
-      {projects.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="text-6xl mb-4">📁</div>
-          <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
-          <p className="text-secondary-content mb-6">
-            Create your first project to organize your tasks and improve your workflow
-          </p>
-          <div className="space-y-3">
-            <button className="bg-primary text-primary-foreground text-sm font-medium px-6 py-2 rounded-md hover:bg-primary/90 transition-all">Create Project</button>
-            <div className="text-meta">
-              💡 Try asking the AI: "Create a project for website redesign"
-            </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground/40 w-4 h-4" />
+        <Input
+          placeholder="Search projects..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* System Projects */}
+      {systemProjects.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Star className="w-4 h-4 text-amber-500" />
+            <h2 className="text-lg font-medium">System Projects</h2>
+            <Badge variant="secondary" className="text-xs">
+              {systemProjects.length}
+            </Badge>
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <div key={project._id} className="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-              <div className="card-body">
-                <div className="flex items-center gap-3 mb-3">
-                  <div 
-                    className="w-5 h-5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: project.color }}
-                  ></div>
-                  <h3 className="card-title text-lg">{project.name}</h3>
-                </div>
-                
-                {project.description && (
-                  <p className="text-secondary-content mb-4">{project.description}</p>
-                )}
-                
-                <div className="flex justify-between items-center mb-3">
-                  <div className="text-sm">
-                    <span className="font-semibold">{project.taskCount || 0}</span> 
-                    <span className="text-muted-foreground"> tasks</span>
-                  </div>
-                  <div className="text-sm text-success">
-                    <span className="font-semibold">{project.completedTaskCount || 0}</span>
-                    <span className="text-muted-foreground"> completed</span>
-                  </div>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="w-full bg-base-300 rounded-full h-2 mb-4">
-                  <div 
-                    className="bg-primary h-2 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${project.taskCount > 0 
-                        ? (project.completedTaskCount / project.taskCount) * 100 
-                        : 0}%`
-                    }}
-                  ></div>
-                </div>
-                
-                <div className="card-actions justify-end">
-                  <button className="text-sm font-medium px-3 py-1 rounded-md hover:bg-accent transition-all flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                    Edit
-                  </button>
-                  <button className="bg-primary text-primary-foreground text-sm font-medium px-3 py-1 rounded-md hover:bg-primary/90 transition-all flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    View
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {systemProjects.map((project) => (
+              <ProjectCard
+                key={project._id}
+                project={project}
+                onSelect={setSelectedProject}
+              />
+            ))}
+          </div>
         </div>
       )}
 
+      {/* User Projects */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Folder className="w-4 h-4" />
+          <h2 className="text-lg font-medium">Your Projects</h2>
+          <Badge variant="secondary" className="text-xs">
+            {userProjects.length}
+          </Badge>
+        </div>
+
+        {userProjects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {userProjects.map((project) => (
+              <ProjectCard
+                key={project._id}
+                project={project}
+                onSelect={setSelectedProject}
+                showActions={true}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Folder className="w-16 h-16 text-foreground/20 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground/80 mb-2">
+                  No projects yet
+                </h3>
+                <p className="text-sm text-foreground/60 mb-6">
+                  Create your first project to organize your tasks.
+                </p>
+                <AddProjectDialog
+                  trigger={
+                    <Button className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Create First Project
+                    </Button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
       {/* Quick Stats */}
-      {projects.length > 0 && (
+      {(systemProjects.length > 0 || userProjects.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="text-meta">Total Projects</div>
-            <div className="stat-value text-primary">{projects.length}</div>
-          </div>
-          <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="text-meta">Total Tasks</div>
-            <div className="stat-value text-accent">
-              {projects.reduce((total, p) => total + (p.taskCount || 0), 0)}
-            </div>
-          </div>
-          <div className="stat bg-base-100 rounded-lg shadow">
-            <div className="text-meta">Completed Tasks</div>
-            <div className="stat-value text-success">
-              {projects.reduce((total, p) => total + (p.completedTaskCount || 0), 0)}
-            </div>
-          </div>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-foreground/60">Total Projects</div>
+              <div className="text-2xl font-bold text-accent">
+                {systemProjects.length + userProjects.length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-foreground/60">Total Tasks</div>
+              <div className="text-2xl font-bold text-blue-500">
+                {[...systemProjects, ...userProjects].reduce((total, p) => total + (p.taskCount || 0), 0)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-foreground/60">Completed Tasks</div>
+              <div className="text-2xl font-bold text-green-500">
+                {[...systemProjects, ...userProjects].reduce((total, p) => total + (p.completedTaskCount || 0), 0)}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
-      </div>
     </div>
+  );
+}
+
+interface ProjectCardProps {
+  project: any;
+  onSelect: (id: Id<"projects">) => void;
+  showActions?: boolean;
+}
+
+function ProjectCard({ project, onSelect, showActions = false }: ProjectCardProps) {
+  const completionPercentage = project.taskCount > 0 
+    ? Math.round((project.completedTaskCount / project.taskCount) * 100)
+    : 0;
+
+  const activeTaskCount = project.taskCount - project.completedTaskCount;
+
+  return (
+    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div 
+            className="flex items-center gap-3 flex-1 min-w-0"
+            onClick={() => onSelect(project._id)}
+          >
+            <div 
+              className="w-4 h-4 rounded-full flex-shrink-0"
+              style={{ backgroundColor: project.color || "#64748b" }}
+            />
+            <div className="min-w-0 flex-1">
+              <h3 className="font-medium truncate">{project.name}</h3>
+              {project.description && (
+                <p className="text-sm text-foreground/60 truncate mt-1">
+                  {project.description}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          {showActions && project.type !== "system" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <AddProjectDialog 
+                    editProject={project}
+                    trigger={
+                      <div className="flex items-center gap-2 w-full">
+                        <Edit className="w-4 h-4" />
+                        Edit Project
+                      </div>
+                    }
+                  />
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <DeleteProject project={project} />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent 
+        className="space-y-3"
+        onClick={() => onSelect(project._id)}
+      >
+        {/* Task Stats */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2">
+            <Circle className="w-3 h-3 text-orange-500" />
+            <span className="text-foreground/70">
+              {activeTaskCount} active
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-3 h-3 text-green-500" />
+            <span className="text-foreground/70">
+              {project.completedTaskCount} done
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        {project.taskCount > 0 ? (
+          <div className="space-y-2">
+            <Progress value={completionPercentage} className="h-2" />
+            <div className="flex items-center justify-between text-xs text-foreground/60">
+              <span>{completionPercentage}% complete</span>
+              <span>{project.taskCount} total tasks</span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-sm text-foreground/50">No tasks yet</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

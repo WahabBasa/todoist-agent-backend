@@ -11,14 +11,23 @@ export const getProjects = query({
       throw new Error("Not authenticated");
     }
 
-    const projects = await ctx.db
+    // Get user projects
+    const userProjects = await ctx.db
       .query("projects")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) => q.eq(q.field("userId"), userId))
       .collect();
+
+    // Get system projects
+    const systemProjects = await ctx.db
+      .query("projects")
+      .filter((q) => q.eq(q.field("type"), "system"))
+      .collect();
+
+    const allProjects = [...systemProjects, ...userProjects];
 
     // Add task counts
     const projectsWithCounts = await Promise.all(
-      projects.map(async (project) => {
+      allProjects.map(async (project) => {
         const tasks = await ctx.db
           .query("tasks")
           .withIndex("by_project", (q) => q.eq("projectId", project._id))
@@ -39,7 +48,7 @@ export const getProjects = query({
 export const createProject = mutation({
   args: {
     name: v.string(),
-    color: v.string(),
+    color: v.optional(v.string()),
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -53,6 +62,7 @@ export const createProject = mutation({
       name: args.name,
       color: args.color,
       description: args.description,
+      type: "user",
     });
   },
 });
@@ -134,6 +144,155 @@ export const getProject = query({
   },
 });
 
+// TodoVex-compatible functions
+export const getProjectByProjectId = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const project = await ctx.db.get(projectId);
+    if (!project) {
+      return null;
+    }
+
+    // Allow access to system projects or user's own projects
+    if (project.type === "system" || project.userId === userId) {
+      return project;
+    }
+
+    return null;
+  },
+});
+
+// Helper function to create default system projects
+export const createSystemProjects = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const systemProjects = [
+      { name: "Inbox", type: "system" as const, color: "#64748b" },
+      { name: "Personal", type: "system" as const, color: "#10b981" },
+      { name: "Work", type: "system" as const, color: "#3b82f6" },
+    ];
+
+    const projectIds = [];
+    for (const projectData of systemProjects) {
+      // Check if system project already exists
+      const existing = await ctx.db
+        .query("projects")
+        .filter((q) => q.eq(q.field("name"), projectData.name))
+        .filter((q) => q.eq(q.field("type"), "system"))
+        .first();
+
+      if (!existing) {
+        const projectId = await ctx.db.insert("projects", {
+          userId: null,
+          name: projectData.name,
+          type: projectData.type,
+          color: projectData.color,
+        });
+        projectIds.push(projectId);
+      }
+    }
+
+    return projectIds;
+  },
+});
+
+/**
+ * Migration function to populate missing 'type' field in existing projects
+ * This function identifies system vs user projects and updates them accordingly
+ */
+export const migrateProjectTypes = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // System project names that should be marked as "system" type
+    const systemProjectNames = ["Inbox", "Personal", "Work"];
+    
+    // Find all projects without a type field
+    const projectsNeedingMigration = await ctx.db
+      .query("projects")
+      .filter((q) => q.eq(q.field("type"), undefined))
+      .collect();
+    
+    const migrationResults = {
+      systemProjects: 0,
+      userProjects: 0,
+      total: projectsNeedingMigration.length,
+    };
+
+    // Update each project with the appropriate type
+    for (const project of projectsNeedingMigration) {
+      let projectType: "user" | "system";
+      
+      // Determine if this is a system project based on name and userId
+      if (systemProjectNames.includes(project.name) || project.userId === null) {
+        projectType = "system";
+        migrationResults.systemProjects++;
+      } else {
+        projectType = "user";
+        migrationResults.userProjects++;
+      }
+      
+      // Update the project with the determined type
+      await ctx.db.patch(project._id, {
+        type: projectType,
+      });
+    }
+    
+    return migrationResults;
+  },
+});
+
+// Enhanced delete with cascade support
+export const deleteProjectAndTasks = mutation({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const project = await ctx.db.get(projectId);
+    if (!project || project.userId !== userId || project.type === "system") {
+      throw new Error("Project not found or unauthorized");
+    }
+
+    // Get all tasks for this project
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+
+    // Delete all subtodos for each task
+    for (const task of tasks) {
+      const subTodos = await ctx.db
+        .query("subTodos")
+        .filter((q) => q.eq(q.field("parentId"), task._id))
+        .collect();
+      
+      for (const subTodo of subTodos) {
+        await ctx.db.delete(subTodo._id);
+      }
+    }
+
+    // Delete all tasks
+    for (const task of tasks) {
+      await ctx.db.delete(task._id);
+    }
+
+    // Finally delete the project
+    await ctx.db.delete(projectId);
+    return projectId;
+  },
+});
+
 // Type definitions for the hierarchical map structure
 type LightweightTask = {
   _id: Id<"tasks">;
@@ -142,10 +301,11 @@ type LightweightTask = {
 
 type ProjectWithTasks = {
   _id: Id<"projects">;
-  userId: Id<"users">;
+  userId: Id<"users"> | null;
   name: string;
-  color: string;
+  color?: string;
   description?: string;
+  type: "user" | "system";
   _creationTime: number;
   tasks: LightweightTask[];
 };
@@ -219,7 +379,7 @@ export const getProjectAndTaskMap = query({
       // Create lightweight task object with only required fields
       const lightweightTask: LightweightTask = {
         _id: task._id,
-        title: task.title,
+        title: task.title || task.taskName || "Untitled Task", // Guaranteed string fallback
       };
 
       // Check if task has valid project assignment

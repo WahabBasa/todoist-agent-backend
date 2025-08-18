@@ -174,10 +174,15 @@ For Claude Code integration with Convex database and functions:
 
 **⚠️ Server Startup Policy**: Only start development servers when explicitly requested by the user.
 
-- `npm run dev` - Start both frontend and backend in development mode (user request required)
-- `npx convex dev` - Start Convex backend only (user request required)
+**🕘 Timeout Commands**: For development and debugging purposes, always use timeout commands to get full context from long-running processes:
+
+- `timeout 60 npm run dev` - Start both frontend and backend with 60-second timeout for diagnostics
+- `timeout 90 npm run dev` - Start development servers with 90-second timeout for comprehensive debugging
+- `timeout 60 npx convex dev` - Start Convex backend only with 60-second timeout
 - `npm run build` - Build for production
 - `npm run lint` - Run TypeScript and ESLint checks
+
+**Why Timeouts**: Long-running development servers provide essential debugging information during startup (dependency resolution, compilation errors, server ready status). Using 60-90 second timeouts captures this diagnostic output without leaving processes running indefinitely.
 
 ### Updated Convex CLI Commands
 

@@ -4,28 +4,54 @@ import { authTables } from "@convex-dev/auth/server";
 
 const applicationTables = {
   projects: defineTable({
-    userId: v.id("users"),
+    userId: v.union(v.id("users"), v.null()),
     name: v.string(),
-    color: v.string(),
+    color: v.optional(v.string()),
     description: v.optional(v.string()),
+    type: v.union(v.literal("user"), v.literal("system")),
+  }).index("by_user", ["userId"]),
+
+  labels: defineTable({
+    userId: v.union(v.id("users"), v.null()),
+    name: v.string(),
+    type: v.union(v.literal("user"), v.literal("system")),
   }).index("by_user", ["userId"]),
 
   tasks: defineTable({
     userId: v.id("users"),
-    title: v.string(),
+    // TodoVex compatibility fields
+    taskName: v.string(),
+    labelId: v.optional(v.id("labels")),
+    // Legacy field mapping (keep for migration)
+    title: v.optional(v.string()),
+    // Standard fields
     description: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
-    priority: v.number(), // 1-4, 1 being highest priority
+    priority: v.optional(v.float64()), // Changed to float64 for TodoVex compatibility
     dueDate: v.optional(v.number()),
-    estimatedTime: v.optional(v.number()), // in minutes
     isCompleted: v.boolean(),
-    tags: v.array(v.string()),
-    isRecurring: v.boolean(),
+    // AI-specific fields (preserved)
+    estimatedTime: v.optional(v.number()), // in minutes
+    tags: v.optional(v.array(v.string())),
+    isRecurring: v.optional(v.boolean()),
     recurringPattern: v.optional(v.string()),
     completedAt: v.optional(v.number()),
   }).index("by_user", ["userId"])
     .index("by_user_and_completed", ["userId", "isCompleted"])
     .index("by_project", ["projectId"]),
+
+  subTodos: defineTable({
+    userId: v.id("users"),
+    parentId: v.id("tasks"),
+    taskName: v.string(),
+    description: v.optional(v.string()),
+    projectId: v.id("projects"),
+    labelId: v.id("labels"),
+    priority: v.optional(v.float64()),
+    dueDate: v.number(),
+    isCompleted: v.boolean(),
+  }).index("by_user", ["userId"])
+    .index("by_parent", ["parentId"]),
 
   conversations: defineTable({
     userId: v.id("users"),

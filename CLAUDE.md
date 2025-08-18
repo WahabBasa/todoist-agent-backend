@@ -77,11 +77,13 @@ gt submit --stack
 
 ## 🔍 Pre-Development Routine Checks
 
-**Before Making Any Changes:**
-1. **Check Latest Devlog** - Review `updates/YYYY-MM-DD_devlog.md` for recent debugging sessions
-2. **Review README Architecture** - Understand current system state
-3. **Architecture Alignment** - Ensure changes fit the React → Convex → AI SDK flow
-4. **Check Someday Tasks** - Review `personal/someday/todolist.md` for conditional tasks that may now be ready
+**STARTUP ROUTINE - ALWAYS CHECK CURRENT DATE FIRST:**
+1. **Check Current Date** - Run `date` command (returns format like "Mon, Aug 18, 2025 12:40:05 PM") to verify today's date before any other action
+2. **Check Today's Devlog** - Look for devlog matching today's date in `updates/` folder (format: YYYY-MM-DD_devlog.md)
+3. **Create Today's Devlog if Missing** - If no devlog exists for today, create empty file `updates/YYYY-MM-DD_devlog.md` and inform user
+4. **Review README Architecture** - Understand current system state
+5. **Architecture Alignment** - Ensure changes fit the React → Convex → AI SDK flow
+6. **Check Someday Tasks** - Review `personal/someday/todolist.md` for conditional tasks that may now be ready
 
 **For Feature Development:**
 1. **Plan with TodoWrite** - Break features into 3-5 logical, stackable PRs
