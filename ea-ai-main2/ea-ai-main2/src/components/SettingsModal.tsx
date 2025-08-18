@@ -140,13 +140,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         className="!w-[700px] h-[650px] !max-w-[700px] p-0 bg-card border-border" 
         showCloseButton={false}
       >
-        <div className="flex h-full rounded-lg overflow-hidden relative">
+        <div className="flex h-full rounded-design-lg overflow-hidden relative">
           {/* Close Button - Top Right */}
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 h-8 w-8 p-0 hover:bg-muted/50 rounded-full"
+            className="absolute top-4 right-4 z-10 h-8 w-8 p-0 hover:bg-muted/50 rounded-design-md"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -166,7 +166,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <button
                     key={section.id}
                     onClick={() => setActiveSection(section.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-design-md transition-colors ${
                       activeSection === section.id
                         ? 'bg-muted/30 text-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -310,9 +310,9 @@ function ConnectedAppsSettings() {
       
       {/* Connection Options */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-card/30 hover:bg-card/50 transition-colors">
+        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-md flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-design-sm flex items-center justify-center">
               <span className="text-white text-sm font-semibold">G</span>
             </div>
             <div>
@@ -325,9 +325,9 @@ function ConnectedAppsSettings() {
           </Button>
         </div>
         
-        <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-card/30 hover:bg-card/50 transition-colors">
+        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center">
+            <div className="w-8 h-8 bg-blue-600 rounded-design-sm flex items-center justify-center">
               <span className="text-white text-sm font-semibold">O</span>
             </div>
             <div>
@@ -340,7 +340,7 @@ function ConnectedAppsSettings() {
           </Button>
         </div>
         
-        <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-card/30 hover:bg-card/50 transition-colors">
+        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-700 rounded-md flex items-center justify-center">
               <span className="text-white text-sm font-semibold">O</span>
@@ -355,7 +355,7 @@ function ConnectedAppsSettings() {
           </Button>
         </div>
         
-        <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-card/30 hover:bg-card/50 transition-colors">
+        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
               <span className="text-white text-sm font-semibold">T</span>

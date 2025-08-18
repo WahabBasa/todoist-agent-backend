@@ -133,7 +133,7 @@ export function LabelManager() {
               {systemLabels.map((label) => (
                 <div
                   key={label._id}
-                  className="flex items-center gap-2 p-2 rounded-lg bg-accent/10 border"
+                  className="flex items-center gap-2 p-2 rounded-design-md bg-accent/10 border"
                 >
                   <Star className="w-3 h-3 text-amber-500" />
                   <span className="text-sm flex-1 truncate">{label.name}</span>
@@ -171,7 +171,7 @@ export function LabelManager() {
           {isCreating && (
             <form
               onSubmit={createForm.handleSubmit(handleCreateLabel)}
-              className="flex items-center gap-2 p-3 bg-accent/5 rounded-lg border mb-3"
+              className="flex items-center gap-2 p-3 bg-accent/5 rounded-design-md border mb-3"
             >
               <Tag className="w-4 h-4 text-foreground/60" />
               <Input
@@ -204,7 +204,7 @@ export function LabelManager() {
               {userLabels.map((label) => (
                 <div
                   key={label._id}
-                  className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent/5 transition-colors"
+                  className="flex items-center gap-2 p-2 rounded-design-md border hover:bg-accent/5 transition-colors"
                 >
                   <Tag className="w-4 h-4 text-foreground/60" />
                   
@@ -280,7 +280,7 @@ export function LabelManager() {
         </div>
 
         {/* Usage Tips */}
-        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="p-3 bg-blue-50 rounded-design-md border border-blue-200">
           <h5 className="text-sm font-medium text-blue-800 mb-1">💡 Label Tips</h5>
           <ul className="text-xs text-blue-700 space-y-1">
             <li>• Use labels to categorize tasks across different projects</li>

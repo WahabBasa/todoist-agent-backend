@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import Textarea from 'react-textarea-autosize'
-import { ArrowUp, ChevronDown, MessageCirclePlus, Square } from 'lucide-react'
+import { ArrowUp, ChevronDown, Square } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Button } from "../ui/button"
 
@@ -41,10 +41,6 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const handleNewChat = () => {
-    // TODO: Implement new chat functionality
-    console.log("New chat requested")
-  }
 
   // Scroll to the bottom of the container
   const handleScrollToBottom = () => {
@@ -83,7 +79,7 @@ export function ChatPanel({
             type="button"
             variant="outline"
             size="icon"
-            className="absolute -top-10 right-4 z-20 size-8 rounded-full shadow-md"
+            className="absolute -top-10 right-4 z-20 size-8 rounded-design-md shadow-md"
             onClick={handleScrollToBottom}
             title="Scroll to bottom"
           >
@@ -91,7 +87,7 @@ export function ChatPanel({
           </Button>
         )}
 
-        <div className="relative flex flex-col w-full gap-2 bg-muted rounded-3xl border border-input">
+        <div className="relative flex flex-col w-full gap-2 bg-muted rounded-design-lg border border-input">
           <Textarea
             ref={inputRef}
             name="input"
@@ -132,24 +128,12 @@ export function ChatPanel({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {messages.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNewChat}
-                  className="shrink-0 rounded-full group transition-all hover:bg-accent"
-                  type="button"
-                  disabled={isLoading}
-                >
-                  <MessageCirclePlus className="size-4 group-hover:rotate-12 transition-all duration-200" />
-                </Button>
-              )}
               <Button
                 type={isLoading ? 'button' : 'submit'}
                 size="icon"
                 variant="outline"
                 className={cn(
-                  'rounded-full transition-all duration-200',
+                  'rounded-design-md transition-all duration-200',
                   isLoading ? 'animate-pulse' : 'hover:bg-accent',
                   input.trim().length > 0 && !isLoading ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
                 )}

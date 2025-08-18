@@ -36,6 +36,12 @@
   --font-size-3xl: 30px;      /* Hero text */
   --line-height-3xl: 1.2;
   --font-weight-3xl: 600;
+
+  /* Border Radius Design System - Professional Curvature */
+  --radius-sm: 0.375rem;     /* 6px - small elements like badges */
+  --radius-md: 0.5rem;       /* 8px - default buttons and inputs */  
+  --radius-lg: 0.75rem;      /* 12px - large containers like chat input */
+  --radius-xl: 1rem;         /* 16px - special cases like modals */
   
   /* Colors - ChatGPT Grey Theme */
   --color-background: #212121;
@@ -170,6 +176,12 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Border Radius Design System Utilities */
+  .rounded-design-sm { border-radius: var(--radius-sm); }
+  .rounded-design-md { border-radius: var(--radius-md); }
+  .rounded-design-lg { border-radius: var(--radius-lg); }
+  .rounded-design-xl { border-radius: var(--radius-xl); }
 }
 
 /* Essential component utilities */

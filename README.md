@@ -118,13 +118,41 @@ This is the TodoVex project - a high-quality Todoist clone that serves as our pr
 │   │   │   ├── ChatPanel.tsx      # Input panel with sticky positioning
 │   │   │   └── RenderMessage.tsx  # User/assistant message rendering
 │   │   ├── ai-elements/   # AI SDK Elements components
-│   │   ├── ui/            # shadcn/ui and custom UI components
+│   │   ├── labels/        # Label/tag management system
+│   │   │   └── LabelManager.tsx   # Complete label CRUD with color coding
+│   │   ├── nav/           # Navigation components
+│   │   │   └── UserProfile.tsx    # User profile dropdown with settings access
+│   │   ├── projects/      # Project management components
+│   │   │   ├── AddProjectDialog.tsx # Project creation modal
+│   │   │   ├── DeleteProject.tsx    # Project deletion confirmation
+│   │   │   └── ProjectView.tsx      # Individual project display
+│   │   ├── ui/            # shadcn/ui components and custom UI elements
+│   │   │   ├── alert-dialog.tsx, alert.tsx, avatar.tsx, badge.tsx
+│   │   │   ├── button.tsx, card.tsx, carousel.tsx, checkbox.tsx
+│   │   │   ├── collapsible.tsx, copy-button.tsx, dialog.tsx
+│   │   │   ├── dropdown-menu.tsx, form.tsx, hover-card.tsx
+│   │   │   ├── input.tsx, label.tsx, markdown-renderer.tsx
+│   │   │   ├── progress.tsx, prompt-suggestions.tsx, scroll-area.tsx
+│   │   │   ├── select.tsx, separator.tsx, sheet.tsx, sidebar.tsx
+│   │   │   ├── skeleton.tsx, sonner.tsx, switch.tsx, tabs.tsx
+│   │   │   └── textarea.tsx, tooltip.tsx
+│   │   ├── SettingsModal.tsx      # ChatGPT-style settings modal (7 sections)
+│   │   ├── QuickTaskModal.tsx     # Quick task creation dialog
 │   │   └── Sidebar.tsx    # Navigation sidebar with stats
 │   ├── views/             # Main application views
 │   │   ├── ChatView.tsx   # AI chat interface (imports Chat component)
 │   │   ├── TasksView.tsx  # Task management interface
 │   │   ├── ProjectsView.tsx # Project overview
 │   │   └── SettingsView.tsx # User preferences
+│   ├── hooks/             # Custom React hooks
+│   │   ├── use-audio-recording.ts    # Audio recording functionality
+│   │   ├── use-auto-scroll.ts        # Automatic scrolling behavior
+│   │   ├── use-autosize-textarea.ts  # Auto-resizing textarea
+│   │   ├── use-copy-to-clipboard.ts  # Clipboard operations
+│   │   └── use-mobile.ts             # Mobile device detection
+│   ├── lib/               # Utility functions and helpers
+│   │   ├── audio-utils.ts # Audio recording utilities
+│   │   └── utils.ts       # General utility functions
 │   ├── App.tsx            # Main app with auth and routing
 │   ├── main.tsx           # Application entry point
 │   └── index.css          # Global styles and theme
@@ -149,10 +177,20 @@ This is the TodoVex project - a high-quality Todoist clone that serves as our pr
   - `ChatMessages.tsx` - Scroll container with section-based message rendering  
   - `ChatPanel.tsx` - Sticky input panel with scroll controls and form handling
   - `RenderMessage.tsx` - Clean user/assistant message display with integrated styling
+- **Modal System** - Comprehensive dialog-based interfaces
+  - `SettingsModal.tsx` - ChatGPT-style settings with 7 sections (General, Notifications, etc.)
+  - `QuickTaskModal.tsx` - Quick task creation dialog with form validation
+- **Navigation & Layout**
+  - `Sidebar.tsx` - Dynamic navigation with live stats and responsive design
+  - `UserProfile.tsx` - User profile dropdown with settings access
+- **Project & Label Management**
+  - `LabelManager.tsx` - Complete label/tag system with CRUD operations
+  - `AddProjectDialog.tsx`, `DeleteProject.tsx`, `ProjectView.tsx` - Project lifecycle
+- **Audio Features** - Voice recording and transcription capabilities
+  - `use-audio-recording.ts` - Custom hook for audio capture
+  - `audio-utils.ts` - Audio processing utilities
 - `ChatView.tsx` - Main chat interface wrapper (imports Chat component)
-- `TasksView.tsx` - Interactive task management with manual creation and status updates
 - `ProjectsView.tsx` - Visual project overview with progress bars and statistics
-- `Sidebar.tsx` - Dynamic navigation with live stats and responsive design
 
 ## Environment Setup
 

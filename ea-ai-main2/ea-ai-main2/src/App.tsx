@@ -12,9 +12,6 @@ import { Toaster } from "sonner";
 // Import components
 import { AppSidebar } from "./components/Sidebar";
 import { ChatView } from "./views/ChatView";
-import { TasksView } from "./views/TasksView";
-import { ProjectsView } from "./views/ProjectsView";
-import { InboxView } from "./views/InboxView";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "./components/ui/dropdown-menu";
@@ -36,21 +33,15 @@ export default function App() {
 }
 
 function MainApp() {
-  const [activeView, setActiveView] = useState<"chat" | "inbox" | "tasks" | "projects">("chat");
+  const [activeView, setActiveView] = useState<"chat">("chat");
+  const [chatKey, setChatKey] = useState(0); // Force re-render of chat component
+
+  const handleNewChat = () => {
+    setChatKey(prev => prev + 1); // Force re-render of chat component
+  };
 
   const renderActiveView = () => {
-    switch (activeView) {
-      case "chat":
-        return <ChatView />;
-      case "inbox":
-        return <InboxView />;
-      case "tasks":
-        return <TasksView />;
-      case "projects":
-        return <ProjectsView />;
-      default:
-        return <ChatView />;
-    }
+    return <ChatView key={chatKey} />;
   };
 
   return (
@@ -58,6 +49,7 @@ function MainApp() {
       <AppSidebar
         activeView={activeView}
         onViewChange={setActiveView}
+        onNewChat={handleNewChat}
       />
       <div className="flex flex-col flex-1">
         <main className="flex flex-1 min-h-0">
