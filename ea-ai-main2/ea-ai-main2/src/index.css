@@ -37,81 +37,45 @@
   --line-height-3xl: 1.2;
   --font-weight-3xl: 600;
   
-  /* Colors */
-  --color-background: #ffffff;
-  --color-foreground: #0d0d0d;
-  --color-card: #ffffff;
-  --color-card-foreground: #0d0d0d;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0d0d0d;
+  /* Colors - ChatGPT Grey Theme */
+  --color-background: #212121;
+  --color-foreground: #ffffff;
+  --color-card: #2f2f2f;
+  --color-card-foreground: #ffffff;
+  --color-popover: #2f2f2f;
+  --color-popover-foreground: #ffffff;
   --color-primary: #404040;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f5f5f5;
-  --color-secondary-foreground: #0d0d0d;
-  --color-muted: #f8f9fb;
-  --color-muted-foreground: #595959;
-  --color-accent: #f7f8fc;
-  --color-accent-foreground: #0d0d0d;
-  --color-destructive: #dc2626;
+  --color-secondary: #1a1a1a;
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #353535;
+  --color-muted-foreground: #b3b3b3;
+  --color-accent: #353535;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e5e5e5;
-  --color-input: #fafafa;
+  --color-border: #404040;
+  --color-input: #353535;
   --color-ring: #404040;
   
-  /* Custom colors - preserved */
-  --color-sidebar-background: #f8f9fb;
-  --color-sidebar-foreground: #0d0d0d;
+  /* Custom colors - updated for grey theme */
+  --color-sidebar-background: #1a1a1a;
+  --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #404040;
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #f7f8fc;
-  --color-sidebar-accent-foreground: #0d0d0d;
-  --color-sidebar-border: #f0f1f5;
+  --color-sidebar-accent: #353535;
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: #404040;
   --color-sidebar-ring: #404040;
   
-  --color-accent-blue: #eff6ff;
-  --color-accent-blue-foreground: #2563eb;
-  --color-accent-blue-border: #bfdbfe;
+  --color-accent-blue: #1e3a8a;
+  --color-accent-blue-foreground: #60a5fa;
+  --color-accent-blue-border: #1e40af;
   
   /* Radius */
   --radius: 0.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: #171717;
-    --color-foreground: #fafafa;
-    --color-card: #262626;
-    --color-card-foreground: #fafafa;
-    --color-popover: #262626;
-    --color-popover-foreground: #fafafa;
-    --color-primary: #e5e5e5;
-    --color-primary-foreground: #262626;
-    --color-secondary: #404040;
-    --color-secondary-foreground: #fafafa;
-    --color-muted: #404040;
-    --color-muted-foreground: #a3a3a3;
-    --color-accent: #404040;
-    --color-accent-foreground: #fafafa;
-    --color-destructive: #ef4444;
-    --color-destructive-foreground: #fafafa;
-    --color-border: #262626;
-    --color-input: #404040;
-    --color-ring: #737373;
-    
-    --color-sidebar-background: #262626;
-    --color-sidebar-foreground: #fafafa;
-    --color-sidebar-primary: #3b82f6;
-    --color-sidebar-primary-foreground: #fafafa;
-    --color-sidebar-accent: #404040;
-    --color-sidebar-accent-foreground: #fafafa;
-    --color-sidebar-border: #262626;
-    --color-sidebar-ring: #737373;
-    
-    --color-accent-blue: #1e3a8a;
-    --color-accent-blue-foreground: #93c5fd;
-    --color-accent-blue-border: #1e40af;
-  }
-}
 
 @layer base {
 

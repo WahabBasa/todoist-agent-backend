@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ChevronDown, Settings, LogOut } from "lucide-react"
 import { useAuthActions } from "@convex-dev/auth/react"
+import { SettingsModal } from "../SettingsModal"
 
 interface UserProfileProps {
   userName?: string
@@ -16,6 +18,7 @@ interface UserProfileProps {
 
 export function UserProfile({ userName = "Abdul" }: UserProfileProps) {
   const { signOut } = useAuthActions()
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
 
   return (
     <div className="p-2">
@@ -34,7 +37,7 @@ export function UserProfile({ userName = "Abdul" }: UserProfileProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setShowSettingsModal(true)}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>
@@ -45,6 +48,11 @@ export function UserProfile({ userName = "Abdul" }: UserProfileProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      
+      <SettingsModal 
+        isOpen={showSettingsModal} 
+        onClose={() => setShowSettingsModal(false)} 
+      />
     </div>
   )
 }

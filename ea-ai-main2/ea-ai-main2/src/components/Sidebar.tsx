@@ -22,8 +22,8 @@ import {
 } from "./ui/sidebar";
 
 interface AppSidebarProps {
-  activeView: "chat" | "inbox" | "tasks" | "projects" | "settings";
-  onViewChange: (view: "chat" | "inbox" | "tasks" | "projects" | "settings") => void;
+  activeView: "chat" | "inbox" | "tasks" | "projects";
+  onViewChange: (view: "chat" | "inbox" | "tasks" | "projects") => void;
 }
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
@@ -53,7 +53,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     }
   ];
 
-  const handleItemClick = (viewId: "chat" | "inbox" | "tasks" | "projects" | "settings") => {
+  const handleItemClick = (viewId: "chat" | "inbox" | "tasks" | "projects") => {
     onViewChange(viewId);
   };
 
@@ -87,7 +87,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             return (
               <SidebarMenuItem key={item.label}>
                 <SidebarMenuButton
-                  onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects" | "settings")}
+                  onClick={() => handleItemClick(item.id as "chat" | "inbox" | "tasks" | "projects")}
                   isActive={activeView === item.id}
                   tooltip={item.label}
                 >
