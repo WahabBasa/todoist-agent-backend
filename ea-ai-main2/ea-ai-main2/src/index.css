@@ -8,19 +8,28 @@
   --default-transition: all 0.2s ease;
   --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Typography Scale Standardization - Chat Input Inspired */
-  --font-size-xs: 12px;
-  --line-height-xs: 1.4;
-  --font-weight-xs: 500;
+  /* UX-Driven Typography System - Attention Flow Based */
+  /* PRIMARY ATTENTION ZONE - Active interaction areas (chat input, main actions) */
+  --font-primary-size: 14px;
+  --font-primary-weight: 500;
+  --font-primary-line-height: 1.5;
   
-  --font-size-sm: 14px;
-  --line-height-sm: 1.5;
-  --font-weight-sm: 500;
+  /* SECONDARY ATTENTION ZONE - Navigation and important controls */
+  --font-secondary-size: 13px;
+  --font-secondary-weight: 475;
+  --font-secondary-line-height: 1.45;
   
-  --font-size-base: 14px;     /* Make base same as sm for consistency */
-  --line-height-base: 1.5;
-  --font-weight-base: 500;
+  /* TERTIARY ATTENTION ZONE - Background content, scannable lists */
+  --font-tertiary-size: 12px;
+  --font-tertiary-weight: 400;
+  --font-tertiary-line-height: 1.4;
   
+  /* UTILITY ATTENTION ZONE - Minimal UI elements, three dots, meta info */
+  --font-utility-size: 11px;
+  --font-utility-weight: 350;
+  --font-utility-line-height: 1.35;
+  
+  /* LEGACY SCALE - Maintained for headings and special use */
   --font-size-lg: 18px;       /* Section headings */
   --line-height-lg: 1.4;
   --font-weight-lg: 600;
@@ -42,6 +51,27 @@
   --radius-md: 0.5rem;       /* 8px - default buttons and inputs */  
   --radius-lg: 0.75rem;      /* 12px - large containers like chat input */
   --radius-xl: 1rem;         /* 16px - special cases like modals */
+  
+  /* UX-Driven Spacing System - Attention Priority Based */
+  /* PRIMARY SPACING - Generous padding for primary interaction zones */
+  --spacing-primary-x: 1rem;    /* 16px horizontal padding */
+  --spacing-primary-y: 0.75rem; /* 12px vertical padding */
+  --spacing-primary-gap: 0.75rem; /* 12px gaps between primary elements */
+  
+  /* SECONDARY SPACING - Balanced padding for navigation zones */
+  --spacing-secondary-x: 0.75rem;  /* 12px horizontal padding */
+  --spacing-secondary-y: 0.5rem;   /* 8px vertical padding */
+  --spacing-secondary-gap: 0.5rem; /* 8px gaps between secondary elements */
+  
+  /* TERTIARY SPACING - Compact padding for background content */
+  --spacing-tertiary-x: 0.5rem;   /* 8px horizontal padding */
+  --spacing-tertiary-y: 0.375rem; /* 6px vertical padding */
+  --spacing-tertiary-gap: 0.25rem; /* 4px gaps for efficient scanning */
+  
+  /* UTILITY SPACING - Minimal padding for utility elements */
+  --spacing-utility-x: 0.375rem;  /* 6px horizontal padding */
+  --spacing-utility-y: 0.25rem;   /* 4px vertical padding */
+  --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
   
   /* Colors - ChatGPT Grey Theme */
   --color-background: #212121;
@@ -102,9 +132,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
     font-family: var(--default-font-family);
-    font-size: 14px;                      /* Match text-sm/text-base standard */
-    font-weight: 500;                     /* font-medium consistency */
-    line-height: 1.5;
+    /* Remove forced typography - let components control their own sizing */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--color-background);
@@ -144,12 +172,7 @@
     color: var(--color-foreground);
   }
   
-  /* Standardize interactive elements to match chat input */
-  button, input, textarea, select {
-    font-size: 14px;        /* text-sm standard */
-    font-weight: 500;       /* font-medium consistency */
-    line-height: 1.5;
-  }
+  /* Remove global interactive element overrides - let components control their typography */
   
   label {
     font-size: 14px;        /* text-sm standard */
@@ -182,6 +205,39 @@
   .rounded-design-md { border-radius: var(--radius-md); }
   .rounded-design-lg { border-radius: var(--radius-lg); }
   .rounded-design-xl { border-radius: var(--radius-xl); }
+
+  /* UX-Driven Attention Typography Utilities */
+  .text-primary { 
+    font-size: var(--font-primary-size);
+    font-weight: var(--font-primary-weight);
+    line-height: var(--font-primary-line-height);
+  }
+  .text-secondary { 
+    font-size: var(--font-secondary-size);
+    font-weight: var(--font-secondary-weight);
+    line-height: var(--font-secondary-line-height);
+  }
+  .text-tertiary { 
+    font-size: var(--font-tertiary-size);
+    font-weight: var(--font-tertiary-weight);
+    line-height: var(--font-tertiary-line-height);
+  }
+  .text-utility { 
+    font-size: var(--font-utility-size);
+    font-weight: var(--font-utility-weight);
+    line-height: var(--font-utility-line-height);
+  }
+
+  /* UX-Driven Spacing Utilities */
+  .padding-primary { padding: var(--spacing-primary-y) var(--spacing-primary-x); }
+  .padding-secondary { padding: var(--spacing-secondary-y) var(--spacing-secondary-x); }
+  .padding-tertiary { padding: var(--spacing-tertiary-y) var(--spacing-tertiary-x); }
+  .padding-utility { padding: var(--spacing-utility-y) var(--spacing-utility-x); }
+  
+  .gap-primary { gap: var(--spacing-primary-gap); }
+  .gap-secondary { gap: var(--spacing-secondary-gap); }
+  .gap-tertiary { gap: var(--spacing-tertiary-gap); }
+  .gap-utility { gap: var(--spacing-utility-gap); }
 }
 
 /* Essential component utilities */

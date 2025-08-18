@@ -79,6 +79,7 @@ export function ChatPanel({
             type="button"
             variant="outline"
             size="icon"
+            attention="primary"
             className="absolute -top-10 right-4 z-20 size-8 rounded-design-md shadow-md"
             onClick={handleScrollToBottom}
             title="Scroll to bottom"
@@ -87,7 +88,7 @@ export function ChatPanel({
           </Button>
         )}
 
-        <div className="relative flex flex-col w-full gap-2 bg-muted rounded-design-lg border border-input">
+        <div className="relative flex flex-col w-full gap-primary bg-muted rounded-design-lg border border-input">
           <Textarea
             ref={inputRef}
             name="input"
@@ -100,7 +101,7 @@ export function ChatPanel({
             spellCheck={false}
             value={input}
             disabled={isLoading}
-            className="resize-none w-full min-h-12 bg-transparent border-0 p-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="resize-none w-full min-h-12 bg-transparent border-0 padding-primary text-primary placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             onChange={handleInputChange}
             onKeyDown={e => {
               if (
@@ -121,17 +122,18 @@ export function ChatPanel({
           />
 
           {/* Bottom control bar - Morphic-style */}
-          <div className="flex items-center justify-between p-3">
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between padding-primary">
+            <div className="flex items-center gap-primary">
+              <div className="text-utility text-muted-foreground">
                 Claude 3.5 Sonnet
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-primary">
               <Button
                 type={isLoading ? 'button' : 'submit'}
                 size="icon"
                 variant="outline"
+                attention="primary"
                 className={cn(
                   'rounded-design-md transition-all duration-200',
                   isLoading ? 'animate-pulse' : 'hover:bg-accent',

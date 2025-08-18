@@ -64,16 +64,16 @@ export function AppSidebar({ activeView, onViewChange, onNewChat }: AppSidebarPr
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">
       {/* App Header */}
-      <SidebarHeader className="flex flex-row justify-between items-center">
-        <h1 className="font-semibold text-sm px-2 py-3 group-data-[collapsible=icon]:hidden">TaskAI</h1>
+      <SidebarHeader className="flex flex-row justify-between items-center padding-secondary">
+        <h1 className="text-secondary font-semibold group-data-[collapsible=icon]:hidden">TaskAI</h1>
         <SidebarTrigger />
       </SidebarHeader>
 
-      <SidebarContent className="flex flex-col overflow-hidden">
+      <SidebarContent className="flex flex-col overflow-hidden px-3 py-0">
         {/* Fixed Top Section */}
         <div>
           {/* Main Navigation */}
-          <SidebarMenu>
+          <SidebarMenu className="gap-secondary">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -82,6 +82,7 @@ export function AppSidebar({ activeView, onViewChange, onNewChat }: AppSidebarPr
                     onClick={item.onClick || (() => handleItemClick(item.id as "chat"))}
                     isActive={activeView === item.id}
                     tooltip={item.label}
+                    attention="secondary"
                   >
                     <Icon className="size-4" />
                     <span>{item.label}</span>
@@ -102,29 +103,30 @@ export function AppSidebar({ activeView, onViewChange, onNewChat }: AppSidebarPr
           <SidebarSeparator />
 
           {/* Chat History Title */}
-          <SidebarGroupLabel className="px-2 pb-2">
-            <span>Chat History</span>
+          <SidebarGroupLabel className="padding-utility">
+            <span className="text-utility">Chat History</span>
           </SidebarGroupLabel>
         </div>
 
         {/* Scrollable Chat History Section */}
         <div className="flex-1 overflow-y-auto">
-          <SidebarMenu>
+          <SidebarMenu className="gap-tertiary">
             {conversations?.messages?.filter(msg => msg.role === "user").map((message, index) => (
               <SidebarMenuItem key={index}>
                 <SidebarMenuButton
                   onClick={() => handleItemClick("chat")}
-                  tooltip={message.content.substring(0, 50) + "..."}
-                  className="text-xs h-auto py-2 justify-start"
+                  tooltip={message.content.substring(0, 50)}
+                  attention="tertiary"
+                  className="h-auto justify-start"
                 >
                   <span className="truncate text-left">
-                    {message.content.substring(0, 40)}...
+                    {message.content.substring(0, 40)}
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )) || (
               <SidebarMenuItem>
-                <SidebarMenuButton disabled tooltip="No chat history" className="text-xs justify-start">
+                <SidebarMenuButton disabled tooltip="No chat history" attention="tertiary" className="justify-start">
                   <span className="text-muted-foreground">No chats yet</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
