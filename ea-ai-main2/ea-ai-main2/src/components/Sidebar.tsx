@@ -8,6 +8,7 @@ import { UserProfile } from "./nav/UserProfile";
 import { ChatHistoryClient } from "./sidebar/ChatHistoryClient";
 import { NewChatButton } from "./sidebar/NewChatButton";
 import { Id } from "../../convex/_generated/dataModel";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -39,7 +40,7 @@ export function AppSidebar({
   currentSessionId,
   onChatSelect 
 }: AppSidebarProps) {
-  const createChatSession = useAction(api.chatSessions.createChatSession);
+  const createChatSession = useMutation(api.chatSessions.createChatSession);
 
   const handleNewChat = async () => {
     try {
@@ -55,6 +56,7 @@ export function AppSidebar({
       window.dispatchEvent(new CustomEvent('chat-history-updated'));
     } catch (error) {
       console.error("Failed to create new chat:", error);
+      toast.error("Failed to create new chat. Please try again.");
     }
   };
 
