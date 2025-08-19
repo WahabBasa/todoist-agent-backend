@@ -17,6 +17,18 @@ const applicationTables = {
     type: v.union(v.literal("user"), v.literal("system")),
   }).index("by_user", ["userId"]),
 
+  // Chat Sessions - Multiple conversations per user (Morphic-style)
+  chatSessions: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    createdAt: v.number(),
+    lastMessageAt: v.number(),
+    messageCount: v.number(),
+    isDefault: v.optional(v.boolean()), // Mark the default chat session
+  }).index("by_user", ["userId"])
+    .index("by_user_and_time", ["userId", "lastMessageAt"])
+    .index("by_user_and_default", ["userId", "isDefault"]),
+
   tasks: defineTable({
     userId: v.id("users"),
     // TodoVex compatibility fields
@@ -55,6 +67,7 @@ const applicationTables = {
 
   conversations: defineTable({
     userId: v.id("users"),
+    sessionId: v.optional(v.id("chatSessions")), // Link to chat session
     // New schema - messages array
     messages: v.optional(v.array(v.object({
       role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system"), v.literal("tool")),
@@ -78,7 +91,9 @@ const applicationTables = {
     toolCalls: v.optional(v.array(v.any())),
     // Migration tracking
     schemaVersion: v.optional(v.number()),
-  }).index("by_user", ["userId"]),
+  }).index("by_user", ["userId"])
+    .index("by_session", ["sessionId"])
+    .index("by_user_and_session", ["userId", "sessionId"]),
 
   numbers: defineTable({
     value: v.number(),

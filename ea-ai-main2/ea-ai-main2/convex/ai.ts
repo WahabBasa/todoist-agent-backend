@@ -320,15 +320,24 @@ export const chatWithAI = action({
   args: {
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
+    sessionId: v.optional(v.id("chatSessions")),
   },
-  handler: async (ctx, { message, useHaiku = true }) => {
+  handler: async (ctx, { message, useHaiku = true, sessionId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("User must be authenticated.");
 
     const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const conversation = await ctx.runQuery(api.conversations.getConversation);
+    // Get conversation history - session-aware or default
+    let conversation;
+    if (sessionId) {
+      conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+    } else {
+      // For backward compatibility, use default conversation
+      conversation = await ctx.runQuery(api.conversations.getConversation);
+    }
+    
     const history = (conversation?.messages as any[]) || [];
     history.push({ role: "user", content: message, timestamp: Date.now() });
 
@@ -599,7 +608,17 @@ Remember: You're here to make their life easier and more organized. Be the assis
         if (!toolCalls || toolCalls.length === 0) {
             console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
             history.push({ role: "assistant", content: text, timestamp: Date.now() });
-            await ctx.runMutation(api.conversations.updateConversation, { messages: history as any });
+            
+            // Save conversation - session-aware or default
+            if (sessionId) {
+              await ctx.runMutation(api.conversations.updateConversationBySession, { 
+                sessionId, 
+                messages: history as any 
+              });
+            } else {
+              await ctx.runMutation(api.conversations.updateConversation, { messages: history as any });
+            }
+            
             return { response: text };
         }
 

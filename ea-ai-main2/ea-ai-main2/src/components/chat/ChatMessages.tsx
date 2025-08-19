@@ -91,22 +91,8 @@ export function ChatMessages({
         aria-roledescription="chat messages"
         className="relative size-full pt-14"
       >
-        {/* Empty State - Enhanced with Morphic styling */}
+        {/* Clean empty state */}
         <div className="h-full flex flex-col items-center justify-center p-6">
-          <div className="text-center mb-6 animate-in fade-in-50 duration-500">
-            <h3 className="text-lg font-medium text-foreground mb-2">Start a conversation</h3>
-            <p className="text-base text-muted-foreground max-w-md">
-              Ask me to create tasks, manage projects, or help with your workflow
-            </p>
-          </div>
-          
-          <div className="w-full max-w-md animate-in slide-in-from-bottom-4 duration-700 delay-150">
-            <PromptSuggestions
-              label="Quick actions:"
-              append={handleAppend}
-              suggestions={suggestions}
-            />
-          </div>
         </div>
       </div>
     )
@@ -136,7 +122,7 @@ export function ChatMessages({
             }
           >
             {/* User message with enhanced styling */}
-            <div className="flex flex-col gap-4 mb-4">
+            <div className="flex flex-col gap-primary mb-4">
               <RenderMessage
                 message={section.userMessage}
                 messageId={section.userMessage.id}
@@ -145,13 +131,13 @@ export function ChatMessages({
                 onQuerySelect={onQuerySelect}
               />
               {showLoading && (
-                <div className="flex items-center gap-2 text-muted-foreground animate-in fade-in-50 duration-300">
-                  <div className="flex gap-1">
+                <div className="flex items-center gap-secondary text-muted-foreground animate-in fade-in-50 duration-300">
+                  <div className="flex gap-tertiary">
                     <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
                     <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />
                     <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.4s' }} />
                   </div>
-                  <span>Thinking...</span>
+                  <span className="text-utility">Thinking...</span>
                 </div>
               )}
             </div>
@@ -161,7 +147,7 @@ export function ChatMessages({
               <div 
                 key={assistantMessage.id} 
                 className={cn(
-                  "flex flex-col gap-4",
+                  "flex flex-col gap-primary",
                   index === 0 ? "animate-in slide-in-from-left-2 duration-500" : ""
                 )}
               >

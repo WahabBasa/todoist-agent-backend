@@ -56,18 +56,12 @@ export function ChatPanel({
   return (
     <div
       className={cn(
-        'w-full bg-background group/form-container shrink-0',
-        messages.length > 0 ? 'sticky bottom-0 px-2 pb-4' : 'px-6'
+        'w-full bg-background group/form-container shrink-0 chat-transition',
+        messages.length > 0 
+          ? 'sticky bottom-0 px-2 pb-4' 
+          : 'flex items-center justify-center min-h-[60vh] px-6'
       )}
     >
-      {messages.length === 0 && (
-        <div className="mb-10 flex flex-col items-center gap-4">
-          <div className="size-12 text-muted-foreground" />
-          <p className="text-center text-3xl font-semibold">
-            How can I help you today?
-          </p>
-        </div>
-      )}
       
       <form
         onSubmit={handleSubmit}
@@ -79,8 +73,7 @@ export function ChatPanel({
             type="button"
             variant="outline"
             size="icon"
-            attention="primary"
-            className="absolute -top-10 right-4 z-20 size-8 rounded-design-md shadow-md"
+            className="absolute -top-10 right-4 z-20 size-8 rounded-design-md shadow-md transition-all duration-200"
             onClick={handleScrollToBottom}
             title="Scroll to bottom"
           >
@@ -101,7 +94,7 @@ export function ChatPanel({
             spellCheck={false}
             value={input}
             disabled={isLoading}
-            className="resize-none w-full min-h-12 bg-transparent border-0 padding-primary text-primary placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="resize-none w-full min-h-12 bg-transparent border-0 p-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             onChange={handleInputChange}
             onKeyDown={e => {
               if (
@@ -132,12 +125,10 @@ export function ChatPanel({
               <Button
                 type={isLoading ? 'button' : 'submit'}
                 size="icon"
-                variant="outline"
-                attention="primary"
+                variant="ghost"
                 className={cn(
-                  'rounded-design-md transition-all duration-200',
-                  isLoading ? 'animate-pulse' : 'hover:bg-accent',
-                  input.trim().length > 0 && !isLoading ? 'bg-primary text-primary-foreground hover:bg-primary/90' : ''
+                  'rounded-design-md btn-blue-primary transition-all duration-200',
+                  isLoading ? 'animate-pulse' : ''
                 )}
                 disabled={input.length === 0 && !isLoading}
                 onClick={isLoading ? () => {} : undefined}

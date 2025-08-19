@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from "./components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "./components/ui/dropdown-menu";
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
+import { Id } from "../convex/_generated/dataModel";
 
 export default function App() {
   return (
@@ -34,14 +35,20 @@ export default function App() {
 
 function MainApp() {
   const [activeView, setActiveView] = useState<"chat">("chat");
+  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(null);
   const [chatKey, setChatKey] = useState(0); // Force re-render of chat component
 
   const handleNewChat = () => {
     setChatKey(prev => prev + 1); // Force re-render of chat component
   };
 
+  const handleChatSelect = (sessionId: Id<"chatSessions">) => {
+    setCurrentSessionId(sessionId);
+    setChatKey(prev => prev + 1); // Force re-render with new session
+  };
+
   const renderActiveView = () => {
-    return <ChatView key={chatKey} />;
+    return <ChatView key={`${chatKey}-${currentSessionId}`} sessionId={currentSessionId} />;
   };
 
   return (
@@ -50,6 +57,8 @@ function MainApp() {
         activeView={activeView}
         onViewChange={setActiveView}
         onNewChat={handleNewChat}
+        currentSessionId={currentSessionId}
+        onChatSelect={handleChatSelect}
       />
       <div className="flex flex-col flex-1">
         <main className="flex flex-1 min-h-0">

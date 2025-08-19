@@ -146,7 +146,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             variant="ghost" 
             size="sm" 
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 h-8 w-8 p-0 hover:bg-muted/50 rounded-design-md"
+            className="absolute top-4 right-4 z-10 h-8 w-8 p-0 bg-background border border-border rounded-design-md"
           >
             <X className="h-4 w-4" />
           </Button>

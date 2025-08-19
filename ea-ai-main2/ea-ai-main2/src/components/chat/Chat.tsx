@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAction, useQuery } from "convex/react"
+import { useAction, useQuery, useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { Id } from "../../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'
@@ -20,13 +21,31 @@ interface Message {
   content: string
 }
 
-export function Chat() {
+interface ChatProps {
+  sessionId?: Id<"chatSessions"> | null
+}
+
+export function Chat({ sessionId }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
   
-  // Convex integration (preserve existing backend)
+  // Convex integration with session support
   const chatWithAI = useAction(api.ai.chatWithAI)
-  const conversation = useQuery(api.conversations.getConversation)
+  const getOrCreateDefaultSession = useMutation(api.chatSessions.getOrCreateDefaultSession)
+  const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage)
+  
+  // Use session-aware conversation query or fallback to legacy
+  const conversation = useQuery(api.conversations.getConversationBySession, 
+    sessionId ? { sessionId } : { sessionId: undefined }
+  )
+  
+  // Fallback to default session query if no session ID provided
+  const defaultConversation = useQuery(api.conversations.getConversation, 
+    sessionId ? undefined : {}
+  )
+  
+  // Use the appropriate conversation data
+  const activeConversation = sessionId ? conversation : defaultConversation
   
   // Local state for chat interface
   const [input, setInput] = useState("")
@@ -37,8 +56,8 @@ export function Chat() {
 
   // Convert existing conversation messages to display format
   const messages = useMemo(() => {
-    return conversation ? 
-      ((conversation.messages as any[]) || [])
+    return activeConversation ? 
+      ((activeConversation.messages as any[]) || [])
         .filter(msg => msg.role === "user" || msg.role === "assistant")
         .map((msg, index) => ({
           id: `${msg.timestamp}-${index}`,
@@ -46,7 +65,7 @@ export function Chat() {
           content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
         }))
       : []
-  }, [conversation])
+  }, [activeConversation])
 
   // Convert messages array to sections array (matching Morphic pattern)
   const sections = useMemo<ChatSection[]>(() => {
@@ -115,7 +134,7 @@ export function Chat() {
     }
   }, [sections, messages])
 
-  // Custom handleSubmit for Convex integration
+  // Session-aware handleSubmit for Convex integration
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
@@ -125,7 +144,31 @@ export function Chat() {
     setInput("")
 
     try {
-      const result = await chatWithAI({ message: inputValue, useHaiku })
+      let currentSessionId = sessionId
+      
+      // If no session ID provided, get or create default session
+      if (!currentSessionId) {
+        currentSessionId = await getOrCreateDefaultSession()
+      }
+
+      // Send message with session context
+      const result = await chatWithAI({ 
+        message: inputValue, 
+        useHaiku,
+        sessionId: currentSessionId 
+      })
+      
+      // Update chat title if this is the first message
+      if (messages.length === 0 && currentSessionId) {
+        try {
+          await updateChatTitle({
+            sessionId: currentSessionId,
+            firstMessage: inputValue
+          })
+        } catch (error) {
+          console.warn("Failed to update chat title:", error)
+        }
+      }
       
       // Handle tool results feedback (preserve existing logic)
       if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
@@ -142,6 +185,10 @@ export function Chat() {
           }
         }
       }
+
+      // Trigger chat history update
+      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+      
     } catch (error) {
       console.error("Chat error:", error)
       toast.error("Failed to send message")
@@ -169,13 +216,13 @@ export function Chat() {
   }
 
   // Show loading state while conversation is loading
-  if (conversation === undefined) {
+  if (activeConversation === undefined) {
     return (
       <div className="h-full flex flex-col bg-background">
         <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="flex items-center gap-3 text-muted-foreground">
+          <div className="flex items-center gap-secondary text-muted-foreground">
             <div className="w-5 h-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            <span className="text-base">Loading conversation...</span>
+            <span className="text-tertiary">Loading conversation...</span>
           </div>
         </div>
       </div>
