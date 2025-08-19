@@ -74,23 +74,29 @@
   --spacing-utility-y: 0.25rem;   /* 4px vertical padding */
   --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
   
-  /* Colors - ChatGPT Grey Theme */
+  /* HSL White Intensity Text System - Attention Based */
+  --color-text-primary: hsl(0, 0%, 100%);     /* PRIMARY attention - Pure white */
+  --color-text-secondary: hsl(0, 0%, 90%);    /* SECONDARY attention - 90% white */
+  --color-text-tertiary: hsl(0, 0%, 75%);     /* TERTIARY attention - 75% white */
+  --color-text-utility: hsl(0, 0%, 60%);      /* UTILITY attention - 60% white */
+
+  /* Colors - ChatGPT Grey Theme (Legacy) */
   --color-background: #212121;
-  --color-foreground: #ffffff;
+  --color-foreground: hsl(0, 0%, 100%);       /* Uses primary white */
   --color-card: #2f2f2f;
-  --color-card-foreground: #ffffff;
+  --color-card-foreground: hsl(0, 0%, 100%);
   --color-popover: #2f2f2f;
-  --color-popover-foreground: #ffffff;
+  --color-popover-foreground: hsl(0, 0%, 100%);
   --color-primary: #404040;
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: hsl(0, 0%, 100%);
   --color-secondary: #1a1a1a;
-  --color-secondary-foreground: #ffffff;
+  --color-secondary-foreground: hsl(0, 0%, 100%);
   --color-muted: #353535;
-  --color-muted-foreground: #b3b3b3;
+  --color-muted-foreground: hsl(0, 0%, 75%);   /* Uses tertiary intensity */
   --color-accent: #353535;
-  --color-accent-foreground: #ffffff;
+  --color-accent-foreground: hsl(0, 0%, 100%);
   --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
+  --color-destructive-foreground: hsl(0, 0%, 100%);
   --color-border: #404040;
   --color-input: #353535;
   --color-ring: #404040;
@@ -212,26 +218,30 @@
   .rounded-design-lg { border-radius: var(--radius-lg); }
   .rounded-design-xl { border-radius: var(--radius-xl); }
 
-  /* UX-Driven Attention Typography Utilities */
+  /* UX-Driven Attention Typography Utilities - Now with HSL Colors */
   .text-primary { 
     font-size: var(--font-primary-size);
     font-weight: var(--font-primary-weight);
     line-height: var(--font-primary-line-height);
+    color: var(--color-text-primary);
   }
   .text-secondary { 
     font-size: var(--font-secondary-size);
     font-weight: var(--font-secondary-weight);
     line-height: var(--font-secondary-line-height);
+    color: var(--color-text-secondary);
   }
   .text-tertiary { 
     font-size: var(--font-tertiary-size);
     font-weight: var(--font-tertiary-weight);
     line-height: var(--font-tertiary-line-height);
+    color: var(--color-text-tertiary);
   }
   .text-utility { 
     font-size: var(--font-utility-size);
     font-weight: var(--font-utility-weight);
     line-height: var(--font-utility-line-height);
+    color: var(--color-text-utility);
   }
 
   /* UX-Driven Spacing Utilities */

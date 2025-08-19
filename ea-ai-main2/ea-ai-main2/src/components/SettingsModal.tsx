@@ -12,6 +12,7 @@ import { Switch } from "./ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Label } from "./ui/label";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import { ConnectedAppItem } from "./settings/ConnectedAppItem";
 import { 
   User, Settings, Bell, Palette, Link, Shield, 
   AlertTriangle, Download, Trash2, LogOut, X 
@@ -298,77 +299,63 @@ function PersonalizationSettings() {
 }
 
 function ConnectedAppsSettings() {
+  const connectedApps = [
+    {
+      appName: "Google Drive",
+      description: "Upload Google Docs, Sheets, Slides and other files.",
+      iconBgColor: "",
+      iconText: "G",
+      gradientFrom: "blue-500",
+      gradientTo: "green-500",
+    },
+    {
+      appName: "Microsoft OneDrive (personal)",
+      description: "Upload Microsoft Word, Excel, PowerPoint and other files.",
+      iconBgColor: "bg-blue-600",
+      iconText: "O",
+    },
+    {
+      appName: "Microsoft OneDrive (work/school)",
+      description: "Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.",
+      iconBgColor: "bg-blue-700",
+      iconText: "O",
+    },
+    {
+      appName: "Todoist",
+      description: "Sync tasks and projects with your Todoist account for enhanced productivity management.",
+      iconBgColor: "bg-red-500",
+      iconText: "T",
+    },
+  ];
+
+  const handleConnect = (appName: string) => {
+    console.log(`Connecting to ${appName}...`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-foreground mb-2">File uploads</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-lg font-semibold text-primary mb-2">File uploads</h1>
+        <p className="text-tertiary">
           These apps will allow you to add files to ChatGPT messages.
         </p>
       </div>
       
       {/* Connection Options */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-design-sm flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">G</span>
-            </div>
-            <div>
-              <div className="font-medium text-foreground">Google Drive</div>
-              <div className="text-sm text-muted-foreground">Upload Google Docs, Sheets, Slides and other files.</div>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="bg-background hover:bg-muted">
-            Connect
-          </Button>
-        </div>
-        
-        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-design-sm flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">O</span>
-            </div>
-            <div>
-              <div className="font-medium text-foreground">Microsoft OneDrive (personal)</div>
-              <div className="text-sm text-muted-foreground">Upload Microsoft Word, Excel, PowerPoint and other files.</div>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="bg-background hover:bg-muted">
-            Connect
-          </Button>
-        </div>
-        
-        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-700 rounded-md flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">O</span>
-            </div>
-            <div>
-              <div className="font-medium text-foreground">Microsoft OneDrive (work/school)</div>
-              <div className="text-sm text-muted-foreground">Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.</div>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="bg-background hover:bg-muted">
-            Connect
-          </Button>
-        </div>
-        
-        <div className="flex items-center justify-between p-3 border border-border rounded-design-md bg-card/30 hover:bg-card/50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">T</span>
-            </div>
-            <div>
-              <div className="font-medium text-foreground">Todoist</div>
-              <div className="text-sm text-muted-foreground">Sync tasks and projects with your Todoist account for enhanced productivity management.</div>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="bg-background hover:bg-muted">
-            Connect
-          </Button>
-        </div>
+      <div className="space-y-4">
+        {connectedApps.map((app) => (
+          <ConnectedAppItem
+            key={app.appName}
+            appName={app.appName}
+            description={app.description}
+            iconBgColor={app.iconBgColor}
+            iconText={app.iconText}
+            gradientFrom={app.gradientFrom}
+            gradientTo={app.gradientTo}
+            onConnect={() => handleConnect(app.appName)}
+          />
+        ))}
       </div>
     </div>
   );

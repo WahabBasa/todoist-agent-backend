@@ -10,16 +10,16 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-background text-foreground border border-border",
+          "bg-background border border-border",
         destructive:
           "bg-red-50 text-red-700 border border-red-200",
         outline:
-          "border bg-background text-foreground border-border",
+          "border bg-background border-border",
         secondary:
-          "bg-muted text-foreground border border-border",
+          "bg-muted border border-border",
         ghost:
-          "bg-transparent text-foreground",
-        link: "text-foreground underline-offset-4",
+          "bg-transparent",
+        link: "underline-offset-4",
       },
       size: {
         default: "h-9 padding-secondary has-[>svg]:px-3",

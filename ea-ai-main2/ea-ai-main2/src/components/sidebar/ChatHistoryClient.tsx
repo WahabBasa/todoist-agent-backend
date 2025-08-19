@@ -169,7 +169,7 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
       
       <div className="flex-1 overflow-y-auto mb-2 relative scrollbar-hide">
         {isHistoryEmpty && !isPending ? (
-          <div className="padding-secondary text-tertiary text-muted-foreground text-center">
+          <div className="padding-secondary text-tertiary text-center">
             No chat history
           </div>
         ) : (

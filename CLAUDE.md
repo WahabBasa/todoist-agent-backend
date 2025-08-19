@@ -82,8 +82,8 @@ gt submit --stack
 2. **Check Today's Devlog** - Look for devlog matching today's date in `updates/` folder (format: YYYY-MM-DD_devlog.md)
 3. **Create Today's Devlog if Missing** - If no devlog exists for today, create empty file `updates/YYYY-MM-DD_devlog.md` and inform user
 4. **Review README Architecture** - Understand current system state
-5. **Read CSS Design System Files** - Always read these files for design system context:
-   - `ea-ai-main2/ea-ai-main2/src/index.css` - Main CSS configuration (Tailwind v4 @theme, ChatGPT grey theme, border radius system, typography)
+5. **Read CSS Design System Files** - Always read these files COMPLETELY for design system context:
+   - `ea-ai-main2/ea-ai-main2/src/index.css` - **READ FULL FILE** - Main CSS configuration (Tailwind v4 @theme, ChatGPT grey theme, border radius system, typography)
    - `ea-ai-main2/ea-ai-main2/postcss.config.js` - PostCSS/Tailwind processing pipeline
 6. **Architecture Alignment** - Ensure changes fit the React → Convex → AI SDK flow
 7. **Check Someday Tasks** - Review `personal/someday/todolist.md` for conditional tasks that may now be ready

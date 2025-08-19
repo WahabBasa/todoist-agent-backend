@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MoreHorizontal, MessageSquare, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { Id } from "../../../convex/_generated/dataModel"
 import { cn } from "@/lib/utils"
 
@@ -72,17 +72,12 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
         )}
         onClick={onSelect}
       >
-        {/* Chat icon */}
-        <div className="flex-shrink-0">
-          <MessageSquare className="w-4 h-4 text-muted-foreground" />
-        </div>
-
         {/* Chat content */}
         <div className="flex-1 min-w-0">
           <div className="text-tertiary truncate">
             {chat.title}
           </div>
-          <div className="text-utility text-muted-foreground">
+          <div className="text-utility">
             {formatDate(chat.lastMessageAt)} • {chat.messageCount} messages
           </div>
         </div>
@@ -98,7 +93,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-design-sm"
+                  className="h-6 w-6 text-utility hover:text-secondary rounded-design-sm"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreHorizontal className="h-3 w-3" />
