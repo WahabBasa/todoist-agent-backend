@@ -98,6 +98,14 @@ const applicationTables = {
   numbers: defineTable({
     value: v.number(),
   }),
+
+  // Todoist API Integration
+  todoistTokens: defineTable({
+    userId: v.id("users"),
+    accessToken: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 };
 
 // The schema is normally optional, but Convex Auth

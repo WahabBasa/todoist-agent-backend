@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -299,6 +299,13 @@ function PersonalizationSettings() {
 }
 
 function ConnectedAppsSettings() {
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  
+  // Check if Todoist is connected
+  const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
+  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
+  const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
+  
   const connectedApps = [
     {
       appName: "Google Drive",
@@ -307,38 +314,83 @@ function ConnectedAppsSettings() {
       iconText: "G",
       gradientFrom: "blue-500",
       gradientTo: "green-500",
+      isConnected: false,
+      canConnect: false,
     },
     {
       appName: "Microsoft OneDrive (personal)",
       description: "Upload Microsoft Word, Excel, PowerPoint and other files.",
       iconBgColor: "bg-blue-600",
       iconText: "O",
+      isConnected: false,
+      canConnect: false,
     },
     {
       appName: "Microsoft OneDrive (work/school)",
       description: "Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.",
       iconBgColor: "bg-blue-700",
       iconText: "O",
+      isConnected: false,
+      canConnect: false,
     },
     {
       appName: "Todoist",
-      description: "Sync tasks and projects with your Todoist account for enhanced productivity management.",
+      description: "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
       iconBgColor: "bg-red-500",
       iconText: "T",
+      isConnected: hasTodoistConnection ?? false,
+      canConnect: true,
     },
   ];
 
-  const handleConnect = (appName: string) => {
-    console.log(`Connecting to ${appName}...`);
+  const handleConnect = async (appName: string) => {
+    if (appName === "Todoist") {
+      if (hasTodoistConnection) {
+        // Disconnect Todoist
+        try {
+          await removeTodoistConnection();
+        } catch (error) {
+          console.error("Failed to disconnect Todoist:", error);
+        }
+      } else {
+        // Connect Todoist
+        if (generateOAuthURL?.error) {
+          console.error("Todoist OAuth error:", generateOAuthURL.error);
+          alert("Todoist integration is not properly configured. Please contact support.");
+        } else if (generateOAuthURL?.url) {
+          setIsConnecting("Todoist");
+          // Open OAuth URL in a popup window
+          const popup = window.open(
+            generateOAuthURL.url,
+            'todoist-oauth',
+            'width=500,height=600,scrollbars=yes,resizable=yes'
+          );
+          
+          // Listen for the popup to close (successful connection)
+          const checkClosed = setInterval(() => {
+            if (popup?.closed) {
+              clearInterval(checkClosed);
+              setIsConnecting(null);
+              // The connection status will update automatically via the query
+            }
+          }, 1000);
+        } else {
+          console.error("No OAuth URL generated");
+          alert("Unable to connect to Todoist. Please try again later.");
+        }
+      }
+    } else {
+      console.log(`${appName} integration coming soon...`);
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-primary mb-2">File uploads</h1>
+        <h1 className="text-lg font-semibold text-primary mb-2">Connected Apps</h1>
         <p className="text-tertiary">
-          These apps will allow you to add files to ChatGPT messages.
+          Connect external services to enhance your AI assistant with additional capabilities and data sources.
         </p>
       </div>
       
@@ -353,6 +405,9 @@ function ConnectedAppsSettings() {
             iconText={app.iconText}
             gradientFrom={app.gradientFrom}
             gradientTo={app.gradientTo}
+            isConnected={app.isConnected}
+            isConnecting={isConnecting === app.appName}
+            canConnect={app.canConnect}
             onConnect={() => handleConnect(app.appName)}
           />
         ))}

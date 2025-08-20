@@ -117,26 +117,26 @@ function convertConvexMessagesToModel(
 // =================================================================
 const plannerTools = {
   createTask: tool({
-    description: "Create a new task for the user. Use this when they want to add something to their to-do list. You can optionally assign it to a specific project to keep things organized.",
+    description: "Create a new task in the user's Todoist account. Use this when they want to add something to their real to-do list. You can optionally assign it to a specific Todoist project to keep things organized.",
     inputSchema: z.object({
       title: z.string().describe("The task title or description (e.g., 'Call the dentist', 'Review quarterly reports', 'Buy groceries')"),
-      projectId: z.string().optional().describe("Optional: The project ID to categorize this task. Get project IDs by calling getProjectAndTaskMap first."),
+      projectId: z.string().optional().describe("Optional: The Todoist project ID to categorize this task. Get project IDs by calling getProjectAndTaskMap first."),
     }),
   }),
   getTasks: tool({
-    description: "Retrieve the user's tasks with full details. Use this to show their to-do list or find tasks within a specific project. Call without parameters to see all tasks, or with projectId to filter by project.",
+    description: "Retrieve the user's Todoist tasks with full details from their account. Use this to show their to-do list or find tasks within a specific Todoist project. Call without parameters to see all tasks, or with projectId to filter by project.",
     inputSchema: z.object({
-      projectId: z.string().optional().describe("Optional: Filter tasks to show only those belonging to a specific project. Get project IDs using getProjectAndTaskMap."),
+      projectId: z.string().optional().describe("Optional: Filter tasks to show only those belonging to a specific Todoist project. Get project IDs using getProjectAndTaskMap."),
     }),
   }),
   createProject: tool({
-    description: "Create a new project category to help organize tasks. Use this when users want to group related tasks together (e.g., 'Work', 'Personal', 'Home Improvement', 'Vacation Planning').",
+    description: "Create a new project in the user's Todoist account to help organize tasks. Use this when users want to group related tasks together (e.g., 'Work', 'Personal', 'Home Improvement', 'Vacation Planning').",
     inputSchema: z.object({
         name: z.string().describe("The project name (e.g., 'Work Projects', 'Personal Goals', 'Home Renovation', 'Marketing Campaign')"),
     }),
   }),
   getProjectAndTaskMap: tool({
-    description: "Get a complete hierarchical overview of the user's entire workspace - all projects with their associated tasks (showing only _id and title for efficiency), plus unassigned tasks. This is your PRIMARY tool for understanding the user's data structure. Use this FIRST when the user asks about projects, tasks, or organization. By default shows only incomplete tasks to focus on actionable items.",
+    description: "Get a complete hierarchical overview of the user's entire Todoist workspace - all projects with their associated tasks (showing only _id and title for efficiency), plus unassigned tasks. This is your PRIMARY tool for understanding the user's Todoist data structure. Use this FIRST when the user asks about projects, tasks, or organization. By default shows only incomplete tasks to focus on actionable items.",
     inputSchema: z.object({
       includeCompleted: z.boolean().optional().describe("Set to true to include completed tasks in the results. Defaults to false (shows only incomplete tasks)."),
     }),
@@ -245,43 +245,124 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
         }
         
         switch (toolName) {
-            case "createTask":
-                result = await ctx.runMutation(api.tasks.createTask, args);
+            case "createTask": {
+                // Map internal format to Todoist API format
+                const todoistArgs = {
+                    content: args.title,
+                    projectId: args.projectId,
+                    priority: args.priority,
+                    dueString: args.dueDate ? new Date(args.dueDate).toISOString().split('T')[0] : undefined,
+                    description: args.description
+                };
+                result = await ctx.runAction(api.todoist.api.createTodoistTask, todoistArgs);
+                
+                // Convert back to expected format
+                if (result) {
+                    result = {
+                        _id: result.id,
+                        title: result.content,
+                        projectId: result.project_id,
+                        isCompleted: result.is_completed,
+                        createdAt: new Date(result.created_at).getTime()
+                    };
+                }
                 break;
-            case "getTasks":
-                result = await ctx.runQuery(api.tasks.getTasks, args);
+            }
+            case "getTasks": {
+                result = await ctx.runAction(api.todoist.api.getTodoistTasks, {
+                    projectId: args.projectId
+                });
+                
+                // Convert to expected format
+                if (result) {
+                    result = result.map((task: any) => ({
+                        _id: task.id,
+                        title: task.content,
+                        description: task.description || "",
+                        projectId: task.project_id,
+                        priority: task.priority || 1,
+                        dueDate: task.due ? new Date(task.due.datetime || task.due.date).getTime() : undefined,
+                        isCompleted: task.is_completed,
+                        createdAt: new Date(task.created_at).getTime()
+                    }));
+                }
                 break;
+            }
             case "updateTask": {
-                const { taskId, ...updateArgs } = args;
-                result = await ctx.runMutation(api.tasks.updateTask, { id: taskId, ...updateArgs });
+                const { taskId, title, description, priority, dueDate, isCompleted, ...updateArgs } = args;
+                const todoistArgs: any = {};
+                
+                if (title) todoistArgs.content = title;
+                if (description !== undefined) todoistArgs.description = description;
+                if (priority) todoistArgs.priority = priority;
+                if (dueDate) todoistArgs.dueString = new Date(dueDate).toISOString().split('T')[0];
+                
+                // Handle task completion separately
+                if (isCompleted === true) {
+                    result = await ctx.runAction(api.todoist.api.completeTodoistTask, { taskId });
+                } else if (isCompleted === false) {
+                    result = await ctx.runAction(api.todoist.api.reopenTodoistTask, { taskId });
+                } else if (Object.keys(todoistArgs).length > 0) {
+                    result = await ctx.runAction(api.todoist.api.updateTodoistTask, {
+                        taskId,
+                        ...todoistArgs
+                    });
+                }
+                
+                // Return success confirmation
+                result = { success: true, _id: taskId };
                 break;
             }
             case "deleteTask":
-                result = await ctx.runMutation(api.tasks.deleteTask, { id: args.taskId });
+                result = await ctx.runAction(api.todoist.api.deleteTodoistTask, { taskId: args.taskId });
                 break;
             case "createProject": {
-                const color = `#${Math.floor(Math.random()*16777215).toString(16)}`;
-                result = await ctx.runMutation(api.projects.createProject, { ...args, color });
+                const todoistArgs = {
+                    name: args.name,
+                    color: args.color || `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                    parentId: args.parentId
+                };
+                result = await ctx.runAction(api.todoist.api.createTodoistProject, todoistArgs);
+                
+                // Convert to expected format
+                if (result) {
+                    result = {
+                        _id: result.id,
+                        name: result.name,
+                        color: result.color,
+                        createdAt: Date.now()
+                    };
+                }
                 break;
             }
             case "updateProject": {
                 const { projectId, ...updateArgs } = args;
-                result = await ctx.runMutation(api.projects.updateProject, { id: projectId, ...updateArgs });
+                result = await ctx.runAction(api.todoist.api.updateTodoistProject, {
+                    projectId,
+                    ...updateArgs
+                });
+                
+                // Return success confirmation
+                result = { success: true, _id: projectId };
                 break;
             }
             case "deleteProject":
-                result = await ctx.runMutation(api.projects.deleteProject, { id: args.projectId });
+                result = await ctx.runAction(api.todoist.api.deleteTodoistProject, { projectId: args.projectId });
                 break;
             case "getProjectAndTaskMap":
-                result = await ctx.runQuery(api.projects.getProjectAndTaskMap, {
+                result = await ctx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
                     includeCompleted: args.includeCompleted || false
                 });
                 break;
             case "getProjectDetails":
-                result = await ctx.runQuery(api.projects.getProjectDetails, { projectId: args.projectId });
+                result = await ctx.runAction(api.todoist.integration.getTodoistProjectDetails, { 
+                    projectId: args.projectId 
+                });
                 break;
             case "getTaskDetails":
-                result = await ctx.runQuery(api.tasks.getTaskDetails, { taskId: args.taskId });
+                result = await ctx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
+                    taskId: args.taskId 
+                });
                 break;
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
@@ -304,11 +385,23 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
         // Record the failure for circuit breaker
         recordToolFailure(toolName);
         
+        // Provide helpful error messages for Todoist integration issues
+        let userFriendlyMessage = errorMessage;
+        if (errorMessage.includes("Todoist not connected")) {
+            userFriendlyMessage = "🔗 Please connect your Todoist account first. Go to Settings to link your Todoist account and start managing your real tasks.";
+        } else if (errorMessage.includes("authentication expired")) {
+            userFriendlyMessage = "🔑 Your Todoist connection has expired. Please reconnect your account in Settings.";
+        } else if (errorMessage.includes("Todoist API error")) {
+            userFriendlyMessage = "⚠️ Todoist service is temporarily unavailable. Please try again in a few moments.";
+        } else if (errorMessage.includes("Rate limit")) {
+            userFriendlyMessage = "⏱️ Too many requests to Todoist. Please wait a moment before trying again.";
+        }
+        
         return {
             type: 'tool-result' as const,
             toolCallId,
             toolName,
-            output: `Error: ${errorMessage}`
+            output: `Error: ${userFriendlyMessage}`
         } as unknown as ToolResultPart;
     }
 }
@@ -413,11 +506,14 @@ export const chatWithAI = action({
         try {
           const result = await generateText({
             model: anthropic(modelName),
-            system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects. Whether they're executives, professionals, or anyone looking to stay organized, you help them streamline their workflow and boost productivity.
+            system: `You are an intelligent executive assistant that helps users manage their real Todoist tasks and projects. You connect directly to their Todoist account to provide seamless task management through natural conversation.
+
+## 🔗 TODOIST INTEGRATION
+You work directly with the user's actual Todoist account. All tasks and projects you manage are real Todoist items that sync across all their devices and apps. If their Todoist account is not connected, guide them to connect it in Settings first.
 
 ## PRIMARY WORKFLOW: Always Start with getProjectAndTaskMap()
 
-**CRITICAL**: For ANY user request about their tasks, projects, or workspace organization, your FIRST action must ALWAYS be to call \`getProjectAndTaskMap()\`. This gives you the complete hierarchical overview of their workspace and is the most efficient way to understand their data structure.
+**CRITICAL**: For ANY user request about their tasks, projects, or workspace organization, your FIRST action must ALWAYS be to call \`getProjectAndTaskMap()\`. This gives you the complete hierarchical overview of their Todoist workspace and is the most efficient way to understand their data structure.
 
 The \`getProjectAndTaskMap()\` function returns:
 - \`projects\`: Array of all projects, each containing lightweight tasks (only _id and title)
