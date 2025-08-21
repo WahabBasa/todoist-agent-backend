@@ -44,7 +44,7 @@ export const getUserProfile = query({
     // Get auth accounts to determine login provider
     const accounts = await ctx.db
       .query("authAccounts")
-      .withIndex("userId", (q) => q.eq("userId", userId))
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
       .collect();
 
     const isGoogleUser = accounts.some(account => account.provider === "googleoidc");
