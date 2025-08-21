@@ -1,30 +1,30 @@
 import { action, mutation } from "../_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 
 const TODOIST_API_BASE_URL = "https://api.todoist.com/rest/v2";
 
-// Helper function to make authenticated Todoist API requests
-async function todoistRequest(ctx: any, endpoint: string, options: RequestInit = {}) {
+// Helper function to make authenticated Todoist API requests (for action contexts)
+async function todoistRequest(ctx: any, endpoint: string, options: RequestInit = {}): Promise<any> {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("User not authenticated");
   }
 
-  // Get user's Todoist token
-  const tokenRecord = await ctx.db
-    .query("todoistTokens")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
-    .unique();
+  // Get user's Todoist token via internal query
+  const tokenData: { accessToken: string } | null = await ctx.runQuery(internal.todoist.auth.getTodoistTokenForUser, {
+    userId,
+  });
 
-  if (!tokenRecord) {
+  if (!tokenData) {
     throw new Error("Todoist not connected. Please connect your Todoist account first.");
   }
 
-  const response = await fetch(`${TODOIST_API_BASE_URL}${endpoint}`, {
+  const response: Response = await fetch(`${TODOIST_API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${tokenRecord.accessToken}`,
+      Authorization: `Bearer ${tokenData.accessToken}`,
       "Content-Type": "application/json",
       ...options.headers,
     },

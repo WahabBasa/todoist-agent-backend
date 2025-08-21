@@ -61,7 +61,7 @@ http.route({
 
     try {
       // Exchange code for token
-      await ctx.runMutation(api.todoist.auth.exchangeCodeForToken, {
+      await ctx.runAction(api.todoist.auth.exchangeCodeForToken, {
         code,
         state
       });

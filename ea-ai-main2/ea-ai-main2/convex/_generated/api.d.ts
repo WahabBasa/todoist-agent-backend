@@ -24,6 +24,9 @@ import type * as myFunctions from "../myFunctions.js";
 import type * as projects from "../projects.js";
 import type * as subTodos from "../subTodos.js";
 import type * as tasks from "../tasks.js";
+import type * as todoist_api from "../todoist/api.js";
+import type * as todoist_auth from "../todoist/auth.js";
+import type * as todoist_integration from "../todoist/integration.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -45,6 +48,9 @@ declare const fullApi: ApiFromModules<{
   projects: typeof projects;
   subTodos: typeof subTodos;
   tasks: typeof tasks;
+  "todoist/api": typeof todoist_api;
+  "todoist/auth": typeof todoist_auth;
+  "todoist/integration": typeof todoist_integration;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
