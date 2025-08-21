@@ -186,6 +186,88 @@ const plannerTools = {
       projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
     }),
   }),
+
+  // =================================================================
+  // GOOGLE CALENDAR INTEGRATION TOOLS
+  // Event management with smart date parsing and recurring events
+  // =================================================================
+
+  createCalendarEvent: tool({
+    description: "Create a new Google Calendar event with smart date parsing. Supports natural language dates like 'tomorrow at 2pm', 'next Monday at 9am', and recurring events. Use this when users want to schedule appointments, meetings, or reminders in their Google Calendar.",
+    inputSchema: z.object({
+      summary: z.string().describe("The event title (e.g., 'Team Meeting', 'Doctor Appointment', 'Project Deadline')"),
+      description: z.string().optional().describe("Optional event description or notes"),
+      startDate: z.string().describe("Event start time - supports natural language like 'tomorrow at 2pm', 'next Friday at 10am', '2024-12-25 14:00', or ISO format"),
+      endDate: z.string().optional().describe("Event end time - natural language or specific time. If not provided, will default to 1 hour duration"),
+      duration: z.number().optional().describe("Event duration in minutes if endDate not specified (default: 60)"),
+      location: z.string().optional().describe("Event location or meeting URL"),
+      attendees: z.array(z.string()).optional().describe("List of attendee email addresses"),
+      recurrencePattern: z.string().optional().describe("Recurring pattern like 'every day', 'every Tuesday', 'every week', 'every 2 weeks'"),
+      timeZone: z.string().optional().describe("Timezone (e.g., 'America/New_York', 'Europe/London'). Defaults to UTC"),
+      reminders: z.object({
+        useDefault: z.boolean().describe("Use default calendar reminders"),
+        overrides: z.array(z.object({
+          method: z.string().describe("Reminder method: 'email' or 'popup'"),
+          minutes: z.number().describe("Minutes before event to remind"),
+        })).optional(),
+      }).optional(),
+    }),
+  }),
+
+  updateCalendarEvent: tool({
+    description: "Update an existing Google Calendar event with smart date parsing. Supports modifying recurring events with different scopes. Use this when users want to change event details, reschedule, or modify recurring patterns.",
+    inputSchema: z.object({
+      eventId: z.string().describe("The Google Calendar event ID to update"),
+      summary: z.string().optional().describe("New event title"),
+      description: z.string().optional().describe("Updated event description"),
+      startDate: z.string().optional().describe("New start time - supports natural language like 'move to tomorrow', 'next week at 3pm'"),
+      endDate: z.string().optional().describe("New end time - natural language or specific time"),
+      duration: z.number().optional().describe("New duration in minutes if endDate not specified"),
+      location: z.string().optional().describe("Updated location"),
+      attendees: z.array(z.string()).optional().describe("Updated attendee email list"),
+      recurrencePattern: z.string().optional().describe("Updated recurrence pattern"),
+      timeZone: z.string().optional().describe("Timezone for new times"),
+      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
+    }),
+  }),
+
+  deleteCalendarEvent: tool({
+    description: "Delete a Google Calendar event. For recurring events, this will delete all instances unless specified otherwise. Use this when users want to cancel or remove events from their calendar.",
+    inputSchema: z.object({
+      eventId: z.string().describe("The Google Calendar event ID to delete"),
+      sendUpdates: z.string().optional().describe("Whether to send cancellation notifications: 'all', 'externalOnly', or 'none' (default: 'all')"),
+      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
+    }),
+  }),
+
+  listCalendarEvents: tool({
+    description: "List upcoming Google Calendar events with smart date filtering. Use this when users ask about their schedule, upcoming events, or want to see what they have planned. Supports natural language time ranges.",
+    inputSchema: z.object({
+      timeRange: z.string().optional().describe("Natural language time range like 'today', 'tomorrow', 'this week', 'next week', 'this month', or 'next 7 days'"),
+      timeMin: z.string().optional().describe("Specific start time override (ISO format)"),
+      timeMax: z.string().optional().describe("Specific end time override (ISO format)"),
+      maxResults: z.number().optional().describe("Maximum number of events to return (default: 20, max: 100)"),
+      timeZone: z.string().optional().describe("Timezone for results (default: UTC)"),
+      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
+    }),
+  }),
+
+  searchCalendarEvents: tool({
+    description: "Search Google Calendar events by text query. Searches across event titles, descriptions, locations, and attendees. Use this when users want to find specific events or meetings.",
+    inputSchema: z.object({
+      query: z.string().describe("Search query text (e.g., 'team meeting', 'doctor', 'project review', 'John Smith')"),
+      timeRange: z.string().optional().describe("Optional time range to limit search: 'this week', 'next week', 'this month'"),
+      maxResults: z.number().optional().describe("Maximum number of results (default: 20)"),
+      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
+    }),
+  }),
+
+  getCurrentTime: tool({
+    description: "Get current time and timezone information. Use this to understand the current context for scheduling and date calculations, especially when users reference relative times like 'tomorrow' or 'next week'.",
+    inputSchema: z.object({
+      timeZone: z.string().optional().describe("Specific timezone to get time for (e.g., 'America/New_York', 'Europe/London')"),
+    }),
+  }),
 };
 
 // =================================================================
@@ -362,6 +444,71 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             case "getTaskDetails":
                 result = await ctx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
                     taskId: args.taskId 
+                });
+                break;
+            
+            // =================================================================
+            // GOOGLE CALENDAR TOOL EXECUTIONS
+            // =================================================================
+            case "createCalendarEvent":
+                result = await ctx.runAction(api.googleCalendar.events.createEventWithSmartDates, {
+                    calendarId: args.calendarId,
+                    summary: args.summary,
+                    description: args.description,
+                    startDate: args.startDate,
+                    endDate: args.endDate,
+                    duration: args.duration,
+                    location: args.location,
+                    attendees: args.attendees,
+                    recurrencePattern: args.recurrencePattern,
+                    timeZone: args.timeZone,
+                    reminders: args.reminders,
+                });
+                break;
+            case "updateCalendarEvent":
+                result = await ctx.runAction(api.googleCalendar.events.updateEventWithSmartDates, {
+                    calendarId: args.calendarId,
+                    eventId: args.eventId,
+                    summary: args.summary,
+                    description: args.description,
+                    startDate: args.startDate,
+                    endDate: args.endDate,
+                    duration: args.duration,
+                    location: args.location,
+                    attendees: args.attendees,
+                    recurrencePattern: args.recurrencePattern,
+                    timeZone: args.timeZone,
+                    reminders: args.reminders,
+                });
+                break;
+            case "deleteCalendarEvent":
+                result = await ctx.runAction(api.googleCalendar.events.deleteCalendarEvent, {
+                    calendarId: args.calendarId,
+                    eventId: args.eventId,
+                    sendUpdates: args.sendUpdates,
+                });
+                break;
+            case "listCalendarEvents":
+                result = await ctx.runAction(api.googleCalendar.events.listEventsWithSmartDates, {
+                    calendarId: args.calendarId,
+                    timeRange: args.timeRange,
+                    timeMin: args.timeMin,
+                    timeMax: args.timeMax,
+                    maxResults: args.maxResults,
+                    timeZone: args.timeZone,
+                });
+                break;
+            case "searchCalendarEvents":
+                result = await ctx.runAction(api.googleCalendar.events.searchCalendarEvents, {
+                    calendarId: args.calendarId,
+                    query: args.query,
+                    timeRange: args.timeRange,
+                    maxResults: args.maxResults,
+                });
+                break;
+            case "getCurrentTime":
+                result = await ctx.runAction(api.googleCalendar.events.getCurrentTime, {
+                    timeZone: args.timeZone,
                 });
                 break;
             default:

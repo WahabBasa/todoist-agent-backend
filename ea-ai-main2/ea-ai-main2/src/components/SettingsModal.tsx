@@ -306,6 +306,10 @@ function ConnectedAppsSettings() {
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
   
+  // Check if Google Calendar is connected
+  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  
   const connectedApps = [
     {
       appName: "Google Drive",
@@ -339,6 +343,16 @@ function ConnectedAppsSettings() {
       iconBgColor: "bg-red-500",
       iconText: "T",
       isConnected: hasTodoistConnection ?? false,
+      canConnect: true,
+    },
+    {
+      appName: "Google Calendar",
+      description: "Connect your Google Calendar to schedule events, check availability, and manage your schedule through AI conversations.",
+      iconBgColor: "",
+      iconText: "📅",
+      gradientFrom: "blue-500",
+      gradientTo: "green-500", 
+      isConnected: hasGoogleCalendarConnection ?? false,
       canConnect: true,
     },
   ];
@@ -378,6 +392,18 @@ function ConnectedAppsSettings() {
           console.error("No OAuth URL generated");
           alert("Unable to connect to Todoist. Please try again later.");
         }
+      }
+    } else if (appName === "Google Calendar") {
+      if (hasGoogleCalendarConnection) {
+        // Disconnect Google Calendar
+        try {
+          await removeGoogleCalendarConnection();
+        } catch (error) {
+          console.error("Failed to disconnect Google Calendar:", error);
+        }
+      } else {
+        // For Google Calendar, user needs to sign in with Google first
+        alert("To connect Google Calendar, please sign in with your Google account. The Calendar integration will be automatically available once you're signed in with Google.");
       }
     } else {
       console.log(`${appName} integration coming soon...`);

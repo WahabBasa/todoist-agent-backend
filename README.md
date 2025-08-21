@@ -70,6 +70,12 @@ This is the primary working directory containing both frontend and backend code.
 
 This is the TodoVex project - a high-quality Todoist clone that serves as our primary design and architecture reference. We use this project to guide our UI/UX decisions, component structure, and overall application design patterns.
 
+### Google Calendar MCP Reference
+
+**📍 MCP Reference Location**: `C:\Users\AtheA\Desktop\Personal_Programs\google-cal-mcp\google-calendar-mcp - Copy`
+
+This is the Google Calendar MCP server implementation that serves as our reference for Google Calendar API integration patterns, authentication flows, and calendar operation implementations.
+
 #### TodoVex Directory Structure
 ```
 ├── app/                       # Next.js 13+ App Router structure
