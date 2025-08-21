@@ -146,7 +146,7 @@ function SignInForm() {
           type="button"
           onClick={() => {
             setIsLoading(true);
-            void signIn("googleoidc")
+            void signIn("google")
               .catch((error) => {
                 setError(error.message);
               })
