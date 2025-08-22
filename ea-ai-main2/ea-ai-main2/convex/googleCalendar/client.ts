@@ -1,9 +1,11 @@
 import { action } from "../_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { api } from "../_generated/api";
-// TODO: Re-implement with Clerk authentication
-// import { sessionManager } from "./sessionManager";
+import { createClerkClient } from "@clerk/backend";
+
+// Get auth user ID using Clerk's getAuth function
+async function getAuthUserId(ctx: any): Promise<string | null> {
+  return ctx.auth.getUserIdentity()?.subject || null;
+}
 
 const GOOGLE_CALENDAR_API_BASE_URL = "https://www.googleapis.com/calendar/v3";
 
@@ -19,38 +21,34 @@ class GoogleCalendarError extends Error {
 }
 
 /**
- * Helper function to make authenticated Google Calendar API requests (for action contexts)
- * Now uses the unified session manager for token handling and automatic refresh
+ * Helper function to make authenticated Google Calendar API requests using Clerk OAuth tokens
  */
 async function googleCalendarRequest(ctx: any, endpoint: string, options: RequestInit = {}): Promise<any> {
-  // TODO: Re-implement with Clerk authentication
-  throw new GoogleCalendarError("Google Calendar integration needs to be updated for Clerk authentication");
-  
-  // const userId = await getAuthUserId(ctx);
-  // if (!userId) {
-  //   throw new GoogleCalendarError("User not authenticated");
-  // }
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new GoogleCalendarError("User not authenticated");
+  }
 
-  // // Get session and valid access token (handles refresh automatically)
-  // const session = sessionManager.getSessionByUserId(userId);
-  // if (!session) {
-  //   throw new GoogleCalendarError("Failed to create Google Calendar session");
-  // }
+  // Get Google OAuth token from Clerk
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+  const token = await clerkClient.users.getUserOauthAccessToken(
+    userId,
+    "oauth_google"
+  );
 
-  // let accessToken: string;
-  // try {
-  //   accessToken = await session.getValidAccessToken(ctx);
-  // } catch (error) {
-  //   // Convert session errors to GoogleCalendarError for consistent error handling
-  //   throw new GoogleCalendarError(error instanceof Error ? error.message : "Failed to get access token");
-  // }
+  if (token.data.length === 0 || token.data[0].token == null) {
+    throw new GoogleCalendarError(
+      "Google Calendar not connected. Please connect your Google account in settings.",
+      401
+    );
+  }
 
   const url = endpoint.startsWith('http') ? endpoint : `${GOOGLE_CALENDAR_API_BASE_URL}${endpoint}`;
   
   const response: Response = await fetch(url, {
     ...options,
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token.data[0].token}`,
       "Content-Type": "application/json",
       ...options.headers,
     },
@@ -62,7 +60,7 @@ async function googleCalendarRequest(ctx: any, endpoint: string, options: Reques
     // Handle specific Google API errors
     if (response.status === 401) {
       throw new GoogleCalendarError(
-        "Google Calendar authentication expired. Please reconnect your account.",
+        "Google Calendar authentication expired. Please reconnect your Google account in settings.",
         401
       );
     }
@@ -110,7 +108,7 @@ async function googleCalendarRequest(ctx: any, endpoint: string, options: Reques
 
   try {
     return await response.json();
-  } catch (error) {
+  } catch {
     // Some successful responses might not be JSON
     return null;
   }

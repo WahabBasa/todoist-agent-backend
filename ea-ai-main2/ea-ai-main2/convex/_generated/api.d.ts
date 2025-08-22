@@ -13,10 +13,6 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as _disabled_auth from "../_disabled/auth.js";
-import type * as _disabled_inspectAuth from "../_disabled/inspectAuth.js";
-import type * as _disabled_oauthFlow from "../_disabled/oauthFlow.js";
-import type * as _disabled_sessionManager from "../_disabled/sessionManager.js";
 import type * as ai from "../ai.js";
 import type * as chatSessions from "../chatSessions.js";
 import type * as cleanup from "../cleanup.js";
@@ -44,10 +40,6 @@ import type * as users from "../users.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "_disabled/auth": typeof _disabled_auth;
-  "_disabled/inspectAuth": typeof _disabled_inspectAuth;
-  "_disabled/oauthFlow": typeof _disabled_oauthFlow;
-  "_disabled/sessionManager": typeof _disabled_sessionManager;
   ai: typeof ai;
   chatSessions: typeof chatSessions;
   cleanup: typeof cleanup;

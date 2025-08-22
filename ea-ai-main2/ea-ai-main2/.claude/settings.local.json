@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:docs.convex.dev)",
+      "WebFetch(domain:clerk.com)",
+      "mcp__convex__status",
+      "Bash(npx convex data:*)",
+      "Bash(npx convex run:*)",
+      "Bash(timeout 30 npx convex dev --until-success)",
+      "Bash(timeout 30 npx convex dev --until-success --typecheck=disable)",
+      "Bash(timeout 35 npm run dev)",
+      "Bash(npm install)",
+      "Bash(git log:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
