@@ -45,7 +45,7 @@ export const createEventWithSmartDates = action({
     recurrencePattern,
     timeZone = "UTC",
     reminders,
-  }) => {
+  }): Promise<{ success: boolean; event?: any; summary?: string; error?: string; parsedDates?: any }> => {
     // Parse smart dates
     const parsedStartDate = parseSmartDate(startDate, timeZone);
     
@@ -70,7 +70,7 @@ export const createEventWithSmartDates = action({
     const formattedAttendees = attendees?.map(email => ({ email }));
     
     try {
-      const event = await ctx.runAction(api.googleCalendar.client.createEvent, {
+      const event: any = await ctx.runAction(api.googleCalendar.client.createEvent, {
         calendarId,
         summary,
         description,
@@ -138,7 +138,7 @@ export const updateEventWithSmartDates = action({
     recurrencePattern,
     timeZone = "UTC",
     reminders,
-  }) => {
+  }): Promise<{ success: boolean; event?: any; summary?: string; error?: string }> => {
     try {
       // Get existing event for reference
       const existingEvent = await ctx.runAction(api.googleCalendar.client.getEvent, {
@@ -193,7 +193,7 @@ export const updateEventWithSmartDates = action({
         }
       }
       
-      const updatedEvent = await ctx.runAction(api.googleCalendar.client.updateEvent, {
+      const updatedEvent: any = await ctx.runAction(api.googleCalendar.client.updateEvent, {
         calendarId,
         eventId,
         ...updateData,
@@ -223,10 +223,10 @@ export const deleteCalendarEvent = action({
     eventId: v.string(),
     sendUpdates: v.optional(v.string()), // "all", "externalOnly", "none"
   },
-  handler: async (ctx, { calendarId = "primary", eventId, sendUpdates = "all" }) => {
+  handler: async (ctx, { calendarId = "primary", eventId, sendUpdates = "all" }): Promise<{ success: boolean; deletedEvent?: any; message?: string; error?: string }> => {
     try {
       // Get event details before deletion for confirmation
-      const event = await ctx.runAction(api.googleCalendar.client.getEvent, {
+      const event: any = await ctx.runAction(api.googleCalendar.client.getEvent, {
         calendarId,
         eventId,
       });
@@ -282,7 +282,7 @@ export const listEventsWithSmartDates = action({
     timeMax,
     maxResults = 20,
     timeZone = "UTC",
-  }) => {
+  }): Promise<{ success: boolean; events?: any[]; summary?: string; timeRange?: any; error?: string }> => {
     try {
       let parsedTimeMin = timeMin;
       let parsedTimeMax = timeMax;
@@ -348,7 +348,7 @@ export const listEventsWithSmartDates = action({
         }
       }
       
-      const result = await ctx.runAction(api.googleCalendar.client.listEvents, {
+      const result: any = await ctx.runAction(api.googleCalendar.client.listEvents, {
         calendarId,
         timeMin: parsedTimeMin,
         timeMax: parsedTimeMax,
@@ -392,7 +392,7 @@ export const searchCalendarEvents = action({
     timeRange,
     maxResults = 20,
     timeZone = "UTC",
-  }) => {
+  }): Promise<{ success: boolean; events?: any[]; summary?: string; error?: string }> => {
     try {
       let timeMin: string | undefined;
       let timeMax: string | undefined;
@@ -429,7 +429,7 @@ export const searchCalendarEvents = action({
         }
       }
       
-      const result = await ctx.runAction(api.googleCalendar.client.searchEvents, {
+      const result: any = await ctx.runAction(api.googleCalendar.client.searchEvents, {
         calendarId,
         query,
         timeMin,
@@ -459,7 +459,7 @@ export const getCurrentTime = action({
   args: {
     timeZone: v.optional(v.string()),
   },
-  handler: async (ctx, { timeZone }) => {
+  handler: async (ctx, { timeZone }): Promise<{ success: boolean; currentTime?: string; timezone?: string; formatted?: string }> => {
     const timeInfo = getCurrentTimeWithTimezone(timeZone);
     
     return {

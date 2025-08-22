@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
 import { Dialog, DialogContent } from "./ui/dialog";
@@ -112,7 +112,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const user = useQuery(api.myFunctions.getCurrentUser);
-  const { signOut } = useAuthActions();
+  const { signIn, signOut } = useAuthActions();
 
   const renderContent = () => {
     switch (activeSection) {
@@ -298,17 +298,125 @@ function PersonalizationSettings() {
   );
 }
 
+// Google Calendar App Item with debug functionality
+interface GoogleCalendarAppItemProps {
+  app: any;
+  isConnecting: boolean;
+  onConnect: () => void;
+  onDebug: () => void;
+  onSync: () => void;
+}
+
+function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }: GoogleCalendarAppItemProps) {
+  return (
+    <div className="flex items-center justify-between p-4 border border-border rounded-design-lg bg-background">
+      <div className="flex items-center gap-4">
+        <div className={`w-10 h-10 rounded-design-md flex items-center justify-center ${
+          app.gradientFrom 
+            ? `bg-gradient-to-br from-${app.gradientFrom} to-${app.gradientTo}` 
+            : app.iconBgColor
+        }`}>
+          <span className="text-white font-semibold">{app.iconText}</span>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-foreground">{app.appName}</h3>
+            {app.isConnected && (
+              <Badge variant="secondary" className="text-xs px-2 py-0.5">Connected</Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            {app.description}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {app.isConnected && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDebug}
+              className="text-xs px-3 py-1"
+            >
+              Connection Status
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSync}
+              className="text-xs px-3 py-1"
+            >
+              Refresh Connection
+            </Button>
+          </>
+        )}
+        {app.canConnect && (
+          <Button
+            variant={app.isConnected ? "outline" : "default"}
+            size="sm"
+            onClick={onConnect}
+            disabled={isConnecting}
+            className="text-xs px-3 py-1"
+          >
+            {isConnecting ? "Connecting..." : app.isConnected ? "Disconnect" : "Connect"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ConnectedAppsSettings() {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
   
-  // Check if Google Calendar is connected
-  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.auth.hasGoogleCalendarConnection);
-  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  // Check if Google Calendar is connected (using new session manager)
+  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
+  const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
+  const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
+  const migrateLegacyTokens = useAction(api.googleCalendar.oauthFlow.migrateLegacyTokens);
+  const forceOAuthReconnection = useAction(api.googleCalendar.oauthFlow.forceOAuthReconnection);
+  
+  // Legacy functions for backward compatibility (during transition)
+  const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
+  const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
+
+  // Auto-initialize Google Calendar after OAuth if needed  
+  useEffect(() => {
+    const autoInitializeCalendar = async () => {
+      // Only run once per session
+      if (hasAutoSynced) return;
+      
+      // If user has Google connection, try to initialize calendar
+      if (hasGoogleCalendarConnection) {
+        try {
+          console.log("Auto-initializing Google Calendar...");
+          const result = await initializeGoogleCalendarAfterOAuth();
+          console.log("Google Calendar auto-initialization result:", result);
+          setHasAutoSynced(true);
+        } catch (error) {
+          console.error("Auto-initialization failed:", error);
+          // Fall back to legacy sync if needed
+          try {
+            await syncGoogleCalendarTokens();
+            console.log("Fallback sync successful");
+            setHasAutoSynced(true);
+          } catch (fallbackError) {
+            console.error("Fallback sync also failed:", fallbackError);
+          }
+        }
+      }
+    };
+
+    autoInitializeCalendar();
+  }, [hasGoogleCalendarConnection, initializeGoogleCalendarAfterOAuth, syncGoogleCalendarTokens, hasAutoSynced]);
   
   const connectedApps = [
     {
@@ -347,13 +455,15 @@ function ConnectedAppsSettings() {
     },
     {
       appName: "Google Calendar",
-      description: "Connect your Google Calendar to schedule events, check availability, and manage your schedule through AI conversations.",
+      description: hasGoogleCalendarConnection 
+        ? "Your Google Calendar is connected and synced. You can schedule events, check availability, and manage your schedule through AI conversations."
+        : "Sign in with your Google account to automatically connect Google Calendar. Calendar access will be enabled automatically.",
       iconBgColor: "",
       iconText: "📅",
       gradientFrom: "blue-500",
       gradientTo: "green-500", 
       isConnected: hasGoogleCalendarConnection ?? false,
-      canConnect: true,
+      canConnect: true, // Always allow connect/disconnect actions
     },
   ];
 
@@ -396,14 +506,37 @@ function ConnectedAppsSettings() {
     } else if (appName === "Google Calendar") {
       if (hasGoogleCalendarConnection) {
         // Disconnect Google Calendar
-        try {
-          await removeGoogleCalendarConnection();
-        } catch (error) {
-          console.error("Failed to disconnect Google Calendar:", error);
+        const shouldDisconnect = confirm(
+          "Are you sure you want to disconnect Google Calendar?\n\n" +
+          "This will remove calendar access and you'll need to reconnect to use calendar features."
+        );
+        
+        if (shouldDisconnect) {
+          try {
+            setIsConnecting("Google Calendar");
+            await forceOAuthReconnection();
+            alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
+          } catch (error) {
+            console.error("Failed to disconnect Google Calendar:", error);
+            alert(`❌ Failed to disconnect: ${error}`);
+          } finally {
+            setIsConnecting(null);
+          }
         }
       } else {
-        // For Google Calendar, user needs to sign in with Google first
-        alert("To connect Google Calendar, please sign in with your Google account. The Calendar integration will be automatically available once you're signed in with Google.");
+        // Connect Google Calendar - use Convex Auth OAuth flow
+        try {
+          setIsConnecting("Google Calendar");
+          // This will redirect to Google OAuth with calendar permissions
+          await signIn("google");
+          // After successful OAuth, tokens will be automatically stored in authAccounts
+          // and our session manager will pick them up
+        } catch (error) {
+          console.error("Failed to initiate Google OAuth:", error);
+          alert("Failed to start Google sign-in. Please try again.");
+        } finally {
+          setIsConnecting(null);
+        }
       }
     } else {
       console.log(`${appName} integration coming soon...`);
@@ -422,21 +555,91 @@ function ConnectedAppsSettings() {
       
       {/* Connection Options */}
       <div className="space-y-4">
-        {connectedApps.map((app) => (
-          <ConnectedAppItem
-            key={app.appName}
-            appName={app.appName}
-            description={app.description}
-            iconBgColor={app.iconBgColor}
-            iconText={app.iconText}
-            gradientFrom={app.gradientFrom}
-            gradientTo={app.gradientTo}
-            isConnected={app.isConnected}
-            isConnecting={isConnecting === app.appName}
-            canConnect={app.canConnect}
-            onConnect={() => handleConnect(app.appName)}
-          />
-        ))}
+        {connectedApps.map((app) => {
+          // Special handling for Google Calendar with debug functionality
+          if (app.appName === "Google Calendar") {
+            return (
+              <GoogleCalendarAppItem
+                key={app.appName}
+                app={app}
+                isConnecting={isConnecting === app.appName}
+                onConnect={() => handleConnect(app.appName)}
+                onDebug={async () => {
+                  try {
+                    // Get detailed connection status using new session manager
+                    const status = await getOAuthConnectionStatus();
+                    console.log("Google Calendar connection status:", status);
+                    
+                    const debugInfo = {
+                      "Connection Status": status.isConnected ? "✅ Connected" : "❌ Not Connected",
+                      "Has Tokens": status.hasTokens ? "✅ Yes" : "❌ No",
+                      "Token Info": status.tokenInfo ? {
+                        "Access Token": status.tokenInfo.hasAccessToken ? "✅ Present" : "❌ Missing",
+                        "Refresh Token": status.tokenInfo.hasRefreshToken ? "✅ Present" : "❌ Missing",
+                        "Token Expired": status.tokenInfo.tokenExpired ? "⚠️ Yes" : "✅ No",
+                        "Expires In": status.tokenInfo.expiresIn ? `${Math.floor(status.tokenInfo.expiresIn / 3600)} hours` : "Unknown",
+                        "Token Type": status.tokenInfo.tokenType || "Unknown",
+                        "Scope": status.tokenInfo.scope || "Unknown"
+                      } : "No token data",
+                      "Recommendations": status.recommendations
+                    };
+                    
+                    alert(`Google Calendar Debug Info:\n\n${JSON.stringify(debugInfo, null, 2)}`);
+                  } catch (error) {
+                    console.error("Debug failed:", error);
+                    alert(`Debug failed: ${error}`);
+                  }
+                }}
+                onSync={async () => {
+                  try {
+                    // Try new initialization first
+                    console.log("Attempting Google Calendar initialization...");
+                    const initResult = await initializeGoogleCalendarAfterOAuth();
+                    
+                    if (initResult.success) {
+                      alert(`✅ Google Calendar initialized successfully!\n${initResult.message}`);
+                      return;
+                    }
+                    
+                    // If initialization failed, try legacy migration
+                    console.log("Initialization failed, trying legacy migration...");
+                    const migrationResult = await migrateLegacyTokens();
+                    
+                    if (migrationResult.migrated) {
+                      alert(`✅ Legacy tokens migrated successfully!\n${migrationResult.message}`);
+                      return;
+                    }
+                    
+                    // If migration didn't help, try manual sync as last resort
+                    console.log("Migration didn't help, trying manual sync...");
+                    const syncResult = await syncGoogleCalendarTokens();
+                    alert(`✅ Manual sync successful!\n${syncResult.message}`);
+                    
+                  } catch (error) {
+                    console.error("All sync methods failed:", error);
+                    alert(`❌ Sync failed: ${error}\n\nTry disconnecting and reconnecting your Google account.`);
+                  }
+                }}
+              />
+            );
+          }
+          
+          return (
+            <ConnectedAppItem
+              key={app.appName}
+              appName={app.appName}
+              description={app.description}
+              iconBgColor={app.iconBgColor}
+              iconText={app.iconText}
+              gradientFrom={app.gradientFrom}
+              gradientTo={app.gradientTo}
+              isConnected={app.isConnected}
+              isConnecting={isConnecting === app.appName}
+              canConnect={app.canConnect}
+              onConnect={() => handleConnect(app.appName)}
+            />
+          );
+        })}
       </div>
     </div>
   );
