@@ -1,13 +1,15 @@
+"use node";
+
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { createClerkClient } from "@clerk/backend";
+import { google } from "googleapis";
+import { addMinutes } from "date-fns";
 
 // Get auth user ID using Clerk's getAuth function
 async function getAuthUserId(ctx: any): Promise<string | null> {
   return ctx.auth.getUserIdentity()?.subject || null;
 }
-
-const GOOGLE_CALENDAR_API_BASE_URL = "https://www.googleapis.com/calendar/v3";
 
 /**
  * Google Calendar API Error handling
@@ -21,98 +23,152 @@ class GoogleCalendarError extends Error {
 }
 
 /**
- * Helper function to make authenticated Google Calendar API requests using Clerk OAuth tokens
+ * Get OAuth client for Google Calendar API using Calendly's exact pattern
  */
-async function googleCalendarRequest(ctx: any, endpoint: string, options: RequestInit = {}): Promise<any> {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new GoogleCalendarError("User not authenticated");
-  }
-
-  // Get Google OAuth token from Clerk
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-  const token = await clerkClient.users.getUserOauthAccessToken(
-    userId,
-    "oauth_google"
-  );
+async function getOAuthClient(clerkUserId: string) {
+  const token = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+    .users.getUserOauthAccessToken(clerkUserId, "oauth_google");
 
   if (token.data.length === 0 || token.data[0].token == null) {
-    throw new GoogleCalendarError(
-      "Google Calendar not connected. Please connect your Google account in settings.",
-      401
-    );
+    return null;
   }
 
-  const url = endpoint.startsWith('http') ? endpoint : `${GOOGLE_CALENDAR_API_BASE_URL}${endpoint}`;
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_REDIRECT_URL
+  );
+
+  client.setCredentials({ access_token: token.data[0].token });
+  return client;
+}
+
+/**
+ * Get calendar event times using Calendly's exact pattern
+ */
+export async function getCalendarEventTimes(
+  clerkUserId: string,
+  { start, end }: { start: Date; end: Date }
+) {
+  const oAuthClient = await getOAuthClient(clerkUserId);
+
+  if (!oAuthClient) {
+    throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+  }
+
+  const events = await google.calendar("v3").events.list({
+    calendarId: "primary",
+    eventTypes: ["default"],
+    singleEvents: true,
+    timeMin: start.toISOString(),
+    timeMax: end.toISOString(),
+    maxResults: 2500,
+    auth: oAuthClient,
+  });
+
+  return (
+    events.data.items
+      ?.map(event => {
+        if (event.start?.date != null && event.end?.date != null) {
+          return {
+            start: new Date(event.start.date + "T00:00:00"),
+            end: new Date(event.end.date + "T23:59:59"),
+          };
+        }
+
+        if (event.start?.dateTime != null && event.end?.dateTime != null) {
+          return {
+            start: new Date(event.start.dateTime),
+            end: new Date(event.end.dateTime),
+          };
+        }
+      })
+      .filter(date => date != null) || []
+  );
+}
+
+/**
+ * Create calendar event using Calendly's pattern
+ */
+export async function createCalendarEvent({
+  clerkUserId,
+  guestName,
+  guestEmail,
+  startTime,
+  guestNotes,
+  durationInMinutes,
+  eventName,
+}: {
+  clerkUserId: string;
+  guestName?: string;
+  guestEmail?: string;
+  startTime: Date;
+  guestNotes?: string | null;
+  durationInMinutes: number;
+  eventName: string;
+}) {
+  const oAuthClient = await getOAuthClient(clerkUserId);
   
-  const response: Response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token.data[0].token}`,
-      "Content-Type": "application/json",
-      ...options.headers,
+  if (!oAuthClient) {
+    throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+  }
+
+  const calendarUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+    .users.getUser(clerkUserId);
+  
+  if (calendarUser.primaryEmailAddress == null) {
+    throw new Error("Clerk user has no email");
+  }
+
+  const attendees = [];
+  if (guestEmail && guestName) {
+    attendees.push({ email: guestEmail, displayName: guestName });
+  }
+  attendees.push({
+    email: calendarUser.primaryEmailAddress.emailAddress,
+    displayName: calendarUser.fullName,
+    responseStatus: "accepted",
+  });
+
+  const calendarEvent = await google.calendar("v3").events.insert({
+    calendarId: "primary",
+    auth: oAuthClient,
+    sendUpdates: "all",
+    requestBody: {
+      attendees: attendees,
+      description: guestNotes ? `Additional Details: ${guestNotes}` : undefined,
+      start: {
+        dateTime: startTime.toISOString(),
+      },
+      end: {
+        dateTime: addMinutes(startTime, durationInMinutes).toISOString(),
+      },
+      summary: guestName ? `${guestName} + ${calendarUser.fullName}: ${eventName}` : eventName,
     },
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    
-    // Handle specific Google API errors
-    if (response.status === 401) {
-      throw new GoogleCalendarError(
-        "Google Calendar authentication expired. Please reconnect your Google account in settings.",
-        401
-      );
-    }
-    
-    if (response.status === 403) {
-      throw new GoogleCalendarError(
-        `Access denied: ${errorData?.error?.message || 'Insufficient permissions for Google Calendar'}`,
-        403
-      );
-    }
-    
-    if (response.status === 404) {
-      throw new GoogleCalendarError(
-        `Resource not found: ${errorData?.error?.message || 'The requested calendar or event does not exist'}`,
-        404
-      );
-    }
-    
-    if (response.status === 429) {
-      throw new GoogleCalendarError(
-        "Google Calendar API rate limit exceeded. Please try again later.",
-        429
-      );
-    }
-    
-    if (response.status >= 500) {
-      throw new GoogleCalendarError(
-        `Google Calendar API server error: ${errorData?.error?.message || response.statusText}`,
-        response.status
-      );
-    }
-    
-    // Generic Google API error
-    throw new GoogleCalendarError(
-      `Google Calendar API error: ${errorData?.error?.message || response.statusText}`,
-      response.status
-    );
-  }
-
-  // Handle empty responses (like for DELETE requests)
-  const contentLength = response.headers.get("content-length");
-  if (contentLength === "0" || response.status === 204) {
-    return null;
-  }
-
-  try {
-    return await response.json();
-  } catch {
-    // Some successful responses might not be JSON
-    return null;
-  }
+  return calendarEvent.data;
 }
+
+/**
+ * Check if the user has a connected Google Calendar account
+ */
+export const hasGoogleCalendarConnection = action({
+  handler: async (ctx) => {
+    try {
+      const userId = await getAuthUserId(ctx);
+      if (!userId) {
+        return false;
+      }
+
+      const oAuthClient = await getOAuthClient(userId);
+      return oAuthClient != null;
+    } catch (error) {
+      console.error("Error checking Google Calendar connection:", error);
+      return false;
+    }
+  },
+});
 
 /**
  * Get the primary calendar for the user (or a specific calendar by ID)
@@ -122,7 +178,22 @@ export const getCalendar = action({
     calendarId: v.optional(v.string()), // Default to "primary"
   },
   handler: async (ctx, { calendarId = "primary" }) => {
-    return await googleCalendarRequest(ctx, `/calendars/${calendarId}`);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const calendar = await google.calendar("v3").calendars.get({
+      calendarId,
+      auth: oAuthClient,
+    });
+
+    return calendar.data;
   },
 });
 
@@ -132,7 +203,21 @@ export const getCalendar = action({
  */
 export const listCalendars = action({
   handler: async (ctx) => {
-    return await googleCalendarRequest(ctx, "/users/me/calendarList");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const calendars = await google.calendar("v3").calendarList.list({
+      auth: oAuthClient,
+    });
+
+    return calendars.data;
   },
 });
 
@@ -156,20 +241,29 @@ export const listEvents = action({
     q,
     timeZone 
   }) => {
-    const params = new URLSearchParams();
-    
-    if (timeMin) params.append("timeMin", timeMin);
-    if (timeMax) params.append("timeMax", timeMax);
-    if (maxResults) params.append("maxResults", maxResults.toString());
-    if (q) params.append("q", q);
-    if (timeZone) params.append("timeZone", timeZone);
-    
-    // Always order by start time
-    params.append("orderBy", "startTime");
-    params.append("singleEvents", "true");
-    
-    const endpoint = `/calendars/${calendarId}/events?${params.toString()}`;
-    return await googleCalendarRequest(ctx, endpoint);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const events = await google.calendar("v3").events.list({
+      calendarId,
+      timeMin,
+      timeMax,
+      maxResults,
+      q,
+      timeZone,
+      orderBy: "startTime",
+      singleEvents: true,
+      auth: oAuthClient,
+    });
+
+    return events.data;
   },
 });
 
@@ -203,10 +297,24 @@ export const createEvent = action({
     })),
   },
   handler: async (ctx, { calendarId = "primary", ...eventData }) => {
-    return await googleCalendarRequest(ctx, `/calendars/${calendarId}/events`, {
-      method: "POST",
-      body: JSON.stringify(eventData),
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const event = await google.calendar("v3").events.insert({
+      calendarId,
+      auth: oAuthClient,
+      sendUpdates: "all",
+      requestBody: eventData,
     });
+
+    return event.data;
   },
 });
 
@@ -241,15 +349,30 @@ export const updateEvent = action({
     })),
   },
   handler: async (ctx, { calendarId = "primary", eventId, ...updateData }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
     // Remove undefined values to avoid overwriting with null
     const cleanUpdateData = Object.fromEntries(
       Object.entries(updateData).filter(([_, value]) => value !== undefined)
     );
     
-    return await googleCalendarRequest(ctx, `/calendars/${calendarId}/events/${eventId}`, {
-      method: "PUT",
-      body: JSON.stringify(cleanUpdateData),
+    const event = await google.calendar("v3").events.patch({
+      calendarId,
+      eventId,
+      auth: oAuthClient,
+      sendUpdates: "all",
+      requestBody: cleanUpdateData,
     });
+
+    return event.data;
   },
 });
 
@@ -263,15 +386,21 @@ export const deleteEvent = action({
     sendUpdates: v.optional(v.string()), // "all", "externalOnly", "none"
   },
   handler: async (ctx, { calendarId = "primary", eventId, sendUpdates }) => {
-    const params = new URLSearchParams();
-    if (sendUpdates) params.append("sendUpdates", sendUpdates);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
     
-    const endpoint = `/calendars/${calendarId}/events/${eventId}${
-      params.toString() ? `?${params.toString()}` : ""
-    }`;
-    
-    await googleCalendarRequest(ctx, endpoint, {
-      method: "DELETE",
+    await google.calendar("v3").events.delete({
+      calendarId,
+      eventId,
+      auth: oAuthClient,
+      sendUpdates: sendUpdates || "all",
     });
     
     return { success: true, eventId };
@@ -287,7 +416,23 @@ export const getEvent = action({
     eventId: v.string(),
   },
   handler: async (ctx, { calendarId = "primary", eventId }) => {
-    return await googleCalendarRequest(ctx, `/calendars/${calendarId}/events/${eventId}`);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const event = await google.calendar("v3").events.get({
+      calendarId,
+      eventId,
+      auth: oAuthClient,
+    });
+
+    return event.data;
   },
 });
 
@@ -309,18 +454,28 @@ export const searchEvents = action({
     timeMax, 
     maxResults = 20 
   }) => {
-    const params = new URLSearchParams();
-    params.append("q", query);
-    
-    if (timeMin) params.append("timeMin", timeMin);
-    if (timeMax) params.append("timeMax", timeMax);
-    if (maxResults) params.append("maxResults", maxResults.toString());
-    
-    params.append("orderBy", "startTime");
-    params.append("singleEvents", "true");
-    
-    const endpoint = `/calendars/${calendarId}/events?${params.toString()}`;
-    return await googleCalendarRequest(ctx, endpoint);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const events = await google.calendar("v3").events.list({
+      calendarId,
+      q: query,
+      timeMin,
+      timeMax,
+      maxResults,
+      orderBy: "startTime",
+      singleEvents: true,
+      auth: oAuthClient,
+    });
+
+    return events.data;
   },
 });
 
@@ -337,9 +492,21 @@ export const getFreeBusy = action({
     timeZone: v.optional(v.string()),
   },
   handler: async (ctx, requestData) => {
-    return await googleCalendarRequest(ctx, "/freeBusy", {
-      method: "POST",
-      body: JSON.stringify(requestData),
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new GoogleCalendarError("User not authenticated");
+    }
+
+    const oAuthClient = await getOAuthClient(userId);
+    if (!oAuthClient) {
+      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
+    }
+
+    const freeBusy = await google.calendar("v3").freebusy.query({
+      auth: oAuthClient,
+      requestBody: requestData,
     });
+
+    return freeBusy.data;
   },
 });

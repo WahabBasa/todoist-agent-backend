@@ -115,6 +115,64 @@ const applicationTables = {
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  // Google Calendar Scheduling System (based on Calendly clone)
+  events: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    durationInMinutes: v.number(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_user_and_active", ["userId", "isActive"]),
+
+  schedules: defineTable({
+    userId: v.id("users"),
+    timezone: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  scheduleAvailabilities: defineTable({
+    scheduleId: v.id("schedules"),
+    dayOfWeek: v.union(
+      v.literal("monday"),
+      v.literal("tuesday"), 
+      v.literal("wednesday"),
+      v.literal("thursday"),
+      v.literal("friday"),
+      v.literal("saturday"),
+      v.literal("sunday")
+    ),
+    startTime: v.string(), // "09:00" format
+    endTime: v.string(),   // "17:00" format
+  }).index("by_schedule", ["scheduleId"])
+    .index("by_schedule_and_day", ["scheduleId", "dayOfWeek"]),
+
+  meetings: defineTable({
+    eventId: v.id("events"),
+    hostUserId: v.id("users"),
+    guestName: v.string(),
+    guestEmail: v.string(),
+    guestNotes: v.optional(v.string()),
+    startTime: v.number(),
+    endTime: v.number(),
+    timezone: v.string(),
+    googleCalendarEventId: v.optional(v.string()),
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_event", ["eventId"])
+    .index("by_host", ["hostUserId"])
+    .index("by_guest_email", ["guestEmail"])
+    .index("by_status", ["status"])
+    .index("by_start_time", ["startTime"]),
+
 };
 
 // Export schema with Clerk users table and application tables
