@@ -2,7 +2,8 @@ import { action } from "../_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
-import { sessionManager } from "./sessionManager";
+// TODO: Re-implement with Clerk authentication
+// import { sessionManager } from "./sessionManager";
 
 const GOOGLE_CALENDAR_API_BASE_URL = "https://www.googleapis.com/calendar/v3";
 
@@ -22,24 +23,27 @@ class GoogleCalendarError extends Error {
  * Now uses the unified session manager for token handling and automatic refresh
  */
 async function googleCalendarRequest(ctx: any, endpoint: string, options: RequestInit = {}): Promise<any> {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    throw new GoogleCalendarError("User not authenticated");
-  }
+  // TODO: Re-implement with Clerk authentication
+  throw new GoogleCalendarError("Google Calendar integration needs to be updated for Clerk authentication");
+  
+  // const userId = await getAuthUserId(ctx);
+  // if (!userId) {
+  //   throw new GoogleCalendarError("User not authenticated");
+  // }
 
-  // Get session and valid access token (handles refresh automatically)
-  const session = sessionManager.getSessionByUserId(userId);
-  if (!session) {
-    throw new GoogleCalendarError("Failed to create Google Calendar session");
-  }
+  // // Get session and valid access token (handles refresh automatically)
+  // const session = sessionManager.getSessionByUserId(userId);
+  // if (!session) {
+  //   throw new GoogleCalendarError("Failed to create Google Calendar session");
+  // }
 
-  let accessToken: string;
-  try {
-    accessToken = await session.getValidAccessToken(ctx);
-  } catch (error) {
-    // Convert session errors to GoogleCalendarError for consistent error handling
-    throw new GoogleCalendarError(error instanceof Error ? error.message : "Failed to get access token");
-  }
+  // let accessToken: string;
+  // try {
+  //   accessToken = await session.getValidAccessToken(ctx);
+  // } catch (error) {
+  //   // Convert session errors to GoogleCalendarError for consistent error handling
+  //   throw new GoogleCalendarError(error instanceof Error ? error.message : "Failed to get access token");
+  // }
 
   const url = endpoint.startsWith('http') ? endpoint : `${GOOGLE_CALENDAR_API_BASE_URL}${endpoint}`;
   

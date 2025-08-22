@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
@@ -111,8 +111,9 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
-  const user = useQuery(api.myFunctions.getCurrentUser);
-  const { signIn, signOut } = useAuthActions();
+  const convexUser = useQuery(api.users.current);
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
 
   const renderContent = () => {
     switch (activeSection) {
@@ -129,9 +130,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       case "security":
         return <SecuritySettings />;
       case "account":
-        return <AccountSettings user={user} signOut={signOut} />;
+        return <AccountSettings clerkUser={clerkUser} signOut={signOut} />;
       default:
-        return <GeneralSettings user={user} />;
+        return <GeneralSettings clerkUser={clerkUser} />;
     }
   };
 
@@ -196,7 +197,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 }
 
 
-function GeneralSettings({ user }: { user: any }) {
+function GeneralSettings({ clerkUser }: { clerkUser: any }) {
   return (
     <div className="space-y-6">
       <SettingsHeader 
@@ -380,7 +381,8 @@ function ConnectedAppsSettings() {
   const hasGoogleCalendarConnection = useQuery(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
   const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
   const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
-  const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
+  // TODO: Update Google Calendar initialization to work with Clerk
+  // const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
   const migrateLegacyTokens = useAction(api.googleCalendar.oauthFlow.migrateLegacyTokens);
   const forceOAuthReconnection = useAction(api.googleCalendar.oauthFlow.forceOAuthReconnection);
   
@@ -388,35 +390,35 @@ function ConnectedAppsSettings() {
   const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
   const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
 
-  // Auto-initialize Google Calendar after OAuth if needed  
-  useEffect(() => {
-    const autoInitializeCalendar = async () => {
-      // Only run once per session
-      if (hasAutoSynced) return;
-      
-      // If user has Google connection, try to initialize calendar
-      if (hasGoogleCalendarConnection) {
-        try {
-          console.log("Auto-initializing Google Calendar...");
-          const result = await initializeGoogleCalendarAfterOAuth();
-          console.log("Google Calendar auto-initialization result:", result);
-          setHasAutoSynced(true);
-        } catch (error) {
-          console.error("Auto-initialization failed:", error);
-          // Fall back to legacy sync if needed
-          try {
-            await syncGoogleCalendarTokens();
-            console.log("Fallback sync successful");
-            setHasAutoSynced(true);
-          } catch (fallbackError) {
-            console.error("Fallback sync also failed:", fallbackError);
-          }
-        }
-      }
-    };
+  // TODO: Re-implement Google Calendar auto-initialization with Clerk
+  // useEffect(() => {
+  //   const autoInitializeCalendar = async () => {
+  //     // Only run once per session
+  //     if (hasAutoSynced) return;
+  //     
+  //     // If user has Google connection, try to initialize calendar
+  //     if (hasGoogleCalendarConnection) {
+  //       try {
+  //         console.log("Auto-initializing Google Calendar...");
+  //         const result = await initializeGoogleCalendarAfterOAuth();
+  //         console.log("Google Calendar auto-initialization result:", result);
+  //         setHasAutoSynced(true);
+  //       } catch (error) {
+  //         console.error("Auto-initialization failed:", error);
+  //         // Fall back to legacy sync if needed
+  //         try {
+  //           await syncGoogleCalendarTokens();
+  //           console.log("Fallback sync successful");
+  //           setHasAutoSynced(true);
+  //         } catch (fallbackError) {
+  //           console.error("Fallback sync also failed:", fallbackError);
+  //         }
+  //       }
+  //     }
+  //   };
 
-    autoInitializeCalendar();
-  }, [hasGoogleCalendarConnection, initializeGoogleCalendarAfterOAuth, syncGoogleCalendarTokens, hasAutoSynced]);
+  //   autoInitializeCalendar();
+  // }, [hasGoogleCalendarConnection, initializeGoogleCalendarAfterOAuth, syncGoogleCalendarTokens, hasAutoSynced]);
   
   const connectedApps = [
     {
@@ -524,19 +526,8 @@ function ConnectedAppsSettings() {
           }
         }
       } else {
-        // Connect Google Calendar - use Convex Auth OAuth flow
-        try {
-          setIsConnecting("Google Calendar");
-          // This will redirect to Google OAuth with calendar permissions
-          await signIn("google");
-          // After successful OAuth, tokens will be automatically stored in authAccounts
-          // and our session manager will pick them up
-        } catch (error) {
-          console.error("Failed to initiate Google OAuth:", error);
-          alert("Failed to start Google sign-in. Please try again.");
-        } finally {
-          setIsConnecting(null);
-        }
+        // TODO: Implement Google Calendar connection with Clerk OAuth
+        alert("Google Calendar connection needs to be updated to work with Clerk authentication. Coming soon!");
       }
     } else {
       console.log(`${appName} integration coming soon...`);
@@ -592,17 +583,9 @@ function ConnectedAppsSettings() {
                 }}
                 onSync={async () => {
                   try {
-                    // Try new initialization first
-                    console.log("Attempting Google Calendar initialization...");
-                    const initResult = await initializeGoogleCalendarAfterOAuth();
-                    
-                    if (initResult.success) {
-                      alert(`✅ Google Calendar initialized successfully!\n${initResult.message}`);
-                      return;
-                    }
-                    
-                    // If initialization failed, try legacy migration
-                    console.log("Initialization failed, trying legacy migration...");
+                    // TODO: Update sync methods to work with Clerk
+                    // For now, try legacy migration and manual sync
+                    console.log("Trying legacy migration...");
                     const migrationResult = await migrateLegacyTokens();
                     
                     if (migrationResult.migrated) {
@@ -616,8 +599,8 @@ function ConnectedAppsSettings() {
                     alert(`✅ Manual sync successful!\n${syncResult.message}`);
                     
                   } catch (error) {
-                    console.error("All sync methods failed:", error);
-                    alert(`❌ Sync failed: ${error}\n\nTry disconnecting and reconnecting your Google account.`);
+                    console.error("Sync methods failed:", error);
+                    alert(`❌ Sync failed: ${error}\n\nGoogle Calendar sync needs to be updated for Clerk authentication.`);
                   }
                 }}
               />
@@ -693,7 +676,7 @@ function SecuritySettings() {
 }
 
 
-function AccountSettings({ user, signOut }: { user: any; signOut: () => void }) {
+function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   return (
     <div className="space-y-6">
       <SettingsHeader 
@@ -705,11 +688,11 @@ function AccountSettings({ user, signOut }: { user: any; signOut: () => void }) 
       <div className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card/30 max-w-md">
         <Avatar className="h-16 w-16">
           <AvatarFallback className="bg-muted text-foreground text-2xl font-semibold">
-            {user?.email?.[0]?.toUpperCase() || "W"}
+            {clerkUser?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "U"}
           </AvatarFallback>
         </Avatar>
         <div className="space-y-2">
-          <div className="font-semibold text-base text-foreground">{user?.email || "wahabekky@gmail.com"}</div>
+          <div className="font-semibold text-base text-foreground">{clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}</div>
           <div className="text-muted-foreground">
             Member since {new Date().toLocaleDateString()}
           </div>

@@ -13,17 +13,16 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _disabled_auth from "../_disabled/auth.js";
+import type * as _disabled_inspectAuth from "../_disabled/inspectAuth.js";
+import type * as _disabled_oauthFlow from "../_disabled/oauthFlow.js";
+import type * as _disabled_sessionManager from "../_disabled/sessionManager.js";
 import type * as ai from "../ai.js";
-import type * as auth from "../auth.js";
 import type * as chatSessions from "../chatSessions.js";
 import type * as cleanup from "../cleanup.js";
 import type * as conversations from "../conversations.js";
-import type * as debug_inspectAuth from "../debug/inspectAuth.js";
-import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
-import type * as googleCalendar_oauthFlow from "../googleCalendar/oauthFlow.js";
-import type * as googleCalendar_sessionManager from "../googleCalendar/sessionManager.js";
 import type * as googleCalendar_utils from "../googleCalendar/utils.js";
 import type * as http from "../http.js";
 import type * as labels from "../labels.js";
@@ -34,6 +33,7 @@ import type * as tasks from "../tasks.js";
 import type * as todoist_api from "../todoist/api.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
+import type * as users from "../users.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -44,17 +44,16 @@ import type * as todoist_integration from "../todoist/integration.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "_disabled/auth": typeof _disabled_auth;
+  "_disabled/inspectAuth": typeof _disabled_inspectAuth;
+  "_disabled/oauthFlow": typeof _disabled_oauthFlow;
+  "_disabled/sessionManager": typeof _disabled_sessionManager;
   ai: typeof ai;
-  auth: typeof auth;
   chatSessions: typeof chatSessions;
   cleanup: typeof cleanup;
   conversations: typeof conversations;
-  "debug/inspectAuth": typeof debug_inspectAuth;
-  "googleCalendar/auth": typeof googleCalendar_auth;
   "googleCalendar/client": typeof googleCalendar_client;
   "googleCalendar/events": typeof googleCalendar_events;
-  "googleCalendar/oauthFlow": typeof googleCalendar_oauthFlow;
-  "googleCalendar/sessionManager": typeof googleCalendar_sessionManager;
   "googleCalendar/utils": typeof googleCalendar_utils;
   http: typeof http;
   labels: typeof labels;
@@ -65,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   "todoist/api": typeof todoist_api;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
+  users: typeof users;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

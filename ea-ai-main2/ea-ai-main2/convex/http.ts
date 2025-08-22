@@ -1,103 +1,55 @@
 import { httpRouter } from "convex/server";
-import { auth } from "./auth";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
+import type { WebhookEvent } from "@clerk/backend";
+import { Webhook } from "svix";
 
 const http = httpRouter();
 
-auth.addHttpRoutes(http);
-
-// Test endpoint to verify HTTP routes are working
 http.route({
-  path: "/test",
-  method: "GET", 
+  path: "/clerk-users-webhook",
+  method: "POST",
   handler: httpAction(async (ctx, request) => {
-    return new Response("HTTP routes are working!", {
-      status: 200,
-      headers: { "Content-Type": "text/plain" }
-    });
+    const event = await validateRequest(request);
+    if (!event) {
+      return new Response("Error occurred", { status: 400 });
+    }
+    switch ((event as any).type) {
+      case "user.created": // intentional fallthrough
+      case "user.updated":
+        await ctx.runMutation(internal.users.upsertFromClerk, {
+          data: event.data as any,
+        });
+        break;
+
+      case "user.deleted": {
+        const clerkUserId = (event.data as any).id!;
+        await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
+        break;
+      }
+
+      default:
+        console.log("Ignored webhook event", (event as any).type);
+    }
+
+    return new Response(null, { status: 200 });
   }),
 });
 
-// Todoist OAuth callback endpoint
-http.route({
-  path: "/auth/todoist/callback",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const url = new URL(request.url);
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    const error = url.searchParams.get("error");
-
-    if (error) {
-      return new Response(`
-        <html>
-          <body>
-            <h1>Todoist Connection Failed</h1>
-            <p>Error: ${error}</p>
-            <p><a href="/">Go back to app</a></p>
-          </body>
-        </html>
-      `, {
-        status: 400,
-        headers: { "Content-Type": "text/html" }
-      });
-    }
-
-    if (!code || !state) {
-      return new Response(`
-        <html>
-          <body>
-            <h1>Invalid Request</h1>
-            <p>Missing authorization code or state parameter.</p>
-            <p><a href="/">Go back to app</a></p>
-          </body>
-        </html>
-      `, {
-        status: 400,
-        headers: { "Content-Type": "text/html" }
-      });
-    }
-
-    try {
-      // Exchange code for token
-      await ctx.runAction(api.todoist.auth.exchangeCodeForToken, {
-        code,
-        state
-      });
-
-      return new Response(`
-        <html>
-          <body>
-            <h1>Todoist Connected Successfully! 🎉</h1>
-            <p>Your Todoist account has been linked. You can now close this window.</p>
-            <script>
-              setTimeout(() => {
-                window.close();
-              }, 2000);
-            </script>
-          </body>
-        </html>
-      `, {
-        status: 200,
-        headers: { "Content-Type": "text/html" }
-      });
-
-    } catch (error: any) {
-      return new Response(`
-        <html>
-          <body>
-            <h1>Connection Error</h1>
-            <p>Failed to connect Todoist: ${error.message}</p>
-            <p><a href="/">Go back to app</a></p>
-          </body>
-        </html>
-      `, {
-        status: 500,
-        headers: { "Content-Type": "text/html" }
-      });
-    }
-  }),
-});
+async function validateRequest(req: Request): Promise<WebhookEvent | null> {
+  const payloadString = await req.text();
+  const svixHeaders = {
+    "svix-id": req.headers.get("svix-id")!,
+    "svix-timestamp": req.headers.get("svix-timestamp")!,
+    "svix-signature": req.headers.get("svix-signature")!,
+  };
+  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
+  try {
+    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
+  } catch (error) {
+    console.error("Error verifying webhook event", error);
+    return null;
+  }
+}
 
 export default http;

@@ -1,28 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
-// Extended auth schema with OAuth token fields (following NextAuth.js standard)
-const extendedAuthTables = {
-  ...authTables,
-  // Override authAccounts to include OAuth token fields
-  authAccounts: defineTable({
-    userId: v.id("users"),
-    provider: v.string(),
-    providerAccountId: v.string(),
-    // OAuth token fields (from NextAuth.js standard)
-    access_token: v.optional(v.string()),
-    refresh_token: v.optional(v.string()),
-    expires_at: v.optional(v.number()),
-    token_type: v.optional(v.string()),
-    scope: v.optional(v.string()),
-    id_token: v.optional(v.string()),
-    session_state: v.optional(v.string()),
-    // Legacy field for backward compatibility
-    secret: v.optional(v.string()),
-  })
-    .index("userIdAndProvider", ["userId", "provider"])
-    .index("providerAndAccountId", ["provider", "providerAccountId"]),
+// Clerk-compatible users table
+const clerkTables = {
+  users: defineTable({
+    name: v.string(),
+    // This is the Clerk ID, stored in the subject JWT field
+    externalId: v.string(),
+  }).index("byExternalId", ["externalId"]),
 };
 
 const applicationTables = {
@@ -132,10 +117,8 @@ const applicationTables = {
 
 };
 
-// The schema is normally optional, but Convex Auth
-// requires indexes defined on `authTables`.
-// The schema provides more precise TypeScript types.
+// Export schema with Clerk users table and application tables
 export default defineSchema({
-  ...extendedAuthTables,
+  ...clerkTables,
   ...applicationTables,
 });
