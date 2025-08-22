@@ -406,15 +406,21 @@ function ConnectedAppsSettings() {
     loadConnectionStatus();
   }, [checkGoogleCalendarConnection]);
 
-  // Check for OAuth return parameters and refresh status
+  // Refresh connection status when user changes (e.g., after OAuth completion)
   useEffect(() => {
-    // If user just returned from OAuth, refresh the connection status
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('oauth_success') || urlParams.get('code')) {
-      setTimeout(() => {
-        loadConnectionStatus();
-      }, 1000); // Give Clerk time to process the OAuth
+    if (clerkUser) {
+      loadConnectionStatus();
     }
+  }, [clerkUser?.id]); // Re-run when user ID changes
+
+  // Refresh connection status periodically to catch any changes
+  useEffect(() => {
+    // Check connection status when component mounts
+    const interval = setInterval(() => {
+      loadConnectionStatus();
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
   }, []);
 
   // TODO: Re-implement Google Calendar auto-initialization with Clerk
@@ -553,19 +559,15 @@ function ConnectedAppsSettings() {
           }
         }
       } else {
-        // Connect Google Calendar via Clerk OAuth
-        try {
-          setIsConnecting("Google Calendar");
-          
-          // Use Clerk's redirect to Google OAuth with calendar scopes
-          // The user will be redirected to Google OAuth, then back to the app
-          // After successful OAuth, the connection status will be updated automatically
-          window.location.href = "/api/auth/google?scope=https://www.googleapis.com/auth/calendar";
-          
-        } catch (error) {
-          console.error("Failed to initiate Google Calendar connection:", error);
-          alert(`❌ Failed to connect: ${error}`);
-          setIsConnecting(null);
+        // Guide user to connect Google Calendar via Clerk's social login
+        const shouldReconnect = confirm(
+          "To connect Google Calendar, you need to sign in with Google.\n\n" +
+          "Click OK to sign out and be redirected to sign in with Google, or Cancel to continue without calendar integration."
+        );
+        
+        if (shouldReconnect) {
+          // Sign out and redirect to home page where user can sign in with Google
+          signOut({ redirectUrl: "/" });
         }
       }
     } else {
