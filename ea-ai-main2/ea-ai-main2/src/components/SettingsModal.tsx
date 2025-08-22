@@ -371,6 +371,7 @@ function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }
 function ConnectedAppsSettings() {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
@@ -378,7 +379,7 @@ function ConnectedAppsSettings() {
   const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
   
   // Check if Google Calendar is connected (using new session manager)
-  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
+  const checkGoogleCalendarConnection = useAction(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
   const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
   const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
   // TODO: Update Google Calendar initialization to work with Clerk
@@ -389,6 +390,32 @@ function ConnectedAppsSettings() {
   // Legacy functions for backward compatibility (during transition)
   const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
   const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
+
+  // Load Google Calendar connection status on component mount
+  const loadConnectionStatus = async () => {
+    try {
+      const isConnected = await checkGoogleCalendarConnection();
+      setHasGoogleCalendarConnection(isConnected);
+    } catch (error) {
+      console.error("Failed to check Google Calendar connection:", error);
+      setHasGoogleCalendarConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConnectionStatus();
+  }, [checkGoogleCalendarConnection]);
+
+  // Check for OAuth return parameters and refresh status
+  useEffect(() => {
+    // If user just returned from OAuth, refresh the connection status
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('oauth_success') || urlParams.get('code')) {
+      setTimeout(() => {
+        loadConnectionStatus();
+      }, 1000); // Give Clerk time to process the OAuth
+    }
+  }, []);
 
   // TODO: Re-implement Google Calendar auto-initialization with Clerk
   // useEffect(() => {
@@ -526,8 +553,20 @@ function ConnectedAppsSettings() {
           }
         }
       } else {
-        // TODO: Implement Google Calendar connection with Clerk OAuth
-        alert("Google Calendar connection needs to be updated to work with Clerk authentication. Coming soon!");
+        // Connect Google Calendar via Clerk OAuth
+        try {
+          setIsConnecting("Google Calendar");
+          
+          // Use Clerk's redirect to Google OAuth with calendar scopes
+          // The user will be redirected to Google OAuth, then back to the app
+          // After successful OAuth, the connection status will be updated automatically
+          window.location.href = "/api/auth/google?scope=https://www.googleapis.com/auth/calendar";
+          
+        } catch (error) {
+          console.error("Failed to initiate Google Calendar connection:", error);
+          alert(`❌ Failed to connect: ${error}`);
+          setIsConnecting(null);
+        }
       }
     } else {
       console.log(`${appName} integration coming soon...`);
@@ -583,24 +622,15 @@ function ConnectedAppsSettings() {
                 }}
                 onSync={async () => {
                   try {
-                    // TODO: Update sync methods to work with Clerk
-                    // For now, try legacy migration and manual sync
-                    console.log("Trying legacy migration...");
-                    const migrationResult = await migrateLegacyTokens();
-                    
-                    if (migrationResult.migrated) {
-                      alert(`✅ Legacy tokens migrated successfully!\n${migrationResult.message}`);
-                      return;
-                    }
-                    
-                    // If migration didn't help, try manual sync as last resort
-                    console.log("Migration didn't help, trying manual sync...");
-                    const syncResult = await syncGoogleCalendarTokens();
-                    alert(`✅ Manual sync successful!\n${syncResult.message}`);
+                    // With Clerk OAuth, the connection should be automatic
+                    // Refresh the connection status to see current state
+                    console.log("Refreshing Google Calendar connection status...");
+                    await loadConnectionStatus();
+                    alert(`✅ Connection status refreshed!\n\nIf you just connected your Google account, the connection should now be active.`);
                     
                   } catch (error) {
-                    console.error("Sync methods failed:", error);
-                    alert(`❌ Sync failed: ${error}\n\nGoogle Calendar sync needs to be updated for Clerk authentication.`);
+                    console.error("Refresh failed:", error);
+                    alert(`❌ Refresh failed: ${error}`);
                   }
                 }}
               />
