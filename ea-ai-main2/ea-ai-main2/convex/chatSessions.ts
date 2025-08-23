@@ -47,7 +47,7 @@ export const getChatSessions = query({
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      return undefined;
     }
     const userId = user._id;
 
@@ -81,7 +81,7 @@ export const getChatSession = query({
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      return null;
     }
     const userId = user._id;
 

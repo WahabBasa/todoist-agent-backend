@@ -10,7 +10,7 @@ export const getConversationBySession = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-      throw new Error("Not authenticated");
+      return null;
     }
 
     if (!args.sessionId) {
@@ -38,7 +38,7 @@ export const getConversation = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-      throw new Error("Not authenticated");
+      return null;
     }
 
     // Try to get conversation for default session first
@@ -394,7 +394,7 @@ export const getMessages = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-      throw new Error("Not authenticated");
+      return [];
     }
 
     const conversation = await ctx.db

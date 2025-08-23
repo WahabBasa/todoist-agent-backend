@@ -46,12 +46,20 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
   const clearAllChatsAction = useAction(api.chatSessions.clearAllChatSessions)
 
   const fetchInitialChats = useCallback(async () => {
-    if (!chatSessions) return
+    if (chatSessions === undefined) {
+      setIsLoading(true)
+      return
+    }
     
     setIsLoading(true)
     try {
-      setChats(chatSessions.sessions)
-      setNextOffset(chatSessions.nextOffset)
+      if (chatSessions) {
+        setChats(chatSessions.sessions)
+        setNextOffset(chatSessions.nextOffset)
+      } else {
+        setChats([])
+        setNextOffset(null)
+      }
     } catch (error) {
       console.error('Failed to load initial chats:', error)
       toast.error('Failed to load chat history.')
