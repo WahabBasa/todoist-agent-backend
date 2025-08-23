@@ -15,8 +15,10 @@ import type {
 } from "convex/server";
 import type * as ai from "../ai.js";
 import type * as chatSessions from "../chatSessions.js";
+import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as clerk from "../clerk.js";
 import type * as conversations from "../conversations.js";
+import type * as deleteUsers from "../deleteUsers.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
@@ -25,6 +27,7 @@ import type * as googleCalendar_sessionManager from "../googleCalendar/sessionMa
 import type * as googleCalendar_utils from "../googleCalendar/utils.js";
 import type * as http from "../http.js";
 import type * as memberships from "../memberships.js";
+import type * as migrateUsers from "../migrateUsers.js";
 import type * as todoist_api from "../todoist/api.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
@@ -41,8 +44,10 @@ import type * as users from "../users.js";
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   chatSessions: typeof chatSessions;
+  cleanupOrphans: typeof cleanupOrphans;
   clerk: typeof clerk;
   conversations: typeof conversations;
+  deleteUsers: typeof deleteUsers;
   "googleCalendar/auth": typeof googleCalendar_auth;
   "googleCalendar/client": typeof googleCalendar_client;
   "googleCalendar/events": typeof googleCalendar_events;
@@ -51,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   "googleCalendar/utils": typeof googleCalendar_utils;
   http: typeof http;
   memberships: typeof memberships;
+  migrateUsers: typeof migrateUsers;
   "todoist/api": typeof todoist_api;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;

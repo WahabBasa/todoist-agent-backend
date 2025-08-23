@@ -25,14 +25,19 @@ http.route({
       switch (result.type) {
         case "user.created":
         case "user.updated":
+          // Transform raw Clerk ID to tokenIdentifier format for consistency
+          const userData = result.data as any;
+          const tokenIdentifier = `https://${process.env.CLERK_HOSTNAME}|${userData.id}`;
           await ctx.runMutation(internal.users.upsertFromClerk, {
-            data: result.data as any,
+            data: { ...userData, tokenIdentifier },
           });
           break;
 
         case "user.deleted": {
-          const clerkUserId = (result.data as any).id!;
-          await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
+          const userData = result.data as any;
+          // Transform raw Clerk ID to tokenIdentifier format for consistency
+          const tokenIdentifier = `https://${process.env.CLERK_HOSTNAME}|${userData.id}`;
+          await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId: tokenIdentifier });
           break;
         }
 

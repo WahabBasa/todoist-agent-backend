@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 
 // Generate a title from the first user message (Morphic-style)
@@ -390,5 +390,23 @@ export const clearAllChatSessions = mutation({
     }
 
     return { deletedSessions: sessions.length };
+  },
+});
+
+// Internal function to delete ALL chat sessions (no auth required - for cleanup)
+export const forceDeleteAllChatSessions = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query("chatSessions").collect();
+    
+    let deletedCount = 0;
+    for (const session of sessions) {
+      await ctx.db.delete(session._id);
+      deletedCount++;
+      console.log(`Deleted chatSession: ${session._id} (title: "${session.title}", userId: ${session.userId})`);
+    }
+    
+    console.log(`Force deleted all ${deletedCount} chatSessions`);
+    return { deletedSessions: deletedCount };
   },
 });

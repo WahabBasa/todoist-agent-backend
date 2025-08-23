@@ -10,14 +10,15 @@ export const current = query({
 });
 
 export const upsertFromClerk = internalMutation({
-  args: { data: v.any() as Validator<UserJSON> }, // no runtime validation, trust Clerk
+  args: { data: v.any() as Validator<UserJSON & { tokenIdentifier: string }> }, // no runtime validation, trust Clerk
   async handler(ctx, { data }) {
     const userAttributes = {
       name: `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim() || "Anonymous User",
-      externalId: data.id,
+      // Use tokenIdentifier for consistent user identification
+      externalId: data.tokenIdentifier,
     };
 
-    const user = await userByExternalId(ctx, data.id);
+    const user = await userByExternalId(ctx, data.tokenIdentifier);
     if (user === null) {
       await ctx.db.insert("users", userAttributes);
     } else {
@@ -52,7 +53,8 @@ export async function getCurrentUser(ctx: QueryCtx) {
   if (identity === null) {
     return null;
   }
-  return await userByExternalId(ctx, identity.subject);
+  // Use tokenIdentifier for consistent user identification across all functions
+  return await userByExternalId(ctx, identity.tokenIdentifier);
 }
 
 async function userByExternalId(ctx: QueryCtx, externalId: string) {
