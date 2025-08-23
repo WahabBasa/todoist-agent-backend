@@ -1,6 +1,6 @@
-import { internalMutation, query, QueryCtx } from "./_generated/server";
+import { internalMutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { UserJSON } from "@clerk/backend";
-import { v, Validator } from "convex/values";
+import { v, Validator, ConvexError } from "convex/values";
 
 export const current = query({
   args: {},
@@ -60,4 +60,26 @@ async function userByExternalId(ctx: QueryCtx, externalId: string) {
     .query("users")
     .withIndex("byExternalId", (q) => q.eq("externalId", externalId))
     .unique();
+}
+
+// Big-brain style auth helpers for consistent authentication patterns
+export async function getUserIdentityOrThrow(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new ConvexError("Not authenticated");
+  }
+  return identity;
+}
+
+export async function getCurrentUserIdOrThrow(ctx: QueryCtx | MutationCtx): Promise<string> {
+  const identity = await getUserIdentityOrThrow(ctx);
+  return identity.tokenIdentifier;
+}
+
+export async function requireAuthentication(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new ConvexError("Authentication required");
+  }
+  return identity.tokenIdentifier;
 }

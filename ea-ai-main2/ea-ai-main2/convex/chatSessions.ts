@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getCurrentUser } from "./users";
 
 // Generate a title from the first user message (Morphic-style)
 function generateChatTitle(firstMessage: string): string {
@@ -18,10 +18,11 @@ export const createChatSession = mutation({
     isDefault: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const now = Date.now();
     const sessionId = await ctx.db.insert("chatSessions", {
@@ -44,10 +45,11 @@ export const getChatSessions = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const limit = args.limit || 20;
     const offset = args.offset || 0;
@@ -77,10 +79,11 @@ export const getChatSession = query({
     sessionId: v.id("chatSessions"),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
@@ -95,10 +98,11 @@ export const getChatSession = query({
 export const getOrCreateDefaultSession = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     // Check for existing default session
     const defaultSession = await ctx.db
@@ -135,10 +139,11 @@ export const updateChatSession = mutation({
     messageCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
@@ -162,10 +167,11 @@ export const updateChatTitleFromMessage = mutation({
     firstMessage: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
@@ -188,10 +194,11 @@ export const deleteChatSession = mutation({
     sessionId: v.id("chatSessions"),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
@@ -223,10 +230,11 @@ export const deleteChatSession = mutation({
 export const clearAllChatSessions = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
       throw new Error("Not authenticated");
     }
+    const userId = user._id;
 
     // Get all non-default sessions
     const sessions = await ctx.db

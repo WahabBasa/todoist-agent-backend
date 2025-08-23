@@ -118,13 +118,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const renderContent = () => {
     switch (activeSection) {
       case "general":
-        return <GeneralSettings user={user} />;
+        return <GeneralSettings clerkUser={clerkUser} />;
       case "notifications":
         return <NotificationsSettings />;
       case "personalization":
         return <PersonalizationSettings />;
       case "connected-apps":
-        return <ConnectedAppsSettings />;
+        return <ConnectedAppsSettings clerkUser={clerkUser} signOut={signOut} />;
       case "data-controls":
         return <DataControlsSettings />;
       case "security":
@@ -368,10 +368,12 @@ function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }
   );
 }
 
-function ConnectedAppsSettings() {
+function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
   const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
@@ -394,34 +396,41 @@ function ConnectedAppsSettings() {
   // Load Google Calendar connection status on component mount
   const loadConnectionStatus = async () => {
     try {
+      console.log("ConnectedAppsSettings: Loading Google Calendar connection status...");
+      setLoadError(null);
       const isConnected = await checkGoogleCalendarConnection();
+      console.log("ConnectedAppsSettings: Google Calendar connection status:", isConnected);
       setHasGoogleCalendarConnection(isConnected);
     } catch (error) {
-      console.error("Failed to check Google Calendar connection:", error);
+      console.error("ConnectedAppsSettings: Failed to check Google Calendar connection:", error);
+      console.error("ConnectedAppsSettings: Error details:", {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack
+      });
       setHasGoogleCalendarConnection(false);
+      setLoadError(`Failed to load connection status: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadConnectionStatus();
-  }, [checkGoogleCalendarConnection]);
+    console.log("ConnectedAppsSettings: Component mounted, loading connection status...");
+    loadConnectionStatus().catch(error => {
+      console.error("ConnectedAppsSettings: Failed to load initial connection status:", error);
+    });
+  }, []);
 
   // Refresh connection status when user changes (e.g., after OAuth completion)
   useEffect(() => {
-    if (clerkUser) {
-      loadConnectionStatus();
+    if (clerkUser?.id) {
+      console.log("ConnectedAppsSettings: User changed, refreshing connection status...");
+      loadConnectionStatus().catch(error => {
+        console.error("ConnectedAppsSettings: Failed to refresh connection status on user change:", error);
+      });
     }
   }, [clerkUser?.id]); // Re-run when user ID changes
-
-  // Refresh connection status periodically to catch any changes
-  useEffect(() => {
-    // Check connection status when component mounts
-    const interval = setInterval(() => {
-      loadConnectionStatus();
-    }, 30000); // Check every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, []);
 
   // TODO: Re-implement Google Calendar auto-initialization with Clerk
   // useEffect(() => {
@@ -584,9 +593,35 @@ function ConnectedAppsSettings() {
           Connect external services to enhance your AI assistant with additional capabilities and data sources.
         </p>
       </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-tertiary">Loading connection status...</div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {loadError && (
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-design-lg">
+          <div className="text-destructive text-sm">{loadError}</div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2"
+            onClick={() => {
+              setIsLoading(true);
+              loadConnectionStatus();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       
       {/* Connection Options */}
-      <div className="space-y-4">
+      {!isLoading && (
+        <div className="space-y-4">
         {connectedApps.map((app) => {
           // Special handling for Google Calendar with debug functionality
           if (app.appName === "Google Calendar") {
@@ -655,7 +690,8 @@ function ConnectedAppsSettings() {
             />
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,29 +10,35 @@ http.route({
   path: "/clerk-users-webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const event = await validateRequest(request);
-    if (!event) {
-      return new Response("Error occurred", { status: 400 });
-    }
-    switch ((event as any).type) {
-      case "user.created": // intentional fallthrough
-      case "user.updated":
-        await ctx.runMutation(internal.users.upsertFromClerk, {
-          data: event.data as any,
-        });
-        break;
+    try {
+      const event = await validateRequest(request);
+      if (!event) {
+        return new Response("Webhook validation failed", { status: 400 });
+      }
+      
+      switch ((event as any).type) {
+        case "user.created": // intentional fallthrough
+        case "user.updated":
+          await ctx.runMutation(internal.users.upsertFromClerk, {
+            data: event.data as any,
+          });
+          break;
 
-      case "user.deleted": {
-        const clerkUserId = (event.data as any).id!;
-        await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
-        break;
+        case "user.deleted": {
+          const clerkUserId = (event.data as any).id!;
+          await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
+          break;
+        }
+
+        default:
+          console.log("Ignored webhook event", (event as any).type);
       }
 
-      default:
-        console.log("Ignored webhook event", (event as any).type);
+      return new Response(null, { status: 200 });
+    } catch (err) {
+      console.error("Webhook error:", err);
+      return new Response("Webhook Error", { status: 400 });
     }
-
-    return new Response(null, { status: 200 });
   }),
 });
 

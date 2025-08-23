@@ -26,11 +26,12 @@ import {
 } from "./ui/sidebar";
 
 interface AppSidebarProps {
-  activeView: "chat";
-  onViewChange: (view: "chat") => void;
+  activeView: "chat" | "settings";
+  onViewChange: (view: "chat" | "settings") => void;
   onNewChat?: () => void;
   currentSessionId?: Id<"chatSessions"> | null;
   onChatSelect?: (sessionId: Id<"chatSessions">) => void;
+  onOpenSettings?: () => void;
 }
 
 export function AppSidebar({ 
@@ -38,7 +39,8 @@ export function AppSidebar({
   onViewChange, 
   onNewChat,
   currentSessionId,
-  onChatSelect 
+  onChatSelect,
+  onOpenSettings
 }: AppSidebarProps) {
   const createChatSession = useMutation(api.chatSessions.createChatSession);
 
@@ -92,7 +94,7 @@ export function AppSidebar({
 
       {/* Account at Bottom */}
       <SidebarFooter className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
-        <UserProfile />
+        <UserProfile onOpenSettings={onOpenSettings} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

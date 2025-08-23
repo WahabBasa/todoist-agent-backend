@@ -1,240 +1,795 @@
-import { useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useAction } from "convex/react";
+import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { ScrollArea } from "../components/ui/scroll-area";
+import { Separator } from "../components/ui/separator";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Skeleton } from "../components/ui/skeleton";
-import { User, Settings, Brain, Shield, AlertTriangle, Download, Trash2, LogOut } from "lucide-react";
+import { Label } from "../components/ui/label";
+import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { ConnectedAppItem } from "../components/settings/ConnectedAppItem";
+import { 
+  User, Settings, Bell, Palette, Link, Shield, 
+  AlertTriangle, Download, Trash2, LogOut, ArrowLeft
+} from "lucide-react";
 
-export function SettingsView() {
-  const user = useQuery(api.myFunctions.getCurrentUser);
-  const { signOut } = useAuthActions();
-  
-  if (user === undefined) {
-    return (
-      <div className="overflow-y-auto h-full p-4">
-        <div className="space-y-6 max-w-2xl">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-64 w-full" />
+interface SettingsViewProps {
+  onBackToChat: () => void;
+}
+
+type SettingsSection = 
+  | "general" 
+  | "notifications" 
+  | "personalization" 
+  | "connected-apps" 
+  | "data-controls" 
+  | "security" 
+  | "account";
+
+const SETTINGS_SECTIONS = [
+  { id: "general" as const, label: "General", icon: Settings },
+  { id: "notifications" as const, label: "Notifications", icon: Bell },
+  { id: "personalization" as const, label: "Personalization", icon: Palette },
+  { id: "connected-apps" as const, label: "Connected apps", icon: Link },
+  { id: "data-controls" as const, label: "Data controls", icon: Shield },
+  { id: "security" as const, label: "Security", icon: Shield },
+  { id: "account" as const, label: "Account", icon: User },
+];
+
+// Reusable Settings Components
+interface SettingsHeaderProps {
+  title: string;
+  description: string;
+}
+
+function SettingsHeader({ title, description }: SettingsHeaderProps) {
+  return (
+    <div className="space-y-2">
+      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+      <p className="text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+interface SettingsSwitchProps {
+  label: string;
+  description: string;
+  badge?: string;
+  defaultChecked?: boolean;
+}
+
+function SettingsSwitch({ label, description, badge, defaultChecked }: SettingsSwitchProps) {
+  return (
+    <div className="flex items-center justify-between py-1.5">
+      <div className="space-y-2 flex-1">
+        <div className="flex items-center gap-2">
+          <Label className="text-foreground font-medium">{label}</Label>
+          {badge && (
+            <Badge variant="secondary" className="text-xs">{badge}</Badge>
+          )}
         </div>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {description}
+        </p>
       </div>
-    );
-  }
+      <Switch defaultChecked={defaultChecked} />
+    </div>
+  );
+}
+
+interface SettingsActionButtonProps {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  variant?: "default" | "destructive";
+  onClick?: () => void;
+}
+
+function SettingsActionButton({ icon: Icon, children, variant = "default", onClick }: SettingsActionButtonProps) {
+  const isDestructive = variant === "destructive";
+  
+  return (
+    <Button 
+      variant="outline" 
+      className={`w-full justify-start gap-3 h-10 ${
+        isDestructive 
+          ? 'text-destructive border-destructive/50 hover:bg-destructive/10 hover:border-destructive'
+          : 'bg-background hover:bg-muted border-border'
+      }`}
+      onClick={onClick}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </Button>
+  );
+}
+
+export function SettingsView({ onBackToChat }: SettingsViewProps) {
+  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const convexUser = useQuery(api.users.current);
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case "general":
+        return <GeneralSettings clerkUser={clerkUser} />;
+      case "notifications":
+        return <NotificationsSettings />;
+      case "personalization":
+        return <PersonalizationSettings />;
+      case "connected-apps":
+        return <ConnectedAppsSettings clerkUser={clerkUser} signOut={signOut} />;
+      case "data-controls":
+        return <DataControlsSettings />;
+      case "security":
+        return <SecuritySettings />;
+      case "account":
+        return <AccountSettings clerkUser={clerkUser} signOut={signOut} />;
+      default:
+        return <GeneralSettings clerkUser={clerkUser} />;
+    }
+  };
 
   return (
-    <div className="overflow-y-auto h-full p-4 bg-background">
-      <div className="space-y-6 max-w-2xl">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">Settings</h2>
-        <p className="text-muted-foreground">Manage your account and app preferences</p>
+    <div className="flex h-full bg-background">
+      {/* Back to Chat Button - Top Left */}
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={onBackToChat}
+        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Chat
+      </Button>
+      
+      {/* Left Navigation Sidebar */}
+      <div className="w-[250px] bg-secondary border-r border-border">
+        {/* Header */}
+        <div className="p-6 pt-16 border-b border-border/30">
+          <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+        </div>
+        
+        {/* Navigation */}
+        <nav className="p-4">
+          {SETTINGS_SECTIONS.map((section) => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-design-md transition-colors ${
+                  activeSection === section.id
+                    ? 'bg-muted/30 text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate text-left">{section.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
       
-      {/* User Profile */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Profile
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-              <span className="text-2xl font-semibold">
-                {user?.email?.[0]?.toUpperCase() || "U"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <div className="font-semibold text-lg text-foreground">{user?.email || "User"}</div>
-              <div className="text-secondary-content">
-                Member since {new Date().toLocaleDateString()}
-              </div>
-              <Badge variant="default" className="mt-1">Active</Badge>
-            </div>
+      {/* Right Content Area */}
+      <div className="flex-1">
+        <ScrollArea className="h-full">
+          <div className="p-8 pt-16 max-w-4xl">
+            {renderContent()}
           </div>
-        </CardContent>
-      </Card>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+
+function GeneralSettings({ clerkUser }: { clerkUser: any }) {
+  return (
+    <div className="space-y-6">
+      <SettingsHeader 
+        title="General"
+        description="These settings apply to all workspaces you're a part of."
+      />
       
-      {/* App Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Preferences
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-input-primary">Email notifications</span>
-                  <Badge variant="secondary" className="text-xs">Recommended</Badge>
-                </div>
-                <p className="text-meta">
-                  Get notified about task deadlines and project updates
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-input-primary">Desktop notifications</span>
-                <p className="text-meta">
-                  Show browser notifications for important updates
-                </p>
-              </div>
-              <Switch />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-input-primary">AI suggestions</span>
-                <p className="text-meta">
-                  Let AI help optimize your workflow and suggest improvements
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-          </div>
+      <div className="space-y-4">
+        <SettingsSwitch 
+          label="Email notifications"
+          description="Get notified about task deadlines and project updates"
+          badge="Recommended"
+          defaultChecked={true}
+        />
+        
+        <SettingsSwitch 
+          label="Desktop notifications"
+          description="Show browser notifications for important updates"
+        />
+        
+        <SettingsSwitch 
+          label="AI suggestions"
+          description="Let AI help optimize your workflow and suggest improvements"
+          defaultChecked={true}
+        />
+      </div>
+    </div>
+  );
+}
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-input-primary">Dark mode</span>
-                <p className="text-meta">
-                  Use dark theme for better visibility in low light
-                </p>
-              </div>
-              <Switch />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* AI Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5" />
-            AI Assistant
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-input-primary">Response style</label>
-            <Select defaultValue="professional">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="professional">Professional</SelectItem>
-                <SelectItem value="casual">Casual</SelectItem>
-                <SelectItem value="detailed">Detailed</SelectItem>
-                <SelectItem value="concise">Concise</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-input-primary">Default task priority</label>
-            <Select defaultValue="normal">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <span className="text-input-primary">Auto-categorize tasks</span>
-                <p className="text-meta">
-                  Let AI automatically assign tasks to appropriate projects
-                </p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data & Privacy */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Data & Privacy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Button variant="outline" className="w-full justify-start gap-2">
-            <Download className="h-4 w-4" />
-            Export my data
-          </Button>
-          
-          <Button variant="outline" className="w-full justify-start gap-2">
-            <Trash2 className="h-4 w-4" />
-            Clear conversation history
-          </Button>
-        </CardContent>
-      </Card>
+function NotificationsSettings() {
+  return (
+    <div className="space-y-6">
+      <SettingsHeader 
+        title="Notifications"
+        description="Choose what updates you receive and how."
+      />
       
-      {/* Danger Zone */}
-      <Card className="border-destructive/20">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            Danger Zone
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-3">
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2 text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => {
-                if (confirm("Are you sure you want to sign out?")) {
-                  void signOut();
-                }
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2 text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Account
-            </Button>
+      <div className="space-y-4">
+        <SettingsSwitch 
+          label="Task reminders"
+          description="Get reminded about upcoming deadlines"
+          defaultChecked={true}
+        />
+        
+        <SettingsSwitch 
+          label="Daily summaries"
+          description="Receive a daily summary of your tasks and progress"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PersonalizationSettings() {
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-lg font-semibold text-foreground">Personalization</h1>
+        <p className="text-muted-foreground">
+          Customize your TaskAI experience.
+        </p>
+      </div>
+      
+      {/* Settings */}
+      <div className="space-y-4">
+        <div className="space-y-3">
+          <Label htmlFor="ai-style" className="text-foreground font-medium">AI response style</Label>
+          <Select defaultValue="professional">
+            <SelectTrigger id="ai-style" className="bg-input border-border">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="professional">Professional</SelectItem>
+              <SelectItem value="casual">Casual</SelectItem>
+              <SelectItem value="detailed">Detailed</SelectItem>
+              <SelectItem value="concise">Concise</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-3">
+          <Label htmlFor="task-priority" className="text-foreground font-medium">Default task priority</Label>
+          <Select defaultValue="normal">
+            <SelectTrigger id="task-priority" className="bg-input border-border">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Google Calendar App Item with debug functionality
+interface GoogleCalendarAppItemProps {
+  app: any;
+  isConnecting: boolean;
+  onConnect: () => void;
+  onDebug: () => void;
+  onSync: () => void;
+}
+
+function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }: GoogleCalendarAppItemProps) {
+  return (
+    <div className="flex items-center justify-between p-4 border border-border rounded-design-lg bg-background">
+      <div className="flex items-center gap-4">
+        <div className={`w-10 h-10 rounded-design-md flex items-center justify-center ${
+          app.gradientFrom 
+            ? `bg-gradient-to-br from-${app.gradientFrom} to-${app.gradientTo}` 
+            : app.iconBgColor
+        }`}>
+          <span className="text-white font-semibold">{app.iconText}</span>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-foreground">{app.appName}</h3>
+            {app.isConnected && (
+              <Badge variant="secondary" className="text-xs px-2 py-0.5">Connected</Badge>
+            )}
           </div>
-          <p className="text-meta">
-            This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            {app.description}
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {app.isConnected && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDebug}
+              className="text-xs px-3 py-1"
+            >
+              Connection Status
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSync}
+              className="text-xs px-3 py-1"
+            >
+              Refresh Connection
+            </Button>
+          </>
+        )}
+        {app.canConnect && (
+          <Button
+            variant={app.isConnected ? "outline" : "default"}
+            size="sm"
+            onClick={onConnect}
+            disabled={isConnecting}
+            className="text-xs px-3 py-1"
+          >
+            {isConnecting ? "Connecting..." : app.isConnected ? "Disconnect" : "Connect"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  
+  // Check if Todoist is connected
+  const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
+  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
+  const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
+  
+  // Check if Google Calendar is connected (using new session manager)
+  const checkGoogleCalendarConnection = useAction(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
+  const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
+  // TODO: Update Google Calendar initialization to work with Clerk
+  // const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
+  const migrateLegacyTokens = useAction(api.googleCalendar.oauthFlow.migrateLegacyTokens);
+  const forceOAuthReconnection = useAction(api.googleCalendar.oauthFlow.forceOAuthReconnection);
+  
+  // Legacy functions for backward compatibility (during transition)
+  const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
+  const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
+
+  // Load Google Calendar connection status on component mount
+  const loadConnectionStatus = async () => {
+    try {
+      console.log("ConnectedAppsSettings: Loading Google Calendar connection status...");
+      setLoadError(null);
+      const isConnected = await checkGoogleCalendarConnection();
+      console.log("ConnectedAppsSettings: Google Calendar connection status:", isConnected);
+      setHasGoogleCalendarConnection(isConnected);
+    } catch (error) {
+      console.error("ConnectedAppsSettings: Failed to check Google Calendar connection:", error);
+      console.error("ConnectedAppsSettings: Error details:", {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack
+      });
+      setHasGoogleCalendarConnection(false);
+      setLoadError(`Failed to load connection status: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log("ConnectedAppsSettings: Component mounted, loading connection status...");
+    loadConnectionStatus().catch(error => {
+      console.error("ConnectedAppsSettings: Failed to load initial connection status:", error);
+    });
+  }, []);
+
+  // Refresh connection status when user changes (e.g., after OAuth completion)
+  useEffect(() => {
+    if (clerkUser?.id) {
+      console.log("ConnectedAppsSettings: User changed, refreshing connection status...");
+      loadConnectionStatus().catch(error => {
+        console.error("ConnectedAppsSettings: Failed to refresh connection status on user change:", error);
+      });
+    }
+  }, [clerkUser?.id]); // Re-run when user ID changes
+
+  // TODO: Re-implement Google Calendar auto-initialization with Clerk
+  // useEffect(() => {
+  //   const autoInitializeCalendar = async () => {
+  //     // Only run once per session
+  //     if (hasAutoSynced) return;
+  //     
+  //     // If user has Google connection, try to initialize calendar
+  //     if (hasGoogleCalendarConnection) {
+  //       try {
+  //         console.log("Auto-initializing Google Calendar...");
+  //         const result = await initializeGoogleCalendarAfterOAuth();
+  //         console.log("Google Calendar auto-initialization result:", result);
+  //         setHasAutoSynced(true);
+  //       } catch (error) {
+  //         console.error("Auto-initialization failed:", error);
+  //         // Fall back to legacy sync if needed
+  //         try {
+  //           await syncGoogleCalendarTokens();
+  //           console.log("Fallback sync successful");
+  //           setHasAutoSynced(true);
+  //         } catch (fallbackError) {
+  //           console.error("Fallback sync also failed:", fallbackError);
+  //         }
+  //       }
+  //     }
+  //   };
+
+  //   autoInitializeCalendar();
+  // }, [hasGoogleCalendarConnection, initializeGoogleCalendarAfterOAuth, syncGoogleCalendarTokens, hasAutoSynced]);
+  
+  const connectedApps = [
+    {
+      appName: "Google Drive",
+      description: "Upload Google Docs, Sheets, Slides and other files.",
+      iconBgColor: "",
+      iconText: "G",
+      gradientFrom: "blue-500",
+      gradientTo: "green-500",
+      isConnected: false,
+      canConnect: false,
+    },
+    {
+      appName: "Microsoft OneDrive (personal)",
+      description: "Upload Microsoft Word, Excel, PowerPoint and other files.",
+      iconBgColor: "bg-blue-600",
+      iconText: "O",
+      isConnected: false,
+      canConnect: false,
+    },
+    {
+      appName: "Microsoft OneDrive (work/school)",
+      description: "Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.",
+      iconBgColor: "bg-blue-700",
+      iconText: "O",
+      isConnected: false,
+      canConnect: false,
+    },
+    {
+      appName: "Todoist",
+      description: "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
+      iconBgColor: "bg-red-500",
+      iconText: "T",
+      isConnected: hasTodoistConnection ?? false,
+      canConnect: true,
+    },
+    {
+      appName: "Google Calendar",
+      description: hasGoogleCalendarConnection 
+        ? "Your Google Calendar is connected and synced. You can schedule events, check availability, and manage your schedule through AI conversations."
+        : "Connect your Google Calendar to schedule events, check availability, and manage your schedule through AI conversations.",
+      iconBgColor: "",
+      iconText: "📅",
+      gradientFrom: "blue-500",
+      gradientTo: "green-500", 
+      isConnected: hasGoogleCalendarConnection ?? false,
+      canConnect: true, // Always allow connect/disconnect actions
+    },
+  ];
+
+  const handleConnect = async (appName: string) => {
+    if (appName === "Todoist") {
+      if (hasTodoistConnection) {
+        // Disconnect Todoist
+        try {
+          await removeTodoistConnection();
+        } catch (error) {
+          console.error("Failed to disconnect Todoist:", error);
+        }
+      } else {
+        // Connect Todoist
+        if (generateOAuthURL?.error) {
+          console.error("Todoist OAuth error:", generateOAuthURL.error);
+          alert("Todoist integration is not properly configured. Please contact support.");
+        } else if (generateOAuthURL?.url) {
+          setIsConnecting("Todoist");
+          // Open OAuth URL in a popup window
+          const popup = window.open(
+            generateOAuthURL.url,
+            'todoist-oauth',
+            'width=500,height=600,scrollbars=yes,resizable=yes'
+          );
+          
+          // Listen for the popup to close (successful connection)
+          const checkClosed = setInterval(() => {
+            if (popup?.closed) {
+              clearInterval(checkClosed);
+              setIsConnecting(null);
+              // The connection status will update automatically via the query
+            }
+          }, 1000);
+        } else {
+          console.error("No OAuth URL generated");
+          alert("Unable to connect to Todoist. Please try again later.");
+        }
+      }
+    } else if (appName === "Google Calendar") {
+      if (hasGoogleCalendarConnection) {
+        // Disconnect Google Calendar
+        const shouldDisconnect = confirm(
+          "Are you sure you want to disconnect Google Calendar?\n\n" +
+          "This will remove calendar access and you'll need to reconnect to use calendar features."
+        );
+        
+        if (shouldDisconnect) {
+          try {
+            setIsConnecting("Google Calendar");
+            await forceOAuthReconnection();
+            alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
+          } catch (error) {
+            console.error("Failed to disconnect Google Calendar:", error);
+            alert(`❌ Failed to disconnect: ${error}`);
+          } finally {
+            setIsConnecting(null);
+          }
+        }
+      } else {
+        // Connect Google Calendar using Clerk's OAuth
+        const shouldConnect = confirm(
+          "📅 Connect Google Calendar\n\n" +
+          "You'll be redirected to your profile page where you can:\n" +
+          "1. Connect your Google account\n" +
+          "2. Grant calendar permissions\n" +
+          "3. Return to settings to use calendar features\n\n" +
+          "Click OK to open your profile settings."
+        );
+        
+        if (shouldConnect) {
+          // Open UserProfile with Google Calendar scopes
+          setIsConnecting("Google Calendar");
+          // This will be handled by the UserButton with additionalOAuthScopes
+          document.getElementById('clerk-user-button')?.click();
+        }
+      }
+    } else {
+      console.log(`${appName} integration coming soon...`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-lg font-semibold text-primary mb-2">Connected Apps</h1>
+        <p className="text-tertiary">
+          Connect external services to enhance your AI assistant with additional capabilities and data sources.
+        </p>
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-tertiary">Loading connection status...</div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {loadError && (
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-design-lg">
+          <div className="text-destructive text-sm">{loadError}</div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2"
+            onClick={() => {
+              setIsLoading(true);
+              loadConnectionStatus();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+      
+      {/* Connection Options */}
+      {!isLoading && (
+        <div className="space-y-4">
+        {connectedApps.map((app) => {
+          // Special handling for Google Calendar with debug functionality
+          if (app.appName === "Google Calendar") {
+            return (
+              <GoogleCalendarAppItem
+                key={app.appName}
+                app={app}
+                isConnecting={isConnecting === app.appName}
+                onConnect={() => handleConnect(app.appName)}
+                onDebug={async () => {
+                  try {
+                    // Get detailed connection status using new session manager
+                    const status = await getOAuthConnectionStatus();
+                    console.log("Google Calendar connection status:", status);
+                    
+                    const debugInfo = {
+                      "Connection Status": status.isConnected ? "✅ Connected" : "❌ Not Connected",
+                      "Has Tokens": status.hasTokens ? "✅ Yes" : "❌ No",
+                      "Token Info": status.tokenInfo ? {
+                        "Access Token": status.tokenInfo.hasAccessToken ? "✅ Present" : "❌ Missing",
+                        "Refresh Token": status.tokenInfo.hasRefreshToken ? "✅ Present" : "❌ Missing",
+                        "Token Expired": status.tokenInfo.tokenExpired ? "⚠️ Yes" : "✅ No",
+                        "Expires In": status.tokenInfo.expiresIn ? `${Math.floor(status.tokenInfo.expiresIn / 3600)} hours` : "Unknown",
+                        "Token Type": status.tokenInfo.tokenType || "Unknown",
+                        "Scope": status.tokenInfo.scope || "Unknown"
+                      } : "No token data",
+                      "Recommendations": status.recommendations
+                    };
+                    
+                    alert(`Google Calendar Debug Info:\n\n${JSON.stringify(debugInfo, null, 2)}`);
+                  } catch (error) {
+                    console.error("Debug failed:", error);
+                    alert(`Debug failed: ${error}`);
+                  }
+                }}
+                onSync={async () => {
+                  try {
+                    // With Clerk OAuth, the connection should be automatic
+                    // Refresh the connection status to see current state
+                    console.log("Refreshing Google Calendar connection status...");
+                    await loadConnectionStatus();
+                    alert(`✅ Connection status refreshed!\n\nIf you just connected your Google account, the connection should now be active.`);
+                    
+                  } catch (error) {
+                    console.error("Refresh failed:", error);
+                    alert(`❌ Refresh failed: ${error}`);
+                  }
+                }}
+              />
+            );
+          }
+          
+          return (
+            <ConnectedAppItem
+              key={app.appName}
+              appName={app.appName}
+              description={app.description}
+              iconBgColor={app.iconBgColor}
+              iconText={app.iconText}
+              gradientFrom={app.gradientFrom}
+              gradientTo={app.gradientTo}
+              isConnected={app.isConnected}
+              isConnecting={isConnecting === app.appName}
+              canConnect={app.canConnect}
+              onConnect={() => handleConnect(app.appName)}
+            />
+          );
+        })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DataControlsSettings() {
+  return (
+    <div className="space-y-6">
+      <SettingsHeader 
+        title="Data controls"
+        description="Manage your data and privacy settings."
+      />
+      
+      {/* Actions */}
+      <div className="space-y-4">
+        <SettingsActionButton icon={Download}>
+          Export my data
+        </SettingsActionButton>
+        
+        <SettingsActionButton icon={Trash2}>
+          Clear conversation history
+        </SettingsActionButton>
+      </div>
+    </div>
+  );
+}
+
+function SecuritySettings() {
+  return (
+    <div className="space-y-6">
+      <SettingsHeader 
+        title="Security"
+        description="Keep your account secure."
+      />
+      
+      {/* Settings */}
+      <div className="space-y-4">
+        <SettingsSwitch 
+          label="Two-factor authentication"
+          description="Add an extra layer of security to your account"
+        />
+        
+        <div className="pt-4">
+          <SettingsActionButton icon={Shield}>
+            Change password
+          </SettingsActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
+  return (
+    <div className="space-y-6">
+      <SettingsHeader 
+        title="Account"
+        description="Manage your account settings."
+      />
+      
+      {/* User Profile */}
+      <div className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card/30 max-w-md">
+        <Avatar className="h-16 w-16">
+          <AvatarFallback className="bg-muted text-foreground text-2xl font-semibold">
+            {clerkUser?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "U"}
+          </AvatarFallback>
+        </Avatar>
+        <div className="space-y-2">
+          <div className="font-semibold text-base text-foreground">{clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}</div>
+          <div className="text-muted-foreground">
+            Member since {new Date().toLocaleDateString()}
+          </div>
+          <Badge variant="default" className="mt-2 bg-primary/20 text-primary-foreground hover:bg-primary/30">Active</Badge>
+        </div>
+      </div>
+      
+      {/* Actions */}
+      <div className="space-y-4 pt-4">
+        <SettingsActionButton 
+          icon={LogOut}
+          variant="destructive"
+          onClick={() => {
+            if (confirm("Are you sure you want to sign out?")) {
+              signOut();
+            }
+          }}
+        >
+          Sign Out
+        </SettingsActionButton>
+        
+        <SettingsActionButton 
+          icon={Trash2}
+          variant="destructive"
+        >
+          Delete Account
+        </SettingsActionButton>
+        
+        <p className="text-muted-foreground text-sm leading-relaxed pt-2">
+          This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
+        </p>
       </div>
     </div>
   );
