@@ -31,8 +31,11 @@ export function Chat({ sessionId }: ChatProps) {
   
   // Convex integration with session support
   const chatWithAI = useAction(api.ai.chatWithAI)
-  const getOrCreateDefaultSession = useMutation(api.chatSessions.getOrCreateDefaultSession)
+  const createDefaultSession = useMutation(api.chatSessions.createDefaultSession)
   const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage)
+  
+  // Big-brain pattern: Query for default session (returns null if user not found)
+  const defaultSession = useQuery(api.chatSessions.getDefaultSession, {})
   
   // Use session-aware conversation query or fallback to legacy
   const conversation = useQuery(api.conversations.getConversationBySession, 
@@ -146,9 +149,14 @@ export function Chat({ sessionId }: ChatProps) {
     try {
       let currentSessionId = sessionId
       
-      // If no session ID provided, get or create default session
+      // If no session ID provided, use or create default session
       if (!currentSessionId) {
-        currentSessionId = await getOrCreateDefaultSession()
+        if (defaultSession) {
+          currentSessionId = defaultSession._id
+        } else {
+          // Create default session only when user starts chatting
+          currentSessionId = await createDefaultSession()
+        }
       }
 
       // Send message with session context
@@ -215,8 +223,9 @@ export function Chat({ sessionId }: ChatProps) {
     setInput(query)
   }
 
-  // Show loading state while conversation is loading
-  if (activeConversation === undefined) {
+  // Big-brain pattern: Show loading state while user authentication is resolving
+  // defaultSession is undefined during auth loading, null when user not found/created yet
+  if (activeConversation === undefined && !sessionId && defaultSession === undefined) {
     return (
       <div className="h-full flex flex-col bg-background">
         <div className="flex-1 flex flex-col items-center justify-center p-6">

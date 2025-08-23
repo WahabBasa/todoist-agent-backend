@@ -1,6 +1,5 @@
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { getCurrentUser } from "./users";
 
 // Generate a title from the first user message (Morphic-style)
 function generateChatTitle(firstMessage: string): string {
@@ -23,7 +22,11 @@ export const createChatSession = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }
@@ -50,11 +53,23 @@ export const getChatSessions = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
+    // Big-brain pattern: return undefined when no user identity
+    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    if (!userId) {
+      return undefined;
+    }
+
+    // Find user in database
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", userId))
+      .unique();
+    
     if (!user) {
       return undefined;
     }
-    const userId = user._id;
+    
+    const userDocId = user._id;
 
     const limit = args.limit || 20;
     const offset = args.offset || 0;
@@ -62,7 +77,7 @@ export const getChatSessions = query({
     // Get sessions ordered by last message time
     const sessions = await ctx.db
       .query("chatSessions")
-      .withIndex("by_user_and_time", (q) => q.eq("userId", userId))
+      .withIndex("by_user_and_time", (q) => q.eq("userId", userDocId))
       .order("desc")
       .collect();
 
@@ -84,14 +99,26 @@ export const getChatSession = query({
     sessionId: v.id("chatSessions"),
   },
   handler: async (ctx, args) => {
-    const user = await getCurrentUser(ctx);
+    // Big-brain pattern: return null when no user identity
+    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    if (!userId) {
+      return null;
+    }
+
+    // Find user in database
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", userId))
+      .unique();
+    
     if (!user) {
       return null;
     }
-    const userId = user._id;
+
+    const userDocId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.userId !== userId) {
+    if (!session || session.userId !== userDocId) {
       return null;
     }
 
@@ -99,8 +126,39 @@ export const getChatSession = query({
   },
 });
 
-// Get or create default chat session for user
-export const getOrCreateDefaultSession = mutation({
+// Get default chat session for user (Query - big-brain pattern)
+export const getDefaultSession = query({
+  args: {},
+  handler: async (ctx) => {
+    // Big-brain pattern: return null when no user identity
+    const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    if (!userId) {
+      return null;
+    }
+
+    // Find user in database
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", userId))
+      .unique();
+    
+    if (!user) {
+      return null;
+    }
+
+    // Check for existing default session
+    const defaultSession = await ctx.db
+      .query("chatSessions")
+      .withIndex("by_user_and_default", (q) => 
+        q.eq("userId", user._id).eq("isDefault", true))
+      .first();
+
+    return defaultSession || null;
+  },
+});
+
+// Create default chat session for user (Mutation - called intentionally)
+export const createDefaultSession = mutation({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -108,21 +166,25 @@ export const getOrCreateDefaultSession = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }
     const userId = user._id;
 
-    // Check for existing default session
-    const defaultSession = await ctx.db
+    // Check if default session already exists
+    const existingDefaultSession = await ctx.db
       .query("chatSessions")
       .withIndex("by_user_and_default", (q) => 
         q.eq("userId", userId).eq("isDefault", true))
       .first();
 
-    if (defaultSession) {
-      return defaultSession._id;
+    if (existingDefaultSession) {
+      return existingDefaultSession._id;
     }
 
     // Create default session
@@ -154,7 +216,11 @@ export const updateChatSession = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }
@@ -187,7 +253,11 @@ export const updateChatTitleFromMessage = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }
@@ -219,7 +289,11 @@ export const deleteChatSession = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }
@@ -260,7 +334,11 @@ export const clearAllChatSessions = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    const user = await getCurrentUser(ctx);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+      .unique();
+    
     if (!user) {
       throw new ConvexError("User not found");
     }

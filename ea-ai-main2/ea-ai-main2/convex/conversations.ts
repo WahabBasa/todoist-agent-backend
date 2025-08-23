@@ -1,6 +1,39 @@
-import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { v, ConvexError } from "convex/values";
+import { Id } from "./_generated/dataModel";
+
+// Helper function for consistent user lookup (big-brain pattern)
+async function getUserForQuery(ctx: QueryCtx): Promise<{ _id: Id<"users"> } | null> {
+  const userId = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+  if (!userId) {
+    return null;
+  }
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("byExternalId", (q) => q.eq("externalId", userId))
+    .unique();
+  
+  return user;
+}
+
+async function getUserForMutation(ctx: MutationCtx): Promise<{ _id: Id<"users"> }> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new ConvexError("Authentication required");
+  }
+
+  const user = await ctx.db
+    .query("users")
+    .withIndex("byExternalId", (q) => q.eq("externalId", identity.tokenIdentifier))
+    .unique();
+  
+  if (!user) {
+    throw new ConvexError("User not found");
+  }
+
+  return user;
+}
 
 // Get conversation for specific session (new multi-chat approach)
 export const getConversationBySession = query({
@@ -8,8 +41,9 @@ export const getConversationBySession = query({
     sessionId: v.optional(v.id("chatSessions")),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    // Big-brain pattern: return null when user not found
+    const user = await getUserForQuery(ctx);
+    if (!user) {
       return null;
     }
 
@@ -20,14 +54,14 @@ export const getConversationBySession = query({
 
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+    if (!session || session.userId !== user._id) {
+      return null; // Big-brain pattern: return null instead of throwing
     }
 
     return await ctx.db
       .query("conversations")
       .withIndex("by_user_and_session", (q) => 
-        q.eq("userId", userId).eq("sessionId", args.sessionId))
+        q.eq("userId", user._id).eq("sessionId", args.sessionId))
       .first();
   },
 });
@@ -36,8 +70,9 @@ export const getConversationBySession = query({
 export const getConversation = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    // Big-brain pattern: return null when user not found
+    const user = await getUserForQuery(ctx);
+    if (!user) {
       return null;
     }
 
@@ -45,14 +80,14 @@ export const getConversation = query({
     const defaultSession = await ctx.db
       .query("chatSessions")
       .withIndex("by_user_and_default", (q) => 
-        q.eq("userId", userId).eq("isDefault", true))
+        q.eq("userId", user._id).eq("isDefault", true))
       .first();
 
     if (defaultSession) {
       const conversation = await ctx.db
         .query("conversations")
         .withIndex("by_user_and_session", (q) => 
-          q.eq("userId", userId).eq("sessionId", defaultSession._id))
+          q.eq("userId", user._id).eq("sessionId", defaultSession._id))
         .first();
       
       if (conversation) {
@@ -63,7 +98,7 @@ export const getConversation = query({
     // Fallback to legacy behavior for migration
     return await ctx.db
       .query("conversations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .filter((q) => q.eq(q.field("sessionId"), undefined))
       .first();
   },
@@ -82,15 +117,12 @@ export const addMessageToSession = mutation({
     }))),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+    if (!session || session.userId !== user._id) {
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
     const message = {
@@ -103,7 +135,7 @@ export const addMessageToSession = mutation({
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_user_and_session", (q) => 
-        q.eq("userId", userId).eq("sessionId", args.sessionId))
+        q.eq("userId", user._id).eq("sessionId", args.sessionId))
       .first();
 
     const now = Date.now();
@@ -123,7 +155,7 @@ export const addMessageToSession = mutation({
       return existingConversation._id;
     } else {
       const conversationId = await ctx.db.insert("conversations", {
-        userId,
+        userId: user._id,
         sessionId: args.sessionId,
         messages: [message],
       });
@@ -151,22 +183,19 @@ export const addMessage = mutation({
     }))),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     // Get or create default session
     let defaultSession = await ctx.db
       .query("chatSessions")
       .withIndex("by_user_and_default", (q) => 
-        q.eq("userId", userId).eq("isDefault", true))
+        q.eq("userId", user._id).eq("isDefault", true))
       .first();
 
     if (!defaultSession) {
       const now = Date.now();
       const sessionId = await ctx.db.insert("chatSessions", {
-        userId,
+        userId: user._id,
         title: "Default Chat",
         createdAt: now,
         lastMessageAt: now,
@@ -177,7 +206,7 @@ export const addMessage = mutation({
     }
 
     if (!defaultSession) {
-      throw new Error("Failed to create default session");
+      throw new ConvexError("Failed to create default session");
     }
 
     // Implement the logic directly instead of calling another mutation
@@ -191,7 +220,7 @@ export const addMessage = mutation({
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_user_and_session", (q) => 
-        q.eq("userId", userId).eq("sessionId", defaultSession._id))
+        q.eq("userId", user._id).eq("sessionId", defaultSession._id))
       .first();
 
     const now = Date.now();
@@ -211,7 +240,7 @@ export const addMessage = mutation({
       return existingConversation._id;
     } else {
       const conversationId = await ctx.db.insert("conversations", {
-        userId,
+        userId: user._id,
         sessionId: defaultSession._id,
         messages: [message],
       });
@@ -248,21 +277,18 @@ export const updateConversationBySession = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+    if (!session || session.userId !== user._id) {
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_user_and_session", (q) => 
-        q.eq("userId", userId).eq("sessionId", args.sessionId))
+        q.eq("userId", user._id).eq("sessionId", args.sessionId))
       .first();
 
     const now = Date.now();
@@ -271,7 +297,7 @@ export const updateConversationBySession = mutation({
       await ctx.db.patch(existingConversation._id, { messages: args.messages });
     } else {
       await ctx.db.insert("conversations", { 
-        userId, 
+        userId: user._id, 
         sessionId: args.sessionId,
         messages: args.messages 
       });
@@ -307,22 +333,19 @@ export const updateConversation = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     // Get or create default session
     let defaultSession = await ctx.db
       .query("chatSessions")
       .withIndex("by_user_and_default", (q) => 
-        q.eq("userId", userId).eq("isDefault", true))
+        q.eq("userId", user._id).eq("isDefault", true))
       .first();
 
     if (!defaultSession) {
       const now = Date.now();
       const sessionId = await ctx.db.insert("chatSessions", {
-        userId,
+        userId: user._id,
         title: "Default Chat",
         createdAt: now,
         lastMessageAt: now,
@@ -333,14 +356,14 @@ export const updateConversation = mutation({
     }
 
     if (!defaultSession) {
-      throw new Error("Failed to create default session");
+      throw new ConvexError("Failed to create default session");
     }
 
     // Implement the logic directly instead of calling another mutation
     const existingConversation = await ctx.db
       .query("conversations")
       .withIndex("by_user_and_session", (q) => 
-        q.eq("userId", userId).eq("sessionId", defaultSession._id))
+        q.eq("userId", user._id).eq("sessionId", defaultSession._id))
       .first();
 
     const now = Date.now();
@@ -349,7 +372,7 @@ export const updateConversation = mutation({
       await ctx.db.patch(existingConversation._id, { messages: args.messages });
     } else {
       await ctx.db.insert("conversations", { 
-        userId, 
+        userId: user._id, 
         sessionId: defaultSession._id,
         messages: args.messages 
       });
@@ -369,14 +392,11 @@ export const updateConversation = mutation({
 export const clearConversation = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     const conversation = await ctx.db
       .query("conversations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (conversation) {
@@ -392,14 +412,15 @@ export const getMessages = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    // Big-brain pattern: return empty array when user not found
+    const user = await getUserForQuery(ctx);
+    if (!user) {
       return [];
     }
 
     const conversation = await ctx.db
       .query("conversations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .first();
 
     if (!conversation) {
@@ -420,17 +441,14 @@ export const getMessages = query({
 export const migrateConversationData = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
+    const user = await getUserForMutation(ctx);
 
     console.log("Starting conversation data migration...");
     
     // Get all conversations for this user
     const conversations = await ctx.db
       .query("conversations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
     let migratedCount = 0;
@@ -515,14 +533,20 @@ export const migrateConversationData = mutation({
 export const getMigrationStatus = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
+    // Big-brain pattern: return default values when user not found
+    const user = await getUserForQuery(ctx);
+    if (!user) {
+      return {
+        totalConversations: 0,
+        legacyConversations: 0,
+        migratedConversations: 0,
+        needsMigration: false,
+      };
     }
 
     const conversations = await ctx.db
       .query("conversations")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
     const legacyCount = conversations.filter(c => c.message !== undefined).length;
