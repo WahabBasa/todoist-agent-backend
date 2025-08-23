@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { getCurrentUser } from "./users";
 
 // Generate a title from the first user message (Morphic-style)
@@ -18,9 +18,14 @@ export const createChatSession = mutation({
     isDefault: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 
@@ -98,9 +103,14 @@ export const getChatSession = query({
 export const getOrCreateDefaultSession = mutation({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 
@@ -139,15 +149,20 @@ export const updateChatSession = mutation({
     messageCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
     const updates: any = {};
@@ -167,15 +182,20 @@ export const updateChatTitleFromMessage = mutation({
     firstMessage: v.string(),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
     // Only update if it's still the default title
@@ -194,20 +214,25 @@ export const deleteChatSession = mutation({
     sessionId: v.id("chatSessions"),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.userId !== userId) {
-      throw new Error("Chat session not found or unauthorized");
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
     // Don't allow deleting default session
     if (session.isDefault) {
-      throw new Error("Cannot delete default chat session");
+      throw new ConvexError("Cannot delete default chat session");
     }
 
     // Delete all conversations for this session
@@ -230,9 +255,14 @@ export const deleteChatSession = mutation({
 export const clearAllChatSessions = mutation({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
     const user = await getCurrentUser(ctx);
     if (!user) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("User not found");
     }
     const userId = user._id;
 

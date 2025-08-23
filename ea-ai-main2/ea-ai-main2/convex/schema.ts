@@ -8,6 +8,14 @@ const clerkTables = {
     // This is the Clerk ID, stored in the subject JWT field
     externalId: v.string(),
   }).index("byExternalId", ["externalId"]),
+
+  // Organization memberships for multi-tenant support
+  memberships: defineTable({
+    userId: v.string(),
+    orgId: v.string(),
+    createdAt: v.number(),
+  }).index("byUserId", ["userId"])
+    .index("byOrgId", ["orgId"]),
 };
 
 const applicationTables = {

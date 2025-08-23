@@ -1,61 +1,70 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { WebhookEvent } from "@clerk/backend";
-import { Webhook } from "svix";
+import { WebhookEvent } from "@clerk/backend";
 
 const http = httpRouter();
 
 http.route({
-  path: "/clerk-users-webhook",
+  path: "/clerk",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const payloadString = await request.text();
+    const headerPayload = request.headers;
+
     try {
-      const event = await validateRequest(request);
-      if (!event) {
-        return new Response("Webhook validation failed", { status: 400 });
-      }
-      
-      switch ((event as any).type) {
-        case "user.created": // intentional fallthrough
+      const result: WebhookEvent = await ctx.runAction(internal.clerk.fulfill, {
+        payload: payloadString,
+        headers: {
+          "svix-id": headerPayload.get("svix-id")!,
+          "svix-timestamp": headerPayload.get("svix-timestamp")!,
+          "svix-signature": headerPayload.get("svix-signature")!,
+        },
+      });
+
+      switch (result.type) {
+        case "user.created":
         case "user.updated":
           await ctx.runMutation(internal.users.upsertFromClerk, {
-            data: event.data as any,
+            data: result.data as any,
           });
           break;
 
         case "user.deleted": {
-          const clerkUserId = (event.data as any).id!;
+          const clerkUserId = (result.data as any).id!;
           await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId });
           break;
         }
 
+        case "organizationMembership.created":
+        case "organizationMembership.updated":
+          await ctx.runMutation(internal.memberships.addUserIdToOrg, {
+            userId: `https://${process.env.CLERK_HOSTNAME}|${result.data.public_user_data.user_id}`,
+            orgId: result.data.organization.id,
+          });
+          break;
+
+        case "organizationMembership.deleted":
+          await ctx.runMutation(internal.memberships.removeUserIdFromOrg, {
+            userId: `https://${process.env.CLERK_HOSTNAME}|${result.data.public_user_data.user_id}`,
+            orgId: result.data.organization.id,
+          });
+          break;
+
         default:
-          console.log("Ignored webhook event", (event as any).type);
+          console.log("Ignored webhook event", result.type);
       }
 
-      return new Response(null, { status: 200 });
+      return new Response(null, {
+        status: 200,
+      });
     } catch (err) {
       console.error("Webhook error:", err);
-      return new Response("Webhook Error", { status: 400 });
+      return new Response("Webhook Error", {
+        status: 400,
+      });
     }
   }),
 });
-
-async function validateRequest(req: Request): Promise<WebhookEvent | null> {
-  const payloadString = await req.text();
-  const svixHeaders = {
-    "svix-id": req.headers.get("svix-id")!,
-    "svix-timestamp": req.headers.get("svix-timestamp")!,
-    "svix-signature": req.headers.get("svix-signature")!,
-  };
-  const wh = new Webhook(process.env.CLERK_WEBHOOK_SECRET!);
-  try {
-    return wh.verify(payloadString, svixHeaders) as unknown as WebhookEvent;
-  } catch (error) {
-    console.error("Error verifying webhook event", error);
-    return null;
-  }
-}
 
 export default http;

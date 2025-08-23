@@ -1,6 +1,6 @@
 "use client";
 
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
@@ -17,6 +17,16 @@ export default function App() {
   return (
     <div className="h-full">
       <Toaster position="top-right" />
+      <AuthLoading>
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
+              <span className="text-primary-foreground font-semibold text-lg">T</span>
+            </div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </AuthLoading>
       <Authenticated>
         <MainApp />
       </Authenticated>
@@ -30,22 +40,21 @@ export default function App() {
 function MainApp() {
   const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
   const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(null);
-  const [chatKey, setChatKey] = useState(0); // Force re-render of chat component
 
   const handleNewChat = () => {
-    setChatKey(prev => prev + 1); // Force re-render of chat component
+    setCurrentSessionId(null); // Clear session to start new chat
   };
 
   const handleChatSelect = (sessionId: Id<"chatSessions">) => {
     setCurrentSessionId(sessionId);
-    setChatKey(prev => prev + 1); // Force re-render with new session
+    setActiveView("chat"); // Ensure we're in chat view when selecting a session
   };
 
   const renderActiveView = () => {
     if (activeView === "settings") {
       return <SettingsView onBackToChat={() => setActiveView("chat")} />;
     }
-    return <ChatView key={`${chatKey}-${currentSessionId}`} sessionId={currentSessionId} />;
+    return <ChatView sessionId={currentSessionId} />;
   };
 
   return (
