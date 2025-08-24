@@ -12,7 +12,7 @@ import {
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
-import { getAuthUserId } from "@convex-dev/auth/server";
+// Clerk authentication will be handled via ctx.auth.getUserIdentity()
 import { z } from "zod";
 import { ActionCtx } from "./_generated/server";
 
@@ -565,8 +565,9 @@ export const chatWithAI = action({
     sessionId: v.optional(v.id("chatSessions")),
   },
   handler: async (ctx, { message, useHaiku = true, sessionId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("User must be authenticated.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User must be authenticated.");
+    const userId = identity.tokenIdentifier;
 
     const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });

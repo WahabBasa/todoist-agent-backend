@@ -1,5 +1,5 @@
 import { mutation, query, action, internalQuery } from "../_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
+// Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
 import { api } from "../_generated/api";
 
@@ -20,7 +20,9 @@ export const storeTodoistToken = mutation({
     accessToken: v.string(),
   },
   handler: async (ctx, { accessToken }) => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -85,7 +87,9 @@ export const storeTodoistTokenForUser = mutation({
 // Get Todoist access token for the current user
 export const getTodoistToken = query({
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       return null;
     }
@@ -102,7 +106,9 @@ export const getTodoistToken = query({
 // Check if user has Todoist connected
 export const hasTodoistConnection = query({
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       return false;
     }
@@ -119,7 +125,9 @@ export const hasTodoistConnection = query({
 // Remove Todoist connection
 export const removeTodoistConnection = mutation({
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -149,7 +157,9 @@ export const generateOAuthURL = query({
     }
 
     // Get current authenticated user ID
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       return {
         url: null,

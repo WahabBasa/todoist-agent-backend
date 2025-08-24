@@ -1,5 +1,5 @@
 import { action } from "../_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
+// Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
 import { api } from "../_generated/api";
 
@@ -18,7 +18,9 @@ export const getTodoistProjectAndTaskMap = action({
     }>;
     unassignedTasks: Array<{ _id: string; title: string; }>;
   }> => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -110,7 +112,9 @@ export const getTodoistProjectDetails = action({
     taskCount: number;
     completedTaskCount: number;
   }> => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -180,7 +184,9 @@ export const getTodoistTaskDetails = action({
     updatedAt?: number;
     url?: string;
   }> => {
-    const userId = await getAuthUserId(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const userId = identity.tokenIdentifier;
     if (!userId) {
       throw new Error("User not authenticated");
     }

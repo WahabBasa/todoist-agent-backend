@@ -1,5 +1,5 @@
 import { action, mutation } from "../_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
+// Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 
@@ -7,10 +7,11 @@ const TODOIST_API_BASE_URL = "https://api.todoist.com/rest/v2";
 
 // Helper function to make authenticated Todoist API requests (for action contexts)
 async function todoistRequest(ctx: any, endpoint: string, options: RequestInit = {}): Promise<any> {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
     throw new Error("User not authenticated");
   }
+  const userId = identity.tokenIdentifier;
 
   // Get user's Todoist token via internal query
   const tokenData: { accessToken: string } | null = await ctx.runQuery(internal.todoist.auth.getTodoistTokenForUser, {
