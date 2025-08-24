@@ -947,14 +947,10 @@ Remember: You're here to make their life easier and more organized. Be the assis
             history.push({ role: "assistant", content: text, timestamp: Date.now() });
             
             // Save conversation - session-aware or default
-            if (sessionId) {
-              await ctx.runMutation(api.conversations.updateConversationBySession, { 
-                sessionId, 
-                messages: history as any 
-              });
-            } else {
-              await ctx.runMutation(api.conversations.updateConversation, { messages: history as any });
-            }
+            await ctx.runMutation(api.conversations.upsertConversation, { 
+              sessionId,  // Will use default session if undefined
+              messages: history as any 
+            });
             
             return { response: text };
         }

@@ -111,7 +111,6 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
-  const convexUser = useQuery(api.users.current);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
 

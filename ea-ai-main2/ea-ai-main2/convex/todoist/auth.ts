@@ -22,15 +22,15 @@ export const storeTodoistToken = mutation({
   handler: async (ctx, { accessToken }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
-    const userId = identity.tokenIdentifier;
-    if (!userId) {
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
       throw new Error("User not authenticated");
     }
 
     // Check if user already has a Todoist token
     const existingToken = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (existingToken) {
@@ -43,7 +43,7 @@ export const storeTodoistToken = mutation({
     } else {
       // Create new token record
       return await ctx.db.insert("todoistTokens", {
-        userId,
+        tokenIdentifier,
         accessToken,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -55,14 +55,14 @@ export const storeTodoistToken = mutation({
 // Store Todoist OAuth tokens for specific user (OAuth callback context)
 export const storeTodoistTokenForUser = mutation({
   args: {
-    userId: v.id("users"),
+    tokenIdentifier: v.string(),
     accessToken: v.string(),
   },
-  handler: async (ctx, { userId, accessToken }) => {
+  handler: async (ctx, { tokenIdentifier, accessToken }) => {
     // Check if user already has a Todoist token
     const existingToken = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (existingToken) {
@@ -75,7 +75,7 @@ export const storeTodoistTokenForUser = mutation({
     } else {
       // Create new token record
       return await ctx.db.insert("todoistTokens", {
-        userId,
+        tokenIdentifier,
         accessToken,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -89,14 +89,14 @@ export const getTodoistToken = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
-    const userId = identity.tokenIdentifier;
-    if (!userId) {
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
       return null;
     }
 
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     return token ? { accessToken: token.accessToken } : null;
@@ -108,14 +108,14 @@ export const hasTodoistConnection = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
-    const userId = identity.tokenIdentifier;
-    if (!userId) {
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
       return false;
     }
 
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     return token !== null;
@@ -127,14 +127,14 @@ export const removeTodoistConnection = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
-    const userId = identity.tokenIdentifier;
-    if (!userId) {
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
       throw new Error("User not authenticated");
     }
 
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (token) {
@@ -159,8 +159,8 @@ export const generateOAuthURL = query({
     // Get current authenticated user ID
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
-    const userId = identity.tokenIdentifier;
-    if (!userId) {
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
       return {
         url: null,
         state: null,
@@ -168,9 +168,9 @@ export const generateOAuthURL = query({
       };
     }
 
-    // Encode userId in state parameter for OAuth callback
+    // Encode tokenIdentifier in state parameter for OAuth callback
     const randomString = Math.random().toString(36).substring(2, 15);
-    const state = `${userId}_${randomString}`;
+    const state = `${tokenIdentifier}_${randomString}`;
     const scope = "data:read_write,task:add";
     const redirectUri = getOAuthRedirectURI();
     
@@ -203,17 +203,17 @@ export const exchangeCodeForToken = action({
       throw new Error("Todoist OAuth credentials not configured");
     }
 
-    // Decode userId from state parameter
+    // Decode tokenIdentifier from state parameter
     const stateParts = state.split('_');
     if (stateParts.length < 2) {
       throw new Error("Invalid state parameter format");
     }
     
-    const userId = stateParts[0]; // First part is the userId
+    const tokenIdentifier = stateParts[0]; // First part is the tokenIdentifier
     
-    // Validate userId format (Convex IDs start with a letter)
-    if (!userId || typeof userId !== 'string' || userId.length < 10) {
-      throw new Error("Invalid user ID in state parameter");
+    // Validate tokenIdentifier format (Clerk tokenIdentifiers are URLs)
+    if (!tokenIdentifier || typeof tokenIdentifier !== 'string' || tokenIdentifier.length < 10) {
+      throw new Error("Invalid tokenIdentifier in state parameter");
     }
 
     // Exchange authorization code for access token
@@ -240,9 +240,9 @@ export const exchangeCodeForToken = action({
       throw new Error("No access token received from Todoist");
     }
 
-    // Store the token using the userId from state parameter
+    // Store the token using the tokenIdentifier from state parameter
     await ctx.runMutation(api.todoist.auth.storeTodoistTokenForUser, {
-      userId: userId as any, // Cast to Id<"users"> type
+      tokenIdentifier: tokenIdentifier,
       accessToken: tokenData.access_token,
     });
 
@@ -253,12 +253,12 @@ export const exchangeCodeForToken = action({
 // Internal query to get Todoist token for a specific user (for action contexts)
 export const getTodoistTokenForUser = internalQuery({
   args: {
-    userId: v.id("users"),
+    tokenIdentifier: v.string(),
   },
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { tokenIdentifier }) => {
     const tokenRecord = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     return tokenRecord ? { accessToken: tokenRecord.accessToken } : null;

@@ -22,49 +22,39 @@ http.route({
         },
       });
 
+      // In tokenIdentifier pattern, we don't need to sync users to database
+      // Clerk authentication is handled directly via tokenIdentifier in each function
       switch (result.type) {
         case "user.created":
         case "user.updated":
-          // Transform raw Clerk ID to tokenIdentifier format for consistency
           const userData = result.data as any;
-          const tokenIdentifier = `https://${process.env.CLERK_HOSTNAME}|${userData.id}`;
-          await ctx.runMutation(internal.users.upsertFromClerk, {
-            data: { ...userData, tokenIdentifier },
-          });
+          console.log(`User ${result.type}: ${userData.id} (${userData.email_addresses?.[0]?.email_address || 'no email'})`);
           break;
 
         case "user.deleted": {
           const userData = result.data as any;
-          // Transform raw Clerk ID to tokenIdentifier format for consistency
-          const tokenIdentifier = `https://${process.env.CLERK_HOSTNAME}|${userData.id}`;
-          await ctx.runMutation(internal.users.deleteFromClerk, { clerkUserId: tokenIdentifier });
+          console.log(`User deleted: ${userData.id}`);
+          // Note: In tokenIdentifier pattern, associated data is automatically inaccessible
+          // when the tokenIdentifier becomes invalid, so no cleanup needed
           break;
         }
 
         case "organizationMembership.created":
         case "organizationMembership.updated":
-          await ctx.runMutation(internal.memberships.addUserIdToOrg, {
-            userId: `https://${process.env.CLERK_HOSTNAME}|${result.data.public_user_data.user_id}`,
-            orgId: result.data.organization.id,
-          });
-          break;
-
         case "organizationMembership.deleted":
-          await ctx.runMutation(internal.memberships.removeUserIdFromOrg, {
-            userId: `https://${process.env.CLERK_HOSTNAME}|${result.data.public_user_data.user_id}`,
-            orgId: result.data.organization.id,
-          });
+          // Organization features not currently implemented
+          console.log(`Organization membership event: ${result.type}`);
           break;
 
         default:
-          console.log("Ignored webhook event", result.type);
+          console.log("Ignored Clerk webhook event:", result.type);
       }
 
       return new Response(null, {
         status: 200,
       });
     } catch (err) {
-      console.error("Webhook error:", err);
+      console.error("Clerk webhook error:", err);
       return new Response("Webhook Error", {
         status: 400,
       });

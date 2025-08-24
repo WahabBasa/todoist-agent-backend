@@ -109,7 +109,6 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 
 export function SettingsView({ onBackToChat }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
-  const convexUser = useQuery(api.users.current);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
 

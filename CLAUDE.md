@@ -94,13 +94,14 @@ gt submit --stack
 3. **Check Dependencies** - Map PR dependencies before coding
 
 **📚 Documentation Research Protocol:**
-- **ALWAYS use docs-researcher subagent** for any documentation lookup, API reference, or research task
-- **Examples of when to use docs-researcher**:
-  - Looking up framework APIs (React, Convex, TailwindCSS, etc.)
-  - Understanding integration patterns or best practices
-  - Finding version-specific implementation guides
-  - Researching library compatibility or migration guides
-- **Never attempt manual documentation research** - delegate to the specialized subagent
+- **NEVER USE SUBAGENTS** - Always research documentation directly using WebFetch, Read, or other tools
+- **Direct Research Only**: Use WebFetch for external documentation, Read for local files
+- **Context Preservation**: Direct research maintains full context instead of filtered summaries
+- **Examples of direct research**:
+  - WebFetch for framework APIs (React, Convex, TailwindCSS, etc.)
+  - Read for local documentation and configuration files
+  - Grep/Glob for finding specific patterns in codebase
+  - Multiple parallel WebFetch calls for comprehensive understanding
 
 **Quality Assurance:**
 1. **File Location Verification** - Confirm working in correct project directory
