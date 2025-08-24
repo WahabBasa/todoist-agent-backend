@@ -368,6 +368,11 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
+  
+  // Add debug logging for Todoist connection status
+  useEffect(() => {
+    console.log("🔍 [Settings] Todoist connection status changed:", hasTodoistConnection);
+  }, [hasTodoistConnection]);
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
   
@@ -529,8 +534,15 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           const checkClosed = setInterval(() => {
             if (popup?.closed) {
               clearInterval(checkClosed);
-              setIsConnecting(null);
-              // The connection status will update automatically via the query
+              console.log("🔄 [Settings] Todoist OAuth popup closed, refreshing connection status...");
+              
+              // Force refresh connection status by re-fetching in a few moments
+              setTimeout(() => {
+                console.log("🔄 [Settings] Triggering manual refresh of Todoist connection status");
+                // Force component re-render to trigger query refresh
+                setIsConnecting(null);
+                // The hasTodoistConnection query should automatically refresh and show updated status
+              }, 500);
             }
           }, 1000);
         } else {

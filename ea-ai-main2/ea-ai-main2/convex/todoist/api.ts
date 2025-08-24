@@ -3,6 +3,8 @@ import { action, mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 
+// DEPRECATED: REST API v2 - Legacy support only
+// New integrations should use syncApi.ts with Todoist API v1 Sync endpoint
 const TODOIST_API_BASE_URL = "https://api.todoist.com/rest/v2";
 
 // Helper function to make authenticated Todoist API requests (for action contexts)
@@ -15,7 +17,7 @@ async function todoistRequest(ctx: any, endpoint: string, options: RequestInit =
 
   // Get user's Todoist token via internal query
   const tokenData: { accessToken: string } | null = await ctx.runQuery(internal.todoist.auth.getTodoistTokenForUser, {
-    userId,
+    tokenIdentifier: userId,
   });
 
   if (!tokenData) {

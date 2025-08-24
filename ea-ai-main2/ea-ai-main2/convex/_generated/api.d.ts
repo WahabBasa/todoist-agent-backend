@@ -19,6 +19,9 @@ import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
 import type * as clerk from "../clerk.js";
 import type * as conversations from "../conversations.js";
+import type * as debug_cleanupDuplicateTokens from "../debug/cleanupDuplicateTokens.js";
+import type * as debug_fixTokenIdentifier from "../debug/fixTokenIdentifier.js";
+import type * as debug_todoistDebug from "../debug/todoistDebug.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
@@ -30,6 +33,8 @@ import type * as migrateTokens from "../migrateTokens.js";
 import type * as todoist_api from "../todoist/api.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
+import type * as todoist_syncApi from "../todoist/syncApi.js";
+import type * as todoist_userAccess from "../todoist/userAccess.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -46,6 +51,9 @@ declare const fullApi: ApiFromModules<{
   cleanupTables: typeof cleanupTables;
   clerk: typeof clerk;
   conversations: typeof conversations;
+  "debug/cleanupDuplicateTokens": typeof debug_cleanupDuplicateTokens;
+  "debug/fixTokenIdentifier": typeof debug_fixTokenIdentifier;
+  "debug/todoistDebug": typeof debug_todoistDebug;
   "googleCalendar/auth": typeof googleCalendar_auth;
   "googleCalendar/client": typeof googleCalendar_client;
   "googleCalendar/events": typeof googleCalendar_events;
@@ -57,6 +65,8 @@ declare const fullApi: ApiFromModules<{
   "todoist/api": typeof todoist_api;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
+  "todoist/syncApi": typeof todoist_syncApi;
+  "todoist/userAccess": typeof todoist_userAccess;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

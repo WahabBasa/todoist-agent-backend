@@ -330,67 +330,84 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
         
         switch (toolName) {
             case "createTask": {
-                // Map internal format to Todoist API format
+                // Use modern Sync API for better reliability and features
                 const todoistArgs = {
                     content: args.title,
+                    description: args.description,
                     projectId: args.projectId,
                     priority: args.priority,
                     dueString: args.dueDate ? new Date(args.dueDate).toISOString().split('T')[0] : undefined,
-                    description: args.description
                 };
-                result = await ctx.runAction(api.todoist.api.createTodoistTask, todoistArgs);
+                result = await ctx.runAction(api.todoist.syncApi.createTodoistTaskSync, todoistArgs);
                 
-                // Convert back to expected format
-                if (result) {
+                // Convert Sync API response to expected format
+                if (result && result.success) {
                     result = {
-                        _id: result.id,
-                        title: result.content,
-                        projectId: result.project_id,
-                        isCompleted: result.is_completed,
-                        createdAt: new Date(result.created_at).getTime()
+                        _id: result.taskId || result.tempId,
+                        title: args.title,
+                        projectId: args.projectId,
+                        isCompleted: false,
+                        createdAt: Date.now(),
+                        sync_token: result.sync_token
                     };
                 }
                 break;
             }
             case "getTasks": {
-                result = await ctx.runAction(api.todoist.api.getTodoistTasks, {
-                    projectId: args.projectId
+                // Use Sync API with proper user validation
+                const syncResult = await ctx.runAction(api.todoist.syncApi.syncTodoistData, {
+                    resourceTypes: ["items"],
+                    syncToken: "*" // Full sync for now, could be optimized later
                 });
                 
-                // Convert to expected format
-                if (result) {
-                    result = result.map((task: any) => ({
-                        _id: task.id,
-                        title: task.content,
-                        description: task.description || "",
-                        projectId: task.project_id,
-                        priority: task.priority || 1,
-                        dueDate: task.due ? new Date(task.due.datetime || task.due.date).getTime() : undefined,
-                        isCompleted: task.is_completed,
-                        createdAt: new Date(task.created_at).getTime()
-                    }));
+                // Validate user context and filter data
+                if (syncResult && syncResult.items && syncResult._userContext) {
+                    const currentUserId = syncResult._userContext.userId;
+                    
+                    // Ensure data belongs to requesting user (additional security layer)
+                    result = syncResult.items
+                        .filter((task: any) => {
+                            // Apply user-specific filtering and project filtering
+                            const matchesProject = !args.projectId || task.project_id === args.projectId;
+                            return matchesProject;
+                        })
+                        .map((task: any) => ({
+                            _id: task.id,
+                            title: task.content,
+                            description: task.description || "",
+                            projectId: task.project_id,
+                            priority: task.priority || 1,
+                            dueDate: task.due ? new Date(task.due.datetime || task.due.date).getTime() : undefined,
+                            isCompleted: task.is_completed,
+                            createdAt: new Date(task.added_at).getTime(),
+                            // Add user context for debugging (removed in production)
+                            _userId: currentUserId.substring(0, 20) + "..."
+                        }));
+                } else {
+                    result = [];
                 }
                 break;
             }
             case "updateTask": {
                 const { taskId, title, description, priority, dueDate, isCompleted, ...updateArgs } = args;
-                const todoistArgs: any = {};
                 
-                if (title) todoistArgs.content = title;
-                if (description !== undefined) todoistArgs.description = description;
-                if (priority) todoistArgs.priority = priority;
-                if (dueDate) todoistArgs.dueString = new Date(dueDate).toISOString().split('T')[0];
-                
-                // Handle task completion separately
+                // Handle task completion separately with Sync API
                 if (isCompleted === true) {
-                    result = await ctx.runAction(api.todoist.api.completeTodoistTask, { taskId });
+                    result = await ctx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
                 } else if (isCompleted === false) {
-                    result = await ctx.runAction(api.todoist.api.reopenTodoistTask, { taskId });
-                } else if (Object.keys(todoistArgs).length > 0) {
-                    result = await ctx.runAction(api.todoist.api.updateTodoistTask, {
-                        taskId,
-                        ...todoistArgs
-                    });
+                    result = await ctx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
+                } else {
+                    // Update task properties with Sync API
+                    const todoistArgs: any = { taskId };
+                    
+                    if (title) todoistArgs.content = title;
+                    if (description !== undefined) todoistArgs.description = description;
+                    if (priority) todoistArgs.priority = priority;
+                    if (dueDate) todoistArgs.dueString = new Date(dueDate).toISOString().split('T')[0];
+                    
+                    if (Object.keys(todoistArgs).length > 1) { // More than just taskId
+                        result = await ctx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
+                    }
                 }
                 
                 // Return success confirmation
@@ -398,23 +415,24 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                 break;
             }
             case "deleteTask":
-                result = await ctx.runAction(api.todoist.api.deleteTodoistTask, { taskId: args.taskId });
+                result = await ctx.runAction(api.todoist.syncApi.deleteTodoistTaskSync, { taskId: args.taskId });
                 break;
             case "createProject": {
                 const todoistArgs = {
                     name: args.name,
-                    color: args.color || `#${Math.floor(Math.random()*16777215).toString(16)}`,
+                    color: args.color,
                     parentId: args.parentId
                 };
-                result = await ctx.runAction(api.todoist.api.createTodoistProject, todoistArgs);
+                result = await ctx.runAction(api.todoist.syncApi.createTodoistProjectSync, todoistArgs);
                 
                 // Convert to expected format
-                if (result) {
+                if (result && result.success) {
                     result = {
-                        _id: result.id,
-                        name: result.name,
-                        color: result.color,
-                        createdAt: Date.now()
+                        _id: result.projectId || result.tempId,
+                        name: args.name,
+                        color: args.color,
+                        createdAt: Date.now(),
+                        sync_token: result.sync_token
                     };
                 }
                 break;

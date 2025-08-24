@@ -2,6 +2,11 @@ import { mutation, query, action, internalQuery } from "../_generated/server";
 // Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
 import { api } from "../_generated/api";
+import { 
+  requireUserAuth, 
+  getUserContext, 
+  logUserAccess 
+} from "./userAccess";
 
 // Todoist OAuth configuration
 const TODOIST_OAUTH_BASE_URL = "https://todoist.com/oauth";
@@ -103,22 +108,68 @@ export const getTodoistToken = query({
   },
 });
 
-// Check if user has Todoist connected
+// Check if user has Todoist connected (with proper user validation)
 export const hasTodoistConnection = query({
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User not authenticated");
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
+    const userContext = await getUserContext(ctx);
+    if (!userContext) {
+      logUserAccess("anonymous", "TODOIST_CONNECTION_CHECK", "FAILED - Not authenticated");
       return false;
     }
 
+    const { userId } = userContext;
+    logUserAccess(userId, "TODOIST_CONNECTION_CHECK", "REQUESTED");
+
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
       .unique();
 
-    return token !== null;
+    const hasConnection = token !== null && token.accessToken.length > 0;
+    logUserAccess(userId, "TODOIST_CONNECTION_CHECK", hasConnection ? "SUCCESS" : "NO_CONNECTION");
+    
+    return hasConnection;
+  },
+});
+
+// Quick fix for tokenIdentifier mismatch
+export const fixTokenIdentifierMismatch = mutation({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    
+    const currentTokenIdentifier = identity.tokenIdentifier;
+    console.log("🔧 Fixing tokenIdentifier to:", currentTokenIdentifier);
+    
+    // Find the token with old format (base URL + |user)
+    const baseUrl = currentTokenIdentifier.split('|')[0];
+    const oldTokenIdentifier = baseUrl + "|user";
+    
+    const oldToken = await ctx.db
+      .query("todoistTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", oldTokenIdentifier))
+      .unique();
+    
+    if (!oldToken) {
+      return { success: false, message: "No token found with old format to update" };
+    }
+    
+    console.log("🔧 Updating token from:", oldTokenIdentifier, "to:", currentTokenIdentifier);
+    
+    // Update the token with current tokenIdentifier
+    await ctx.db.patch(oldToken._id, {
+      tokenIdentifier: currentTokenIdentifier,
+      updatedAt: Date.now()
+    });
+    
+    console.log("✅ Token updated successfully");
+    
+    return { 
+      success: true, 
+      message: "TokenIdentifier updated successfully",
+      oldTokenIdentifier,
+      newTokenIdentifier: currentTokenIdentifier
+    };
   },
 });
 
@@ -168,9 +219,10 @@ export const generateOAuthURL = query({
       };
     }
 
-    // Encode tokenIdentifier in state parameter for OAuth callback
+    // Encode tokenIdentifier in state parameter for OAuth callback (Base64 for URL safety)
+    const encodedTokenIdentifier = btoa(tokenIdentifier); // Base64 encode for URL safety
     const randomString = Math.random().toString(36).substring(2, 15);
-    const state = `${tokenIdentifier}_${randomString}`;
+    const state = `${encodedTokenIdentifier}_${randomString}`;
     const scope = "data:read_write,task:add";
     const redirectUri = getOAuthRedirectURI();
     
@@ -209,7 +261,14 @@ export const exchangeCodeForToken = action({
       throw new Error("Invalid state parameter format");
     }
     
-    const tokenIdentifier = stateParts[0]; // First part is the tokenIdentifier
+    // Decode the Base64 encoded tokenIdentifier
+    const encodedTokenIdentifier = stateParts[0]; // First part is the encoded tokenIdentifier
+    let tokenIdentifier: string;
+    try {
+      tokenIdentifier = atob(encodedTokenIdentifier); // Base64 decode
+    } catch (error) {
+      throw new Error("Invalid Base64 encoded tokenIdentifier in state parameter");
+    }
     
     // Validate tokenIdentifier format (Clerk tokenIdentifiers are URLs)
     if (!tokenIdentifier || typeof tokenIdentifier !== 'string' || tokenIdentifier.length < 10) {
@@ -262,5 +321,45 @@ export const getTodoistTokenForUser = internalQuery({
       .unique();
 
     return tokenRecord ? { accessToken: tokenRecord.accessToken } : null;
+  },
+});
+
+// Internal query for actions to check if user has active Todoist connection
+export const hasActiveTodoistConnectionQuery = internalQuery({
+  args: {
+    userId: v.string(),
+  },
+  handler: async (ctx, { userId }) => {
+    try {
+      const tokenRecord = await ctx.db
+        .query("todoistTokens")
+        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
+        .unique();
+      
+      return tokenRecord !== null && tokenRecord.accessToken.length > 0;
+    } catch (error) {
+      console.error("Error checking Todoist connection:", error);
+      return false;
+    }
+  },
+});
+
+// Internal query for actions to get user's Todoist token
+export const getUserTodoistTokenQuery = internalQuery({
+  args: {
+    userId: v.string(),
+  },
+  handler: async (ctx, { userId }) => {
+    try {
+      const tokenRecord = await ctx.db
+        .query("todoistTokens")
+        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
+        .unique();
+      
+      return tokenRecord?.accessToken || null;
+    } catch (error) {
+      console.error("Error retrieving Todoist token:", error);
+      return null;
+    }
   },
 });
