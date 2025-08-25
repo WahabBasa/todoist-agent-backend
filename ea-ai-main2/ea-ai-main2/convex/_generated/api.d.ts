@@ -30,7 +30,6 @@ import type * as googleCalendar_sessionManager from "../googleCalendar/sessionMa
 import type * as googleCalendar_utils from "../googleCalendar/utils.js";
 import type * as http from "../http.js";
 import type * as migrateTokens from "../migrateTokens.js";
-import type * as todoist_api from "../todoist/api.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
@@ -62,7 +61,6 @@ declare const fullApi: ApiFromModules<{
   "googleCalendar/utils": typeof googleCalendar_utils;
   http: typeof http;
   migrateTokens: typeof migrateTokens;
-  "todoist/api": typeof todoist_api;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
   "todoist/syncApi": typeof todoist_syncApi;

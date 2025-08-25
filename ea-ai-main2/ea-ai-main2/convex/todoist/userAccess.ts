@@ -168,9 +168,9 @@ export function createUserScopedFilter<T extends { userId?: string; tokenIdentif
 export function logUserAccess(
   userId: string,
   action: string,
-  resource: string,
-  success: boolean = true
+  status: string
 ): void {
-  const logLevel = success ? "info" : "warn";
-  console[logLevel](`[USER_ACCESS] ${userId.substring(0, 20)}... ${action} ${resource} - ${success ? "SUCCESS" : "FAILED"}`);
+  const isSuccess = status.includes("SUCCESS");
+  const logLevel = isSuccess ? "info" : "warn";
+  console[logLevel](`[USER_ACCESS] ${userId.substring(0, 20)}... ${action} - ${status}`);
 }

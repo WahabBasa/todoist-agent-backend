@@ -34,8 +34,8 @@ export const getTodoistProjectAndTaskMap = action({
     try {
       // Get projects and tasks in parallel
       const [projects, allTasks] = await Promise.all([
-        ctx.runAction(api.todoist.api.getTodoistProjects),
-        ctx.runAction(api.todoist.api.getTodoistTasks, {})
+        ctx.runAction(api.todoist.syncApi.getTodoistProjectsSync),
+        ctx.runAction(api.todoist.syncApi.getTodoistTasksSync, {})
       ]) as [any[], any[]];
 
       // Filter tasks based on completion status if needed
@@ -128,8 +128,8 @@ export const getTodoistProjectDetails = action({
     try {
       // Get project details and associated tasks
       const [projects, tasks] = await Promise.all([
-        ctx.runAction(api.todoist.api.getTodoistProjects),
-        ctx.runAction(api.todoist.api.getTodoistTasks, { projectId })
+        ctx.runAction(api.todoist.syncApi.getTodoistProjectsSync),
+        ctx.runAction(api.todoist.syncApi.getTodoistTasksSync, { projectId })
       ]) as [any[], any[]];
 
       const project = projects.find((p: any) => p.id === projectId);
@@ -200,7 +200,7 @@ export const getTodoistTaskDetails = action({
     try {
       // Get all tasks and find the specific one
       // Note: Todoist REST API doesn't have a single task endpoint, so we filter from all tasks
-      const allTasks = await ctx.runAction(api.todoist.api.getTodoistTasks, {}) as any[];
+      const allTasks = await ctx.runAction(api.todoist.syncApi.getTodoistTasksSync, {}) as any[];
       const task = allTasks.find((t: any) => t.id === taskId);
 
       if (!task) {
@@ -210,7 +210,7 @@ export const getTodoistTaskDetails = action({
       // Get project info if task belongs to a project
       let projectInfo = null;
       if (task.project_id) {
-        const projects = await ctx.runAction(api.todoist.api.getTodoistProjects) as any[];
+        const projects = await ctx.runAction(api.todoist.syncApi.getTodoistProjectsSync) as any[];
         const project = projects.find((p: any) => p.id === task.project_id);
         if (project) {
           projectInfo = {

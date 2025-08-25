@@ -490,7 +490,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
     },
     {
       appName: "Todoist",
-      description: "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
+      description: "Connect your Todoist account to manage your real tasks and projects through AI conversations. Important: Make sure you're logged into the correct Todoist account before connecting. If connecting multiple users, log out of Todoist first.",
       iconBgColor: "bg-red-500",
       iconText: "T",
       isConnected: hasTodoistConnection ?? false,

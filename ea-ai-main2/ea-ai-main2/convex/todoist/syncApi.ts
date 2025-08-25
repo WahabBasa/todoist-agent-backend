@@ -465,3 +465,79 @@ export const createProjectWithTasksSync = action({
     };
   },
 });
+
+// GET Functions for compatibility with deleted api.ts
+
+// Get all projects using Sync API
+export const getTodoistProjectsSync = action({
+  handler: async (ctx) => {
+    const result = await todoistSyncRequest(ctx, [], ["projects"]);
+    return result.projects || [];
+  },
+});
+
+// Get all tasks using Sync API  
+export const getTodoistTasksSync = action({
+  args: {
+    projectId: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId }) => {
+    const result = await todoistSyncRequest(ctx, [], ["items"]);
+    const tasks = result.items || [];
+    
+    // Filter by project if specified
+    if (projectId) {
+      return tasks.filter((task: any) => task.project_id === projectId);
+    }
+    
+    return tasks;
+  },
+});
+
+// Update project using Sync API
+export const updateTodoistProjectSync = action({
+  args: {
+    projectId: v.string(),
+    name: v.optional(v.string()),
+    color: v.optional(v.string()),
+  },
+  handler: async (ctx, { projectId, name, color }) => {
+    const args: any = { id: projectId };
+    if (name) args.name = name;
+    if (color) args.color = color;
+    
+    const commands = [{
+      type: "project_update",
+      uuid: generateUUID(),
+      args,
+    }];
+
+    const result = await todoistSyncRequest(ctx, commands);
+    return {
+      success: true,
+      projectId,
+      sync_token: result.sync_token,
+    };
+  },
+});
+
+// Delete project using Sync API
+export const deleteTodoistProjectSync = action({
+  args: {
+    projectId: v.string(),
+  },
+  handler: async (ctx, { projectId }) => {
+    const commands = [{
+      type: "project_delete",
+      uuid: generateUUID(),
+      args: { id: projectId },
+    }];
+
+    const result = await todoistSyncRequest(ctx, commands);
+    return {
+      success: true,
+      projectId,
+      sync_token: result.sync_token,
+    };
+  },
+});

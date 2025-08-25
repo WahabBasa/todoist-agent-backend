@@ -1,7 +1,7 @@
 import { mutation, query, action, internalQuery } from "../_generated/server";
 // Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 import { 
   requireUserAuth, 
   getUserContext, 
@@ -10,7 +10,6 @@ import {
 
 // Todoist OAuth configuration
 const TODOIST_OAUTH_BASE_URL = "https://todoist.com/oauth";
-const TODOIST_API_BASE_URL = "https://api.todoist.com/rest/v2";
 
 // Get the redirect URI for OAuth
 function getOAuthRedirectURI(): string {
@@ -25,12 +24,9 @@ export const storeTodoistToken = mutation({
     accessToken: v.string(),
   },
   handler: async (ctx, { accessToken }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User not authenticated");
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new Error("User not authenticated");
-    }
+    // Use big-brain authentication pattern
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    logUserAccess(tokenIdentifier, "STORE_TODOIST_TOKEN", "REQUESTED");
 
     // Check if user already has a Todoist token
     const existingToken = await ctx.db
@@ -44,15 +40,18 @@ export const storeTodoistToken = mutation({
         accessToken,
         updatedAt: Date.now(),
       });
+      logUserAccess(tokenIdentifier, "STORE_TODOIST_TOKEN", "SUCCESS - Updated");
       return existingToken._id;
     } else {
       // Create new token record
-      return await ctx.db.insert("todoistTokens", {
+      const tokenId = await ctx.db.insert("todoistTokens", {
         tokenIdentifier,
         accessToken,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      logUserAccess(tokenIdentifier, "STORE_TODOIST_TOKEN", "SUCCESS - Created");
+      return tokenId;
     }
   },
 });
@@ -92,18 +91,22 @@ export const storeTodoistTokenForUser = mutation({
 // Get Todoist access token for the current user
 export const getTodoistToken = query({
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User not authenticated");
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      return null;
+    // Use big-brain pattern for consistent authentication
+    const userContext = await getUserContext(ctx);
+    if (!userContext) {
+      return null; // Big-brain pattern: return null instead of throwing
     }
+
+    const { userId: tokenIdentifier } = userContext;
+    logUserAccess(tokenIdentifier, "GET_TODOIST_TOKEN", "REQUESTED");
 
     const token = await ctx.db
       .query("todoistTokens")
       .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
+    const hasToken = token !== null;
+    logUserAccess(tokenIdentifier, "GET_TODOIST_TOKEN", hasToken ? "SUCCESS" : "NO_TOKEN");
     return token ? { accessToken: token.accessToken } : null;
   },
 });
@@ -176,12 +179,9 @@ export const fixTokenIdentifierMismatch = mutation({
 // Remove Todoist connection
 export const removeTodoistConnection = mutation({
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User not authenticated");
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new Error("User not authenticated");
-    }
+    // Use big-brain authentication pattern
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "REQUESTED");
 
     const token = await ctx.db
       .query("todoistTokens")
@@ -190,6 +190,9 @@ export const removeTodoistConnection = mutation({
 
     if (token) {
       await ctx.db.delete(token._id);
+      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "SUCCESS");
+    } else {
+      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "NO_TOKEN_FOUND");
     }
   },
 });
@@ -207,17 +210,18 @@ export const generateOAuthURL = query({
       };
     }
 
-    // Get current authenticated user ID
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User not authenticated");
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
+    // Get current authenticated user ID using big-brain pattern
+    const userContext = await getUserContext(ctx);
+    if (!userContext) {
       return {
         url: null,
         state: null,
         error: "User must be authenticated to connect Todoist account."
       };
     }
+    
+    const { userId: tokenIdentifier } = userContext;
+    logUserAccess(tokenIdentifier, "GENERATE_OAUTH_URL", "REQUESTED");
 
     // Encode tokenIdentifier in state parameter for OAuth callback (Base64 for URL safety)
     const encodedTokenIdentifier = btoa(tokenIdentifier); // Base64 encode for URL safety
@@ -231,10 +235,15 @@ export const generateOAuthURL = query({
       scope,
       state,
       redirect_uri: redirectUri,
+      // Experimental: Try to force account selection (may not be supported by Todoist)
+      prompt: "select_account",
     });
 
+    const oauthUrl = `${TODOIST_OAUTH_BASE_URL}/authorize?${params.toString()}`;
+    logUserAccess(tokenIdentifier, "GENERATE_OAUTH_URL", "SUCCESS");
+    
     return {
-      url: `${TODOIST_OAUTH_BASE_URL}/authorize?${params.toString()}`,
+      url: oauthUrl,
       state,
       error: null
     };
@@ -299,6 +308,23 @@ export const exchangeCodeForToken = action({
       throw new Error("No access token received from Todoist");
     }
 
+    // Check if this access token is already being used by another user
+    const existingTokenUsers = await ctx.runQuery(internal.todoist.auth.findTokenUsers, {
+      accessToken: tokenData.access_token,
+    });
+
+    if (existingTokenUsers.length > 0) {
+      const otherUserIds = existingTokenUsers
+        .filter(user => user.tokenIdentifier !== tokenIdentifier)
+        .map(user => user.tokenIdentifier.split('|').pop()?.substring(0, 8) + '...')
+        .join(', ');
+      
+      if (otherUserIds) {
+        console.warn(`⚠️ Todoist account already connected to other users: ${otherUserIds}`);
+        throw new Error("This Todoist account is already connected to another user. Please log out of Todoist and connect with a different account, or disconnect the account from the other user first.");
+      }
+    }
+
     // Store the token using the tokenIdentifier from state parameter
     await ctx.runMutation(api.todoist.auth.storeTodoistTokenForUser, {
       tokenIdentifier: tokenIdentifier,
@@ -306,6 +332,20 @@ export const exchangeCodeForToken = action({
     });
 
     return { success: true };
+  },
+});
+
+// Internal query to find all users using a specific access token
+export const findTokenUsers = internalQuery({
+  args: {
+    accessToken: v.string(),
+  },
+  handler: async (ctx, { accessToken }) => {
+    const tokens = await ctx.db
+      .query("todoistTokens")
+      .collect();
+    
+    return tokens.filter(token => token.accessToken === accessToken);
   },
 });
 

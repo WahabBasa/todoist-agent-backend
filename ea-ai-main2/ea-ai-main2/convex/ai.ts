@@ -12,7 +12,8 @@ import {
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
-// Clerk authentication will be handled via ctx.auth.getUserIdentity()
+// Use big-brain authentication pattern
+import { requireUserAuthForAction } from "./todoist/userAccess";
 import { z } from "zod";
 import { ActionCtx } from "./_generated/server";
 
@@ -439,7 +440,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             }
             case "updateProject": {
                 const { projectId, ...updateArgs } = args;
-                result = await ctx.runAction(api.todoist.api.updateTodoistProject, {
+                result = await ctx.runAction(api.todoist.syncApi.updateTodoistProjectSync, {
                     projectId,
                     ...updateArgs
                 });
@@ -449,7 +450,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                 break;
             }
             case "deleteProject":
-                result = await ctx.runAction(api.todoist.api.deleteTodoistProject, { projectId: args.projectId });
+                result = await ctx.runAction(api.todoist.syncApi.deleteTodoistProjectSync, { projectId: args.projectId });
                 break;
             case "getProjectAndTaskMap":
                 result = await ctx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
@@ -583,9 +584,9 @@ export const chatWithAI = action({
     sessionId: v.optional(v.id("chatSessions")),
   },
   handler: async (ctx, { message, useHaiku = true, sessionId }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("User must be authenticated.");
-    const userId = identity.tokenIdentifier;
+    // Use big-brain authentication pattern for consistent user validation
+    const { userId } = await requireUserAuthForAction(ctx);
+    console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
 
     const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
     const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -602,12 +603,13 @@ export const chatWithAI = action({
     const history = (conversation?.messages as any[]) || [];
     history.push({ role: "user", content: message, timestamp: Date.now() });
 
-    console.log(`[Orchestrator] Starting interaction for user message: "${message}"`);
+    console.log(`[Orchestrator] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
 
     // Reset circuit breaker for new conversation to give tools a fresh start
     toolFailureTracker.clear();
 
     // Enhanced conversation state deduplication to prevent infinite loops
+    // Include userId in state tracking to prevent cross-user contamination
     const conversationStateTracker = new Set<string>();
     const toolCallTracker = new Map<string, number>(); // Track repeated tool calls
     
@@ -615,10 +617,11 @@ export const chatWithAI = action({
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
         
-        // Advanced state tracking: message content + history length + last 3 message types
+        // Advanced state tracking: user + message content + history length + last 3 message types
+        const userPrefix = userId.substring(0, 20);
         const recentMessageTypes = history.slice(-3).map(h => h.role).join('-');
         const lastToolCalls = history.slice(-1)[0]?.toolCalls?.map((tc: any) => tc.name).sort().join(',') || 'none';
-        const stateKey = `${message.slice(0, 50)}-${history.length}-${recentMessageTypes}-${lastToolCalls}`;
+        const stateKey = `${userPrefix}-${message.slice(0, 50)}-${history.length}-${recentMessageTypes}-${lastToolCalls}`;
         
         if (conversationStateTracker.has(stateKey)) {
             console.warn(`[CIRCUIT_BREAKER] Duplicate conversation state detected at iteration ${i + 1}`);

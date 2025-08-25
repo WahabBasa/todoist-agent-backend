@@ -5,10 +5,25 @@ import { v } from "convex/values";
 import { createClerkClient } from "@clerk/backend";
 import { google } from "googleapis";
 import { addMinutes } from "date-fns";
+import { requireUserAuthForAction } from "../todoist/userAccess";
 
-// Get auth user ID using Clerk's getAuth function
+// Get authenticated user's Clerk subject ID for Google OAuth operations
+// Note: Uses subject (Clerk user ID) not tokenIdentifier because Google tokens are stored in Clerk
 async function getAuthUserId(ctx: any): Promise<string | null> {
-  return ctx.auth.getUserIdentity()?.subject || null;
+  const identity = await ctx.auth.getUserIdentity();
+  return identity?.subject || null;
+}
+
+// Get user context with both tokenIdentifier and Clerk subject ID
+async function getFullUserContext(ctx: any): Promise<{ tokenIdentifier: string; clerkUserId: string } | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.tokenIdentifier || !identity?.subject) {
+    return null;
+  }
+  return {
+    tokenIdentifier: identity.tokenIdentifier,
+    clerkUserId: identity.subject
+  };
 }
 
 /**
@@ -156,12 +171,13 @@ export async function createCalendarEvent({
 export const hasGoogleCalendarConnection = action({
   handler: async (ctx) => {
     try {
-      const userId = await getAuthUserId(ctx);
-      if (!userId) {
+      // Use our improved authentication helper
+      const userContext = await getFullUserContext(ctx);
+      if (!userContext) {
         return false;
       }
 
-      const oAuthClient = await getOAuthClient(userId);
+      const oAuthClient = await getOAuthClient(userContext.clerkUserId);
       return oAuthClient != null;
     } catch (error) {
       console.error("Error checking Google Calendar connection:", error);
@@ -241,12 +257,12 @@ export const listEvents = action({
     q,
     timeZone 
   }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
+    const userContext = await getFullUserContext(ctx);
+    if (!userContext) {
       throw new GoogleCalendarError("User not authenticated");
     }
 
-    const oAuthClient = await getOAuthClient(userId);
+    const oAuthClient = await getOAuthClient(userContext.clerkUserId);
     if (!oAuthClient) {
       throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
     }
