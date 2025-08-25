@@ -1,4 +1,4 @@
-import { mutation, query, action, internalQuery } from "../_generated/server";
+import { mutation, query, action, internalQuery, internalMutation } from "../_generated/server";
 // Clerk authentication handled via ctx.auth.getUserIdentity()
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
@@ -176,23 +176,91 @@ export const fixTokenIdentifierMismatch = mutation({
   },
 });
 
-// Remove Todoist connection
-export const removeTodoistConnection = mutation({
+// Remove Todoist connection with proper token revocation
+export const removeTodoistConnection = action({
   handler: async (ctx) => {
-    // Use big-brain authentication pattern
-    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    // Get current authenticated user using action-compatible method
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.tokenIdentifier) {
+      throw new Error("Authentication required to disconnect Todoist account.");
+    }
+
+    const tokenIdentifier = identity.tokenIdentifier;
     logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "REQUESTED");
 
-    const token = await ctx.db
-      .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
-      .unique();
+    // Get user's current token via internal query
+    const tokenData = await ctx.runQuery(internal.todoist.auth.getTodoistTokenForUser, {
+      tokenIdentifier,
+    });
 
-    if (token) {
-      await ctx.db.delete(token._id);
-      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "SUCCESS");
-    } else {
+    if (!tokenData?.accessToken) {
       logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "NO_TOKEN_FOUND");
+      return { success: true, message: "No Todoist connection found to disconnect." };
+    }
+
+    const clientId = process.env.TODOIST_CLIENT_ID;
+    const clientSecret = process.env.TODOIST_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "FAILED - Missing credentials");
+      throw new Error("Todoist OAuth credentials not configured for token revocation.");
+    }
+
+    try {
+      // Step 1: Revoke the token with Todoist
+      logUserAccess(tokenIdentifier, "TODOIST_TOKEN_REVOCATION", "ATTEMPTING");
+      
+      const revokeParams = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        access_token: tokenData.accessToken,
+      });
+
+      const revokeResponse = await fetch(`https://api.todoist.com/api/v1/access_tokens?${revokeParams.toString()}`, {
+        method: 'DELETE',
+      });
+
+      if (!revokeResponse.ok) {
+        const errorText = await revokeResponse.text();
+        logUserAccess(tokenIdentifier, "TODOIST_TOKEN_REVOCATION", `FAILED - ${revokeResponse.status}: ${errorText}`);
+        
+        // Continue with local deletion even if revocation fails
+        // This prevents users from being stuck with unrevokable tokens
+        console.warn(`⚠️ Failed to revoke Todoist token (${revokeResponse.status}), proceeding with local deletion`);
+      } else {
+        logUserAccess(tokenIdentifier, "TODOIST_TOKEN_REVOCATION", "SUCCESS");
+      }
+
+      // Step 2: Remove token from our database
+      await ctx.runMutation(internal.todoist.auth.deleteTodoistTokenForUser, {
+        tokenIdentifier,
+      });
+
+      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "SUCCESS - Revoked and deleted");
+      
+      return { 
+        success: true, 
+        message: "Todoist account disconnected successfully. You can now connect a different account." 
+      };
+
+    } catch (error) {
+      logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", `FAILED - ${error}`);
+      console.error("Error during Todoist disconnection:", error);
+      
+      // In case of network/other errors, still attempt local deletion
+      try {
+        await ctx.runMutation(internal.todoist.auth.deleteTodoistTokenForUser, {
+          tokenIdentifier,
+        });
+        
+        return { 
+          success: true, 
+          message: "Todoist connection removed locally. Please manually revoke access in your Todoist settings if needed." 
+        };
+      } catch (deleteError) {
+        console.error("Failed to delete token locally:", deleteError);
+        throw new Error("Failed to disconnect Todoist account. Please try again.");
+      }
     }
   },
 });
@@ -400,6 +468,26 @@ export const getUserTodoistTokenQuery = internalQuery({
     } catch (error) {
       console.error("Error retrieving Todoist token:", error);
       return null;
+    }
+  },
+});
+
+// Internal mutation to delete Todoist token for a specific user
+export const deleteTodoistTokenForUser = internalMutation({
+  args: {
+    tokenIdentifier: v.string(),
+  },
+  handler: async (ctx, { tokenIdentifier }) => {
+    const tokenRecord = await ctx.db
+      .query("todoistTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .unique();
+
+    if (tokenRecord) {
+      await ctx.db.delete(tokenRecord._id);
+      return { success: true, deleted: true };
+    } else {
+      return { success: true, deleted: false, message: "No token found to delete" };
     }
   },
 });

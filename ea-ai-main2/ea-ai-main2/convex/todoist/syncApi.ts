@@ -95,7 +95,7 @@ async function todoistSyncRequest(
   }
 
   // Log successful API response
-  logUserAccess(userId, "TODOIST_SYNC_RESPONSE", `SUCCESS - ${resourceTypes.join(',')}`, true);
+  logUserAccess(userId, "TODOIST_SYNC_RESPONSE", `SUCCESS - ${resourceTypes.join(',')}`);
   
   // Add user context to response for validation downstream
   return {
