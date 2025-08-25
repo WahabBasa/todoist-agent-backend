@@ -108,9 +108,9 @@ async function todoistSyncRequest(
 export const syncTodoistData = action({
   args: {
     syncToken: v.optional(v.string()),
-    resourceTypes: v.optional(v.array(v.string())),
+    resourceTypes: v.optional(v.any()), // Simplified to avoid deep type inference
   },
-  handler: async (ctx, { syncToken = "*", resourceTypes = ["all"] }) => {
+  handler: async (ctx, { syncToken = "*", resourceTypes = ["all"] }): Promise<any> => {
     return await todoistSyncRequest(ctx, [], resourceTypes, syncToken);
   },
 });
@@ -122,7 +122,7 @@ export const createTodoistProjectSync = action({
     color: v.optional(v.string()),
     parentId: v.optional(v.string()),
   },
-  handler: async (ctx, { name, color, parentId }) => {
+  handler: async (ctx, { name, color, parentId }): Promise<any> => {
     const tempId = generateTempId("project");
     const uuid = generateUUID();
     
@@ -166,11 +166,11 @@ export const createTodoistTaskSync = action({
     projectId: v.optional(v.string()),
     sectionId: v.optional(v.string()),
     parentId: v.optional(v.string()),
-    priority: v.optional(v.number()), // 1-4, where 4 is highest priority
-    dueString: v.optional(v.string()), // Natural language like "tomorrow", "next week"
-    dueDate: v.optional(v.string()), // YYYY-MM-DD format
-    dueDatetime: v.optional(v.string()), // RFC3339 format
-    labels: v.optional(v.array(v.string())),
+    priority: v.optional(v.number()),
+    dueString: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
+    dueDatetime: v.optional(v.string()),
+    labels: v.optional(v.any()), // Simplified to avoid deep array validation
   },
   handler: async (ctx, { 
     content, 
@@ -183,7 +183,7 @@ export const createTodoistTaskSync = action({
     dueDate, 
     dueDatetime, 
     labels 
-  }) => {
+  }): Promise<any> => {
     const tempId = generateTempId("task");
     const uuid = generateUUID();
     
@@ -243,7 +243,7 @@ export const updateTodoistTaskSync = action({
     dueString: v.optional(v.string()),
     dueDate: v.optional(v.string()),
     dueDatetime: v.optional(v.string()),
-    labels: v.optional(v.array(v.string())),
+    labels: v.optional(v.any()), // Simplified
   },
   handler: async (ctx, { 
     taskId, 
@@ -293,7 +293,7 @@ export const completeTodoistTaskSync = action({
   args: {
     taskId: v.string(),
   },
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId }): Promise<any> => {
     const uuid = generateUUID();
     
     const command = {
@@ -318,7 +318,7 @@ export const reopenTodoistTaskSync = action({
   args: {
     taskId: v.string(),
   },
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId }): Promise<any> => {
     const uuid = generateUUID();
     
     const command = {
@@ -343,7 +343,7 @@ export const deleteTodoistTaskSync = action({
   args: {
     taskId: v.string(),
   },
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId }): Promise<any> => {
     const uuid = generateUUID();
     
     const command = {
@@ -369,7 +369,7 @@ export const createTodoistLabelSync = action({
     name: v.string(),
     color: v.optional(v.string()),
   },
-  handler: async (ctx, { name, color }) => {
+  handler: async (ctx, { name, color }): Promise<any> => {
     const tempId = generateTempId("label");
     const uuid = generateUUID();
     
@@ -409,15 +409,9 @@ export const createProjectWithTasksSync = action({
   args: {
     projectName: v.string(),
     projectColor: v.optional(v.string()),
-    tasks: v.array(v.object({
-      content: v.string(),
-      description: v.optional(v.string()),
-      priority: v.optional(v.number()),
-      dueString: v.optional(v.string()),
-      labels: v.optional(v.array(v.string())),
-    })),
+    tasks: v.any(), // Simplified to avoid deep nested object validation
   },
-  handler: async (ctx, { projectName, projectColor, tasks }) => {
+  handler: async (ctx, { projectName, projectColor, tasks }): Promise<any> => {
     const projectTempId = generateTempId("project");
     const commands: any[] = [];
     
@@ -433,7 +427,7 @@ export const createProjectWithTasksSync = action({
     });
     
     // Subsequent commands: Create tasks in the project using temp_id
-    tasks.forEach((task) => {
+    tasks.forEach((task: any) => {
       const taskTempId = generateTempId("task");
       const args: any = {
         content: task.content,
@@ -470,7 +464,7 @@ export const createProjectWithTasksSync = action({
 
 // Get all projects using Sync API
 export const getTodoistProjectsSync = action({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<any[]> => {
     const result = await todoistSyncRequest(ctx, [], ["projects"]);
     return result.projects || [];
   },
@@ -481,9 +475,9 @@ export const getTodoistTasksSync = action({
   args: {
     projectId: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId }) => {
+  handler: async (ctx, { projectId }): Promise<any[]> => {
     const result = await todoistSyncRequest(ctx, [], ["items"]);
-    const tasks = result.items || [];
+    const tasks: any[] = result.items || [];
     
     // Filter by project if specified
     if (projectId) {
@@ -501,7 +495,7 @@ export const updateTodoistProjectSync = action({
     name: v.optional(v.string()),
     color: v.optional(v.string()),
   },
-  handler: async (ctx, { projectId, name, color }) => {
+  handler: async (ctx, { projectId, name, color }): Promise<any> => {
     const args: any = { id: projectId };
     if (name) args.name = name;
     if (color) args.color = color;
@@ -526,7 +520,7 @@ export const deleteTodoistProjectSync = action({
   args: {
     projectId: v.string(),
   },
-  handler: async (ctx, { projectId }) => {
+  handler: async (ctx, { projectId }): Promise<any> => {
     const commands = [{
       type: "project_delete",
       uuid: generateUUID(),

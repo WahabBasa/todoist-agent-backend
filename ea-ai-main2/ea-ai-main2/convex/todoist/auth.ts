@@ -23,7 +23,7 @@ export const storeTodoistToken = mutation({
   args: {
     accessToken: v.string(),
   },
-  handler: async (ctx, { accessToken }) => {
+  handler: async (ctx, { accessToken }): Promise<any> => {
     // Use big-brain authentication pattern
     const { userId: tokenIdentifier } = await requireUserAuth(ctx);
     logUserAccess(tokenIdentifier, "STORE_TODOIST_TOKEN", "REQUESTED");
@@ -31,7 +31,7 @@ export const storeTodoistToken = mutation({
     // Check if user already has a Todoist token
     const existingToken = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (existingToken) {
@@ -62,11 +62,11 @@ export const storeTodoistTokenForUser = mutation({
     tokenIdentifier: v.string(),
     accessToken: v.string(),
   },
-  handler: async (ctx, { tokenIdentifier, accessToken }) => {
+  handler: async (ctx, { tokenIdentifier, accessToken }): Promise<any> => {
     // Check if user already has a Todoist token
     const existingToken = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (existingToken) {
@@ -90,7 +90,7 @@ export const storeTodoistTokenForUser = mutation({
 
 // Get Todoist access token for the current user
 export const getTodoistToken = query({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<string | null> => {
     // Use big-brain pattern for consistent authentication
     const userContext = await getUserContext(ctx);
     if (!userContext) {
@@ -102,7 +102,7 @@ export const getTodoistToken = query({
 
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     const hasToken = token !== null;
@@ -113,7 +113,7 @@ export const getTodoistToken = query({
 
 // Check if user has Todoist connected (with proper user validation)
 export const hasTodoistConnection = query({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<boolean> => {
     const userContext = await getUserContext(ctx);
     if (!userContext) {
       logUserAccess("anonymous", "TODOIST_CONNECTION_CHECK", "FAILED - Not authenticated");
@@ -125,7 +125,7 @@ export const hasTodoistConnection = query({
 
     const token = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", userId))
       .unique();
 
     const hasConnection = token !== null && token.accessToken.length > 0;
@@ -137,7 +137,7 @@ export const hasTodoistConnection = query({
 
 // Quick fix for tokenIdentifier mismatch
 export const fixTokenIdentifierMismatch = mutation({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
     
@@ -150,7 +150,7 @@ export const fixTokenIdentifierMismatch = mutation({
     
     const oldToken = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", oldTokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", oldTokenIdentifier))
       .unique();
     
     if (!oldToken) {
@@ -178,7 +178,7 @@ export const fixTokenIdentifierMismatch = mutation({
 
 // Remove Todoist connection with proper token revocation
 export const removeTodoistConnection = action({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<any> => {
     // Get current authenticated user using action-compatible method
     const identity = await ctx.auth.getUserIdentity();
     if (!identity?.tokenIdentifier) {
@@ -267,7 +267,7 @@ export const removeTodoistConnection = action({
 
 // Generate OAuth authorization URL
 export const generateOAuthURL = query({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<any> => {
     const clientId = process.env.TODOIST_CLIENT_ID;
     if (!clientId) {
       console.warn("Todoist Client ID not configured in Convex environment");
@@ -324,7 +324,7 @@ export const exchangeCodeForToken = action({
     code: v.string(),
     state: v.string(),
   },
-  handler: async (ctx, { code, state }) => {
+  handler: async (ctx, { code, state }): Promise<any> => {
     const clientId = process.env.TODOIST_CLIENT_ID;
     const clientSecret = process.env.TODOIST_CLIENT_SECRET;
     
@@ -383,8 +383,8 @@ export const exchangeCodeForToken = action({
 
     if (existingTokenUsers.length > 0) {
       const otherUserIds = existingTokenUsers
-        .filter(user => user.tokenIdentifier !== tokenIdentifier)
-        .map(user => user.tokenIdentifier.split('|').pop()?.substring(0, 8) + '...')
+        .filter((user: any) => user.tokenIdentifier !== tokenIdentifier)
+        .map((user: any) => user.tokenIdentifier.split('|').pop()?.substring(0, 8) + '...')
         .join(', ');
       
       if (otherUserIds) {
@@ -419,12 +419,12 @@ export const findTokenUsers = internalQuery({
   args: {
     accessToken: v.string(),
   },
-  handler: async (ctx, { accessToken }) => {
-    const tokens = await ctx.db
+  handler: async (ctx, { accessToken }): Promise<any[]> => {
+    const tokens: any[] = await ctx.db
       .query("todoistTokens")
       .collect();
     
-    return tokens.filter(token => token.accessToken === accessToken);
+    return tokens.filter((token: any) => token.accessToken === accessToken);
   },
 });
 
@@ -433,10 +433,10 @@ export const getTodoistTokenForUser = internalQuery({
   args: {
     tokenIdentifier: v.string(),
   },
-  handler: async (ctx, { tokenIdentifier }) => {
+  handler: async (ctx, { tokenIdentifier }): Promise<any> => {
     const tokenRecord = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     return tokenRecord ? { accessToken: tokenRecord.accessToken } : null;
@@ -448,11 +448,11 @@ export const hasActiveTodoistConnectionQuery = internalQuery({
   args: {
     userId: v.string(),
   },
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId }): Promise<boolean> => {
     try {
       const tokenRecord = await ctx.db
         .query("todoistTokens")
-        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
+        .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", userId))
         .unique();
       
       return tokenRecord !== null && tokenRecord.accessToken.length > 0;
@@ -468,11 +468,11 @@ export const getUserTodoistTokenQuery = internalQuery({
   args: {
     userId: v.string(),
   },
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId }): Promise<string | null> => {
     try {
       const tokenRecord = await ctx.db
         .query("todoistTokens")
-        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", userId))
+        .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", userId))
         .unique();
       
       return tokenRecord?.accessToken || null;
@@ -488,10 +488,10 @@ export const deleteTodoistTokenForUser = internalMutation({
   args: {
     tokenIdentifier: v.string(),
   },
-  handler: async (ctx, { tokenIdentifier }) => {
+  handler: async (ctx, { tokenIdentifier }): Promise<any> => {
     const tokenRecord = await ctx.db
       .query("todoistTokens")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", tokenIdentifier))
       .unique();
 
     if (tokenRecord) {

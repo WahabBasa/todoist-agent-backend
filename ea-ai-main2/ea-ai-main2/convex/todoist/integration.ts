@@ -9,15 +9,7 @@ export const getTodoistProjectAndTaskMap = action({
   args: {
     includeCompleted: v.optional(v.boolean()),
   },
-  handler: async (ctx, { includeCompleted = false }): Promise<{
-    projects: Array<{
-      _id: string;
-      name: string;
-      color?: string;
-      tasks: Array<{ _id: string; title: string; }>;
-    }>;
-    unassignedTasks: Array<{ _id: string; title: string; }>;
-  }> => {
+  handler: async (ctx, { includeCompleted = false }): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
     const userId = identity.tokenIdentifier;
@@ -93,25 +85,7 @@ export const getTodoistProjectDetails = action({
   args: {
     projectId: v.string(),
   },
-  handler: async (ctx, { projectId }): Promise<{
-    _id: string;
-    name: string;
-    color?: string;
-    description: string;
-    tasks: Array<{
-      _id: string;
-      title: string;
-      description: string;
-      priority: number;
-      dueDate?: number;
-      isCompleted: boolean;
-      labels: string[];
-      createdAt: number;
-      updatedAt?: number;
-    }>;
-    taskCount: number;
-    completedTaskCount: number;
-  }> => {
+  handler: async (ctx, { projectId }): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
     const userId = identity.tokenIdentifier;
@@ -170,20 +144,7 @@ export const getTodoistTaskDetails = action({
   args: {
     taskId: v.string(),
   },
-  handler: async (ctx, { taskId }): Promise<{
-    _id: string;
-    title: string;
-    description: string;
-    projectId?: string;
-    project?: { _id: string; name: string; color?: string; } | null;
-    priority: number;
-    dueDate?: number;
-    isCompleted: boolean;
-    labels: string[];
-    createdAt: number;
-    updatedAt?: number;
-    url?: string;
-  }> => {
+  handler: async (ctx, { taskId }): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("User not authenticated");
     const userId = identity.tokenIdentifier;

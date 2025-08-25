@@ -24,12 +24,32 @@ export const listEvents = action({
     q: v.optional(v.string()), // Text search query
     timeZone: v.optional(v.string()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.listEvents", { 
-      tokenIdentifier,
-      calendarId: args.calendarId || "primary"
-    });
+  handler: async (ctx: ActionCtx, args): Promise<{
+    events: Array<{
+      id: string;
+      summary: string;
+      description: string | null;
+      location: string | null;
+      start: any;
+      end: any;
+      attendees: any[];
+      creator: any;
+      organizer: any;
+      status: string;
+      htmlLink: string;
+      created: string;
+      updated: string;
+      recurringEventId: string | null;
+      recurrence: string[] | null;
+      etag: string;
+    }>;
+    totalCount: number;
+    nextPageToken: string | null;
+    summary: string;
+    timeZone: string;
+  }> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.listEvents", "INITIATED");
 
     try {
       const calendarId = args.calendarId || "primary";
@@ -76,13 +96,13 @@ export const listEvents = action({
         queryParams.timeZone = args.timeZone;
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
+      const response: any = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
         endpoint: `/calendars/${encodeURIComponent(calendarId)}/events`,
         queryParams,
       });
 
       // Process events to a consistent format
-      const events = response.items?.map((event: any) => ({
+      const events: any[] = response.items?.map((event: any) => ({
         id: event.id,
         summary: event.summary || "No Title",
         description: event.description || null,
@@ -158,12 +178,17 @@ export const createEventWithSmartDates = action({
       minutes: v.number(), // Minutes before event
     }))),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.createEventWithSmartDates", { 
-      tokenIdentifier,
-      summary: args.summary 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<{
+    id: string;
+    summary: string;
+    htmlLink: string;
+    start: any;
+    end: any;
+    created: string;
+    success: boolean;
+  }> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.createEventWithSmartDates", "INITIATED");
 
     try {
       const calendarId = args.calendarId || "primary";
@@ -220,7 +245,7 @@ export const createEventWithSmartDates = action({
         };
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.postToGoogleCalendar, {
+      const response: any = await ctx.runAction(api.googleCalendar.client.postToGoogleCalendar, {
         endpoint: `/calendars/${encodeURIComponent(calendarId)}/events`,
         body: eventData,
       });
@@ -266,12 +291,17 @@ export const updateEventWithSmartDates = action({
       minutes: v.number(),
     }))),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.updateEventWithSmartDates", { 
-      tokenIdentifier,
-      eventId: args.eventId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<{
+    id: string;
+    summary: string;
+    htmlLink: string;
+    start: any;
+    end: any;
+    updated: string;
+    success: boolean;
+  }> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.updateEventWithSmartDates", "INITIATED");
 
     try {
       const calendarId = args.calendarId || "primary";
@@ -360,7 +390,7 @@ export const updateEventWithSmartDates = action({
         throw new Error("No changes specified for event update");
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.patchToGoogleCalendar, {
+      const response: any = await ctx.runAction(api.googleCalendar.client.patchToGoogleCalendar, {
         endpoint: `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
         body: updateData,
       });
@@ -394,12 +424,13 @@ export const deleteCalendarEvent = action({
     eventId: v.string(),
     sendUpdates: v.optional(v.string()), // "all", "externalOnly", "none"
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.deleteCalendarEvent", { 
-      tokenIdentifier,
-      eventId: args.eventId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<{
+    success: boolean;
+    eventId: string;
+    deleted: boolean;
+  }> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.deleteCalendarEvent", "INITIATED");
 
     try {
       const calendarId = args.calendarId || "primary";
@@ -442,12 +473,9 @@ export const searchCalendarEvents = action({
     timeRange: v.optional(v.string()), // Natural language: "this week", "next month"
     maxResults: v.optional(v.number()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.searchCalendarEvents", { 
-      tokenIdentifier,
-      query: args.query 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.searchCalendarEvents", "INITIATED");
 
     try {
       // Parse time range if provided
@@ -488,9 +516,14 @@ export const getCurrentTime = action({
   args: {
     timeZone: v.optional(v.string()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.events.getCurrentTime", { tokenIdentifier });
+  handler: async (ctx: ActionCtx, args): Promise<{
+    timestamp: number;
+    iso: string;
+    timeZone: string;
+    formatted: string;
+  }> => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    logUserAccess(userId, "googleCalendar.events.getCurrentTime", "SUCCESS");
 
     const now = new Date();
     
