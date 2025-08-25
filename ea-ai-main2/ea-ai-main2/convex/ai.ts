@@ -510,11 +510,53 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                 });
                 break;
             case "listCalendarEvents":
-                result = await ctx.runAction(api.googleCalendar.events.listEventsWithSmartDates, {
+                // Parse time range to specific dates if provided
+                let timeMin = args.timeMin;
+                let timeMax = args.timeMax;
+                
+                if (args.timeRange && !timeMin && !timeMax) {
+                    // Handle natural language time ranges
+                    const now = new Date();
+                    const lowerRange = args.timeRange.toLowerCase().trim();
+                    
+                    if (lowerRange === "today") {
+                        const startOfDay = new Date(now);
+                        startOfDay.setHours(0, 0, 0, 0);
+                        const endOfDay = new Date(now);
+                        endOfDay.setHours(23, 59, 59, 999);
+                        timeMin = startOfDay.toISOString();
+                        timeMax = endOfDay.toISOString();
+                    } else if (lowerRange === "this week") {
+                        const startOfWeek = new Date(now);
+                        startOfWeek.setDate(now.getDate() - now.getDay());
+                        startOfWeek.setHours(0, 0, 0, 0);
+                        const endOfWeek = new Date(startOfWeek);
+                        endOfWeek.setDate(startOfWeek.getDate() + 6);
+                        endOfWeek.setHours(23, 59, 59, 999);
+                        timeMin = startOfWeek.toISOString();
+                        timeMax = endOfWeek.toISOString();
+                    } else if (lowerRange === "next week") {
+                        const startOfNextWeek = new Date(now);
+                        startOfNextWeek.setDate(now.getDate() - now.getDay() + 7);
+                        startOfNextWeek.setHours(0, 0, 0, 0);
+                        const endOfNextWeek = new Date(startOfNextWeek);
+                        endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+                        endOfNextWeek.setHours(23, 59, 59, 999);
+                        timeMin = startOfNextWeek.toISOString();
+                        timeMax = endOfNextWeek.toISOString();
+                    } else if (lowerRange === "this month") {
+                        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                        endOfMonth.setHours(23, 59, 59, 999);
+                        timeMin = startOfMonth.toISOString();
+                        timeMax = endOfMonth.toISOString();
+                    }
+                }
+                
+                result = await ctx.runAction(api.googleCalendar.events.listEvents, {
                     calendarId: args.calendarId,
-                    timeRange: args.timeRange,
-                    timeMin: args.timeMin,
-                    timeMax: args.timeMax,
+                    timeMin,
+                    timeMax,
                     maxResults: args.maxResults,
                     timeZone: args.timeZone,
                 });

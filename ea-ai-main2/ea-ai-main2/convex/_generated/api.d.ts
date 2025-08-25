@@ -23,11 +23,9 @@ import type * as debug_cleanupDuplicateTokens from "../debug/cleanupDuplicateTok
 import type * as debug_fixTokenIdentifier from "../debug/fixTokenIdentifier.js";
 import type * as debug_todoistDebug from "../debug/todoistDebug.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
+import type * as googleCalendar_calendars from "../googleCalendar/calendars.js";
 import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
-import type * as googleCalendar_oauthFlow from "../googleCalendar/oauthFlow.js";
-import type * as googleCalendar_sessionManager from "../googleCalendar/sessionManager.js";
-import type * as googleCalendar_utils from "../googleCalendar/utils.js";
 import type * as http from "../http.js";
 import type * as migrateTokens from "../migrateTokens.js";
 import type * as todoist_auth from "../todoist/auth.js";
@@ -54,11 +52,9 @@ declare const fullApi: ApiFromModules<{
   "debug/fixTokenIdentifier": typeof debug_fixTokenIdentifier;
   "debug/todoistDebug": typeof debug_todoistDebug;
   "googleCalendar/auth": typeof googleCalendar_auth;
+  "googleCalendar/calendars": typeof googleCalendar_calendars;
   "googleCalendar/client": typeof googleCalendar_client;
   "googleCalendar/events": typeof googleCalendar_events;
-  "googleCalendar/oauthFlow": typeof googleCalendar_oauthFlow;
-  "googleCalendar/sessionManager": typeof googleCalendar_sessionManager;
-  "googleCalendar/utils": typeof googleCalendar_utils;
   http: typeof http;
   migrateTokens: typeof migrateTokens;
   "todoist/auth": typeof todoist_auth;

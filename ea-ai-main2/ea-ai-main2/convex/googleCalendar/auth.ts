@@ -1,133 +1,320 @@
-"use node";
-
-import { action } from "../_generated/server";
 import { v } from "convex/values";
-import { createClerkClient } from "@clerk/backend";
+import { query, mutation, action } from "../_generated/server";
+import { api } from "../_generated/api";
+import { requireUserAuth } from "../todoist/userAccess";
+import { logUserAccess } from "../todoist/userAccess";
+import { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 
-// Get auth user ID using Clerk's getAuth function
-async function getAuthUserId(ctx: any): Promise<string | null> {
-  return ctx.auth.getUserIdentity()?.subject || null;
-}
+// Google Calendar OAuth configuration
+const GOOGLE_OAUTH_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+
+// Required OAuth scopes for Google Calendar integration
+const REQUIRED_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.readonly"
+];
+
+// =================================================================
+// QUERY FUNCTIONS: Check connection status
+// =================================================================
 
 /**
- * Legacy function: Sync Google Calendar tokens
- * With Clerk, tokens are managed automatically, so this provides guidance
+ * Check if the current user has a Google Calendar connection
+ * Returns true if user has valid tokens, false otherwise
  */
-export const syncGoogleCalendarTokens = action({
-  handler: async (ctx) => {
+export const hasGoogleCalendarConnection = query({
+  args: {},
+  handler: async (ctx: QueryCtx): Promise<boolean> => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.hasGoogleCalendarConnection", { tokenIdentifier });
+
+    const token = await ctx.db
+      .query("googleCalendarTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+
+    // Return true if we have a token record (even if expired - refresh logic handles this)
+    return token !== null;
+  },
+});
+
+/**
+ * Get Google Calendar connection details for the current user
+ */
+export const getGoogleCalendarConnection = query({
+  args: {},
+  handler: async (ctx: QueryCtx) => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.getGoogleCalendarConnection", { tokenIdentifier });
+
+    const token = await ctx.db
+      .query("googleCalendarTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+
+    if (!token) {
+      return null;
+    }
+
+    return {
+      hasConnection: true,
+      scope: token.scope,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      isExpired: Date.now() > token.expiresAt,
+    };
+  },
+});
+
+// =================================================================
+// MUTATION FUNCTIONS: Token storage and removal
+// =================================================================
+
+/**
+ * Store Google Calendar OAuth tokens after successful authorization
+ * This is called after the OAuth flow completes
+ */
+export const storeGoogleCalendarTokens = mutation({
+  args: {
+    accessToken: v.string(),
+    refreshToken: v.optional(v.string()),
+    expiresIn: v.number(), // Seconds until expiration
+    scope: v.string(),
+  },
+  handler: async (ctx: MutationCtx, args) => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.storeGoogleCalendarTokens", { tokenIdentifier });
+
+    const now = Date.now();
+    const expiresAt = now + (args.expiresIn * 1000); // Convert seconds to milliseconds
+
+    // Check if user already has tokens - update or insert
+    const existingToken = await ctx.db
+      .query("googleCalendarTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+
+    if (existingToken) {
+      // Update existing tokens
+      await ctx.db.patch(existingToken._id, {
+        accessToken: args.accessToken,
+        refreshToken: args.refreshToken || existingToken.refreshToken,
+        expiresAt,
+        scope: args.scope,
+        updatedAt: now,
+      });
+    } else {
+      // Insert new token record
+      await ctx.db.insert("googleCalendarTokens", {
+        tokenIdentifier,
+        accessToken: args.accessToken,
+        refreshToken: args.refreshToken,
+        expiresAt,
+        scope: args.scope,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Remove Google Calendar connection for the current user
+ * Revokes tokens and deletes from database
+ */
+export const removeGoogleCalendarConnection = action({
+  args: {},
+  handler: async (ctx: ActionCtx) => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.removeGoogleCalendarConnection", { tokenIdentifier });
+
+    // Get the user's token
+    const token = await ctx.runQuery(api.googleCalendar.auth.getGoogleCalendarTokenRecord, {});
+    
+    if (!token) {
+      return { success: false, error: "No Google Calendar connection found" };
+    }
+
     try {
-      const userId = await getAuthUserId(ctx);
-      if (!userId) {
-        throw new Error("User not authenticated");
-      }
+      // Revoke the token with Google
+      if (token.accessToken) {
+        const revokeParams = new URLSearchParams();
+        revokeParams.set("token", token.accessToken);
 
-      // Check if user has Google OAuth connection
-      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-      const token = await clerkClient.users.getUserOauthAccessToken(
-        userId,
-        "oauth_google"
-      );
-
-      if (token.data.length === 0 || token.data[0].token == null) {
-        return {
-          success: false,
-          message: "No Google OAuth connection found. Please connect your Google account in Settings.",
-          action_required: "oauth_connection_needed"
-        };
-      }
-
-      // Test the connection
-      try {
-        const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary", {
+        const revokeResponse = await fetch(GOOGLE_REVOKE_URL, {
+          method: "POST",
           headers: {
-            Authorization: `Bearer ${token.data[0].token}`,
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           },
+          body: revokeParams.toString(),
         });
 
-        if (response.ok) {
-          return {
-            success: true,
-            message: "✅ Google Calendar connection is working properly. No sync needed with Clerk.",
-            connection_status: "active"
-          };
-        } else if (response.status === 401) {
-          return {
-            success: false,
-            message: "⚠️ Google Calendar token has expired. Please reconnect your Google account in Settings.",
-            action_required: "reconnection_needed"
-          };
-        } else {
-          return {
-            success: false,
-            message: `❌ Google Calendar API error: ${response.statusText}. Try reconnecting your account.`,
-            action_required: "reconnection_recommended"
-          };
-        }
-      } catch (apiError) {
-        return {
-          success: false,
-          message: "❌ Unable to test Google Calendar connection. Check your internet connection.",
-          action_required: "retry_later"
-        };
+        console.log("Google token revocation response:", revokeResponse.status);
       }
     } catch (error) {
-      console.error("Error syncing Google Calendar tokens:", error);
-      throw new Error(`Sync failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Failed to revoke Google Calendar token:", error);
+      // Continue with local deletion even if revocation fails
+    }
+
+    // Delete the token from our database
+    await ctx.runMutation(api.googleCalendar.auth.deleteGoogleCalendarTokenForUser, {
+      tokenIdentifier,
+    });
+
+    return { success: true };
+  },
+});
+
+// =================================================================
+// INTERNAL HELPER FUNCTIONS
+// =================================================================
+
+/**
+ * Internal query to get token record for the current user
+ * Used by other modules to access tokens
+ */
+export const getGoogleCalendarTokenRecord = query({
+  args: {},
+  handler: async (ctx: QueryCtx) => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+
+    const token = await ctx.db
+      .query("googleCalendarTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+
+    return token;
+  },
+});
+
+/**
+ * Internal mutation to delete token for a specific user
+ * Used by removeGoogleCalendarConnection action
+ */
+export const deleteGoogleCalendarTokenForUser = mutation({
+  args: {
+    tokenIdentifier: v.string(),
+  },
+  handler: async (ctx: MutationCtx, args) => {
+    const token = await ctx.db
+      .query("googleCalendarTokens")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", args.tokenIdentifier))
+      .first();
+
+    if (token) {
+      await ctx.db.delete(token._id);
+      return { success: true };
+    }
+
+    return { success: false, error: "Token not found" };
+  },
+});
+
+// =================================================================
+// TOKEN MANAGEMENT FUNCTIONS
+// =================================================================
+
+/**
+ * Get a valid access token for the current user
+ * Automatically refreshes if expired
+ */
+export const getValidGoogleCalendarToken = action({
+  args: {},
+  handler: async (ctx: ActionCtx): Promise<string | null> => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.getValidGoogleCalendarToken", { tokenIdentifier });
+
+    const tokenRecord = await ctx.runQuery(api.googleCalendar.auth.getGoogleCalendarTokenRecord, {});
+    
+    if (!tokenRecord) {
+      return null;
+    }
+
+    const now = Date.now();
+    
+    // If token is still valid, return it
+    if (now < tokenRecord.expiresAt) {
+      return tokenRecord.accessToken;
+    }
+
+    // Token is expired, attempt to refresh
+    if (!tokenRecord.refreshToken) {
+      console.error("No refresh token available for expired access token");
+      return null;
+    }
+
+    try {
+      const refreshResponse = await fetch(GOOGLE_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          client_id: process.env.GOOGLE_CLIENT_ID || "",
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+          refresh_token: tokenRecord.refreshToken,
+          grant_type: "refresh_token",
+        }).toString(),
+      });
+
+      if (!refreshResponse.ok) {
+        console.error("Failed to refresh Google Calendar token:", refreshResponse.status);
+        return null;
+      }
+
+      const refreshData = await refreshResponse.json();
+      
+      // Update the stored tokens
+      await ctx.runMutation(api.googleCalendar.auth.storeGoogleCalendarTokens, {
+        accessToken: refreshData.access_token,
+        refreshToken: refreshData.refresh_token || tokenRecord.refreshToken, // Keep existing if not provided
+        expiresIn: refreshData.expires_in || 3600, // Default to 1 hour
+        scope: tokenRecord.scope,
+      });
+
+      return refreshData.access_token;
+    } catch (error) {
+      console.error("Error refreshing Google Calendar token:", error);
+      return null;
     }
   },
 });
 
 /**
- * Legacy function: Debug Google auth account
- * Provides debugging information for troubleshooting
+ * Generate OAuth authorization URL for Google Calendar
+ * This is used to initiate the OAuth flow
  */
-export const debugGoogleAuthAccount = action({
-  handler: async (ctx) => {
-    try {
-      const userId = await getAuthUserId(ctx);
-      if (!userId) {
-        return {
-          error: "User not authenticated",
-          user_id: null,
-          debug_info: null
-        };
-      }
+export const generateGoogleCalendarOAuthURL = query({
+  args: {
+    redirectUri: v.string(),
+    state: v.optional(v.string()),
+  },
+  handler: async (ctx: QueryCtx, args) => {
+    const tokenIdentifier = await requireUserAuth(ctx);
+    await logUserAccess(ctx, "googleCalendar.auth.generateGoogleCalendarOAuthURL", { tokenIdentifier });
 
-      // Get Google OAuth token from Clerk
-      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-      const token = await clerkClient.users.getUserOauthAccessToken(
-        userId,
-        "oauth_google"
-      );
-
-      return {
-        user_id: userId,
-        oauth_provider: "oauth_google",
-        token_count: token.data.length,
-        has_tokens: token.data.length > 0 && token.data[0].token != null,
-        debug_info: {
-          clerk_user_id: userId,
-          oauth_tokens_available: token.data.length,
-          first_token_exists: token.data.length > 0 ? token.data[0].token != null : false,
-          auth_method: "Clerk OAuth",
-          legacy_token_system: false
-        },
-        recommendations: token.data.length === 0 ? [
-          "Connect your Google account in Settings",
-          "Make sure to grant calendar permissions"
-        ] : [
-          "Google OAuth connection found via Clerk",
-          "Tokens are managed automatically"
-        ]
-      };
-    } catch (error) {
-      console.error("Error debugging Google auth account:", error);
-      return {
-        error: error instanceof Error ? error.message : String(error),
-        user_id: null,
-        debug_info: null
-      };
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      return { error: "Google OAuth is not configured" };
     }
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: args.redirectUri,
+      response_type: "code",
+      scope: REQUIRED_SCOPES.join(" "),
+      access_type: "offline", // Required for refresh tokens
+      prompt: "consent", // Force consent screen to ensure refresh token
+      state: args.state || tokenIdentifier, // Use tokenIdentifier as state for security
+    });
+
+    return {
+      url: `${GOOGLE_OAUTH_BASE_URL}?${params.toString()}`,
+      state: args.state || tokenIdentifier,
+    };
   },
 });

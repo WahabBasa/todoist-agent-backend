@@ -390,46 +390,18 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Check if Google Calendar is connected (using new session manager)
-  const checkGoogleCalendarConnection = useAction(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
-  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
-  const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
-  // TODO: Update Google Calendar initialization to work with Clerk
-  // const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
-  const migrateLegacyTokens = useAction(api.googleCalendar.oauthFlow.migrateLegacyTokens);
-  const forceOAuthReconnection = useAction(api.googleCalendar.oauthFlow.forceOAuthReconnection);
-  
-  // Legacy functions for backward compatibility (during transition)
-  const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
-  const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
+  // Check if Google Calendar is connected (using new authentication system)
+  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  const getGoogleCalendarConnection = useQuery(api.googleCalendar.auth.getGoogleCalendarConnection);
+  const testGoogleCalendarConnection = useAction(api.googleCalendar.client.testGoogleCalendarConnection);
 
-  // Load Google Calendar connection status on component mount
-  const loadConnectionStatus = async () => {
-    try {
-      console.log("ConnectedAppsSettings: Loading Google Calendar connection status...");
-      setLoadError(null);
-      const isConnected = await checkGoogleCalendarConnection();
-      console.log("ConnectedAppsSettings: Google Calendar connection status:", isConnected);
-      setHasGoogleCalendarConnection(isConnected);
-    } catch (error) {
-      console.error("ConnectedAppsSettings: Failed to check Google Calendar connection:", error);
-      console.error("ConnectedAppsSettings: Error details:", {
-        name: error?.name,
-        message: error?.message,
-        stack: error?.stack
-      });
-      setHasGoogleCalendarConnection(false);
-      setLoadError(`Failed to load connection status: ${error?.message || 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // The Google Calendar connection status is now handled by useQuery automatically
+  // No need for manual loading since useQuery will handle this
 
   useEffect(() => {
-    console.log("ConnectedAppsSettings: Component mounted, loading connection status...");
-    loadConnectionStatus().catch(error => {
-      console.error("ConnectedAppsSettings: Failed to load initial connection status:", error);
-    });
+    console.log("ConnectedAppsSettings: Component mounted");
+    setIsLoading(false); // Set loading to false since useQuery handles the loading state
   }, []);
 
   // Refresh connection status when user changes (e.g., after OAuth completion)
@@ -670,11 +642,11 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         if (shouldDisconnect) {
           try {
             setIsConnecting("Google Calendar");
-            await forceOAuthReconnection();
+            await removeGoogleCalendarConnection();
             alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
           } catch (error) {
             console.error("Failed to disconnect Google Calendar:", error);
-            alert(`❌ Failed to disconnect: ${error}`);
+            alert(`❌ Failed to disconnect: ${error?.message || error}`);
           } finally {
             setIsConnecting(null);
           }
@@ -800,41 +772,54 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                 onConnect={() => handleConnect(app.appName)}
                 onDebug={async () => {
                   try {
-                    // Get detailed connection status using new session manager
-                    const status = await getOAuthConnectionStatus();
-                    console.log("Google Calendar connection status:", status);
+                    // Get detailed connection status and test connection
+                    const connectionDetails = getGoogleCalendarConnection;
+                    const testResult = await testGoogleCalendarConnection();
+                    
+                    console.log("Google Calendar connection details:", connectionDetails);
+                    console.log("Google Calendar test result:", testResult);
                     
                     const debugInfo = {
-                      "Connection Status": status.isConnected ? "✅ Connected" : "❌ Not Connected",
-                      "Has Tokens": status.hasTokens ? "✅ Yes" : "❌ No",
-                      "Token Info": status.tokenInfo ? {
-                        "Access Token": status.tokenInfo.hasAccessToken ? "✅ Present" : "❌ Missing",
-                        "Refresh Token": status.tokenInfo.hasRefreshToken ? "✅ Present" : "❌ Missing",
-                        "Token Expired": status.tokenInfo.tokenExpired ? "⚠️ Yes" : "✅ No",
-                        "Expires In": status.tokenInfo.expiresIn ? `${Math.floor(status.tokenInfo.expiresIn / 3600)} hours` : "Unknown",
-                        "Token Type": status.tokenInfo.tokenType || "Unknown",
-                        "Scope": status.tokenInfo.scope || "Unknown"
-                      } : "No token data",
-                      "Recommendations": status.recommendations
+                      "Connection Status": hasGoogleCalendarConnection ? "✅ Connected" : "❌ Not Connected",
+                      "Connection Details": connectionDetails ? {
+                        "Scope": connectionDetails.scope || "Unknown",
+                        "Created": connectionDetails.createdAt ? new Date(connectionDetails.createdAt).toLocaleString() : "Unknown",
+                        "Expires": connectionDetails.expiresAt ? new Date(connectionDetails.expiresAt).toLocaleString() : "Unknown",
+                        "Is Expired": connectionDetails.isExpired ? "⚠️ Yes" : "✅ No"
+                      } : "No connection data",
+                      "API Test": testResult.success ? {
+                        "Status": "✅ Working",
+                        "Calendars Count": testResult.calendarsCount,
+                        "Primary Calendar": testResult.primaryCalendar,
+                        "Test Time": new Date(testResult.testTimestamp).toLocaleString()
+                      } : {
+                        "Status": "❌ Failed",
+                        "Error": testResult.error,
+                        "Test Time": new Date(testResult.testTimestamp).toLocaleString()
+                      }
                     };
                     
                     alert(`Google Calendar Debug Info:\n\n${JSON.stringify(debugInfo, null, 2)}`);
                   } catch (error) {
                     console.error("Debug failed:", error);
-                    alert(`Debug failed: ${error}`);
+                    alert(`Debug failed: ${error?.message || error}`);
                   }
                 }}
                 onSync={async () => {
                   try {
-                    // With Clerk OAuth, the connection should be automatic
-                    // Refresh the connection status to see current state
-                    console.log("Refreshing Google Calendar connection status...");
-                    await loadConnectionStatus();
-                    alert(`✅ Connection status refreshed!\n\nIf you just connected your Google account, the connection should now be active.`);
+                    // Test the current connection to verify it's working
+                    console.log("Testing Google Calendar connection...");
+                    const testResult = await testGoogleCalendarConnection();
+                    
+                    if (testResult.success) {
+                      alert(`✅ Google Calendar connection is working!\n\nFound ${testResult.calendarsCount} calendars.\nPrimary calendar: ${testResult.primaryCalendar}`);
+                    } else {
+                      alert(`❌ Google Calendar connection test failed:\n\n${testResult.error}\n\nPlease reconnect your Google account.`);
+                    }
                     
                   } catch (error) {
-                    console.error("Refresh failed:", error);
-                    alert(`❌ Refresh failed: ${error}`);
+                    console.error("Test failed:", error);
+                    alert(`❌ Connection test failed: ${error?.message || error}`);
                   }
                 }}
               />

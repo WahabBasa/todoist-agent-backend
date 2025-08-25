@@ -1,528 +1,261 @@
-"use node";
-
 import { action } from "../_generated/server";
-import { v } from "convex/values";
-import { createClerkClient } from "@clerk/backend";
-import { google } from "googleapis";
-import { addMinutes } from "date-fns";
-import { requireUserAuthForAction } from "../todoist/userAccess";
+import { api } from "../_generated/api";
+import { requireUserAuth, requireUserAuthForAction } from "../todoist/userAccess";
+import { logUserAccess } from "../todoist/userAccess";
+import { ActionCtx } from "../_generated/server";
 
-// Get authenticated user's Clerk subject ID for Google OAuth operations
-// Note: Uses subject (Clerk user ID) not tokenIdentifier because Google tokens are stored in Clerk
-async function getAuthUserId(ctx: any): Promise<string | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject || null;
-}
+// Google Calendar API configuration
+const GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
-// Get user context with both tokenIdentifier and Clerk subject ID
-async function getFullUserContext(ctx: any): Promise<{ tokenIdentifier: string; clerkUserId: string } | null> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.tokenIdentifier || !identity?.subject) {
-    return null;
-  }
-  return {
-    tokenIdentifier: identity.tokenIdentifier,
-    clerkUserId: identity.subject
-  };
-}
+// =================================================================
+// HTTP CLIENT: Authenticated API client with automatic token refresh
+// =================================================================
 
 /**
- * Google Calendar API Error handling
- * Adapted from MCP BaseToolHandler error patterns
+ * Make an authenticated HTTP request to the Google Calendar API
+ * Automatically handles token refresh on 401 errors
  */
-class GoogleCalendarError extends Error {
-  constructor(message: string, public status?: number) {
-    super(message);
-    this.name = 'GoogleCalendarError';
-  }
-}
+export const makeGoogleCalendarRequest = action({
+  args: {},
+  handler: async (
+    ctx: ActionCtx,
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    endpoint: string,
+    body?: any,
+    queryParams?: Record<string, string>
+  ): Promise<any> => {
+    const tokenIdentifier = await requireUserAuthForAction(ctx);
+    await logUserAccess(ctx, "googleCalendar.client.makeGoogleCalendarRequest", { 
+      tokenIdentifier,
+      method,
+      endpoint 
+    });
 
-/**
- * Get OAuth client for Google Calendar API using Calendly's exact pattern
- */
-async function getOAuthClient(clerkUserId: string) {
-  const token = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-    .users.getUserOauthAccessToken(clerkUserId, "oauth_google");
+    // Get valid access token (automatically refreshes if needed)
+    const accessToken = await ctx.runAction(api.googleCalendar.auth.getValidGoogleCalendarToken, {});
+    
+    if (!accessToken) {
+      throw new Error("No valid Google Calendar access token available. Please reconnect your Google account.");
+    }
 
-  if (token.data.length === 0 || token.data[0].token == null) {
-    return null;
-  }
+    // Build the full URL
+    let url = `${GOOGLE_CALENDAR_API_BASE}${endpoint}`;
+    if (queryParams && Object.keys(queryParams).length > 0) {
+      const params = new URLSearchParams(queryParams);
+      url += `?${params.toString()}`;
+    }
 
-  const client = new google.auth.OAuth2(
-    process.env.GOOGLE_OAUTH_CLIENT_ID,
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-    process.env.GOOGLE_OAUTH_REDIRECT_URL
-  );
-
-  client.setCredentials({ access_token: token.data[0].token });
-  return client;
-}
-
-/**
- * Get calendar event times using Calendly's exact pattern
- */
-export async function getCalendarEventTimes(
-  clerkUserId: string,
-  { start, end }: { start: Date; end: Date }
-) {
-  const oAuthClient = await getOAuthClient(clerkUserId);
-
-  if (!oAuthClient) {
-    throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-  }
-
-  const events = await google.calendar("v3").events.list({
-    calendarId: "primary",
-    eventTypes: ["default"],
-    singleEvents: true,
-    timeMin: start.toISOString(),
-    timeMax: end.toISOString(),
-    maxResults: 2500,
-    auth: oAuthClient,
-  });
-
-  return (
-    events.data.items
-      ?.map(event => {
-        if (event.start?.date != null && event.end?.date != null) {
-          return {
-            start: new Date(event.start.date + "T00:00:00"),
-            end: new Date(event.end.date + "T23:59:59"),
-          };
-        }
-
-        if (event.start?.dateTime != null && event.end?.dateTime != null) {
-          return {
-            start: new Date(event.start.dateTime),
-            end: new Date(event.end.dateTime),
-          };
-        }
-      })
-      .filter(date => date != null) || []
-  );
-}
-
-/**
- * Create calendar event using Calendly's pattern
- */
-export async function createCalendarEvent({
-  clerkUserId,
-  guestName,
-  guestEmail,
-  startTime,
-  guestNotes,
-  durationInMinutes,
-  eventName,
-}: {
-  clerkUserId: string;
-  guestName?: string;
-  guestEmail?: string;
-  startTime: Date;
-  guestNotes?: string | null;
-  durationInMinutes: number;
-  eventName: string;
-}) {
-  const oAuthClient = await getOAuthClient(clerkUserId);
-  
-  if (!oAuthClient) {
-    throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-  }
-
-  const calendarUser = await createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-    .users.getUser(clerkUserId);
-  
-  if (calendarUser.primaryEmailAddress == null) {
-    throw new Error("Clerk user has no email");
-  }
-
-  const attendees = [];
-  if (guestEmail && guestName) {
-    attendees.push({ email: guestEmail, displayName: guestName });
-  }
-  attendees.push({
-    email: calendarUser.primaryEmailAddress.emailAddress,
-    displayName: calendarUser.fullName,
-    responseStatus: "accepted",
-  });
-
-  const calendarEvent = await google.calendar("v3").events.insert({
-    calendarId: "primary",
-    auth: oAuthClient,
-    sendUpdates: "all",
-    requestBody: {
-      attendees: attendees,
-      description: guestNotes ? `Additional Details: ${guestNotes}` : undefined,
-      start: {
-        dateTime: startTime.toISOString(),
+    // Prepare request options
+    const requestOptions: RequestInit = {
+      method,
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      end: {
-        dateTime: addMinutes(startTime, durationInMinutes).toISOString(),
-      },
-      summary: guestName ? `${guestName} + ${calendarUser.fullName}: ${eventName}` : eventName,
-    },
-  });
+    };
 
-  return calendarEvent.data;
-}
+    if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
+      requestOptions.body = JSON.stringify(body);
+    }
 
-/**
- * Check if the user has a connected Google Calendar account
- */
-export const hasGoogleCalendarConnection = action({
-  handler: async (ctx) => {
     try {
-      // Use our improved authentication helper
-      const userContext = await getFullUserContext(ctx);
-      if (!userContext) {
-        return false;
+      console.log(`[Google Calendar API] ${method} ${endpoint}`);
+      
+      const response = await fetch(url, requestOptions);
+      
+      // Handle different response status codes
+      if (response.status === 401) {
+        throw new Error("Google Calendar authentication failed. Please reconnect your Google account.");
+      }
+      
+      if (response.status === 403) {
+        const errorData = await response.json().catch(() => null);
+        if (errorData?.error?.errors?.[0]?.reason === "quotaExceeded") {
+          throw new Error("Google Calendar API quota exceeded. Please try again later.");
+        }
+        throw new Error("Insufficient permissions for Google Calendar. Please check your account settings.");
+      }
+      
+      if (response.status === 404) {
+        throw new Error("The requested calendar or event was not found.");
+      }
+      
+      if (response.status === 429) {
+        throw new Error("Google Calendar API rate limit exceeded. Please try again later.");
+      }
+      
+      if (!response.ok) {
+        let errorMessage = `Google Calendar API error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error?.message || errorMessage;
+        } catch (e) {
+          // If we can't parse the error, use the default message
+        }
+        throw new Error(errorMessage);
       }
 
-      const oAuthClient = await getOAuthClient(userContext.clerkUserId);
-      return oAuthClient != null;
+      // Handle empty responses (e.g., DELETE requests)
+      if (response.status === 204 || response.headers.get("content-length") === "0") {
+        return { success: true };
+      }
+
+      // Parse and return the JSON response
+      const data = await response.json();
+      console.log(`[Google Calendar API] ${method} ${endpoint} - Success`);
+      return data;
+      
     } catch (error) {
-      console.error("Error checking Google Calendar connection:", error);
-      return false;
+      console.error(`[Google Calendar API] ${method} ${endpoint} - Error:`, error);
+      
+      // Re-throw API errors with context
+      if (error instanceof Error) {
+        throw new Error(`Google Calendar API request failed: ${error.message}`);
+      }
+      
+      throw new Error("Unknown error occurred while calling Google Calendar API");
     }
+  },
+});
+
+// =================================================================
+// CONVENIENCE METHODS: Pre-configured API calls
+// =================================================================
+
+/**
+ * Make a GET request to the Google Calendar API
+ */
+export const getFromGoogleCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx, endpoint: string, queryParams?: Record<string, string>) => {
+    // @ts-ignore - We're using this as a helper function
+    return await makeGoogleCalendarRequest.handler(ctx, "GET", endpoint, undefined, queryParams);
   },
 });
 
 /**
- * Get the primary calendar for the user (or a specific calendar by ID)
+ * Make a POST request to the Google Calendar API
  */
-export const getCalendar = action({
-  args: {
-    calendarId: v.optional(v.string()), // Default to "primary"
-  },
-  handler: async (ctx, { calendarId = "primary" }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const calendar = await google.calendar("v3").calendars.get({
-      calendarId,
-      auth: oAuthClient,
-    });
-
-    return calendar.data;
+export const postToGoogleCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
+    // @ts-ignore - We're using this as a helper function
+    return await makeGoogleCalendarRequest.handler(ctx, "POST", endpoint, body, queryParams);
   },
 });
 
 /**
- * List calendars accessible to the user
- * Only used for debugging/setup - not part of main AI tools
+ * Make a PUT request to the Google Calendar API
  */
-export const listCalendars = action({
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const calendars = await google.calendar("v3").calendarList.list({
-      auth: oAuthClient,
-    });
-
-    return calendars.data;
+export const putToGoogleCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
+    // @ts-ignore - We're using this as a helper function
+    return await makeGoogleCalendarRequest.handler(ctx, "PUT", endpoint, body, queryParams);
   },
 });
 
 /**
- * Get calendar events with optional date filtering
+ * Make a PATCH request to the Google Calendar API
  */
-export const listEvents = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    timeMin: v.optional(v.string()),
-    timeMax: v.optional(v.string()),
-    maxResults: v.optional(v.number()),
-    q: v.optional(v.string()), // Search query
-    timeZone: v.optional(v.string()),
-  },
-  handler: async (ctx, { 
-    calendarId = "primary", 
-    timeMin, 
-    timeMax, 
-    maxResults = 50, 
-    q,
-    timeZone 
-  }) => {
-    const userContext = await getFullUserContext(ctx);
-    if (!userContext) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userContext.clerkUserId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const events = await google.calendar("v3").events.list({
-      calendarId,
-      timeMin,
-      timeMax,
-      maxResults,
-      q,
-      timeZone,
-      orderBy: "startTime",
-      singleEvents: true,
-      auth: oAuthClient,
-    });
-
-    return events.data;
+export const patchToGoogleCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
+    // @ts-ignore - We're using this as a helper function
+    return await makeGoogleCalendarRequest.handler(ctx, "PATCH", endpoint, body, queryParams);
   },
 });
 
 /**
- * Create a new calendar event
+ * Make a DELETE request to the Google Calendar API
  */
-export const createEvent = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    summary: v.string(),
-    description: v.optional(v.string()),
-    start: v.object({
-      dateTime: v.string(),
-      timeZone: v.optional(v.string()),
-    }),
-    end: v.object({
-      dateTime: v.string(),
-      timeZone: v.optional(v.string()),
-    }),
-    location: v.optional(v.string()),
-    attendees: v.optional(v.array(v.object({
-      email: v.string(),
-    }))),
-    recurrence: v.optional(v.array(v.string())),
-    reminders: v.optional(v.object({
-      useDefault: v.boolean(),
-      overrides: v.optional(v.array(v.object({
-        method: v.string(),
-        minutes: v.number(),
-      }))),
-    })),
-  },
-  handler: async (ctx, { calendarId = "primary", ...eventData }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const event = await google.calendar("v3").events.insert({
-      calendarId,
-      auth: oAuthClient,
-      sendUpdates: "all",
-      requestBody: eventData,
-    });
-
-    return event.data;
+export const deleteFromGoogleCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx, endpoint: string, queryParams?: Record<string, string>) => {
+    // @ts-ignore - We're using this as a helper function
+    return await makeGoogleCalendarRequest.handler(ctx, "DELETE", endpoint, undefined, queryParams);
   },
 });
+
+// =================================================================
+// CONNECTION TESTING
+// =================================================================
 
 /**
- * Update an existing calendar event
+ * Test the Google Calendar API connection
+ * Returns basic information about the user's calendar setup
  */
-export const updateEvent = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    eventId: v.string(),
-    summary: v.optional(v.string()),
-    description: v.optional(v.string()),
-    start: v.optional(v.object({
-      dateTime: v.string(),
-      timeZone: v.optional(v.string()),
-    })),
-    end: v.optional(v.object({
-      dateTime: v.string(),
-      timeZone: v.optional(v.string()),
-    })),
-    location: v.optional(v.string()),
-    attendees: v.optional(v.array(v.object({
-      email: v.string(),
-    }))),
-    recurrence: v.optional(v.array(v.string())),
-    reminders: v.optional(v.object({
-      useDefault: v.boolean(),
-      overrides: v.optional(v.array(v.object({
-        method: v.string(),
-        minutes: v.number(),
-      }))),
-    })),
-  },
-  handler: async (ctx, { calendarId = "primary", eventId, ...updateData }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
+export const testGoogleCalendarConnection = action({
+  args: {},
+  handler: async (ctx: ActionCtx) => {
+    const tokenIdentifier = await requireUserAuthForAction(ctx);
+    await logUserAccess(ctx, "googleCalendar.client.testGoogleCalendarConnection", { tokenIdentifier });
+
+    try {
+      // Test the connection by fetching the calendar list
+      const calendars = await getFromGoogleCalendar.handler(ctx, "/users/me/calendarList");
+      
+      return {
+        success: true,
+        calendarsCount: calendars.items?.length || 0,
+        primaryCalendar: calendars.items?.find((cal: any) => cal.primary)?.summary || "Unknown",
+        testTimestamp: Date.now(),
+      };
+    } catch (error) {
+      console.error("Google Calendar connection test failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        testTimestamp: Date.now(),
+      };
     }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    // Remove undefined values to avoid overwriting with null
-    const cleanUpdateData = Object.fromEntries(
-      Object.entries(updateData).filter(([_, value]) => value !== undefined)
-    );
-    
-    const event = await google.calendar("v3").events.patch({
-      calendarId,
-      eventId,
-      auth: oAuthClient,
-      sendUpdates: "all",
-      requestBody: cleanUpdateData,
-    });
-
-    return event.data;
   },
 });
+
+// =================================================================
+// ERROR HANDLING UTILITIES
+// =================================================================
 
 /**
- * Delete a calendar event
+ * Check if an error indicates that the user needs to re-authenticate
  */
-export const deleteEvent = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    eventId: v.string(),
-    sendUpdates: v.optional(v.string()), // "all", "externalOnly", "none"
-  },
-  handler: async (ctx, { calendarId = "primary", eventId, sendUpdates }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-    
-    await google.calendar("v3").events.delete({
-      calendarId,
-      eventId,
-      auth: oAuthClient,
-      sendUpdates: sendUpdates || "all",
-    });
-    
-    return { success: true, eventId };
-  },
-});
+export function isAuthenticationError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("authentication failed") ||
+    message.includes("unauthorized") ||
+    message.includes("invalid_grant") ||
+    message.includes("token") && message.includes("expired")
+  );
+}
 
 /**
- * Get a specific calendar event by ID
+ * Check if an error indicates a rate limit or quota issue
  */
-export const getEvent = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    eventId: v.string(),
-  },
-  handler: async (ctx, { calendarId = "primary", eventId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const event = await google.calendar("v3").events.get({
-      calendarId,
-      eventId,
-      auth: oAuthClient,
-    });
-
-    return event.data;
-  },
-});
+export function isRateLimitError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("quota exceeded") ||
+    message.includes("rate limit") ||
+    message.includes("too many requests")
+  );
+}
 
 /**
- * Search for events by text query
+ * Extract a user-friendly error message from Google Calendar API errors
  */
-export const searchEvents = action({
-  args: {
-    calendarId: v.optional(v.string()),
-    query: v.string(),
-    timeMin: v.optional(v.string()),
-    timeMax: v.optional(v.string()),
-    maxResults: v.optional(v.number()),
-  },
-  handler: async (ctx, { 
-    calendarId = "primary", 
-    query, 
-    timeMin, 
-    timeMax, 
-    maxResults = 20 
-  }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const events = await google.calendar("v3").events.list({
-      calendarId,
-      q: query,
-      timeMin,
-      timeMax,
-      maxResults,
-      orderBy: "startTime",
-      singleEvents: true,
-      auth: oAuthClient,
-    });
-
-    return events.data;
-  },
-});
-
-/**
- * Get free/busy information for calendars
- */
-export const getFreeBusy = action({
-  args: {
-    timeMin: v.string(),
-    timeMax: v.string(),
-    calendars: v.array(v.object({
-      id: v.string(),
-    })),
-    timeZone: v.optional(v.string()),
-  },
-  handler: async (ctx, requestData) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new GoogleCalendarError("User not authenticated");
-    }
-
-    const oAuthClient = await getOAuthClient(userId);
-    if (!oAuthClient) {
-      throw new GoogleCalendarError("Google Calendar not connected. Please connect your Google account in settings.", 401);
-    }
-
-    const freeBusy = await google.calendar("v3").freebusy.query({
-      auth: oAuthClient,
-      requestBody: requestData,
-    });
-
-    return freeBusy.data;
-  },
-});
+export function getGoogleCalendarErrorMessage(error: any): string {
+  if (error?.error?.message) {
+    return error.error.message;
+  }
+  
+  if (error instanceof Error) {
+    return error.message;
+  }
+  
+  if (typeof error === "string") {
+    return error;
+  }
+  
+  return "An unknown error occurred with Google Calendar";
+}
