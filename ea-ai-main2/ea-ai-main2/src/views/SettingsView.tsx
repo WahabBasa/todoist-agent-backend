@@ -365,16 +365,30 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [todoistConflictData, setTodoistConflictData] = useState<{
+    message: string;
+    instructions: string[];
+  } | null>(null);
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
   
-  // Add debug logging for Todoist connection status
+  // Add debug logging for Todoist connection status and handle successful connection after conflict
   useEffect(() => {
     console.log("🔍 [Settings] Todoist connection status changed:", hasTodoistConnection);
-  }, [hasTodoistConnection]);
+    
+    // If user successfully connected after a conflict, clear the conflict data
+    if (hasTodoistConnection && todoistConflictData) {
+      console.log("✅ [Settings] Todoist connected successfully after conflict resolution");
+      setTodoistConflictData(null);
+      // Show success message
+      setTimeout(() => {
+        alert("✅ Todoist connected successfully! You can now use task management features.");
+      }, 500);
+    }
+  }, [hasTodoistConnection, todoistConflictData]);
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
-  const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
+  const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
   // Check if Google Calendar is connected (using new session manager)
   const checkGoogleCalendarConnection = useAction(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
@@ -428,6 +442,46 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
     }
   }, [clerkUser?.id]); // Re-run when user ID changes
 
+  // PostMessage listener for OAuth popup messages (including account conflicts)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      console.log("🔍 [Settings] PostMessage received from origin:", event.origin);
+      console.log("🔍 [Settings] Current window origin:", window.location.origin);
+      console.log("🔍 [Settings] Message data:", event.data);
+
+      // Security: Only accept messages from expected origins
+      // Allow messages from same origin or Convex site domain
+      const allowedOrigins = [
+        window.location.origin,
+        'https://peaceful-boar-923.convex.site'
+      ];
+      
+      if (!allowedOrigins.includes(event.origin)) {
+        console.warn("🚫 [Settings] Rejected message from untrusted origin:", event.origin);
+        return;
+      }
+
+      console.log("✅ [Settings] Message accepted from trusted origin");
+
+      if (event.data?.type === 'TODOIST_ACCOUNT_CONFLICT') {
+        console.log("🚨 [Settings] Processing Todoist account conflict");
+        console.log("🚨 [Settings] Conflict data:", event.data.data);
+        setTodoistConflictData(event.data.data);
+        setIsConnecting(null); // Clear connecting state
+        console.log("🚨 [Settings] Conflict dialog should now be visible");
+      } else {
+        console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
+      }
+    };
+
+    console.log("🔧 [Settings] Setting up PostMessage listener");
+    window.addEventListener('message', handleMessage);
+    return () => {
+      console.log("🔧 [Settings] Removing PostMessage listener");
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
   // TODO: Re-implement Google Calendar auto-initialization with Clerk
   // useEffect(() => {
   //   const autoInitializeCalendar = async () => {
@@ -458,6 +512,25 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   //   autoInitializeCalendar();
   // }, [hasGoogleCalendarConnection, initializeGoogleCalendarAfterOAuth, syncGoogleCalendarTokens, hasAutoSynced]);
   
+  const handleTodoistConflictInfo = (conflictData: typeof todoistConflictData) => {
+    if (!conflictData) return;
+
+    alert(
+      `Todoist Account Already Connected\n\n` +
+      `${conflictData.message}\n\n` +
+      `Instructions:\n` +
+      conflictData.instructions.map((instruction, index) => `${index + 1}. ${instruction}`).join('\n')
+    );
+
+    // Clear conflict data after showing info
+    setTodoistConflictData(null);
+  };
+
+  const retryTodoistConnection = () => {
+    console.log("[Settings] Retrying Todoist connection...");
+    handleConnect("Todoist");
+  };
+
   const connectedApps = [
     {
       appName: "Google Drive",
@@ -487,11 +560,13 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
     },
     {
       appName: "Todoist",
-      description: "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
+      description: todoistConflictData 
+        ? "Account conflict detected. Please resolve the conflict to connect Todoist."
+        : "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
       iconBgColor: "bg-red-500",
       iconText: "T",
       isConnected: hasTodoistConnection ?? false,
-      canConnect: true,
+      canConnect: !todoistConflictData, // Disable connection button when there's a conflict
     },
     {
       appName: "Google Calendar",
@@ -523,6 +598,9 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           alert("Todoist integration is not properly configured. Please contact support.");
         } else if (generateOAuthURL?.url) {
           setIsConnecting("Todoist");
+          // Clear any existing conflict data
+          setTodoistConflictData(null);
+          
           // Open OAuth URL in a popup window
           const popup = window.open(
             generateOAuthURL.url,
@@ -530,19 +608,50 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
             'width=500,height=600,scrollbars=yes,resizable=yes'
           );
           
-          // Listen for the popup to close (successful connection)
+          if (!popup) {
+            console.error("Failed to open OAuth popup (blocked by browser)");
+            alert("Unable to open authentication window. Please allow popups and try again.");
+            setIsConnecting(null);
+            return;
+          }
+          
+          // Enhanced popup monitoring with timeout
+          let checkCount = 0;
+          const maxChecks = 300; // 5 minutes timeout (300 seconds)
+          
           const checkClosed = setInterval(() => {
-            if (popup?.closed) {
-              clearInterval(checkClosed);
-              console.log("🔄 [Settings] Todoist OAuth popup closed, refreshing connection status...");
+            checkCount++;
+            
+            try {
+              // Check if popup still exists and is not closed
+              if (popup.closed) {
+                clearInterval(checkClosed);
+                console.log("🔄 [Settings] Todoist OAuth popup closed, processing result...");
+                
+                // Give a moment for any postMessage to arrive
+                setTimeout(() => {
+                  // If no conflict data was received, assume success or user cancelled
+                  if (!todoistConflictData) {
+                    console.log("🔄 [Settings] No conflict detected, refreshing connection status");
+                    // The hasTodoistConnection query should automatically refresh
+                  }
+                  setIsConnecting(null);
+                }, 300);
+                return;
+              }
               
-              // Force refresh connection status by re-fetching in a few moments
-              setTimeout(() => {
-                console.log("🔄 [Settings] Triggering manual refresh of Todoist connection status");
-                // Force component re-render to trigger query refresh
+              // Timeout after 5 minutes
+              if (checkCount >= maxChecks) {
+                clearInterval(checkClosed);
+                popup.close();
+                console.log("⏰ [Settings] OAuth popup timeout - closing");
+                alert("Authentication timed out. Please try again.");
                 setIsConnecting(null);
-                // The hasTodoistConnection query should automatically refresh and show updated status
-              }, 500);
+                return;
+              }
+            } catch (error) {
+              // Popup might be cross-origin and throw errors - this is expected
+              // Continue monitoring
             }
           }, 1000);
         } else {
@@ -628,6 +737,55 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         </div>
       )}
       
+      {/* Todoist Account Conflict Dialog */}
+      {todoistConflictData && (
+        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-design-lg">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-foreground mb-2">Todoist Account Already Connected</h3>
+              <p className="text-muted-foreground text-sm mb-3">{todoistConflictData.message}</p>
+              
+              <div className="text-sm text-muted-foreground mb-4">
+                <p className="font-medium mb-1">To connect a different account:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  {todoistConflictData.instructions.map((instruction, index) => (
+                    <li key={index}>{instruction}</li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleTodoistConflictInfo(todoistConflictData)}
+                  className="bg-background hover:bg-muted"
+                >
+                  Show Instructions
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={retryTodoistConnection}
+                  className="bg-background hover:bg-muted"
+                >
+                  Try Again
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setTodoistConflictData(null)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Connection Options */}
       {!isLoading && (
         <div className="space-y-4">

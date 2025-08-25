@@ -145,11 +145,47 @@ http.route({
             }
           );
         }
-      } else {
-        console.error("Todoist OAuth token exchange failed");
+      } else if (result.errorType === "ACCOUNT_CONFLICT") {
+        console.log("🚨 [OAuth] Todoist account conflict detected, sending PostMessage to parent");
+        console.log("🚨 [OAuth] Conflict data:", {
+          message: result.message,
+          instructions: result.instructions
+        });
         return new Response(
           `<html><body><script>
-            alert('OAuth connection failed: Token exchange unsuccessful');
+            console.log('🚨 [Popup] Todoist account conflict - preparing PostMessage');
+            console.log('🚨 [Popup] Window opener exists:', !!window.opener);
+            console.log('🚨 [Popup] Origin:', window.location.origin);
+            
+            // Send conflict data to parent window
+            if (window.opener) {
+              const conflictData = {
+                type: 'TODOIST_ACCOUNT_CONFLICT',
+                data: {
+                  message: '${result.message}',
+                  instructions: ${JSON.stringify(result.instructions)}
+                }
+              };
+              console.log('🚨 [Popup] Sending PostMessage:', conflictData);
+              window.opener.postMessage(conflictData, '*');
+              console.log('🚨 [Popup] PostMessage sent successfully');
+            } else {
+              console.error('🚨 [Popup] No window.opener available for PostMessage');
+            }
+            
+            console.log('🚨 [Popup] Closing popup window');
+            window.close();
+          </script></body></html>`,
+          { 
+            status: 200,
+            headers: { "Content-Type": "text/html" }
+          }
+        );
+      } else {
+        console.error("Todoist OAuth token exchange failed:", result.message);
+        return new Response(
+          `<html><body><script>
+            alert('OAuth connection failed: ${result.message || 'Token exchange unsuccessful'}');
             window.close();
           </script></body></html>`,
           { 

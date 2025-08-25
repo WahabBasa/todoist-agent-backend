@@ -114,3 +114,64 @@ export const debugAllTokensRaw = query({
     }
   },
 });
+
+// Check for problematic generic tokens that could cause conflicts
+export const checkForGenericTokens = query({
+  handler: async (ctx) => {
+    try {
+      const allTokens = await ctx.db.query("todoistTokens").collect();
+      
+      // Look for tokens that end with just "|user" (generic format)
+      const genericTokens = allTokens.filter(token => 
+        token.tokenIdentifier.endsWith("|user") && 
+        token.tokenIdentifier.length < 60 // Generic tokens are shorter
+      );
+      
+      // Look for tokens with same access token (cross-user sharing)
+      const tokensByAccessToken = new Map<string, typeof allTokens>();
+      for (const token of allTokens) {
+        if (!tokensByAccessToken.has(token.accessToken)) {
+          tokensByAccessToken.set(token.accessToken, []);
+        }
+        tokensByAccessToken.get(token.accessToken)!.push(token);
+      }
+      
+      const sharedTokens = Array.from(tokensByAccessToken.entries())
+        .filter(([_, tokens]) => tokens.length > 1);
+      
+      return {
+        success: true,
+        total: allTokens.length,
+        genericTokens: {
+          count: genericTokens.length,
+          tokens: genericTokens.map(t => ({
+            id: t._id,
+            tokenIdentifier: t.tokenIdentifier,
+            length: t.tokenIdentifier.length,
+            accessTokenPreview: t.accessToken.substring(0, 10) + "..."
+          }))
+        },
+        sharedAccessTokens: {
+          count: sharedTokens.length,
+          details: sharedTokens.map(([accessToken, tokens]) => ({
+            accessTokenPreview: accessToken.substring(0, 10) + "...",
+            usedByCount: tokens.length,
+            users: tokens.map(t => ({
+              id: t._id,
+              tokenIdentifier: t.tokenIdentifier.length > 60 
+                ? t.tokenIdentifier.substring(0, 50) + "..." 
+                : t.tokenIdentifier
+            }))
+          }))
+        },
+        recommendations: [
+          ...(genericTokens.length > 0 ? ["Remove generic |user tokens"] : []),
+          ...(sharedTokens.length > 0 ? ["Fix shared access tokens across users"] : []),
+          ...(genericTokens.length === 0 && sharedTokens.length === 0 ? ["Token isolation looks good"] : [])
+        ]
+      };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  },
+});

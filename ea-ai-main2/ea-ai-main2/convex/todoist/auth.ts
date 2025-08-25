@@ -389,7 +389,18 @@ export const exchangeCodeForToken = action({
       
       if (otherUserIds) {
         console.warn(`⚠️ Todoist account already connected to other users: ${otherUserIds}`);
-        throw new Error("This Todoist account is already connected to another user. Please log out of Todoist and connect with a different account, or disconnect the account from the other user first.");
+        
+        return { 
+          success: false, 
+          errorType: "ACCOUNT_CONFLICT",
+          message: "This Todoist account is already connected to another account.",
+          instructions: [
+            "Disconnect Todoist from your other account or device first",
+            "Go to Settings → Connected Apps → Todoist → Disconnect",
+            "Return here and try connecting again",
+            "The same Todoist account cannot be connected to multiple users"
+          ]
+        };
       }
     }
 
