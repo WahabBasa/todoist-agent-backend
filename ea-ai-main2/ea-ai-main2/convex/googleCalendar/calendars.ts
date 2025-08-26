@@ -14,7 +14,7 @@ import { getFromGoogleCalendar, postToGoogleCalendar, patchToGoogleCalendar, del
  * List all calendars accessible to the user
  * Returns the calendar list with basic information
  */
-export const listCalendars: any = action({
+export const listCalendars = action({
   args: {
     showHidden: v.optional(v.boolean()),
     showDeleted: v.optional(v.boolean()),
@@ -70,7 +70,7 @@ export const listCalendars: any = action({
 /**
  * Get detailed information about a specific calendar
  */
-export const getCalendarDetails: any = action({
+export const getCalendarDetails = action({
   args: {
     calendarId: v.string(),
   },
@@ -106,7 +106,7 @@ export const getCalendarDetails: any = action({
  * Get the primary calendar for the user
  * This is a convenience function for the most common use case
  */
-export const getPrimaryCalendar: any = action({
+export const getPrimaryCalendar = action({
   args: {},
   handler: async (ctx: ActionCtx): Promise<any> => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
@@ -164,7 +164,7 @@ export const getPrimaryCalendar: any = action({
  * Create a new calendar
  * Note: This creates a new calendar, not just adds an existing one to the list
  */
-export const createCalendar: any = action({
+export const createCalendar = action({
   args: {
     summary: v.string(),
     description: v.optional(v.string()),
@@ -217,7 +217,7 @@ export const createCalendar: any = action({
 /**
  * Update an existing calendar
  */
-export const updateCalendar: any = action({
+export const updateCalendar = action({
   args: {
     calendarId: v.string(),
     summary: v.optional(v.string()),
@@ -279,7 +279,7 @@ export const updateCalendar: any = action({
  * Delete a calendar
  * WARNING: This permanently deletes the calendar and all its events
  */
-export const deleteCalendar: any = action({
+export const deleteCalendar = action({
   args: {
     calendarId: v.string(),
   },
@@ -319,7 +319,7 @@ export const deleteCalendar: any = action({
  * Add an existing calendar to the user's calendar list
  * This is different from creating a new calendar - it adds a shared calendar
  */
-export const addCalendarToList: any = action({
+export const addCalendarToList = action({
   args: {
     calendarId: v.string(),
     colorRgbFormat: v.optional(v.boolean()),
@@ -361,7 +361,7 @@ export const addCalendarToList: any = action({
  * Remove a calendar from the user's calendar list
  * This doesn't delete the calendar, just removes it from the user's view
  */
-export const removeCalendarFromList: any = action({
+export const removeCalendarFromList = action({
   args: {
     calendarId: v.string(),
   },

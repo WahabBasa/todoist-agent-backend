@@ -391,7 +391,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
   // Google Calendar connection using Clerk pattern (like Calendly)
-  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.clerkIntegration.hasGoogleCalendarConnection);
+  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.connection.hasGoogleCalendarConnection);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.testGoogleCalendarConnectionClerk);
   const initiateGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.initiateGoogleCalendarConnection);
   
