@@ -112,18 +112,36 @@ export const initiateGoogleCalendarConnection = action({
   },
 });
 
+// Define the test result interface to avoid circular type issues
+interface GoogleCalendarTestResult {
+  success: boolean;
+  error?: string;
+  calendarsCount?: number;
+  primaryCalendar?: string;
+  testTimestamp: number;
+  message?: string;
+}
+
+// Define the OAuth client result interface
+interface GoogleOAuthClientResult {
+  error?: string;
+  success?: boolean;
+  hasToken?: boolean;
+  message?: string;
+}
+
 /**
  * Test Google Calendar connection using Clerk tokens
  * Similar to existing testGoogleCalendarConnection but uses Clerk
  */
 export const testGoogleCalendarConnectionClerk = action({
   args: {},
-  handler: async (ctx: ActionCtx) => {
+  handler: async (ctx: ActionCtx): Promise<GoogleCalendarTestResult> => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.clerk.testConnection", "REQUESTED");
 
     try {
-      const oauthResult = await ctx.runAction(api.googleCalendar.clerkIntegration.getGoogleOAuthClient, {});
+      const oauthResult: GoogleOAuthClientResult = await ctx.runAction(api.googleCalendar.clerkIntegration.getGoogleOAuthClient, {});
       
       if (oauthResult.error) {
         return {
@@ -146,9 +164,10 @@ export const testGoogleCalendarConnectionClerk = action({
       };
     } catch (error) {
       console.error("Error testing Google Calendar connection:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error during connection test";
       return {
         success: false,
-        error: error?.message || "Unknown error during connection test",
+        error: errorMessage,
         testTimestamp: Date.now()
       };
     }
