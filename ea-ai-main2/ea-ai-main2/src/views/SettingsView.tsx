@@ -390,16 +390,29 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Google Calendar connection using Clerk pattern (like Calendly)
-  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.connection.hasGoogleCalendarConnection);
+  // Google Calendar connection using Clerk pattern (like Calendly) - now using action
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<boolean | null>(null);
+  const checkGoogleCalendarConnection = useAction(api.googleCalendar.connection.hasGoogleCalendarConnection);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.testGoogleCalendarConnectionClerk);
   const initiateGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.initiateGoogleCalendarConnection);
   
   // Keep fallback to existing system for disconnect
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
 
-  // The Google Calendar connection status is now handled by useQuery automatically
-  // No need for manual loading since useQuery will handle this
+  // Check Google Calendar connection status on component mount
+  useEffect(() => {
+    const checkConnectionStatus = async () => {
+      try {
+        const status = await checkGoogleCalendarConnection();
+        setGoogleCalendarStatus(status);
+      } catch (error) {
+        console.error("Failed to check Google Calendar connection:", error);
+        setGoogleCalendarStatus(false);
+      }
+    };
+
+    checkConnectionStatus();
+  }, [checkGoogleCalendarConnection]);
 
 
   // PostMessage listener for OAuth popup messages (including account conflicts)
@@ -530,14 +543,14 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
     },
     {
       appName: "Google Calendar",
-      description: hasGoogleCalendarConnection 
+      description: googleCalendarStatus 
         ? "Your Google Calendar is connected and synced. You can schedule events, check availability, and manage your schedule through AI conversations."
         : "Connect your Google Calendar to schedule events, check availability, and manage your schedule through AI conversations.",
       iconBgColor: "",
       iconText: "📅",
       gradientFrom: "blue-500",
       gradientTo: "green-500", 
-      isConnected: hasGoogleCalendarConnection ?? false,
+      isConnected: googleCalendarStatus ?? false,
       canConnect: true, // Always allow connect/disconnect actions
     },
   ];
@@ -620,7 +633,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         }
       }
     } else if (appName === "Google Calendar") {
-      if (hasGoogleCalendarConnection) {
+      if (googleCalendarStatus) {
         // Disconnect Google Calendar
         const shouldDisconnect = confirm(
           "Are you sure you want to disconnect Google Calendar?\n\n" +
@@ -631,6 +644,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           try {
             setIsConnecting("Google Calendar");
             await removeGoogleCalendarConnection();
+            setGoogleCalendarStatus(false); // Update status immediately
             alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
           } catch (error) {
             console.error("Failed to disconnect Google Calendar:", error);
@@ -660,9 +674,8 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
               window.location.href = result.verification.externalVerificationRedirectURL.href;
             } else {
               // Connection successful
+              setGoogleCalendarStatus(true); // Update status immediately
               alert("✅ Google Calendar connected successfully!");
-              // Refresh the page to update connection status
-              window.location.reload();
             }
           } else {
             throw new Error("User not loaded. Please refresh and try again.");
@@ -671,8 +684,8 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           console.error("Failed to connect Google Calendar:", error);
           // Check if user already has Google connected
           if (error?.errors?.[0]?.code === 'external_account_exists') {
+            setGoogleCalendarStatus(true); // Update status immediately
             alert("✅ Google Calendar is already connected!");
-            window.location.reload();
           } else {
             alert(`❌ Connection failed: ${error?.errors?.[0]?.longMessage || error?.message || error}`);
           }
@@ -764,7 +777,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                     console.log("Google Calendar Clerk test result:", testResult);
                     
                     const debugInfo = {
-                      "Connection Status": hasGoogleCalendarConnection ? "✅ Connected" : "❌ Not Connected",
+                      "Connection Status": googleCalendarStatus ? "✅ Connected" : "❌ Not Connected",
                       "Integration Type": "Clerk-based OAuth (Calendly pattern)",
                       "API Test": testResult.success ? {
                         "Status": "✅ Working",
