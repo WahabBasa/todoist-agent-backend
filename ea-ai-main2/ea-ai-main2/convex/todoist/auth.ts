@@ -107,7 +107,7 @@ export const getTodoistToken = query({
 
     const hasToken = token !== null;
     logUserAccess(tokenIdentifier, "GET_TODOIST_TOKEN", hasToken ? "SUCCESS" : "NO_TOKEN");
-    return token ? { accessToken: token.accessToken } : null;
+    return token ? token.accessToken : null;
   },
 });
 

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, action } from "../_generated/server";
 import { api } from "../_generated/api";
-import { requireUserAuth } from "../todoist/userAccess";
+import { requireUserAuth, requireUserAuthForAction } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -27,8 +27,8 @@ const REQUIRED_SCOPES = [
 export const hasGoogleCalendarConnection = query({
   args: {},
   handler: async (ctx: QueryCtx): Promise<boolean> => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.hasGoogleCalendarConnection", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.hasGoogleCalendarConnection", "REQUESTED");
 
     const token = await ctx.db
       .query("googleCalendarTokens")
@@ -46,8 +46,8 @@ export const hasGoogleCalendarConnection = query({
 export const getGoogleCalendarConnection = query({
   args: {},
   handler: async (ctx: QueryCtx) => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.getGoogleCalendarConnection", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.getGoogleCalendarConnection", "REQUESTED");
 
     const token = await ctx.db
       .query("googleCalendarTokens")
@@ -84,8 +84,8 @@ export const storeGoogleCalendarTokens = mutation({
     scope: v.string(),
   },
   handler: async (ctx: MutationCtx, args) => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.storeGoogleCalendarTokens", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.storeGoogleCalendarTokens", "REQUESTED");
 
     const now = Date.now();
     const expiresAt = now + (args.expiresIn * 1000); // Convert seconds to milliseconds
@@ -108,7 +108,7 @@ export const storeGoogleCalendarTokens = mutation({
     } else {
       // Insert new token record
       await ctx.db.insert("googleCalendarTokens", {
-        tokenIdentifier,
+        tokenIdentifier: tokenIdentifier,
         accessToken: args.accessToken,
         refreshToken: args.refreshToken,
         expiresAt,
@@ -129,8 +129,8 @@ export const storeGoogleCalendarTokens = mutation({
 export const removeGoogleCalendarConnection = action({
   args: {},
   handler: async (ctx: ActionCtx) => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.removeGoogleCalendarConnection", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.removeGoogleCalendarConnection", "REQUESTED");
 
     // Get the user's token
     const token = await ctx.runQuery(api.googleCalendar.auth.getGoogleCalendarTokenRecord, {});
@@ -162,7 +162,7 @@ export const removeGoogleCalendarConnection = action({
 
     // Delete the token from our database
     await ctx.runMutation(api.googleCalendar.auth.deleteGoogleCalendarTokenForUser, {
-      tokenIdentifier,
+      tokenIdentifier: tokenIdentifier,
     });
 
     return { success: true };
@@ -180,7 +180,7 @@ export const removeGoogleCalendarConnection = action({
 export const getGoogleCalendarTokenRecord = query({
   args: {},
   handler: async (ctx: QueryCtx) => {
-    const tokenIdentifier = await requireUserAuth(ctx);
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
 
     const token = await ctx.db
       .query("googleCalendarTokens")
@@ -225,8 +225,8 @@ export const deleteGoogleCalendarTokenForUser = mutation({
 export const getValidGoogleCalendarToken = action({
   args: {},
   handler: async (ctx: ActionCtx): Promise<string | null> => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.getValidGoogleCalendarToken", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.getValidGoogleCalendarToken", "REQUESTED");
 
     const tokenRecord = await ctx.runQuery(api.googleCalendar.auth.getGoogleCalendarTokenRecord, {});
     
@@ -294,8 +294,8 @@ export const generateGoogleCalendarOAuthURL = query({
     state: v.optional(v.string()),
   },
   handler: async (ctx: QueryCtx, args) => {
-    const tokenIdentifier = await requireUserAuth(ctx);
-    await logUserAccess(ctx, "googleCalendar.auth.generateGoogleCalendarOAuthURL", { tokenIdentifier });
+    const { userId: tokenIdentifier } = await requireUserAuth(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.generateGoogleCalendarOAuthURL", "REQUESTED");
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {

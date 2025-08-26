@@ -362,9 +362,6 @@ function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }
 function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
-  const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [todoistConflictData, setTodoistConflictData] = useState<{
     message: string;
     instructions: string[];
@@ -399,20 +396,6 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   // The Google Calendar connection status is now handled by useQuery automatically
   // No need for manual loading since useQuery will handle this
 
-  useEffect(() => {
-    console.log("ConnectedAppsSettings: Component mounted");
-    setIsLoading(false); // Set loading to false since useQuery handles the loading state
-  }, []);
-
-  // Refresh connection status when user changes (e.g., after OAuth completion)
-  useEffect(() => {
-    if (clerkUser?.id) {
-      console.log("ConnectedAppsSettings: User changed, refreshing connection status...");
-      loadConnectionStatus().catch(error => {
-        console.error("ConnectedAppsSettings: Failed to refresh connection status on user change:", error);
-      });
-    }
-  }, [clerkUser?.id]); // Re-run when user ID changes
 
   // PostMessage listener for OAuth popup messages (including account conflicts)
   useEffect(() => {
@@ -684,30 +667,6 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         </p>
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-tertiary">Loading connection status...</div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {loadError && (
-        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-design-lg">
-          <div className="text-destructive text-sm">{loadError}</div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="mt-2"
-            onClick={() => {
-              setIsLoading(true);
-              loadConnectionStatus();
-            }}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
       
       {/* Todoist Account Conflict Dialog */}
       {todoistConflictData && (
@@ -759,8 +718,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
       )}
 
       {/* Connection Options */}
-      {!isLoading && (
-        <div className="space-y-4">
+      <div className="space-y-4">
         {connectedApps.map((app) => {
           // Special handling for Google Calendar with debug functionality
           if (app.appName === "Google Calendar") {
@@ -842,8 +800,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
             />
           );
         })}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
