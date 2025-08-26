@@ -279,7 +279,7 @@ export const updateCalendar: any = action({
  * Delete a calendar
  * WARNING: This permanently deletes the calendar and all its events
  */
-export const deleteCalendar = action({
+export const deleteCalendar: any = action({
   args: {
     calendarId: v.string(),
   },
@@ -361,7 +361,7 @@ export const addCalendarToList: any = action({
  * Remove a calendar from the user's calendar list
  * This doesn't delete the calendar, just removes it from the user's view
  */
-export const removeCalendarFromList = action({
+export const removeCalendarFromList: any = action({
   args: {
     calendarId: v.string(),
   },

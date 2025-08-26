@@ -41,6 +41,9 @@ function ConvexProvidersWithTheme({ children }: { children: React.ReactNode }) {
       appearance={{
         baseTheme: resolvedTheme === "dark" ? dark : undefined,
       }}
+      additionalOAuthScopes={{
+        google: ['https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.readonly']
+      }}
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         {children}

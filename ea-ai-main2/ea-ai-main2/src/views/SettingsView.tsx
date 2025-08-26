@@ -640,31 +640,42 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           }
         }
       } else {
-        // Connect Google Calendar using Clerk-based approach (like Calendly)
+        // Connect Google Calendar using Clerk's createExternalAccount (seamless OAuth)
         try {
           setIsConnecting("Google Calendar");
-          const result = await initiateGoogleCalendarConnection();
           
-          if (result.success) {
-            alert("✅ Google Calendar connected successfully!");
-          } else {
-            // Show user how to connect via Clerk (like Calendly pattern)
-            const shouldProceed = confirm(
-              `📅 Connect Google Calendar\n\n` +
-              `${result.message}\n\n` +
-              `Steps to connect:\n` +
-              result.instructions?.join('\n') + 
-              `\n\nWould you like to open your account settings?`
-            );
+          if (clerkUser) {
+            // Use Clerk's frontend SDK to initiate OAuth flow
+            const result = await clerkUser.createExternalAccount({
+              strategy: 'oauth_google',
+              redirectUrl: window.location.href, // Return to current page
+              additionalScopes: [
+                'https://www.googleapis.com/auth/calendar.events',
+                'https://www.googleapis.com/auth/calendar.readonly'
+              ]
+            });
             
-            if (shouldProceed && result.redirectUrl) {
-              // Open Clerk account management in a new tab
-              window.open(result.redirectUrl, '_blank');
+            // If OAuth requires redirect, Clerk handles it automatically
+            if (result.verification?.externalVerificationRedirectURL) {
+              window.location.href = result.verification.externalVerificationRedirectURL.href;
+            } else {
+              // Connection successful
+              alert("✅ Google Calendar connected successfully!");
+              // Refresh the page to update connection status
+              window.location.reload();
             }
+          } else {
+            throw new Error("User not loaded. Please refresh and try again.");
           }
         } catch (error) {
-          console.error("Failed to initiate Google Calendar connection:", error);
-          alert(`❌ Connection failed: ${error?.message || error}`);
+          console.error("Failed to connect Google Calendar:", error);
+          // Check if user already has Google connected
+          if (error?.errors?.[0]?.code === 'external_account_exists') {
+            alert("✅ Google Calendar is already connected!");
+            window.location.reload();
+          } else {
+            alert(`❌ Connection failed: ${error?.errors?.[0]?.longMessage || error?.message || error}`);
+          }
         } finally {
           setIsConnecting(null);
         }

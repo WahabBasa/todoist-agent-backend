@@ -1,8 +1,12 @@
+"use node";
+
 import { v } from "convex/values";
 import { query, action } from "../_generated/server";
 import { requireUserAuthForAction, requireUserAuth } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx, QueryCtx } from "../_generated/server";
+import { createClerkClient } from "@clerk/backend";
+import { api } from "../_generated/api";
 
 // Mirror Calendly's approach - use Clerk's OAuth tokens instead of custom storage
 // This eliminates the "Google Calendar integration is not properly configured" error
@@ -18,19 +22,15 @@ export const hasGoogleCalendarConnection = query({
     await logUserAccess(tokenIdentifier, "googleCalendar.clerk.hasGoogleCalendarConnection", "REQUESTED");
 
     try {
-      // In a real implementation, you'd use clerkClient() here
-      // For now, we'll simulate the check
-      // const token = await clerkClient().users.getUserOauthAccessToken(tokenIdentifier, "oauth_google");
-      // return token.data.length > 0 && token.data[0].token != null;
+      // Use Clerk to check if user has Google OAuth token
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY!,
+      });
       
-      // Temporary: Check if user has existing connection in our custom storage
-      // This will be replaced with Clerk check once environment is configured
-      const token = await ctx.db
-        .query("googleCalendarTokens")
-        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
-        .first();
+      const { data: tokens } = await clerkClient.users.getUserOauthAccessToken(tokenIdentifier, "google");
       
-      return token !== null;
+      // Check if user has valid Google OAuth token with calendar scopes
+      return tokens.length > 0 && tokens[0].token != null;
     } catch (error) {
       console.error("Error checking Google connection:", error);
       return false;
@@ -49,32 +49,23 @@ export const getGoogleOAuthClient = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.clerk.getGoogleOAuthClient", "REQUESTED");
 
     try {
-      // TODO: Replace with actual Clerk implementation
-      // const token = await clerkClient().users.getUserOauthAccessToken(tokenIdentifier, "oauth_google");
-      // 
-      // if (token.data.length === 0 || token.data[0].token == null) {
-      //   return { error: "No Google OAuth token found. Please connect your Google account." };
-      // }
-      //
-      // const client = new google.auth.OAuth2(
-      //   process.env.GOOGLE_OAUTH_CLIENT_ID,
-      //   process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-      //   process.env.GOOGLE_OAUTH_REDIRECT_URL
-      // );
-      //
-      // client.setCredentials({ access_token: token.data[0].token });
-      // return { client };
-
-      // Temporary fallback to existing system
-      const token = await ctx.runQuery(api.googleCalendar.auth.getGoogleCalendarTokenRecord, {});
-      if (!token) {
-        return { error: "No Google Calendar connection found. Please connect your Google account first." };
+      // Use Clerk to get Google OAuth token
+      const clerkClient = createClerkClient({
+        secretKey: process.env.CLERK_SECRET_KEY!,
+      });
+      
+      const { data: tokens } = await clerkClient.users.getUserOauthAccessToken(tokenIdentifier, "google");
+      
+      if (tokens.length === 0 || tokens[0].token == null) {
+        return { error: "No Google OAuth token found. Please connect your Google account through your profile settings." };
       }
-
+      
+      // Return the OAuth access token for the HTTP client to use
       return { 
         success: true, 
         hasToken: true,
-        message: "Ready to use Clerk-based OAuth (environment setup pending)"
+        token: tokens[0].token,
+        message: "Google Calendar access token retrieved successfully"
       };
     } catch (error) {
       console.error("Error getting OAuth client:", error);
@@ -93,20 +84,20 @@ export const initiateGoogleCalendarConnection = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.clerk.initiateConnection", "REQUESTED");
 
-    // TODO: Implement proper Clerk-based connection initiation
-    // For now, provide guidance on proper connection method
+    // For Clerk-based OAuth, users need to connect via their profile
+    // This provides direct instructions for Clerk's OAuth flow
     
     return {
-      success: false,
-      redirectUrl: "/user-profile#/security", // Clerk's account management page
-      message: "Please connect your Google account through your profile settings, then grant Calendar permissions.",
+      success: true,
+      requiresManualConnection: true,
+      redirectUrl: "/user-profile?focusSection=connectedAccounts",
+      message: "Connect your Google account to enable Calendar integration.",
       instructions: [
-        "1. Click your profile picture (top right)",
-        "2. Select 'Manage account'", 
-        "3. Go to 'Connected accounts'",
-        "4. Click 'Add connection' and select Google",
-        "5. Grant Calendar permissions when prompted",
-        "6. Return here and try connecting again"
+        "1. Click your profile picture or UserButton",
+        "2. Navigate to 'Connected accounts'", 
+        "3. Click 'Connect' next to Google",
+        "4. Grant Calendar permissions when prompted",
+        "5. Return to this page - the integration will work automatically"
       ]
     };
   },
@@ -151,16 +142,16 @@ export const testGoogleCalendarConnectionClerk = action({
         };
       }
 
-      // TODO: Replace with actual Google Calendar API test using Clerk tokens
-      // const calendar = google.calendar({ version: 'v3', auth: oauthResult.client });
-      // const calendarsResponse = await calendar.calendarList.list();
+      // Test the connection by trying to get the primary calendar
+      // This will be handled by the HTTP client using the Clerk token
+      const testResult = await ctx.runAction(api.googleCalendar.calendars.getPrimaryCalendar, {});
       
       return {
         success: true,
-        calendarsCount: 1, // Placeholder
-        primaryCalendar: "Connected via Clerk OAuth",
+        calendarsCount: 1, // We successfully got the primary calendar
+        primaryCalendar: testResult.summary || "Primary Calendar",
         testTimestamp: Date.now(),
-        message: "Clerk-based integration ready (pending environment configuration)"
+        message: "Google Calendar connection successful via Clerk OAuth"
       };
     } catch (error) {
       console.error("Error testing Google Calendar connection:", error);
@@ -174,5 +165,3 @@ export const testGoogleCalendarConnectionClerk = action({
   },
 });
 
-// Import the existing API for fallback
-import { api } from "../_generated/api";

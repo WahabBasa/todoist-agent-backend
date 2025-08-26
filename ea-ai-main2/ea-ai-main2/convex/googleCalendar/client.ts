@@ -28,12 +28,14 @@ export const makeGoogleCalendarRequest = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.client.makeGoogleCalendarRequest", `REQUESTED - ${method} ${endpoint}`);
 
-    // Get valid access token (automatically refreshes if needed)
-    const accessToken = await ctx.runAction(api.googleCalendar.auth.getValidGoogleCalendarToken, {});
+    // Get Google OAuth access token from Clerk
+    const clerkTokenResult = await ctx.runAction(api.googleCalendar.clerkIntegration.getGoogleOAuthClient, {});
     
-    if (!accessToken) {
-      throw new Error("No valid Google Calendar access token available. Please reconnect your Google account.");
+    if (clerkTokenResult.error || !clerkTokenResult.token) {
+      throw new Error(clerkTokenResult.error || "No valid Google Calendar access token available. Please connect your Google account through your profile settings.");
     }
+    
+    const accessToken = clerkTokenResult.token;
 
     // Build the full URL
     let url = `${GOOGLE_CALENDAR_API_BASE}${endpoint}`;
