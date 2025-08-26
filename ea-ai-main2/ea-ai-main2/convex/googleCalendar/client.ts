@@ -1,6 +1,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
-import { requireUserAuth, requireUserAuthForAction } from "../todoist/userAccess";
+import { v } from "convex/values";
+import { requireUserAuthForAction } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx } from "../_generated/server";
 
@@ -16,20 +17,16 @@ const GOOGLE_CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
  * Automatically handles token refresh on 401 errors
  */
 export const makeGoogleCalendarRequest = action({
-  args: {},
-  handler: async (
-    ctx: ActionCtx,
-    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-    endpoint: string,
-    body?: any,
-    queryParams?: Record<string, string>
-  ): Promise<any> => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.client.makeGoogleCalendarRequest", { 
-      tokenIdentifier,
-      method,
-      endpoint 
-    });
+  args: {
+    method: v.union(v.literal("GET"), v.literal("POST"), v.literal("PUT"), v.literal("PATCH"), v.literal("DELETE")),
+    endpoint: v.string(),
+    body: v.optional(v.any()),
+    queryParams: v.optional(v.record(v.string(), v.string())),
+  },
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { method, endpoint, body, queryParams } = args;
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.client.makeGoogleCalendarRequest", `REQUESTED - ${method} ${endpoint}`);
 
     // Get valid access token (automatically refreshes if needed)
     const accessToken = await ctx.runAction(api.googleCalendar.auth.getValidGoogleCalendarToken, {});
@@ -119,63 +116,13 @@ export const makeGoogleCalendarRequest = action({
 });
 
 // =================================================================
-// CONVENIENCE METHODS: Pre-configured API calls
+// CONVENIENCE METHODS: Moved to helpers.ts to eliminate circular dependencies
 // =================================================================
 
-/**
- * Make a GET request to the Google Calendar API
- */
-export const getFromGoogleCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx, endpoint: string, queryParams?: Record<string, string>) => {
-    // @ts-ignore - We're using this as a helper function
-    return await makeGoogleCalendarRequest.handler(ctx, "GET", endpoint, undefined, queryParams);
-  },
-});
-
-/**
- * Make a POST request to the Google Calendar API
- */
-export const postToGoogleCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
-    // @ts-ignore - We're using this as a helper function
-    return await makeGoogleCalendarRequest.handler(ctx, "POST", endpoint, body, queryParams);
-  },
-});
-
-/**
- * Make a PUT request to the Google Calendar API
- */
-export const putToGoogleCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
-    // @ts-ignore - We're using this as a helper function
-    return await makeGoogleCalendarRequest.handler(ctx, "PUT", endpoint, body, queryParams);
-  },
-});
-
-/**
- * Make a PATCH request to the Google Calendar API
- */
-export const patchToGoogleCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx, endpoint: string, body: any, queryParams?: Record<string, string>) => {
-    // @ts-ignore - We're using this as a helper function
-    return await makeGoogleCalendarRequest.handler(ctx, "PATCH", endpoint, body, queryParams);
-  },
-});
-
-/**
- * Make a DELETE request to the Google Calendar API
- */
-export const deleteFromGoogleCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx, endpoint: string, queryParams?: Record<string, string>) => {
-    // @ts-ignore - We're using this as a helper function
-    return await makeGoogleCalendarRequest.handler(ctx, "DELETE", endpoint, undefined, queryParams);
-  },
-});
+// NOTE: The convenience HTTP methods (getFromGoogleCalendar, postToGoogleCalendar, etc.)
+// have been moved to ./helpers.ts as TypeScript helper functions.
+// This follows Convex best practices to avoid circular dependencies in the generated API.
+// Import and use the helper functions directly instead of ctx.runAction calls.
 
 // =================================================================
 // CONNECTION TESTING
@@ -185,15 +132,16 @@ export const deleteFromGoogleCalendar = action({
  * Test the Google Calendar API connection
  * Returns basic information about the user's calendar setup
  */
-export const testGoogleCalendarConnection = action({
+export const testGoogleCalendarConnection: any = action({
   args: {},
-  handler: async (ctx: ActionCtx) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.client.testGoogleCalendarConnection", { tokenIdentifier });
+  handler: async (ctx: ActionCtx): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.client.testGoogleCalendarConnection", "REQUESTED");
 
     try {
-      // Test the connection by fetching the calendar list
-      const calendars = await getFromGoogleCalendar.handler(ctx, "/users/me/calendarList");
+      // Test the connection by fetching the calendar list using helper function
+      const { getFromGoogleCalendar } = await import("./helpers");
+      const calendars: any = await getFromGoogleCalendar(ctx, "/users/me/calendarList");
       
       return {
         success: true,

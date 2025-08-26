@@ -4,6 +4,7 @@ import { api } from "../_generated/api";
 import { requireUserAuthForAction } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx } from "../_generated/server";
+import { getFromGoogleCalendar, postToGoogleCalendar, patchToGoogleCalendar, deleteFromGoogleCalendar } from "./helpers";
 
 // =================================================================
 // CALENDAR OPERATIONS: List and manage Google Calendars
@@ -13,14 +14,14 @@ import { ActionCtx } from "../_generated/server";
  * List all calendars accessible to the user
  * Returns the calendar list with basic information
  */
-export const listCalendars = action({
+export const listCalendars: any = action({
   args: {
     showHidden: v.optional(v.boolean()),
     showDeleted: v.optional(v.boolean()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.listCalendars", { tokenIdentifier });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.listCalendars", "REQUESTED");
 
     try {
       const queryParams: Record<string, string> = {};
@@ -33,13 +34,10 @@ export const listCalendars = action({
         queryParams.showDeleted = args.showDeleted.toString();
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
-        endpoint: "/users/me/calendarList",
-        queryParams,
-      });
+      const response: any = await getFromGoogleCalendar(ctx, "/users/me/calendarList", queryParams);
 
       // Process and return calendar list with useful information
-      const calendars = response.items?.map((calendar: any) => ({
+      const calendars: any[] = response.items?.map((calendar: any) => ({
         id: calendar.id,
         summary: calendar.summary,
         description: calendar.description || null,
@@ -72,21 +70,16 @@ export const listCalendars = action({
 /**
  * Get detailed information about a specific calendar
  */
-export const getCalendarDetails = action({
+export const getCalendarDetails: any = action({
   args: {
     calendarId: v.string(),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.getCalendarDetails", { 
-      tokenIdentifier,
-      calendarId: args.calendarId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.getCalendarDetails", `REQUESTED - ${args.calendarId}`);
 
     try {
-      const response = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(args.calendarId)}`,
-      });
+      const response: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`);
 
       return {
         id: response.id,
@@ -113,24 +106,49 @@ export const getCalendarDetails = action({
  * Get the primary calendar for the user
  * This is a convenience function for the most common use case
  */
-export const getPrimaryCalendar = action({
+export const getPrimaryCalendar: any = action({
   args: {},
-  handler: async (ctx: ActionCtx) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.getPrimaryCalendar", { tokenIdentifier });
+  handler: async (ctx: ActionCtx): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.getPrimaryCalendar", "REQUESTED");
 
     try {
-      const calendarsResult = await ctx.runAction(api.googleCalendar.calendars.listCalendars, {});
+      // Call listCalendars logic directly to avoid circular dependency
+      const queryParams: Record<string, string> = {};
+      const response: any = await getFromGoogleCalendar(ctx, "/users/me/calendarList", queryParams);
       
-      const primaryCalendar = calendarsResult.primaryCalendar;
+      const calendars: any[] = response.items?.map((calendar: any) => ({
+        id: calendar.id,
+        summary: calendar.summary,
+        description: calendar.description || null,
+        primary: calendar.primary || false,
+        accessRole: calendar.accessRole,
+        backgroundColor: calendar.backgroundColor || null,
+        foregroundColor: calendar.foregroundColor || null,
+        selected: calendar.selected !== false,
+        hidden: calendar.hidden || false,
+        timeZone: calendar.timeZone || null,
+        conferenceProperties: calendar.conferenceProperties || null,
+      })) || [];
+
+      const primaryCalendar = calendars.find((cal: any) => cal.primary);
       if (!primaryCalendar) {
         throw new Error("No primary calendar found for user");
       }
 
-      // Get detailed information about the primary calendar
-      return await ctx.runAction(api.googleCalendar.calendars.getCalendarDetails, {
-        calendarId: primaryCalendar.id,
-      });
+      // Get detailed information about the primary calendar directly
+      const detailResponse: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(primaryCalendar.id)}`);
+      
+      return {
+        id: detailResponse.id,
+        summary: detailResponse.summary,
+        description: detailResponse.description || null,
+        location: detailResponse.location || null,
+        timeZone: detailResponse.timeZone,
+        conferenceProperties: detailResponse.conferenceProperties || null,
+        etag: detailResponse.etag,
+        kind: detailResponse.kind,
+      };
     } catch (error) {
       console.error("Failed to get primary calendar:", error);
       throw new Error(
@@ -146,19 +164,16 @@ export const getPrimaryCalendar = action({
  * Create a new calendar
  * Note: This creates a new calendar, not just adds an existing one to the list
  */
-export const createCalendar = action({
+export const createCalendar: any = action({
   args: {
     summary: v.string(),
     description: v.optional(v.string()),
     timeZone: v.optional(v.string()),
     location: v.optional(v.string()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.createCalendar", { 
-      tokenIdentifier,
-      summary: args.summary 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.createCalendar", `REQUESTED - ${args.summary}`);
 
     try {
       const calendarData: any = {
@@ -177,10 +192,7 @@ export const createCalendar = action({
         calendarData.location = args.location;
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.postToGoogleCalendar, {
-        endpoint: "/calendars",
-        body: calendarData,
-      });
+      const response: any = await postToGoogleCalendar(ctx, "/calendars", calendarData);
 
       return {
         id: response.id,
@@ -205,7 +217,7 @@ export const createCalendar = action({
 /**
  * Update an existing calendar
  */
-export const updateCalendar = action({
+export const updateCalendar: any = action({
   args: {
     calendarId: v.string(),
     summary: v.optional(v.string()),
@@ -213,12 +225,9 @@ export const updateCalendar = action({
     timeZone: v.optional(v.string()),
     location: v.optional(v.string()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.updateCalendar", { 
-      tokenIdentifier,
-      calendarId: args.calendarId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.updateCalendar", `REQUESTED - ${args.calendarId}`);
 
     try {
       const updateData: any = {};
@@ -244,10 +253,7 @@ export const updateCalendar = action({
         throw new Error("No changes specified for calendar update");
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.patchToGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(args.calendarId)}`,
-        body: updateData,
-      });
+      const response: any = await patchToGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`, updateData);
 
       return {
         id: response.id,
@@ -277,12 +283,9 @@ export const deleteCalendar = action({
   args: {
     calendarId: v.string(),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.deleteCalendar", { 
-      tokenIdentifier,
-      calendarId: args.calendarId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.deleteCalendar", `REQUESTED - ${args.calendarId}`);
 
     try {
       // Prevent deletion of primary calendar
@@ -290,9 +293,7 @@ export const deleteCalendar = action({
         throw new Error("Cannot delete the primary calendar");
       }
 
-      await ctx.runAction(api.googleCalendar.client.deleteFromGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(args.calendarId)}`,
-      });
+      await deleteFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`);
 
       return {
         success: true,
@@ -318,17 +319,14 @@ export const deleteCalendar = action({
  * Add an existing calendar to the user's calendar list
  * This is different from creating a new calendar - it adds a shared calendar
  */
-export const addCalendarToList = action({
+export const addCalendarToList: any = action({
   args: {
     calendarId: v.string(),
     colorRgbFormat: v.optional(v.boolean()),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.addCalendarToList", { 
-      tokenIdentifier,
-      calendarId: args.calendarId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.addCalendarToList", `REQUESTED - ${args.calendarId}`);
 
     try {
       const calendarListEntry = {
@@ -340,11 +338,7 @@ export const addCalendarToList = action({
         queryParams.colorRgbFormat = "true";
       }
 
-      const response = await ctx.runAction(api.googleCalendar.client.postToGoogleCalendar, {
-        endpoint: "/users/me/calendarList",
-        body: calendarListEntry,
-        queryParams,
-      });
+      const response: any = await postToGoogleCalendar(ctx, "/users/me/calendarList", calendarListEntry, queryParams);
 
       return {
         id: response.id,
@@ -371,17 +365,12 @@ export const removeCalendarFromList = action({
   args: {
     calendarId: v.string(),
   },
-  handler: async (ctx: ActionCtx, args) => {
-    const tokenIdentifier = await requireUserAuthForAction(ctx);
-    await logUserAccess(ctx, "googleCalendar.calendars.removeCalendarFromList", { 
-      tokenIdentifier,
-      calendarId: args.calendarId 
-    });
+  handler: async (ctx: ActionCtx, args): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.removeCalendarFromList", `REQUESTED - ${args.calendarId}`);
 
     try {
-      await ctx.runAction(api.googleCalendar.client.deleteFromGoogleCalendar, {
-        endpoint: `/users/me/calendarList/${encodeURIComponent(args.calendarId)}`,
-      });
+      await deleteFromGoogleCalendar(ctx, `/users/me/calendarList/${encodeURIComponent(args.calendarId)}`);
 
       return {
         success: true,

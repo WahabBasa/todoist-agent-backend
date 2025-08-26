@@ -4,6 +4,7 @@ import { api } from "../_generated/api";
 import { requireUserAuthForAction } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx } from "../_generated/server";
+import { getFromGoogleCalendar, postToGoogleCalendar, patchToGoogleCalendar, deleteFromGoogleCalendar } from "./helpers";
 
 // =================================================================
 // EVENT OPERATIONS: Full CRUD for Google Calendar events
@@ -96,10 +97,7 @@ export const listEvents = action({
         queryParams.timeZone = args.timeZone;
       }
 
-      const response: any = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(calendarId)}/events`,
-        queryParams,
-      });
+      const response: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events`, queryParams);
 
       // Process events to a consistent format
       const events: any[] = response.items?.map((event: any) => ({
@@ -245,10 +243,7 @@ export const createEventWithSmartDates = action({
         };
       }
 
-      const response: any = await ctx.runAction(api.googleCalendar.client.postToGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(calendarId)}/events`,
-        body: eventData,
-      });
+      const response: any = await postToGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events`, eventData);
 
       return {
         id: response.id,
@@ -330,9 +325,7 @@ export const updateEventWithSmartDates = action({
         // If start time changes but no end time specified, maintain duration
         if (!args.endDate && !args.duration) {
           // Get existing event to calculate current duration
-          const existingEvent = await ctx.runAction(api.googleCalendar.client.getFromGoogleCalendar, {
-            endpoint: `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
-          });
+          const existingEvent = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`);
 
           if (existingEvent.start?.dateTime && existingEvent.end?.dateTime) {
             const currentStart = new Date(existingEvent.start.dateTime);
@@ -390,10 +383,7 @@ export const updateEventWithSmartDates = action({
         throw new Error("No changes specified for event update");
       }
 
-      const response: any = await ctx.runAction(api.googleCalendar.client.patchToGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
-        body: updateData,
-      });
+      const response: any = await patchToGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`, updateData);
 
       return {
         id: response.id,
@@ -442,10 +432,7 @@ export const deleteCalendarEvent = action({
         queryParams.sendUpdates = "all"; // Default: notify all attendees
       }
 
-      await ctx.runAction(api.googleCalendar.client.deleteFromGoogleCalendar, {
-        endpoint: `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
-        queryParams,
-      });
+      await deleteFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`, queryParams);
 
       return {
         success: true,
@@ -497,7 +484,46 @@ export const searchCalendarEvents = action({
         searchArgs.timeMax = timeRange.timeMax;
       }
 
-      return await ctx.runAction(api.googleCalendar.events.listEvents, searchArgs);
+      // Call listEvents logic directly to avoid circular dependency
+      const calendarId = searchArgs.calendarId || "primary";
+      
+      const queryParams: Record<string, string> = {};
+      
+      if (searchArgs.timeMin) queryParams.timeMin = searchArgs.timeMin;
+      if (searchArgs.timeMax) queryParams.timeMax = searchArgs.timeMax;
+      if (searchArgs.maxResults) queryParams.maxResults = searchArgs.maxResults.toString();
+      if (searchArgs.orderBy) queryParams.orderBy = searchArgs.orderBy;
+      if (searchArgs.singleEvents !== undefined) queryParams.singleEvents = searchArgs.singleEvents.toString();
+      if (searchArgs.q) queryParams.q = searchArgs.q;
+      
+      const response: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(calendarId)}/events`, queryParams);
+      
+      const events: any[] = response.items?.map((event: any) => ({
+        id: event.id,
+        summary: event.summary || "Untitled",
+        description: event.description || null,
+        location: event.location || null,
+        start: event.start,
+        end: event.end,
+        attendees: event.attendees || [],
+        creator: event.creator,
+        organizer: event.organizer,
+        status: event.status,
+        htmlLink: event.htmlLink,
+        created: event.created,
+        updated: event.updated,
+        recurringEventId: event.recurringEventId || null,
+        recurrence: event.recurrence || null,
+        etag: event.etag,
+      })) || [];
+      
+      return {
+        events,
+        totalCount: events.length,
+        nextPageToken: response.nextPageToken || null,
+        summary: response.summary,
+        timeZone: response.timeZone,
+      };
     } catch (error) {
       console.error("Failed to search events:", error);
       throw new Error(
