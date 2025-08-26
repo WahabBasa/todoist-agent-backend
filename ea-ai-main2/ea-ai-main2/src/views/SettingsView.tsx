@@ -119,7 +119,7 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
       case "personalization":
         return <PersonalizationSettings />;
       case "connected-apps":
-        return <ConnectedAppsSettings clerkUser={clerkUser} signOut={signOut} />;
+        return <ConnectedAppsSettings clerkUser={clerkUser} signOut={signOut} activeSection={activeSection} />;
       case "data-controls":
         return <DataControlsSettings />;
       case "security":
@@ -289,76 +289,14 @@ function PersonalizationSettings() {
   );
 }
 
-// Google Calendar App Item with debug functionality
-interface GoogleCalendarAppItemProps {
-  app: any;
-  isConnecting: boolean;
-  onConnect: () => void;
-  onDebug: () => void;
-  onSync: () => void;
+
+interface ConnectedAppsSettingsProps {
+  clerkUser: any;
+  signOut: () => void;
+  activeSection: SettingsSection;
 }
 
-function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }: GoogleCalendarAppItemProps) {
-  return (
-    <div className="flex items-center justify-between p-4 border border-border rounded-design-lg bg-background">
-      <div className="flex items-center gap-4">
-        <div className={`w-10 h-10 rounded-design-md flex items-center justify-center ${
-          app.gradientFrom 
-            ? `bg-gradient-to-br from-${app.gradientFrom} to-${app.gradientTo}` 
-            : app.iconBgColor
-        }`}>
-          <span className="text-white font-semibold">{app.iconText}</span>
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium text-foreground">{app.appName}</h3>
-            {app.isConnected && (
-              <Badge variant="secondary" className="text-xs px-2 py-0.5">Connected</Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            {app.description}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {app.isConnected && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDebug}
-              className="text-xs px-3 py-1"
-            >
-              Connection Status
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSync}
-              className="text-xs px-3 py-1"
-            >
-              Refresh Connection
-            </Button>
-          </>
-        )}
-        {app.canConnect && (
-          <Button
-            variant={app.isConnected ? "outline" : "default"}
-            size="sm"
-            onClick={onConnect}
-            disabled={isConnecting}
-            className="text-xs px-3 py-1"
-          >
-            {isConnecting ? "Connecting..." : app.isConnected ? "Disconnect" : "Connect"}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
+function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedAppsSettingsProps) {
   // Remove unused parameters for linting
   void clerkUser;
   void signOut;
@@ -390,29 +328,14 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Google Calendar connection using Clerk pattern (like Calendly) - now using action
-  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<boolean | null>(null);
-  const checkGoogleCalendarConnection = useAction(api.googleCalendar.connection.hasGoogleCalendarConnection);
-  const testGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.testGoogleCalendarConnectionClerk);
-  const initiateGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.initiateGoogleCalendarConnection);
+  // Google Calendar connection status - passive query (no OAuth triggers)
+  const googleCalendarStatus = useQuery(api.googleCalendar.connection.hasGoogleCalendarConnection);
   
   // Keep fallback to existing system for disconnect
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
 
-  // Check Google Calendar connection status on component mount
-  useEffect(() => {
-    const checkConnectionStatus = async () => {
-      try {
-        const status = await checkGoogleCalendarConnection();
-        setGoogleCalendarStatus(status);
-      } catch (error) {
-        console.error("Failed to check Google Calendar connection:", error);
-        setGoogleCalendarStatus(false);
-      }
-    };
 
-    checkConnectionStatus();
-  }, [checkGoogleCalendarConnection]);
+
 
 
   // PostMessage listener for OAuth popup messages (including account conflicts)
@@ -643,11 +566,14 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         if (shouldDisconnect) {
           try {
             setIsConnecting("Google Calendar");
+            console.log("🔌 [Disconnect] Starting Google Calendar disconnection...");
             await removeGoogleCalendarConnection();
-            setGoogleCalendarStatus(false); // Update status immediately
+            
+            // Status will automatically refresh via useQuery
+            
             alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
           } catch (error) {
-            console.error("Failed to disconnect Google Calendar:", error);
+            console.error("❌ [Disconnect] Failed to disconnect Google Calendar:", error);
             alert(`❌ Failed to disconnect: ${error?.message || error}`);
           } finally {
             setIsConnecting(null);
@@ -657,38 +583,112 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         // Connect Google Calendar using Clerk's createExternalAccount (seamless OAuth)
         try {
           setIsConnecting("Google Calendar");
+          console.log("🔗 [Connect] Starting Google Calendar connection...");
+          console.log("🔗 [Connect] === GOOGLE CALENDAR CONNECTION ATTEMPT ===");
+          console.log("🔗 [Connect] Current URL:", window.location.href);
+          console.log("🔗 [Connect] Clerk user state:", clerkUser ? "loaded" : "not loaded");
+          console.log("🔗 [Connect] Google Calendar status before attempt:", googleCalendarStatus);
           
           if (clerkUser) {
-            // Use Clerk's frontend SDK to initiate OAuth flow
-            const result = await clerkUser.createExternalAccount({
+            // Enhanced logging for user state
+            console.log("🔗 [Connect] === DETAILED CLERK USER STATE ===");
+            console.log("🔗 [Connect] User ID:", clerkUser.id);
+            console.log("🔗 [Connect] Email:", clerkUser.primaryEmailAddress?.emailAddress);
+            console.log("🔗 [Connect] Verification status:", {
+              emailVerified: clerkUser.primaryEmailAddress?.verification?.status,
+              phoneVerified: clerkUser.primaryPhoneNumber?.verification?.status,
+              twoFactorEnabled: clerkUser.twoFactorEnabled
+            });
+            console.log("🔗 [Connect] Existing external accounts:", clerkUser.externalAccounts?.map(account => ({
+              provider: account.provider,
+              id: account.id,
+              verified: account.verification?.status
+            })));
+            console.log("🔗 [Connect] Session state:", {
+              lastSignInAt: clerkUser.lastSignInAt,
+              createdAt: clerkUser.createdAt
+            });
+            
+            console.log("🔗 [Connect] === INITIATING OAUTH ===");
+            const oauthParams = {
               strategy: 'oauth_google',
-              redirectUrl: window.location.href, // Return to current page
+              redirectUrl: window.location.href,
               additionalScopes: [
                 'https://www.googleapis.com/auth/calendar.events',
                 'https://www.googleapis.com/auth/calendar.readonly'
               ]
-            });
+            };
+            console.log("🔗 [Connect] OAuth parameters:", JSON.stringify(oauthParams, null, 2));
+            
+            // Use Clerk's frontend SDK to initiate OAuth flow
+            const result = await clerkUser.createExternalAccount(oauthParams);
+            
+            console.log("🔗 [Connect] === OAUTH RESULT ===");
+            console.log("🔗 [Connect] Full result object:", JSON.stringify(result, null, 2));
+            console.log("🔗 [Connect] Result keys:", Object.keys(result || {}));
+            console.log("🔗 [Connect] Verification object:", result?.verification);
+            console.log("🔗 [Connect] External verification URL:", result?.verification?.externalVerificationRedirectURL);
             
             // If OAuth requires redirect, Clerk handles it automatically
             if (result.verification?.externalVerificationRedirectURL) {
+              console.log("🔗 [Connect] Redirecting to OAuth URL:", result.verification.externalVerificationRedirectURL.href);
               window.location.href = result.verification.externalVerificationRedirectURL.href;
             } else {
-              // Connection successful
-              setGoogleCalendarStatus(true); // Update status immediately
+              // Connection successful - status will update automatically via useQuery
+              console.log("🔗 [Connect] OAuth completed, status will refresh automatically");
               alert("✅ Google Calendar connected successfully!");
             }
           } else {
             throw new Error("User not loaded. Please refresh and try again.");
           }
         } catch (error) {
-          console.error("Failed to connect Google Calendar:", error);
-          // Check if user already has Google connected
-          if (error?.errors?.[0]?.code === 'external_account_exists') {
-            setGoogleCalendarStatus(true); // Update status immediately
-            alert("✅ Google Calendar is already connected!");
-          } else {
-            alert(`❌ Connection failed: ${error?.errors?.[0]?.longMessage || error?.message || error}`);
+          console.error("❌ [Connect] === COMPREHENSIVE ERROR ANALYSIS ===");
+          console.error("❌ [Connect] Raw error object:", error);
+          console.error("❌ [Connect] Error constructor:", error?.constructor?.name);
+          console.error("❌ [Connect] Error message:", error?.message);
+          console.error("❌ [Connect] Error stack:", error?.stack);
+          
+          // Log all error properties
+          console.error("❌ [Connect] All error properties:", Object.keys(error || {}));
+          console.error("❌ [Connect] Error as JSON:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+          
+          // Clerk-specific error details
+          if (error?.errors) {
+            console.error("❌ [Connect] Clerk errors array:", JSON.stringify(error.errors, null, 2));
+            error.errors.forEach((err, index) => {
+              console.error(`❌ [Connect] Error ${index}:`, {
+                code: err.code,
+                message: err.message,
+                longMessage: err.longMessage,
+                meta: err.meta,
+                param: err.param
+              });
+            });
           }
+          
+          // Check for specific error codes
+          const errorCode = error?.errors?.[0]?.code;
+          const errorMessage = error?.errors?.[0]?.longMessage || error?.message || 'Unknown error';
+          
+          console.error("❌ [Connect] Primary error code:", errorCode);
+          console.error("❌ [Connect] Primary error message:", errorMessage);
+          
+          // Handle specific error cases
+          if (errorCode === 'external_account_exists') {
+            console.log("ℹ️ [Connect] External account already exists, status will refresh automatically");
+            alert("✅ Google Calendar is already connected!");
+          } else if (errorCode === 'additional_verification_required') {
+            console.error("❌ [Connect] Additional verification required - details:", error?.errors?.[0]?.meta);
+            alert(`❌ Additional verification required: ${errorMessage}`);
+          } else if (errorCode === 'oauth_provider_not_configured') {
+            console.error("❌ [Connect] OAuth provider not configured in Clerk dashboard");
+            alert(`❌ OAuth provider not configured: ${errorMessage}`);
+          } else {
+            console.error("❌ [Connect] Unhandled error code:", errorCode);
+            alert(`❌ Connection failed: ${errorMessage}`);
+          }
+          
+          console.error("❌ [Connect] === END ERROR ANALYSIS ===");
         } finally {
           setIsConnecting(null);
         }
@@ -760,81 +760,21 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
 
       {/* Connection Options */}
       <div className="space-y-4">
-        {connectedApps.map((app) => {
-          // Special handling for Google Calendar with debug functionality
-          if (app.appName === "Google Calendar") {
-            return (
-              <GoogleCalendarAppItem
-                key={app.appName}
-                app={app}
-                isConnecting={isConnecting === app.appName}
-                onConnect={() => void handleConnect(app.appName)}
-                onDebug={async () => {
-                  try {
-                    // Test connection using Clerk-based approach
-                    const testResult = await testGoogleCalendarConnection();
-                    
-                    console.log("Google Calendar Clerk test result:", testResult);
-                    
-                    const debugInfo = {
-                      "Connection Status": googleCalendarStatus ? "✅ Connected" : "❌ Not Connected",
-                      "Integration Type": "Clerk-based OAuth (Calendly pattern)",
-                      "API Test": testResult.success ? {
-                        "Status": "✅ Working",
-                        "Calendars Count": testResult.calendarsCount,
-                        "Primary Calendar": testResult.primaryCalendar,
-                        "Test Time": new Date(testResult.testTimestamp).toLocaleString(),
-                        "Message": testResult.message
-                      } : {
-                        "Status": "❌ Failed",
-                        "Error": testResult.error,
-                        "Test Time": new Date(testResult.testTimestamp).toLocaleString()
-                      }
-                    };
-                    
-                    alert(`Google Calendar Debug Info (Clerk):\n\n${JSON.stringify(debugInfo, null, 2)}`);
-                  } catch (error) {
-                    console.error("Debug failed:", error);
-                    alert(`Debug failed: ${error?.message || error}`);
-                  }
-                }}
-                onSync={async () => {
-                  try {
-                    // Test the current connection to verify it's working
-                    console.log("Testing Google Calendar connection...");
-                    const testResult = await testGoogleCalendarConnection();
-                    
-                    if (testResult.success) {
-                      alert(`✅ Google Calendar connection is working!\n\nFound ${testResult.calendarsCount} calendars.\nPrimary calendar: ${testResult.primaryCalendar}`);
-                    } else {
-                      alert(`❌ Google Calendar connection test failed:\n\n${testResult.error}\n\nPlease reconnect your Google account.`);
-                    }
-                    
-                  } catch (error) {
-                    console.error("Test failed:", error);
-                    alert(`❌ Connection test failed: ${error?.message || error}`);
-                  }
-                }}
-              />
-            );
-          }
-          
-          return (
-            <ConnectedAppItem
-              key={app.appName}
-              appName={app.appName}
-              description={app.description}
-              iconBgColor={app.iconBgColor}
-              iconText={app.iconText}
-              gradientFrom={app.gradientFrom}
-              gradientTo={app.gradientTo}
-              isConnected={app.isConnected}
-              isConnecting={isConnecting === app.appName}
-              canConnect={app.canConnect}
-              onConnect={() => void handleConnect(app.appName)}
-            />
-          );
-        })}
+        {connectedApps.map((app) => (
+          <ConnectedAppItem
+            key={app.appName}
+            appName={app.appName}
+            description={app.description}
+            iconBgColor={app.iconBgColor}
+            iconText={app.iconText}
+            gradientFrom={app.gradientFrom}
+            gradientTo={app.gradientTo}
+            isConnected={app.isConnected}
+            isConnecting={isConnecting === app.appName}
+            canConnect={app.canConnect}
+            onConnect={() => void handleConnect(app.appName)}
+          />
+        ))}
       </div>
     </div>
   );
