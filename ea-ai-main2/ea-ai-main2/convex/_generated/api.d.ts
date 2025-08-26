@@ -24,6 +24,7 @@ import type * as debug_fixTokenIdentifier from "../debug/fixTokenIdentifier.js";
 import type * as debug_todoistDebug from "../debug/todoistDebug.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as googleCalendar_calendars from "../googleCalendar/calendars.js";
+import type * as googleCalendar_clerkIntegration from "../googleCalendar/clerkIntegration.js";
 import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
 import type * as googleCalendar_helpers from "../googleCalendar/helpers.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   "debug/todoistDebug": typeof debug_todoistDebug;
   "googleCalendar/auth": typeof googleCalendar_auth;
   "googleCalendar/calendars": typeof googleCalendar_calendars;
+  "googleCalendar/clerkIntegration": typeof googleCalendar_clerkIntegration;
   "googleCalendar/client": typeof googleCalendar_client;
   "googleCalendar/events": typeof googleCalendar_events;
   "googleCalendar/helpers": typeof googleCalendar_helpers;

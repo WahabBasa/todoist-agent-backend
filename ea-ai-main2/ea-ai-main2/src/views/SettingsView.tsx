@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
+import { useQuery, useAction } from "convex/react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { ScrollArea } from "../components/ui/scroll-area";
-import { Separator } from "../components/ui/separator";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
@@ -189,6 +187,7 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 
 
 function GeneralSettings({ clerkUser }: { clerkUser: any }) {
+  void clerkUser; // Remove unused parameter warning
   return (
     <div className="space-y-6">
       <SettingsHeader 
@@ -360,8 +359,12 @@ function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }
 }
 
 function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
+  // Remove unused parameters for linting
+  void clerkUser;
+  void signOut;
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
-  const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const [hasAutoSynced] = useState(false);
+  void hasAutoSynced; // Remove unused variable warning
   const [todoistConflictData, setTodoistConflictData] = useState<{
     message: string;
     instructions: string[];
@@ -387,11 +390,13 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Check if Google Calendar is connected (using new authentication system)
-  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  // Google Calendar connection using Clerk pattern (like Calendly)
+  const hasGoogleCalendarConnection = useQuery(api.googleCalendar.clerkIntegration.hasGoogleCalendarConnection);
+  const testGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.testGoogleCalendarConnectionClerk);
+  const initiateGoogleCalendarConnection = useAction(api.googleCalendar.clerkIntegration.initiateGoogleCalendarConnection);
+  
+  // Keep fallback to existing system for disconnect
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
-  const getGoogleCalendarConnection = useQuery(api.googleCalendar.auth.getGoogleCalendarConnection);
-  const testGoogleCalendarConnection = useAction(api.googleCalendar.client.testGoogleCalendarConnection);
 
   // The Google Calendar connection status is now handled by useQuery automatically
   // No need for manual loading since useQuery will handle this
@@ -483,7 +488,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
 
   const retryTodoistConnection = () => {
     console.log("[Settings] Retrying Todoist connection...");
-    handleConnect("Todoist");
+    void handleConnect("Todoist");
   };
 
   const connectedApps = [
@@ -604,7 +609,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                 setIsConnecting(null);
                 return;
               }
-            } catch (error) {
+            } catch (_error) {
               // Popup might be cross-origin and throw errors - this is expected
               // Continue monitoring
             }
@@ -635,21 +640,33 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           }
         }
       } else {
-        // Connect Google Calendar using Clerk's OAuth
-        const shouldConnect = confirm(
-          "📅 Connect Google Calendar\n\n" +
-          "You'll be redirected to your profile page where you can:\n" +
-          "1. Connect your Google account\n" +
-          "2. Grant calendar permissions\n" +
-          "3. Return to settings to use calendar features\n\n" +
-          "Click OK to open your profile settings."
-        );
-        
-        if (shouldConnect) {
-          // Open UserProfile with Google Calendar scopes
+        // Connect Google Calendar using Clerk-based approach (like Calendly)
+        try {
           setIsConnecting("Google Calendar");
-          // This will be handled by the UserButton with additionalOAuthScopes
-          document.getElementById('clerk-user-button')?.click();
+          const result = await initiateGoogleCalendarConnection();
+          
+          if (result.success) {
+            alert("✅ Google Calendar connected successfully!");
+          } else {
+            // Show user how to connect via Clerk (like Calendly pattern)
+            const shouldProceed = confirm(
+              `📅 Connect Google Calendar\n\n` +
+              `${result.message}\n\n` +
+              `Steps to connect:\n` +
+              result.instructions?.join('\n') + 
+              `\n\nWould you like to open your account settings?`
+            );
+            
+            if (shouldProceed && result.redirectUrl) {
+              // Open Clerk account management in a new tab
+              window.open(result.redirectUrl, '_blank');
+            }
+          }
+        } catch (error) {
+          console.error("Failed to initiate Google Calendar connection:", error);
+          alert(`❌ Connection failed: ${error?.message || error}`);
+        } finally {
+          setIsConnecting(null);
         }
       }
     } else {
@@ -727,29 +744,23 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                 key={app.appName}
                 app={app}
                 isConnecting={isConnecting === app.appName}
-                onConnect={() => handleConnect(app.appName)}
+                onConnect={() => void handleConnect(app.appName)}
                 onDebug={async () => {
                   try {
-                    // Get detailed connection status and test connection
-                    const connectionDetails = getGoogleCalendarConnection;
+                    // Test connection using Clerk-based approach
                     const testResult = await testGoogleCalendarConnection();
                     
-                    console.log("Google Calendar connection details:", connectionDetails);
-                    console.log("Google Calendar test result:", testResult);
+                    console.log("Google Calendar Clerk test result:", testResult);
                     
                     const debugInfo = {
                       "Connection Status": hasGoogleCalendarConnection ? "✅ Connected" : "❌ Not Connected",
-                      "Connection Details": connectionDetails ? {
-                        "Scope": connectionDetails.scope || "Unknown",
-                        "Created": connectionDetails.createdAt ? new Date(connectionDetails.createdAt).toLocaleString() : "Unknown",
-                        "Expires": connectionDetails.expiresAt ? new Date(connectionDetails.expiresAt).toLocaleString() : "Unknown",
-                        "Is Expired": connectionDetails.isExpired ? "⚠️ Yes" : "✅ No"
-                      } : "No connection data",
+                      "Integration Type": "Clerk-based OAuth (Calendly pattern)",
                       "API Test": testResult.success ? {
                         "Status": "✅ Working",
                         "Calendars Count": testResult.calendarsCount,
                         "Primary Calendar": testResult.primaryCalendar,
-                        "Test Time": new Date(testResult.testTimestamp).toLocaleString()
+                        "Test Time": new Date(testResult.testTimestamp).toLocaleString(),
+                        "Message": testResult.message
                       } : {
                         "Status": "❌ Failed",
                         "Error": testResult.error,
@@ -757,7 +768,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                       }
                     };
                     
-                    alert(`Google Calendar Debug Info:\n\n${JSON.stringify(debugInfo, null, 2)}`);
+                    alert(`Google Calendar Debug Info (Clerk):\n\n${JSON.stringify(debugInfo, null, 2)}`);
                   } catch (error) {
                     console.error("Debug failed:", error);
                     alert(`Debug failed: ${error?.message || error}`);
@@ -796,7 +807,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
               isConnected={app.isConnected}
               isConnecting={isConnecting === app.appName}
               canConnect={app.canConnect}
-              onConnect={() => handleConnect(app.appName)}
+              onConnect={() => void handleConnect(app.appName)}
             />
           );
         })}
