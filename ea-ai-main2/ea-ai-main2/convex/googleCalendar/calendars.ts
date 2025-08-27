@@ -72,7 +72,7 @@ export const listCalendars = action({
       });
 
       // Process and return calendar list with useful information
-      const calendars: any[] = response.items?.map((calendar: any) => ({
+      const calendars: any[] = response.data.items?.map((calendar: any) => ({
         id: calendar.id,
         summary: calendar.summary,
         description: calendar.description || null,
@@ -113,18 +113,34 @@ export const getCalendarDetails = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.getCalendarDetails", `REQUESTED - ${args.calendarId}`);
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
     try {
-      const response: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`);
+      // Direct googleapis call
+      const response = await google.calendar("v3").calendars.get({
+        auth: oAuthClient,
+        calendarId: args.calendarId,
+      });
 
       return {
-        id: response.id,
-        summary: response.summary,
-        description: response.description || null,
-        location: response.location || null,
-        timeZone: response.timeZone,
-        conferenceProperties: response.conferenceProperties || null,
-        etag: response.etag,
-        kind: response.kind,
+        id: response.data.id,
+        summary: response.data.summary,
+        description: response.data.description || null,
+        location: response.data.location || null,
+        timeZone: response.data.timeZone,
+        conferenceProperties: response.data.conferenceProperties || null,
+        etag: response.data.etag,
+        kind: response.data.kind,
       };
     } catch (error) {
       console.error("Failed to get calendar details:", error);
@@ -137,63 +153,6 @@ export const getCalendarDetails = action({
   },
 });
 
-/**
- * Get the primary calendar for the user
- * This is a convenience function for the most common use case
- */
-export const getPrimaryCalendar = action({
-  args: {},
-  handler: async (ctx: ActionCtx): Promise<any> => {
-    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
-    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.getPrimaryCalendar", "REQUESTED");
-
-    try {
-      // Call listCalendars logic directly to avoid circular dependency
-      const queryParams: Record<string, string> = {};
-      const response: any = await getFromGoogleCalendar(ctx, "/users/me/calendarList", queryParams);
-      
-      const calendars: any[] = response.items?.map((calendar: any) => ({
-        id: calendar.id,
-        summary: calendar.summary,
-        description: calendar.description || null,
-        primary: calendar.primary || false,
-        accessRole: calendar.accessRole,
-        backgroundColor: calendar.backgroundColor || null,
-        foregroundColor: calendar.foregroundColor || null,
-        selected: calendar.selected !== false,
-        hidden: calendar.hidden || false,
-        timeZone: calendar.timeZone || null,
-        conferenceProperties: calendar.conferenceProperties || null,
-      })) || [];
-
-      const primaryCalendar = calendars.find((cal: any) => cal.primary);
-      if (!primaryCalendar) {
-        throw new Error("No primary calendar found for user");
-      }
-
-      // Get detailed information about the primary calendar directly
-      const detailResponse: any = await getFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(primaryCalendar.id)}`);
-      
-      return {
-        id: detailResponse.id,
-        summary: detailResponse.summary,
-        description: detailResponse.description || null,
-        location: detailResponse.location || null,
-        timeZone: detailResponse.timeZone,
-        conferenceProperties: detailResponse.conferenceProperties || null,
-        etag: detailResponse.etag,
-        kind: detailResponse.kind,
-      };
-    } catch (error) {
-      console.error("Failed to get primary calendar:", error);
-      throw new Error(
-        error instanceof Error 
-          ? `Failed to get primary calendar: ${error.message}`
-          : "Failed to get primary calendar"
-      );
-    }
-  },
-});
 
 /**
  * Create a new calendar
@@ -209,6 +168,18 @@ export const createCalendar = action({
   handler: async (ctx: ActionCtx, args): Promise<any> => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.createCalendar", `REQUESTED - ${args.summary}`);
+
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
 
     try {
       const calendarData: any = {
@@ -227,15 +198,19 @@ export const createCalendar = action({
         calendarData.location = args.location;
       }
 
-      const response: any = await postToGoogleCalendar(ctx, "/calendars", calendarData);
+      // Direct googleapis call
+      const response = await google.calendar("v3").calendars.insert({
+        auth: oAuthClient,
+        requestBody: calendarData,
+      });
 
       return {
-        id: response.id,
-        summary: response.summary,
-        description: response.description || null,
-        timeZone: response.timeZone,
-        location: response.location || null,
-        etag: response.etag,
+        id: response.data.id,
+        summary: response.data.summary,
+        description: response.data.description || null,
+        timeZone: response.data.timeZone,
+        location: response.data.location || null,
+        etag: response.data.etag,
         created: true,
       };
     } catch (error) {
@@ -264,6 +239,18 @@ export const updateCalendar = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.updateCalendar", `REQUESTED - ${args.calendarId}`);
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
     try {
       const updateData: any = {};
 
@@ -288,15 +275,20 @@ export const updateCalendar = action({
         throw new Error("No changes specified for calendar update");
       }
 
-      const response: any = await patchToGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`, updateData);
+      // Direct googleapis call
+      const response = await google.calendar("v3").calendars.patch({
+        auth: oAuthClient,
+        calendarId: args.calendarId,
+        requestBody: updateData,
+      });
 
       return {
-        id: response.id,
-        summary: response.summary,
-        description: response.description || null,
-        timeZone: response.timeZone,
-        location: response.location || null,
-        etag: response.etag,
+        id: response.data.id,
+        summary: response.data.summary,
+        description: response.data.description || null,
+        timeZone: response.data.timeZone,
+        location: response.data.location || null,
+        etag: response.data.etag,
         updated: true,
       };
     } catch (error) {
@@ -322,13 +314,29 @@ export const deleteCalendar = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.deleteCalendar", `REQUESTED - ${args.calendarId}`);
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
     try {
       // Prevent deletion of primary calendar
       if (args.calendarId === "primary") {
         throw new Error("Cannot delete the primary calendar");
       }
 
-      await deleteFromGoogleCalendar(ctx, `/calendars/${encodeURIComponent(args.calendarId)}`);
+      // Direct googleapis call
+      await google.calendar("v3").calendars.delete({
+        auth: oAuthClient,
+        calendarId: args.calendarId,
+      });
 
       return {
         success: true,
@@ -363,22 +371,34 @@ export const addCalendarToList = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.addCalendarToList", `REQUESTED - ${args.calendarId}`);
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
     try {
       const calendarListEntry = {
         id: args.calendarId,
       };
 
-      const queryParams: Record<string, string> = {};
-      if (args.colorRgbFormat) {
-        queryParams.colorRgbFormat = "true";
-      }
-
-      const response: any = await postToGoogleCalendar(ctx, "/users/me/calendarList", calendarListEntry, queryParams);
+      // Direct googleapis call
+      const response = await google.calendar("v3").calendarList.insert({
+        auth: oAuthClient,
+        requestBody: calendarListEntry,
+        colorRgbFormat: args.colorRgbFormat,
+      });
 
       return {
-        id: response.id,
-        summary: response.summary,
-        accessRole: response.accessRole,
+        id: response.data.id,
+        summary: response.data.summary,
+        accessRole: response.data.accessRole,
         added: true,
       };
     } catch (error) {
@@ -404,8 +424,24 @@ export const removeCalendarFromList = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.removeCalendarFromList", `REQUESTED - ${args.calendarId}`);
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
     try {
-      await deleteFromGoogleCalendar(ctx, `/users/me/calendarList/${encodeURIComponent(args.calendarId)}`);
+      // Direct googleapis call
+      await google.calendar("v3").calendarList.delete({
+        auth: oAuthClient,
+        calendarId: args.calendarId,
+      });
 
       return {
         success: true,
