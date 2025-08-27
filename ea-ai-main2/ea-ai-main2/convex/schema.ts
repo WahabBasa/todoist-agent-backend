@@ -53,16 +53,8 @@ const applicationTables = {
     updatedAt: v.number(),
   }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
-  // Google Calendar API Integration
-  googleCalendarTokens: defineTable({
-    tokenIdentifier: v.string(), // Required - Clerk tokenIdentifier
-    accessToken: v.string(),
-    refreshToken: v.optional(v.string()),
-    expiresAt: v.number(), // Token expiration timestamp
-    scope: v.string(), // OAuth scopes granted
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+  // Google Calendar integration now uses Clerk OAuth tokens directly
+  // No database storage needed - Clerk manages all token lifecycle
 
 };
 

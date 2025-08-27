@@ -328,11 +328,24 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Google Calendar connection status - passive query (no OAuth triggers)
-  const googleCalendarStatus = useQuery(api.googleCalendar.connection.hasGoogleCalendarConnection);
+  // Google Calendar connection status - use action since we need to check Clerk OAuth
+  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<boolean | null>(null);
+  const checkGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
   
   // Keep fallback to existing system for disconnect
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+
+  // Check Google Calendar connection status when component mounts or user switches to Connected Apps
+  useEffect(() => {
+    if (activeSection === 'connected-apps') {
+      checkGoogleCalendarConnection()
+        .then(setGoogleCalendarStatus)
+        .catch((error) => {
+          console.error("Failed to check Google Calendar connection:", error);
+          setGoogleCalendarStatus(false);
+        });
+    }
+  }, [activeSection, checkGoogleCalendarConnection]);
 
 
 
@@ -567,11 +580,15 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
           try {
             setIsConnecting("Google Calendar");
             console.log("🔌 [Disconnect] Starting Google Calendar disconnection...");
-            await removeGoogleCalendarConnection();
+            const success = await removeGoogleCalendarConnection();
             
-            // Status will automatically refresh via useQuery
-            
-            alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
+            if (success) {
+              // Refresh connection status after successful disconnect
+              setGoogleCalendarStatus(false);
+              alert("✅ Google Calendar has been disconnected. You can reconnect anytime in Settings.");
+            } else {
+              alert("❌ Failed to disconnect Google Calendar. Please try again.");
+            }
           } catch (error) {
             console.error("❌ [Disconnect] Failed to disconnect Google Calendar:", error);
             alert(`❌ Failed to disconnect: ${error?.message || error}`);
@@ -584,32 +601,8 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
         try {
           setIsConnecting("Google Calendar");
           console.log("🔗 [Connect] Starting Google Calendar connection...");
-          console.log("🔗 [Connect] === GOOGLE CALENDAR CONNECTION ATTEMPT ===");
-          console.log("🔗 [Connect] Current URL:", window.location.href);
-          console.log("🔗 [Connect] Clerk user state:", clerkUser ? "loaded" : "not loaded");
-          console.log("🔗 [Connect] Google Calendar status before attempt:", googleCalendarStatus);
           
           if (clerkUser) {
-            // Enhanced logging for user state
-            console.log("🔗 [Connect] === DETAILED CLERK USER STATE ===");
-            console.log("🔗 [Connect] User ID:", clerkUser.id);
-            console.log("🔗 [Connect] Email:", clerkUser.primaryEmailAddress?.emailAddress);
-            console.log("🔗 [Connect] Verification status:", {
-              emailVerified: clerkUser.primaryEmailAddress?.verification?.status,
-              phoneVerified: clerkUser.primaryPhoneNumber?.verification?.status,
-              twoFactorEnabled: clerkUser.twoFactorEnabled
-            });
-            console.log("🔗 [Connect] Existing external accounts:", clerkUser.externalAccounts?.map(account => ({
-              provider: account.provider,
-              id: account.id,
-              verified: account.verification?.status
-            })));
-            console.log("🔗 [Connect] Session state:", {
-              lastSignInAt: clerkUser.lastSignInAt,
-              createdAt: clerkUser.createdAt
-            });
-            
-            console.log("🔗 [Connect] === INITIATING OAUTH ===");
             const oauthParams = {
               strategy: 'oauth_google',
               redirectUrl: window.location.href,
@@ -618,77 +611,40 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
                 'https://www.googleapis.com/auth/calendar.readonly'
               ]
             };
-            console.log("🔗 [Connect] OAuth parameters:", JSON.stringify(oauthParams, null, 2));
             
             // Use Clerk's frontend SDK to initiate OAuth flow
             const result = await clerkUser.createExternalAccount(oauthParams);
             
-            console.log("🔗 [Connect] === OAUTH RESULT ===");
-            console.log("🔗 [Connect] Full result object:", JSON.stringify(result, null, 2));
-            console.log("🔗 [Connect] Result keys:", Object.keys(result || {}));
-            console.log("🔗 [Connect] Verification object:", result?.verification);
-            console.log("🔗 [Connect] External verification URL:", result?.verification?.externalVerificationRedirectURL);
-            
             // If OAuth requires redirect, Clerk handles it automatically
             if (result.verification?.externalVerificationRedirectURL) {
-              console.log("🔗 [Connect] Redirecting to OAuth URL:", result.verification.externalVerificationRedirectURL.href);
+              console.log("🔗 [Connect] Redirecting to OAuth...");
               window.location.href = result.verification.externalVerificationRedirectURL.href;
             } else {
-              // Connection successful - status will update automatically via useQuery
-              console.log("🔗 [Connect] OAuth completed, status will refresh automatically");
+              // Connection successful - refresh status manually
+              console.log("🔗 [Connect] OAuth completed, refreshing status...");
+              const newStatus = await checkGoogleCalendarConnection();
+              setGoogleCalendarStatus(newStatus);
               alert("✅ Google Calendar connected successfully!");
             }
           } else {
             throw new Error("User not loaded. Please refresh and try again.");
           }
         } catch (error) {
-          console.error("❌ [Connect] === COMPREHENSIVE ERROR ANALYSIS ===");
-          console.error("❌ [Connect] Raw error object:", error);
-          console.error("❌ [Connect] Error constructor:", error?.constructor?.name);
-          console.error("❌ [Connect] Error message:", error?.message);
-          console.error("❌ [Connect] Error stack:", error?.stack);
-          
-          // Log all error properties
-          console.error("❌ [Connect] All error properties:", Object.keys(error || {}));
-          console.error("❌ [Connect] Error as JSON:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-          
-          // Clerk-specific error details
-          if (error?.errors) {
-            console.error("❌ [Connect] Clerk errors array:", JSON.stringify(error.errors, null, 2));
-            error.errors.forEach((err, index) => {
-              console.error(`❌ [Connect] Error ${index}:`, {
-                code: err.code,
-                message: err.message,
-                longMessage: err.longMessage,
-                meta: err.meta,
-                param: err.param
-              });
-            });
-          }
+          console.error("❌ [Connect] Connection error:", error);
           
           // Check for specific error codes
           const errorCode = error?.errors?.[0]?.code;
           const errorMessage = error?.errors?.[0]?.longMessage || error?.message || 'Unknown error';
           
-          console.error("❌ [Connect] Primary error code:", errorCode);
-          console.error("❌ [Connect] Primary error message:", errorMessage);
-          
           // Handle specific error cases
           if (errorCode === 'external_account_exists') {
-            console.log("ℹ️ [Connect] External account already exists, status will refresh automatically");
+            console.log("ℹ️ [Connect] External account already exists, refreshing status...");
+            const newStatus = await checkGoogleCalendarConnection();
+            setGoogleCalendarStatus(newStatus);
             alert("✅ Google Calendar is already connected!");
-          } else if (errorCode === 'additional_verification_required') {
-            console.error("❌ [Connect] Additional verification required - details:", error?.errors?.[0]?.meta);
-            alert(`❌ Additional verification required: ${errorMessage}`);
-          } else if (errorCode === 'oauth_provider_not_configured') {
-            console.error("❌ [Connect] OAuth provider not configured in Clerk dashboard");
-            alert(`❌ OAuth provider not configured: ${errorMessage}`);
           } else {
-            console.error("❌ [Connect] Unhandled error code:", errorCode);
-            alert(`❌ Connection failed: ${errorMessage}`);
+            alert("❌ Failed to connect Google Calendar. Please try again.");
           }
-          
-          console.error("❌ [Connect] === END ERROR ANALYSIS ===");
         } finally {
           setIsConnecting(null);
         }

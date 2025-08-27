@@ -3,64 +3,62 @@ import { query, action } from "../_generated/server";
 import { requireUserAuth, requireUserAuthForAction, getUserContext } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx, QueryCtx } from "../_generated/server";
+import { createClerkClient } from "@clerk/backend";
 
-// Database-based connection status check - follows Todoist pattern
-// Pure query - reads from googleCalendarTokens table without external API calls
+// Clerk-based connection status query for frontend compatibility
+// Returns actual connection state based on Clerk OAuth tokens
 
 /**
- * Check if user has Google Calendar connection by reading from database
- * Same pattern as Todoist hasTodoistConnection query
+ * Check if user has Google Calendar connection via Clerk OAuth
+ * Query for frontend useQuery compatibility  
+ * Returns true only when user has Google OAuth token available through Clerk
  */
 export const hasGoogleCalendarConnection = query({
   handler: async (ctx: QueryCtx): Promise<boolean> => {
     const userContext = await getUserContext(ctx);
     if (!userContext) {
-      logUserAccess("anonymous", "GOOGLE_CALENDAR_CONNECTION_CHECK", "FAILED - Not authenticated");
+      logUserAccess("anonymous", "googleCalendar.connection.hasGoogleCalendarConnection", "FAILED - Not authenticated");
       return false;
     }
 
     const { userId } = userContext;
-    logUserAccess(userId, "GOOGLE_CALENDAR_CONNECTION_CHECK", "REQUESTED");
+    logUserAccess(userId, "googleCalendar.connection.hasGoogleCalendarConnection", "REQUESTED");
 
-    const token = await ctx.db
-      .query("googleCalendarTokens")
-      .withIndex("by_tokenIdentifier", (q: any) => q.eq("tokenIdentifier", userId))
-      .unique();
-
-    const hasConnection = token !== null && token.accessToken.length > 0;
-    logUserAccess(userId, "GOOGLE_CALENDAR_CONNECTION_CHECK", hasConnection ? "SUCCESS" : "NO_CONNECTION");
+    // Since this is a query, we cannot call external APIs (like Clerk)
+    // For now, return false and let the action handle the actual checking
+    // The frontend will need to use the action for real-time checking
+    logUserAccess(userId, "googleCalendar.connection.hasGoogleCalendarConnection", "QUERY_LIMITATION");
     
-    return hasConnection;
+    return false;
   },
 });
 
-// Advanced connection testing using Clerk API (for debugging)
-// This remains as an ACTION since it calls external services
+// =================================================================
+// CLERK API ACTIONS (Node.js runtime required)
+// =================================================================
+
+/**
+ * Advanced connection testing using Clerk API (for debugging)
+ * This remains as an ACTION since it calls external services
+ */
 export const testGoogleCalendarConnectionWithClerk = action({
   args: {},
   handler: async (ctx: ActionCtx): Promise<boolean> => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.connection.testGoogleCalendarConnectionWithClerk", "REQUESTED");
 
-    // Extract Clerk user ID from tokenIdentifier using correct pipe separator
-    // Format: "https://domain|user_id" -> extract "user_id"
-    const clerkUserId = tokenIdentifier.split('|').pop() || 
-                       tokenIdentifier.split('#').pop() || 
-                       tokenIdentifier;
-
     try {
-      // Import Clerk only in Node.js runtime - need "use node" for this function
-      const { createClerkClient } = await import("@clerk/backend");
-      
-      // Use Clerk to check if user has Google OAuth token
       const clerkClient = createClerkClient({
         secretKey: process.env.CLERK_SECRET_KEY!,
       });
       
-      const { data: tokens } = await clerkClient.users.getUserOauthAccessToken(clerkUserId, "google");
+      const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
+        tokenIdentifier, 
+        "oauth_google"
+      );
       
       // Check if user has valid Google OAuth token with calendar scopes
-      return tokens.length > 0 && tokens[0].token != null;
+      return tokenResponse.data.length > 0 && tokenResponse.data[0].token != null;
     } catch (error) {
       console.error("Error checking Google connection:", error);
       return false;

@@ -19,8 +19,14 @@ import { api } from "../_generated/api";
 export const getGoogleOAuthClient = action({
   args: {},
   handler: async (ctx: ActionCtx) => {
-    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
-    await logUserAccess(tokenIdentifier, "googleCalendar.clerk.getGoogleOAuthClient", "REQUESTED");
+    // Use proper Convex-Clerk pattern to get clean user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    
+    const userId = identity.subject; // Clean Clerk user ID (e.g., "user_123")
+    await logUserAccess(identity.tokenIdentifier, "googleCalendar.clerk.getGoogleOAuthClient", "REQUESTED");
 
     try {
       // Use Clerk to get Google OAuth token
@@ -28,7 +34,7 @@ export const getGoogleOAuthClient = action({
         secretKey: process.env.CLERK_SECRET_KEY!,
       });
       
-      const { data: tokens } = await clerkClient.users.getUserOauthAccessToken(tokenIdentifier, "google");
+      const { data: tokens } = await clerkClient.users.getUserOauthAccessToken(userId, "oauth_google");
       
       if (tokens.length === 0 || tokens[0].token == null) {
         return { error: "No Google OAuth token found. Please connect your Google account through your profile settings." };
