@@ -188,6 +188,144 @@ export const removeGoogleCalendarConnection = action({
   },
 });
 
+// =================================================================
+// CALENDAR EVENT OPERATIONS (Calendly Clone Pattern)  
+// =================================================================
+
+/**
+ * Get calendar events in a date range (AI-friendly format)
+ */
+export const getCalendarEventTimes = action({
+  args: {
+    start: v.string(), // ISO date string
+    end: v.string(),   // ISO date string
+  },
+  handler: async (ctx: ActionCtx, args) => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCalendarEventTimes", "REQUESTED");
+
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please sign in again.");
+    }
+
+    try {
+      const events = await google.calendar("v3").events.list({
+        calendarId: "primary",
+        eventTypes: ["default"],
+        singleEvents: true,
+        timeMin: args.start,
+        timeMax: args.end,
+        maxResults: 2500,
+        auth: oAuthClient,
+      });
+
+      const eventTimes = events.data.items?.map(event => {
+        // Handle all-day events
+        if (event.start?.date && event.end?.date) {
+          return {
+            start: new Date(event.start.date),
+            end: new Date(event.end.date),
+            title: event.summary || "Untitled Event",
+            isAllDay: true
+          };
+        }
+
+        // Handle timed events
+        if (event.start?.dateTime && event.end?.dateTime) {
+          return {
+            start: new Date(event.start.dateTime),
+            end: new Date(event.end.dateTime),
+            title: event.summary || "Untitled Event",
+            isAllDay: false
+          };
+        }
+
+        return null;
+      }).filter(Boolean) || [];
+
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCalendarEventTimes", "SUCCESS");
+      return eventTimes;
+    } catch (error) {
+      console.error("Error fetching calendar events:", error);
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCalendarEventTimes", `FAILED: ${error}`);
+      throw new Error(`Failed to fetch calendar events: ${error instanceof Error ? error.message : error}`);
+    }
+  },
+});
+
+/**
+ * Create a new calendar event (AI-friendly)
+ */
+export const createCalendarEvent = action({
+  args: {
+    title: v.string(),
+    startTime: v.string(), // ISO date string
+    durationMinutes: v.number(),
+    description: v.optional(v.string()),
+    attendeeEmails: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx: ActionCtx, args) => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", "REQUESTED");
+
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please sign in again.");
+    }
+
+    try {
+      const startTime = new Date(args.startTime);
+      const endTime = new Date(startTime.getTime() + args.durationMinutes * 60000);
+
+      const attendees = args.attendeeEmails?.map(email => ({ email })) || [];
+
+      const calendarEvent = await google.calendar("v3").events.insert({
+        calendarId: "primary",
+        auth: oAuthClient,
+        requestBody: {
+          summary: args.title,
+          description: args.description,
+          start: {
+            dateTime: startTime.toISOString(),
+          },
+          end: {
+            dateTime: endTime.toISOString(),
+          },
+          attendees,
+        },
+      });
+
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", "SUCCESS");
+      return {
+        id: calendarEvent.data.id,
+        title: calendarEvent.data.summary,
+        start: calendarEvent.data.start?.dateTime,
+        end: calendarEvent.data.end?.dateTime,
+        htmlLink: calendarEvent.data.htmlLink,
+      };
+    } catch (error) {
+      console.error("Error creating calendar event:", error);
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", `FAILED: ${error}`);
+      throw new Error(`Failed to create calendar event: ${error instanceof Error ? error.message : error}`);
+    }
+  },
+});
+
 /**
  * Note: storeGoogleCalendarConnection is not needed when using Clerk OAuth
  * Clerk automatically manages the OAuth token lifecycle when users connect

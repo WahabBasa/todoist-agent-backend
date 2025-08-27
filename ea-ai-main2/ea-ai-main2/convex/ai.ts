@@ -472,42 +472,26 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
             // GOOGLE CALENDAR TOOL EXECUTIONS
             // =================================================================
             case "createCalendarEvent":
-                result = await ctx.runAction(api.googleCalendar.events.createEventWithSmartDates, {
-                    calendarId: args.calendarId,
-                    summary: args.summary,
+                // Calculate duration from start and end dates
+                const startTime = new Date(args.startDate);
+                const endTime = args.endDate ? new Date(args.endDate) : new Date(startTime.getTime() + 60 * 60000); // Default 1 hour
+                const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+                
+                result = await ctx.runAction(api.googleCalendar.auth.createCalendarEvent, {
+                    title: args.summary,
+                    startTime: startTime.toISOString(),
+                    durationMinutes,
                     description: args.description,
-                    startDate: args.startDate,
-                    endDate: args.endDate,
-                    duration: args.duration,
-                    location: args.location,
-                    attendees: args.attendees,
-                    recurrencePattern: args.recurrencePattern,
-                    timeZone: args.timeZone,
-                    reminders: args.reminders,
+                    attendeeEmails: args.attendees,
                 });
                 break;
             case "updateCalendarEvent":
-                result = await ctx.runAction(api.googleCalendar.events.updateEventWithSmartDates, {
-                    calendarId: args.calendarId,
-                    eventId: args.eventId,
-                    summary: args.summary,
-                    description: args.description,
-                    startDate: args.startDate,
-                    endDate: args.endDate,
-                    duration: args.duration,
-                    location: args.location,
-                    attendees: args.attendees,
-                    recurrencePattern: args.recurrencePattern,
-                    timeZone: args.timeZone,
-                    reminders: args.reminders,
-                });
+                // Temporarily disabled - simplified version coming soon
+                result = { error: "Update calendar events temporarily unavailable. Please delete and recreate the event." };
                 break;
             case "deleteCalendarEvent":
-                result = await ctx.runAction(api.googleCalendar.events.deleteCalendarEvent, {
-                    calendarId: args.calendarId,
-                    eventId: args.eventId,
-                    sendUpdates: args.sendUpdates,
-                });
+                // Temporarily disabled - simplified version coming soon
+                result = { error: "Delete calendar events temporarily unavailable. Contact support if urgent." };
                 break;
             case "listCalendarEvents":
                 // Parse time range to specific dates if provided
@@ -553,26 +537,23 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                     }
                 }
                 
-                result = await ctx.runAction(api.googleCalendar.events.listEvents, {
-                    calendarId: args.calendarId,
-                    timeMin,
-                    timeMax,
-                    maxResults: args.maxResults,
-                    timeZone: args.timeZone,
+                result = await ctx.runAction(api.googleCalendar.auth.getCalendarEventTimes, {
+                    start: timeMin || new Date().toISOString(),
+                    end: timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default 7 days
                 });
                 break;
             case "searchCalendarEvents":
-                result = await ctx.runAction(api.googleCalendar.events.searchCalendarEvents, {
-                    calendarId: args.calendarId,
-                    query: args.query,
-                    timeRange: args.timeRange,
-                    maxResults: args.maxResults,
-                });
+                // Temporarily disabled - simplified version coming soon  
+                result = { error: "Search calendar events temporarily unavailable. Use listCalendarEvents instead." };
                 break;
             case "getCurrentTime":
-                result = await ctx.runAction(api.googleCalendar.events.getCurrentTime, {
-                    timeZone: args.timeZone,
-                });
+                // Simple implementation - return current time
+                const now = new Date();
+                result = { 
+                    currentTime: now.toISOString(),
+                    timezone: args.timeZone || "UTC",
+                    timestamp: now.getTime()
+                };
                 break;
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
