@@ -7,6 +7,7 @@ import { requireUserAuthForAction, requireUserAuth } from "../todoist/userAccess
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx, MutationCtx } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
+import { google } from "googleapis";
 
 // TypeScript interfaces for return types
 interface GoogleTokenSuccess {
@@ -38,65 +39,47 @@ interface TestConnectionResult {
 // CLERK-BASED GOOGLE CALENDAR OAUTH (Calendly Clone Pattern)
 // =================================================================
 
-/**
- * Get Google OAuth access token using Clerk
- * This replaces all custom token storage and refresh logic
- */
-export const getGoogleCalendarToken = action({
-  args: {},
-  handler: async (ctx: ActionCtx): Promise<GoogleTokenResult> => {
-    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
-    await logUserAccess(tokenIdentifier, "googleCalendar.auth.getGoogleCalendarToken", "REQUESTED");
+// Simple OAuth client helper (mirrors Calendly pattern exactly)
+async function getOAuthClient(clerkUserId: string) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY!,
+  });
 
-    try {
-      const clerkClient = createClerkClient({
-        secretKey: process.env.CLERK_SECRET_KEY!,
-      });
-      
-      // Extract Clerk user ID from tokenIdentifier using correct pipe separator
-      const clerkUserId = tokenIdentifier.split('|').pop() || 
-                         tokenIdentifier.split('#').pop() || 
-                         tokenIdentifier;
-      
-      const tokenResponse = await clerkClient.users.getUserOauthAccessToken(
-        clerkUserId, 
-        "oauth_google"
-      );
-      
-      if (tokenResponse.data.length === 0 || !tokenResponse.data[0].token) {
-        return { 
-          success: false, 
-          error: "No Google OAuth token found. Please connect your Google account through your profile settings.",
-          hasToken: false
-        };
-      }
-      
-      return { 
-        success: true,
-        token: tokenResponse.data[0].token,
-        hasToken: true,
-        message: "Google Calendar access token retrieved successfully"
-      };
-    } catch (error) {
-      console.error("Error getting Google OAuth token from Clerk:", error);
-      
-      return { 
-        success: false, 
-        error: "Google Calendar not connected. Please connect in Settings.",
-        hasToken: false
-      };
-    }
-  },
-});
+  const token = await clerkClient.users.getUserOauthAccessToken(
+    clerkUserId,
+    "oauth_google"
+  );
+
+  if (token.data.length === 0 || token.data[0].token == null) {
+    return undefined; // Simple error handling like Calendly
+  }
+
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_REDIRECT_URL
+  );
+
+  client.setCredentials({ access_token: token.data[0].token });
+
+  return client;
+}
 
 /**
- * Check if user has Google Calendar connection via Clerk
+ * Check if user has Google Calendar connection via Clerk (simple version)
  */
 export const hasGoogleCalendarConnection = action({
   args: {},
   handler: async (ctx: ActionCtx): Promise<boolean> => {
-    const tokenResult = await ctx.runAction(api.googleCalendar.auth.getGoogleCalendarToken, {});
-    return tokenResult.success && tokenResult.hasToken;
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return false;
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    return oAuthClient !== undefined;
   },
 });
 
@@ -105,7 +88,7 @@ export const hasGoogleCalendarConnection = action({
 // =================================================================
 
 /**
- * Test Google Calendar connection using Clerk tokens
+ * Test Google Calendar connection using Clerk tokens (simple version)
  */
 export const testGoogleCalendarConnection = action({
   args: {},
@@ -113,28 +96,35 @@ export const testGoogleCalendarConnection = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.testGoogleCalendarConnection", "REQUESTED");
 
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return {
+        success: false,
+        error: "Not authenticated",
+        testTimestamp: Date.now()
+      };
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      return {
+        success: false,
+        error: "Google Calendar not connected. Please connect in Settings.",
+        testTimestamp: Date.now()
+      };
+    }
+
     try {
-      const tokenResult: GoogleTokenResult = await ctx.runAction(api.googleCalendar.auth.getGoogleCalendarToken, {});
-      
-      if (!tokenResult.success) {
-        return {
-          success: false,
-          error: tokenResult.error || "No Google Calendar connection found",
-          testTimestamp: Date.now()
-        };
-      }
-      
-      if (!tokenResult.token) {
-        return {
-          success: false,
-          error: "No Google Calendar token found",
-          testTimestamp: Date.now()
-        };
-      }
+      // Test by getting calendar list - simple and effective
+      const calendars = await google.calendar("v3").calendarList.list({
+        auth: oAuthClient,
+      });
 
       return {
         success: true,
-        message: "Google Calendar connection successful via Clerk OAuth",
+        message: `Connected to Google Calendar with ${calendars.data.items?.length || 0} calendars`,
         testTimestamp: Date.now(),
         hasConnection: true
       };

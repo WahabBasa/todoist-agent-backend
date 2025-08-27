@@ -1,10 +1,38 @@
+"use node";
+
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
 import { requireUserAuthForAction } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
 import { ActionCtx } from "../_generated/server";
-import { getFromGoogleCalendar, postToGoogleCalendar, patchToGoogleCalendar, deleteFromGoogleCalendar } from "./helpers";
+import { createClerkClient } from "@clerk/backend";
+import { google } from "googleapis";
+
+// Simple OAuth client helper (mirrors Calendly pattern)
+async function getOAuthClient(clerkUserId: string) {
+  const clerkClient = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY!,
+  });
+
+  const token = await clerkClient.users.getUserOauthAccessToken(
+    clerkUserId,
+    "oauth_google"
+  );
+
+  if (token.data.length === 0 || token.data[0].token == null) {
+    return undefined;
+  }
+
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_REDIRECT_URL
+  );
+
+  client.setCredentials({ access_token: token.data[0].token });
+
+  return client;
+}
 
 // =================================================================
 // CALENDAR OPERATIONS: List and manage Google Calendars
@@ -23,18 +51,25 @@ export const listCalendars = action({
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.calendars.listCalendars", "REQUESTED");
 
-    try {
-      const queryParams: Record<string, string> = {};
-      
-      if (args.showHidden !== undefined) {
-        queryParams.showHidden = args.showHidden.toString();
-      }
-      
-      if (args.showDeleted !== undefined) {
-        queryParams.showDeleted = args.showDeleted.toString();
-      }
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
 
-      const response: any = await getFromGoogleCalendar(ctx, "/users/me/calendarList", queryParams);
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
+    try {
+      // Direct googleapis call - simple and clean
+      const response = await google.calendar("v3").calendarList.list({
+        auth: oAuthClient,
+        showHidden: args.showHidden,
+        showDeleted: args.showDeleted,
+      });
 
       // Process and return calendar list with useful information
       const calendars: any[] = response.items?.map((calendar: any) => ({
@@ -383,6 +418,53 @@ export const removeCalendarFromList = action({
         error instanceof Error 
           ? `Failed to remove calendar from list: ${error.message}`
           : "Failed to remove calendar from list"
+      );
+    }
+  },
+});
+
+/**
+ * Get primary calendar (simple helper function)
+ */
+export const getPrimaryCalendar = action({
+  args: {},
+  handler: async (ctx: ActionCtx): Promise<any> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.calendars.getPrimaryCalendar", "REQUESTED");
+
+    // Get clean Clerk user ID
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    const clerkUserId = identity.subject;
+
+    const oAuthClient = await getOAuthClient(clerkUserId);
+    if (!oAuthClient) {
+      throw new Error("Google Calendar not connected. Please connect in Settings.");
+    }
+
+    try {
+      // Direct googleapis call to get primary calendar
+      const response = await google.calendar("v3").calendarList.get({
+        auth: oAuthClient,
+        calendarId: "primary",
+      });
+
+      return {
+        id: response.data.id,
+        summary: response.data.summary || "Primary Calendar",
+        description: response.data.description || null,
+        primary: true,
+        accessRole: response.data.accessRole,
+        timeZone: response.data.timeZone,
+      };
+    } catch (error) {
+      console.error("Failed to get primary calendar:", error);
+      throw new Error(
+        error instanceof Error 
+          ? `Failed to get primary calendar: ${error.message}`
+          : "Failed to get primary calendar"
       );
     }
   },

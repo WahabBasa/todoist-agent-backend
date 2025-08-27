@@ -29,6 +29,7 @@ import type * as googleCalendar_client from "../googleCalendar/client.js";
 import type * as googleCalendar_connection from "../googleCalendar/connection.js";
 import type * as googleCalendar_events from "../googleCalendar/events.js";
 import type * as googleCalendar_helpers from "../googleCalendar/helpers.js";
+import type * as googleCalendar_simpleAuth from "../googleCalendar/simpleAuth.js";
 import type * as http from "../http.js";
 import type * as migrateTokens from "../migrateTokens.js";
 import type * as todoist_auth from "../todoist/auth.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   "googleCalendar/connection": typeof googleCalendar_connection;
   "googleCalendar/events": typeof googleCalendar_events;
   "googleCalendar/helpers": typeof googleCalendar_helpers;
+  "googleCalendar/simpleAuth": typeof googleCalendar_simpleAuth;
   http: typeof http;
   migrateTokens: typeof migrateTokens;
   "todoist/auth": typeof todoist_auth;
