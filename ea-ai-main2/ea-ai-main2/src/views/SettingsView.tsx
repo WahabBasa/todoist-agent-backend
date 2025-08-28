@@ -107,8 +107,14 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 
 export function SettingsView({ onBackToChat }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
+  
+  // Move Todoist connection query to parent to persist across tab switches
+  const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
+  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
+  const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -119,7 +125,16 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
       case "personalization":
         return <PersonalizationSettings />;
       case "connected-apps":
-        return <ConnectedAppsSettings clerkUser={clerkUser} signOut={signOut} activeSection={activeSection} />;
+        return <ConnectedAppsSettings 
+          clerkUser={clerkUser} 
+          signOut={signOut} 
+          activeSection={activeSection}
+          hasTodoistConnection={hasTodoistConnection}
+          generateOAuthURL={generateOAuthURL}
+          removeTodoistConnection={removeTodoistConnection}
+          isConnecting={isConnecting}
+          setIsConnecting={setIsConnecting}
+        />;
       case "data-controls":
         return <DataControlsSettings />;
       case "security":
@@ -294,13 +309,26 @@ interface ConnectedAppsSettingsProps {
   clerkUser: any;
   signOut: () => void;
   activeSection: SettingsSection;
+  hasTodoistConnection: boolean | undefined;
+  generateOAuthURL: any;
+  removeTodoistConnection: any;
+  isConnecting: string | null;
+  setIsConnecting: (value: string | null) => void;
 }
 
-function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedAppsSettingsProps) {
+function ConnectedAppsSettings({ 
+  clerkUser, 
+  signOut, 
+  activeSection, 
+  hasTodoistConnection,
+  generateOAuthURL,
+  removeTodoistConnection,
+  isConnecting,
+  setIsConnecting 
+}: ConnectedAppsSettingsProps) {
   // Remove unused parameters for linting
   void clerkUser;
   void signOut;
-  const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [hasAutoSynced] = useState(false);
   void hasAutoSynced; // Remove unused variable warning
   const [todoistConflictData, setTodoistConflictData] = useState<{
@@ -308,13 +336,8 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
     instructions: string[];
   } | null>(null);
   
-  // Check if Todoist is connected
-  const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
-  
-  // Add debug logging for Todoist connection status and handle successful connection after conflict
+  // Handle successful connection after conflict (no more status logging)
   useEffect(() => {
-    console.log("🔍 [Settings] Todoist connection status changed:", hasTodoistConnection);
-    
     // If user successfully connected after a conflict, clear the conflict data
     if (hasTodoistConnection && todoistConflictData) {
       console.log("✅ [Settings] Todoist connected successfully after conflict resolution");
@@ -325,8 +348,6 @@ function ConnectedAppsSettings({ clerkUser, signOut, activeSection }: ConnectedA
       }, 500);
     }
   }, [hasTodoistConnection, todoistConflictData]);
-  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
-  const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
 
 

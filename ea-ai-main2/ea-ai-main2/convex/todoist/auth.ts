@@ -295,7 +295,7 @@ export const generateOAuthURL = query({
     const encodedTokenIdentifier = btoa(tokenIdentifier); // Base64 encode for URL safety
     const randomString = Math.random().toString(36).substring(2, 15);
     const state = `${encodedTokenIdentifier}_${randomString}`;
-    const scope = "data:read_write,task:add";
+    const scope = "data:read_write,task:add,data:delete";
     const redirectUri = getOAuthRedirectURI();
     
     const params = new URLSearchParams({

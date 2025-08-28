@@ -56,6 +56,24 @@ const applicationTables = {
   // Google Calendar integration now uses Clerk OAuth tokens directly
   // No database storage needed - Clerk manages all token lifecycle
 
+  // AI Agent Internal Todos - Session-scoped task management for complex workflows
+  aiInternalTodos: defineTable({
+    tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
+    sessionId: v.optional(v.id("chatSessions")), // Link to chat session
+    todos: v.array(v.object({
+      id: v.string(), // Unique identifier for the todo item
+      content: v.string(), // Brief description of the task
+      status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed"), v.literal("cancelled")), // Current status of the task
+      priority: v.union(v.literal("high"), v.literal("medium"), v.literal("low")), // Priority level of the task
+    })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.boolean(), // Track active todolist state
+  }).index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_session", ["sessionId"])
+    .index("by_tokenIdentifier_and_session", ["tokenIdentifier", "sessionId"])
+    .index("by_active", ["isActive"]),
+
 };
 
 // Export schema with tokenIdentifier-based tables (big-brain pattern)

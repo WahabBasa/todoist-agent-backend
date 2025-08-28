@@ -159,11 +159,21 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Send message with session context
+      // Create current time context from user's browser
+      const currentTimeContext = {
+        currentTime: new Date().toISOString(),
+        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        localTime: new Date().toLocaleString(),
+        timestamp: Date.now(),
+        source: "user_browser"
+      }
+
+      // Send message with session context and current time
       const result = await chatWithAI({ 
         message: inputValue, 
         useHaiku,
-        sessionId: currentSessionId 
+        sessionId: currentSessionId,
+        currentTimeContext
       })
       
       // Update chat title if this is the first message

@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
+import { SystemPrompt } from "./ai/system";
 // Use big-brain authentication pattern
 import { requireUserAuthForAction } from "./todoist/userAccess";
 import { z } from "zod";
@@ -196,7 +197,7 @@ const plannerTools = {
   // =================================================================
 
   createCalendarEvent: tool({
-    description: "Create a new Google Calendar event with smart date parsing. Supports natural language dates like 'tomorrow at 2pm', 'next Monday at 9am', and recurring events. Use this when users want to schedule appointments, meetings, or reminders in their Google Calendar.",
+    description: "Create a new event in your Google Calendar with smart date parsing. Supports natural language dates like 'tomorrow at 2pm', 'next Monday at 9am', and recurring events. Use this when users want to schedule appointments, meetings, or reminders.",
     inputSchema: z.object({
       summary: z.string().describe("The event title (e.g., 'Team Meeting', 'Doctor Appointment', 'Project Deadline')"),
       description: z.string().optional().describe("Optional event description or notes"),
@@ -218,7 +219,7 @@ const plannerTools = {
   }),
 
   updateCalendarEvent: tool({
-    description: "Update an existing Google Calendar event with smart date parsing. Supports modifying recurring events with different scopes. Use this when users want to change event details, reschedule, or modify recurring patterns.",
+    description: "Update an existing event in your Google Calendar with smart date parsing. Supports modifying recurring events with different scopes. Use this when users want to change event details, reschedule, or modify recurring patterns.",
     inputSchema: z.object({
       eventId: z.string().describe("The Google Calendar event ID to update"),
       summary: z.string().optional().describe("New event title"),
@@ -230,46 +231,64 @@ const plannerTools = {
       attendees: z.array(z.string()).optional().describe("Updated attendee email list"),
       recurrencePattern: z.string().optional().describe("Updated recurrence pattern"),
       timeZone: z.string().optional().describe("Timezone for new times"),
-      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
     }),
   }),
 
   deleteCalendarEvent: tool({
-    description: "Delete a Google Calendar event. For recurring events, this will delete all instances unless specified otherwise. Use this when users want to cancel or remove events from their calendar.",
+    description: "Delete an event from your Google Calendar. For recurring events, this will delete all instances unless specified otherwise. Use this when users want to cancel or remove events from their calendar.",
     inputSchema: z.object({
       eventId: z.string().describe("The Google Calendar event ID to delete"),
       sendUpdates: z.string().optional().describe("Whether to send cancellation notifications: 'all', 'externalOnly', or 'none' (default: 'all')"),
-      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
     }),
   }),
 
   listCalendarEvents: tool({
-    description: "List upcoming Google Calendar events with smart date filtering. Use this when users ask about their schedule, upcoming events, or want to see what they have planned. Supports natural language time ranges.",
+    description: "List upcoming events from your Google Calendar with smart date filtering. Use this when users ask about their schedule, upcoming events, or want to see what they have planned. Supports natural language time ranges.",
     inputSchema: z.object({
       timeRange: z.string().optional().describe("Natural language time range like 'today', 'tomorrow', 'this week', 'next week', 'this month', or 'next 7 days'"),
       timeMin: z.string().optional().describe("Specific start time override (ISO format)"),
       timeMax: z.string().optional().describe("Specific end time override (ISO format)"),
       maxResults: z.number().optional().describe("Maximum number of events to return (default: 20, max: 100)"),
       timeZone: z.string().optional().describe("Timezone for results (default: UTC)"),
-      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
     }),
   }),
 
   searchCalendarEvents: tool({
-    description: "Search Google Calendar events by text query. Searches across event titles, descriptions, locations, and attendees. Use this when users want to find specific events or meetings.",
+    description: "Search your Google Calendar events by text query. Searches across event titles, descriptions, locations, and attendees. Use this when users want to find specific events or meetings.",
     inputSchema: z.object({
       query: z.string().describe("Search query text (e.g., 'team meeting', 'doctor', 'project review', 'John Smith')"),
       timeRange: z.string().optional().describe("Optional time range to limit search: 'this week', 'next week', 'this month'"),
       maxResults: z.number().optional().describe("Maximum number of results (default: 20)"),
-      calendarId: z.string().optional().describe("Calendar ID (defaults to 'primary')"),
     }),
   }),
 
   getCurrentTime: tool({
-    description: "Get current time and timezone information. Use this to understand the current context for scheduling and date calculations, especially when users reference relative times like 'tomorrow' or 'next week'.",
+    description: "Get current time and timezone information from the user's Google Calendar settings. Use this to understand the current context for scheduling and date calculations, especially when users reference relative times like 'tomorrow' or 'next week'. Returns user's actual timezone and time format preferences.",
     inputSchema: z.object({
-      timeZone: z.string().optional().describe("Specific timezone to get time for (e.g., 'America/New_York', 'Europe/London')"),
+      timeZone: z.string().optional().describe("Override timezone (e.g., 'America/New_York', 'Europe/London'). If not provided, uses user's Google Calendar timezone setting."),
     }),
+  }),
+
+  // =================================================================
+  // INTERNAL AI AGENT TODOLIST TOOLS
+  // Self-management tools for complex multi-step workflows
+  // =================================================================
+
+  internalTodoWrite: tool({
+    description: "Create or update your internal todolist to plan complex multi-step tasks. Use this when you need to break down user requests into manageable steps and track your progress. This is your internal planning tool - the user cannot see these todos.",
+    inputSchema: z.object({
+      todos: z.array(z.object({
+        id: z.string().describe("Unique identifier for the todo item"),
+        content: z.string().describe("Brief description of the task"),
+        status: z.enum(["pending", "in_progress", "completed", "cancelled"]).describe("Current status of the task"),
+        priority: z.enum(["high", "medium", "low"]).describe("Priority level of the task"),
+      })).describe("The updated todo list for your internal planning"),
+    }),
+  }),
+
+  internalTodoRead: tool({
+    description: "Read your current internal todolist to check progress and understand what you're working on. Use this to stay organized and provide progress updates to users. This shows your internal planning state.",
+    inputSchema: z.object({}),
   }),
 };
 
@@ -303,7 +322,7 @@ function recordToolFailure(toolName: string): void {
   toolFailureTracker.set(toolName, failure);
 }
 
-async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPart> {
+async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: any, sessionId?: any): Promise<ToolResultPart> {
     const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
     
@@ -547,14 +566,69 @@ async function executeTool(ctx: ActionCtx, toolCall: any): Promise<ToolResultPar
                 result = { error: "Search calendar events temporarily unavailable. Use listCalendarEvents instead." };
                 break;
             case "getCurrentTime":
-                // Simple implementation - return current time
-                const now = new Date();
-                result = { 
-                    currentTime: now.toISOString(),
-                    timezone: args.timeZone || "UTC",
-                    timestamp: now.getTime()
+                // Use current time provided by user's browser (no calculations needed)
+                if (currentTimeContext) {
+                    console.log("[getCurrentTime] Using browser-provided time context");
+                    result = {
+                        ...currentTimeContext,
+                        source: currentTimeContext.source || "user_browser"
+                    };
+                } else {
+                    // Fallback to server time if no context provided
+                    console.warn("[getCurrentTime] No browser context provided, using server time");
+                    const now = new Date();
+                    result = { 
+                        currentTime: now.toISOString(),
+                        userTimezone: "UTC",
+                        localTime: now.toISOString(),
+                        timestamp: now.getTime(),
+                        source: "server_fallback",
+                        fallbackReason: "No browser time context provided"
+                    };
+                }
+                break;
+            
+            // =================================================================
+            // INTERNAL AI AGENT TODOLIST TOOL EXECUTIONS
+            // =================================================================
+            case "internalTodoWrite":
+                result = await ctx.runMutation(api.aiInternalTodos.updateInternalTodos, {
+                    sessionId: sessionId,
+                    todos: args.todos,
+                });
+                
+                // Return summary for agent context
+                const pendingCount = args.todos.filter((t: { status: string }) => t.status === "pending").length;
+                const inProgressCount = args.todos.filter((t: { status: string }) => t.status === "in_progress").length;
+                const completedCount = args.todos.filter((t: { status: string }) => t.status === "completed").length;
+                
+                result = {
+                    success: true,
+                    summary: `${args.todos.length} todos managed (${pendingCount} pending, ${inProgressCount} in progress, ${completedCount} completed)`,
+                    todos: args.todos,
                 };
                 break;
+            
+            case "internalTodoRead":
+                const todoData = await ctx.runQuery(api.aiInternalTodos.getInternalTodos, {
+                    sessionId: sessionId,
+                });
+                
+                if (todoData) {
+                    result = {
+                        todos: todoData.todos,
+                        summary: todoData.summary,
+                        message: `Current internal todolist: ${todoData.summary.remaining} tasks remaining (${todoData.summary.pending} pending, ${todoData.summary.inProgress} in progress)`,
+                    };
+                } else {
+                    result = {
+                        todos: [],
+                        summary: { total: 0, pending: 0, inProgress: 0, completed: 0, remaining: 0 },
+                        message: "No active internal todolist found",
+                    };
+                }
+                break;
+            
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
@@ -605,8 +679,15 @@ export const chatWithAI = action({
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
     sessionId: v.optional(v.id("chatSessions")),
+    currentTimeContext: v.optional(v.object({
+      currentTime: v.string(),
+      userTimezone: v.string(),
+      localTime: v.string(),
+      timestamp: v.number(),
+      source: v.optional(v.string()),
+    })),
   },
-  handler: async (ctx, { message, useHaiku = true, sessionId }) => {
+  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }) => {
     // Use big-brain authentication pattern for consistent user validation
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
@@ -631,12 +712,30 @@ export const chatWithAI = action({
     // Reset circuit breaker for new conversation to give tools a fresh start
     toolFailureTracker.clear();
 
+    // Enhanced internal todolist detection - catches bulk operations and multi-step tasks
+    const messageLength = message.length;
+    const hasMultipleRequests = /and|then|also|additionally|furthermore|moreover|plus|while|after|before/i.test(message);
+    const hasComplexKeywords = /plan|organize|schedule|manage|setup|create.*and|help.*with.*multiple|several|various/i.test(message);
+    
+    // NEW: Detect bulk operations that require internal todolist
+    const hasBulkOperations = /(?:delete|update|move|complete|modify|change|remove)\s+(?:all|every|each)(?:\s+(?:my|the))?\s+(?:task|project|event|item)/i.test(message);
+    const hasQuantifiedTasks = /(?:delete|update|move|complete).*(?:\d{2,}|many|multiple|several|various).*(?:task|project|event)/i.test(message);
+    const hasMultiEntityWork = /(?:task|project|event|item)s?.*(?:and|\+|also).*(?:task|project|event|item)/i.test(message);
+    
+    // Multi-step detection: Any request affecting 3+ items or cross-system operations
+    const shouldCreateTodolist = messageLength > 80 || hasMultipleRequests || hasComplexKeywords || 
+                                hasBulkOperations || hasQuantifiedTasks || hasMultiEntityWork;
+
+    if (shouldCreateTodolist) {
+      console.log(`[Orchestrator] Complex/bulk request detected - REQUIRES internal todolist for: "${message.slice(0, 50)}..."`);
+    }
+
     // Enhanced conversation state deduplication to prevent infinite loops
     // Include userId in state tracking to prevent cross-user contamination
     const conversationStateTracker = new Set<string>();
     const toolCallTracker = new Map<string, number>(); // Track repeated tool calls
     
-    const MAX_ITERATIONS = 5;
+    const MAX_ITERATIONS = 6; // Reduced from 15 to prevent rate limits
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
         
@@ -697,189 +796,28 @@ export const chatWithAI = action({
         let text: string;
         let toolCalls: any[];
         
+        // Mandatory workflow directives for complex/bulk operations
+        let dynamicInstructions = "";
+        if (shouldCreateTodolist && i === 0) {
+          dynamicInstructions = `
+
+<mandatory_first_action>
+**STOP**: This request requires internal todolist management.
+
+Your FIRST action must be:
+1. Use internalTodoWrite to create 3-5 specific todos with priorities
+2. Only then proceed with tool execution 
+3. Mark todos "in_progress" → execute tools → mark "completed"
+4. Update user with progress: "Working on step X of Y"
+
+Do NOT use any other tools until internal todolist is created.
+</mandatory_first_action>`;
+        }
+
         try {
           const result = await generateText({
             model: anthropic(modelName),
-            system: 
-
-`<task_description>
-You are an intelligent priority detective AI assistant that helps users organize their overwhelming task lists by first discovering their true priorities through strategic questioning, then applying the Eisenhower Matrix to create actionable, chronological task plans. Your role is to provide the instant relief that comes from transforming chaos into clear, prioritized action steps.
-</task_description>
-
-<background_context>
-Most people struggle with task paralysis - they have overwhelming lists but don't know what's truly important or urgent to them. They often lack self-awareness about their core values, constraints, and priority frameworks. Your specialty is acting as a "priority detective" who reveals their underlying decision-making patterns through indirect questioning, then uses those insights to organize their tasks into clear, time-sequenced action plans that feel immediately actionable.
-</background_context>
-
-<core_methodology>
-<discovery_process>
-You discover user priorities through revealing questions that expose their natural stress triggers, success patterns, time preferences, and value hierarchies. Never ask direct questions like "What's important to you?" Instead, use strategic questions that reveal subconscious priorities:
-
-- Stress triggers: "What would completely derail how you feel about your day if it went wrong?"
-- Success patterns: "When did you last feel genuinely proud for a full week? What were you consistently doing?"
-- Time allocation preferences: "If you had three extra hours today, what would you instinctively want to use them for?"
-- Future scenarios: "Looking back from next month, what would make you feel like you handled this period exactly right?"
-- Trade-off reveals: "If someone offered you guaranteed money but you had to delay your main goal by a month, what's your gut reaction?"
-
-Ask only one revealing question at a time. Build understanding progressively through the conversation.
-</discovery_process>
-
-<eisenhower_application>
-Once you understand their priority framework, categorize their tasks using the Eisenhower Matrix:
-
-- **Urgent & Important (Do First)**: Tasks with immediate consequences that align with their core values
-- **Important but Not Urgent (Schedule)**: Tasks that build toward their main goals and address root constraints  
-- **Urgent but Not Important (Quick Wins)**: Tasks with immediate deadlines but minimal strategic value
-- **Neither Urgent nor Important (Eliminate/Later)**: Tasks that don't serve their revealed priorities
-
-Base urgency and importance on what you learned about their specific stress triggers, goals, constraints, and values - not generic assumptions.
-</eisenhower_application>
-
-<output_formatting>
-Present the final task organization as a chronological, actionable plan using markdown checklists:
-
-
-## [Time Period] - [Date]
-- [ ] [Task with context]
-- [ ] [Task with context]
-
-## [Next Time Period] - [Date]  
-- [ ] [Task with context]
-- [ ] [Task with context]
-
-
-Include realistic time estimates and account for their revealed constraints (sleep schedules, fixed commitments, energy patterns, etc.).
-</output_formatting>
-</core_methodology>
-
-<conversation_flow>
-<phase_1_discovery>
-Begin with strategic questioning to uncover their priority framework. Use questions that reveal:
-1. Core stress triggers and non-negotiables
-2. Success patterns and optimal states
-3. Current mental focus and energy allocation
-4. Future success/failure scenarios
-5. Instinctive trade-off preferences
-
-Continue questioning until you have a clear picture of what drives their decisions and what success looks like to them.
-</phase_1_discovery>
-
-<phase_2_organization>
-When they provide their task list:
-1. Apply the Eisenhower Matrix based on their revealed priorities
-2. Consider their specific constraints (time, energy, deadlines, dependencies)
-3. Sequence tasks chronologically with realistic timing
-4. Account for their natural rhythms and fixed commitments
-5. Present as actionable markdown checklist with dates and time blocks
-</phase_2_organization>
-
-<phase_3_refinement>
-Be ready to adjust the plan based on:
-- New constraints they mention
-- Realistic time estimates for complex tasks
-- Dependencies between tasks
-- Their feedback on the proposed sequence
-</phase_3_refinement>
-</conversation_flow>
-
-<communication_guidelines>
-- **Detective mindset**: Ask revealing questions that expose subconscious priorities without being direct
-- **One question at a time**: Build understanding progressively through focused inquiry  
-- **Contextual understanding**: Base all categorization on their specific revealed values, not generic importance
-- **Actionable output**: Always provide chronological, checkable task lists with realistic timing
-- **Constraint awareness**: Account for sleep, fixed commitments, and realistic work capacity
-- **Clarity over complexity**: Transform overwhelming chaos into simple, clear next steps
-</communication_guidelines>
-
-<example_revealing_questions>
-- "When you think about tomorrow evening, what's the one thing that, if left undone, would keep you up at night?"
-- "Picture yourself a week from now feeling completely satisfied with your progress. What would you have accomplished?"
-- "If your phone died for 48 hours and you could only focus on 2 things, what would your instincts tell you to prioritize?"
-- "What's something you've been avoiding that, deep down, you know would unlock everything else?"
-- "If you had to explain to someone why this specific deadline matters so much, what would you tell them?"
-</example_revealing_questions>
-
-<success_metrics>
-Your success is measured by:
-1. **Burden relief**: User experiences immediate mental clarity and reduced overwhelm
-2. **Accurate prioritization**: Tasks are ordered according to their true (revealed) values and constraints
-3. **Actionable output**: User knows exactly what to do next and in what order
-4. **Realistic planning**: Time estimates and sequences account for their actual capacity and constraints
-5. **Value alignment**: The plan reflects their authentic priorities, not generic productivity advice
-</success_metrics>
-
-<tool_usage_instructions>
-<todoist_integration>
-**CRITICAL WORKFLOW: Always start with getProjectAndTaskMap()**
-
-For ANY request about tasks or projects, your FIRST action must ALWAYS be:
-1. Call \`getProjectAndTaskMap()\` to get complete workspace overview
-2. Use the returned hierarchical structure to find projects/tasks by matching names (case-insensitive)
-3. Extract the exact \`_id\` field values (never use human-readable names like "Personal" or "Work")
-4. Use these extracted IDs for all subsequent operations
-
-**Available Todoist Functions:**
-- \`getProjectAndTaskMap()\` - Get complete workspace hierarchy (start here)
-- \`getProjectDetails(projectId)\` - Get full project information using extracted ID
-- \`getTaskDetails(taskId)\` - Get full task information using extracted ID
-- \`createTask({ title, projectId, priority, dueDate })\` - Create new tasks
-- \`updateTask({ taskId, title, isCompleted, priority, projectId })\` - Modify existing tasks
-- \`deleteTask({ taskId })\` - Remove tasks
-- \`createProject({ name, color })\` - Create new projects
-- \`updateProject({ projectId, name, color })\` - Modify projects
-- \`deleteProject({ projectId })\` - Remove empty projects
-
-**NEVER use placeholder IDs like "PROJECT_ID" or human names like "personal" - always extract the actual _id string from getProjectAndTaskMap()**
-</todoist_integration>
-
-<calendar_integration>
-**Google Calendar Functions:**
-- \`listCalendarEvents({ timeRange })\` - Show upcoming events ("today", "this week", "next month")
-- \`searchCalendarEvents({ query, timeRange })\` - Find events by text search
-- \`createCalendarEvent({ summary, startDate, endDate, recurrencePattern })\` - Schedule events
-- \`updateCalendarEvent({ eventId, summary, startDate, endDate })\` - Modify events
-- \`deleteCalendarEvent({ eventId })\` - Cancel events
-- \`getCurrentTime()\` - Get current timezone-aware time for scheduling context
-
-**Smart Date Parsing Examples:**
-- "tomorrow at 2pm" → Automatically converts to proper datetime
-- "next Monday 9am" → Finds next Monday and sets time
-- "every Tuesday at 3pm" → Creates recurring event with RRULE patterns
-
-**Recurring Event Patterns:**
-- "daily" → FREQ=DAILY
-- "weekly on Tuesday" → FREQ=WEEKLY;BYDAY=TU
-- "every 2 weeks" → FREQ=WEEKLY;INTERVAL=2
-- "monthly" → FREQ=MONTHLY
-</calendar_integration>
-
-<implementation_workflow>
-**After Priority Detective Work, Offer Implementation:**
-
-1. **Task Creation Phase**:
-   - Call \`getProjectAndTaskMap()\` to see current structure
-   - Suggest creating projects for major priority categories if needed
-   - Use \`createTask()\` with proper projectId assignments for organized tasks
-
-2. **Calendar Integration Phase**:
-   - Call \`getCurrentTime()\` and \`listCalendarEvents()\` to understand availability
-   - Use \`createCalendarEvent()\` to block time for "Important but Not Urgent" tasks
-   - Schedule specific work sessions for high-priority items
-
-3. **Confirmation Phase**:
-   - Show what was created in both systems
-   - Confirm tasks sync across their devices
-   - Verify calendar events appear in their actual calendar
-
-**Example Implementation Sequence:**
-
-User provides task list → Priority detective questioning → Eisenhower categorization → 
-"Would you like me to create these tasks in your actual Todoist and schedule work time on your calendar?" →
-getProjectAndTaskMap() → createTask() calls → createCalendarEvent() calls → Confirmation
-
-</implementation_workflow>
-</tool_usage_instructions>
-</task_description>`
-,
+            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions),
             messages: modelMessages,
             tools: plannerTools,
         });
@@ -929,6 +867,15 @@ getProjectAndTaskMap() → createTask() calls → createCalendarEvent() calls �
             console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
             history.push({ role: "assistant", content: text, timestamp: Date.now() });
             
+            // Clean up internal todolist if conversation is complete
+            try {
+              await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
+              console.log(`[Orchestrator] Deactivated internal todolist for completed conversation`);
+            } catch (error) {
+              console.warn(`[Orchestrator] Failed to deactivate todolist:`, error);
+              // Non-blocking error - continue with response
+            }
+            
             // Save conversation - session-aware or default
             await ctx.runMutation(api.conversations.upsertConversation, { 
               sessionId,  // Will use default session if undefined
@@ -953,7 +900,7 @@ getProjectAndTaskMap() → createTask() calls → createCalendarEvent() calls �
             toolName: call.toolName,
             args: call.input,
             toolCallId: call.toolCallId
-        })));
+        }, currentTimeContext, sessionId)));
         
         // Validate tool call ID consistency and filter out mismatched results
         const validatedResults = toolResults.filter((result: any) => {

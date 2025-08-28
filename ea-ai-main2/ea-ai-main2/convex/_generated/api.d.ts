@@ -13,7 +13,9 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as ai_system from "../ai/system.js";
 import type * as ai from "../ai.js";
+import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as chatSessions from "../chatSessions.js";
 import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
@@ -39,7 +41,9 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "ai/system": typeof ai_system;
   ai: typeof ai;
+  aiInternalTodos: typeof aiInternalTodos;
   chatSessions: typeof chatSessions;
   cleanupOrphans: typeof cleanupOrphans;
   cleanupTables: typeof cleanupTables;
