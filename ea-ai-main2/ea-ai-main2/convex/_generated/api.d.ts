@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as ai_caching from "../ai/caching.js";
 import type * as ai_system from "../ai/system.js";
 import type * as ai from "../ai.js";
 import type * as aiInternalTodos from "../aiInternalTodos.js";
@@ -41,6 +42,7 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "ai/caching": typeof ai_caching;
   "ai/system": typeof ai_system;
   ai: typeof ai;
   aiInternalTodos: typeof aiInternalTodos;

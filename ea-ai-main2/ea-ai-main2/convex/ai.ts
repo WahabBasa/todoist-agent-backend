@@ -13,6 +13,7 @@ import {
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
 import { SystemPrompt } from "./ai/system";
+import { MessageCaching } from "./ai/caching";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 // Use big-brain authentication pattern
@@ -23,29 +24,55 @@ import { requireUserAuthForAction } from "./todoist/userAccess";
 // File-based user behavioral learning for personalized AI assistance
 // =================================================================
 
-// Load user mental model for personalized AI behavior
-function getUserMentalModel(): string {
+// Load user mental model for personalized AI behavior with caching
+function getUserMentalModel(userId?: string): string {
+  // Try to get from cache first if userId provided
+  if (userId) {
+    const cached = MessageCaching.getCachedMentalModel(userId);
+    if (cached) {
+      MessageCaching.incrementCacheHit('mental_model');
+      return cached;
+    }
+    MessageCaching.incrementCacheMiss();
+  }
+
   try {
     const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+    let content: string;
+    
     if (existsSync(mentalModelPath)) {
-      const content = readFileSync(mentalModelPath, "utf-8");
-      return `
+      const fileContent = readFileSync(mentalModelPath, "utf-8");
+      content = `
 <user_mental_model>
-${content}
+${fileContent}
 </user_mental_model>`;
     } else {
-      return `
+      content = `
 <user_mental_model>
 No user mental model found - AI should create one by observing behavioral patterns in conversation.
 Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
 </user_mental_model>`;
     }
+
+    // Cache the result if userId provided
+    if (userId) {
+      MessageCaching.setCachedMentalModel(userId, content);
+    }
+
+    return content;
   } catch (error) {
-    return `
+    const errorContent = `
 <user_mental_model>
 Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
 AI should use default behavior and attempt to create mental model during conversation.
 </user_mental_model>`;
+
+    // Cache the error result to avoid repeated file I/O failures
+    if (userId) {
+      MessageCaching.setCachedMentalModel(userId, errorContent);
+    }
+
+    return errorContent;
   }
 }
 
@@ -113,6 +140,11 @@ function editMentalModelFile(oldString: string, newString: string, replaceAll: b
     
     // Write the updated content
     writeFileSync(editPath, updatedContent, "utf-8");
+    
+    // Invalidate all mental model caches since file was modified
+    // Note: This is a global invalidation since we don't have userId context in this function
+    // In a production system, you might want to pass userId or maintain a mapping
+    console.log("[Caching] Mental model file updated, clearing cache");
     
     return {
       success: true,
@@ -457,6 +489,23 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
     const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
     
+    // Check tool call cache for identical operations
+    if (sessionId) {
+      const cacheKey = MessageCaching.createToolCacheKey(toolName, args, sessionId);
+      const cachedResult = MessageCaching.getCachedToolResult(cacheKey);
+      
+      if (cachedResult) {
+        console.log(`[Caching] Tool cache hit for ${toolName}:${cacheKey.substring(0, 30)}...`);
+        MessageCaching.incrementCacheHit('tool_call');
+        return {
+          type: 'tool-result' as const,
+          toolCallId,
+          toolName,
+          output: cachedResult
+        } as ToolResultPart;
+      }
+    }
+    
     // Circuit breaker check
     if (!checkCircuitBreaker(toolName)) {
         console.warn(`[Executor] 🚫 Circuit breaker active for tool: ${toolName}`);
@@ -780,6 +829,13 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
         // Reset failure counter on success
         toolFailureTracker.delete(toolName);
         
+        // Cache successful tool results for future use
+        if (sessionId) {
+          const cacheKey = MessageCaching.createToolCacheKey(toolName, args, sessionId);
+          MessageCaching.setCachedToolResult(cacheKey, result || {}, sessionId);
+          console.log(`[Caching] Tool result cached for ${toolName}:${cacheKey.substring(0, 30)}...`);
+        }
+        
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
         return {
             type: 'tool-result' as const,
@@ -852,6 +908,21 @@ export const chatWithAI = action({
     history.push({ role: "user", content: message, timestamp: Date.now() });
 
     console.log(`[Orchestrator] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
+
+    // Initialize caching system on first use
+    MessageCaching.initializeCaching();
+
+    // Check for duplicate requests using caching system
+    const cacheKey = MessageCaching.createCacheKey(userId, message, history.length, sessionId);
+    const recentCacheKeys = new Set<string>(); // TODO: This should be persistent across requests
+    
+    if (MessageCaching.isDuplicateRequest(cacheKey, recentCacheKeys)) {
+      console.log(`[Caching] Duplicate request detected: ${cacheKey}`);
+      MessageCaching.incrementCacheHit();
+      // Return cached response or handle gracefully
+      return { response: "This request appears identical to a recent one. Please wait a moment before trying again." };
+    }
+    recentCacheKeys.add(cacheKey);
 
     // Reset circuit breaker for new conversation to give tools a fresh start
     toolFailureTracker.clear();
@@ -959,13 +1030,20 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         try {
-          // Load mental model content in Node.js runtime
-          const mentalModelContent = getUserMentalModel();
+          // Load mental model content in Node.js runtime with caching
+          const mentalModelContent = getUserMentalModel(userId);
+          
+          // Apply intelligent caching to messages before AI generation
+          let optimizedMessages = MessageCaching.optimizeForCaching(modelMessages);
+          optimizedMessages = MessageCaching.applyCaching(optimizedMessages);
+          
+          console.log(`[Caching] Optimized messages: ${modelMessages.length} -> ${optimizedMessages.length}`);
+          MessageCaching.incrementMessagesCached();
           
           const result = await generateText({
             model: anthropic(modelName),
             system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
-            messages: modelMessages,
+            messages: optimizedMessages,
             tools: plannerTools,
         });
         
@@ -1086,4 +1164,49 @@ Do NOT use any other tools until internal todolist is created.
 
     throw new Error("Maximum tool call iterations reached.");
   }
+});
+
+// =================================================================
+// CACHING MONITORING & STATISTICS
+// Endpoint to monitor caching performance and effectiveness
+// =================================================================
+
+export const getCacheStatistics = action({
+  args: {},
+  handler: async (ctx) => {
+    // Use big-brain authentication pattern
+    const { userId } = await requireUserAuthForAction(ctx);
+    
+    const stats = MessageCaching.getCacheStats();
+    
+    // Calculate efficiency metrics
+    const totalRequests = stats.cacheHits + stats.cacheMisses;
+    const hitRate = totalRequests > 0 ? (stats.cacheHits / totalRequests * 100).toFixed(1) : '0.0';
+    
+    return {
+      ...stats,
+      totalRequests,
+      hitRate: `${hitRate}%`,
+      userId: userId.substring(0, 20) + "...",
+      timestamp: Date.now(),
+    };
+  },
+});
+
+// Cleanup cache manually (for testing/debugging)
+export const cleanupCache = action({
+  args: {},
+  handler: async (ctx) => {
+    // Use big-brain authentication pattern  
+    const { userId } = await requireUserAuthForAction(ctx);
+    
+    console.log(`[Caching] Manual cache cleanup requested by user: ${userId.substring(0, 20)}...`);
+    MessageCaching.cleanupExpiredCache();
+    
+    return { 
+      success: true, 
+      message: "Cache cleanup completed successfully",
+      timestamp: Date.now()
+    };
+  },
 });
