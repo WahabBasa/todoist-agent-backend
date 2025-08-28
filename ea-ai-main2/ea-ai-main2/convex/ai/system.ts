@@ -1,7 +1,3 @@
-import { readFile } from "fs/promises";
-import { readFileSync, existsSync } from "fs";
-import path from "path";
-
 // OpenCode-inspired dynamic prompt system for Todoist Agent Backend
 export namespace SystemPrompt {
   
@@ -25,28 +21,15 @@ export namespace SystemPrompt {
 </current_date_context>`;
   }
 
-  // Load user mental model for personalized AI behavior
-  export function getUserMentalModel(): string {
-    try {
-      const mentalModelPath = path.join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-      if (existsSync(mentalModelPath)) {
-        const content = readFileSync(mentalModelPath, "utf-8");
-        return `
-<user_mental_model>
-${content}
-</user_mental_model>`;
-      } else {
-        return `
+  // Format mental model content for prompt integration
+  export function formatMentalModel(mentalModelContent?: string): string {
+    if (mentalModelContent) {
+      return mentalModelContent;
+    } else {
+      return `
 <user_mental_model>
 No user mental model found - AI should create one by observing behavioral patterns in conversation.
 Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
-</user_mental_model>`;
-      }
-    } catch (error) {
-      return `
-<user_mental_model>
-Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
-AI should use default behavior and attempt to create mental model during conversation.
 </user_mental_model>`;
     }
   }
@@ -76,7 +59,7 @@ AI should use default behavior and attempt to create mental model during convers
   }
 
   // Main prompt getter that combines provider selection with environment  
-  export function getSystemPrompt(modelID: string, dynamicInstructions: string = "", userMessage: string = ""): string {
+  export function getSystemPrompt(modelID: string, dynamicInstructions: string = "", userMessage: string = "", mentalModelContent?: string): string {
     let promptName = provider(modelID);
     
     // Use enhanced internal todo prompt for complex operations
@@ -86,7 +69,7 @@ AI should use default behavior and attempt to create mental model during convers
     
     const basePrompt = getPrompt(promptName);
     const envContext = environment();
-    const mentalModel = getUserMentalModel();
+    const mentalModel = formatMentalModel(mentalModelContent);
     
     return basePrompt + envContext + mentalModel + dynamicInstructions;
   }

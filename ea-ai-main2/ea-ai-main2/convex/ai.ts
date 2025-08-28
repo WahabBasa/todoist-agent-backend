@@ -17,6 +17,120 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 // Use big-brain authentication pattern
 import { requireUserAuthForAction } from "./todoist/userAccess";
+
+// =================================================================
+// MENTAL MODEL SYSTEM - Node.js Runtime Functions
+// File-based user behavioral learning for personalized AI assistance
+// =================================================================
+
+// Load user mental model for personalized AI behavior
+function getUserMentalModel(): string {
+  try {
+    const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+    if (existsSync(mentalModelPath)) {
+      const content = readFileSync(mentalModelPath, "utf-8");
+      return `
+<user_mental_model>
+${content}
+</user_mental_model>`;
+    } else {
+      return `
+<user_mental_model>
+No user mental model found - AI should create one by observing behavioral patterns in conversation.
+Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
+</user_mental_model>`;
+    }
+  } catch (error) {
+    return `
+<user_mental_model>
+Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
+AI should use default behavior and attempt to create mental model during conversation.
+</user_mental_model>`;
+  }
+}
+
+// Read mental model file (for tool execution)
+function readMentalModelFile(): { success: boolean; content?: string; error?: string; message: string; path: string } {
+  const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+  
+  try {
+    if (existsSync(mentalModelPath)) {
+      const mentalModelContent = readFileSync(mentalModelPath, "utf-8");
+      return {
+        success: true,
+        content: mentalModelContent,
+        message: "User mental model loaded successfully",
+        path: mentalModelPath,
+      };
+    } else {
+      return {
+        success: false,
+        content: "",
+        message: "User mental model file not found - needs to be created",
+        path: mentalModelPath,
+      };
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error reading mental model",
+      message: "Failed to read user mental model file",
+      path: mentalModelPath,
+    };
+  }
+}
+
+// Edit mental model file (for tool execution)
+function editMentalModelFile(oldString: string, newString: string, replaceAll: boolean = false): { success: boolean; error?: string; message: string; path: string; operation?: string; oldLength?: number; newLength?: number } {
+  const editPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+  
+  try {
+    let content = "";
+    if (existsSync(editPath)) {
+      content = readFileSync(editPath, "utf-8");
+    } else {
+      // If file doesn't exist and oldString is empty, create new file
+      if (oldString === "") {
+        content = "";
+      } else {
+        throw new Error("Mental model file not found and oldString is not empty");
+      }
+    }
+    
+    // Perform the edit
+    let updatedContent: string;
+    if (oldString === "") {
+      // Creating new file or appending
+      updatedContent = newString;
+    } else if (replaceAll) {
+      updatedContent = content.replaceAll(oldString, newString);
+    } else {
+      if (!content.includes(oldString)) {
+        throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);
+      }
+      updatedContent = content.replace(oldString, newString);
+    }
+    
+    // Write the updated content
+    writeFileSync(editPath, updatedContent, "utf-8");
+    
+    return {
+      success: true,
+      message: "User mental model updated successfully",
+      path: editPath,
+      operation: oldString === "" ? "created" : replaceAll ? "replaced_all" : "replaced_once",
+      oldLength: content.length,
+      newLength: updatedContent.length,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error editing mental model",
+      message: "Failed to update user mental model file",
+      path: editPath,
+    };
+  }
+}
 import { z } from "zod";
 import { ActionCtx } from "./_generated/server";
 
@@ -647,89 +761,16 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 break;
 
             case "readUserMentalModel":
-                const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-                
-                try {
-                    if (existsSync(mentalModelPath)) {
-                        const mentalModelContent = readFileSync(mentalModelPath, "utf-8");
-                        result = {
-                            success: true,
-                            content: mentalModelContent,
-                            message: "User mental model loaded successfully",
-                            path: mentalModelPath,
-                        };
-                    } else {
-                        result = {
-                            success: false,
-                            content: "",
-                            message: "User mental model file not found - needs to be created",
-                            path: mentalModelPath,
-                        };
-                    }
-                } catch (error) {
-                    result = {
-                        success: false,
-                        error: error instanceof Error ? error.message : "Unknown error reading mental model",
-                        message: "Failed to read user mental model file",
-                        path: mentalModelPath,
-                    };
-                }
+                result = readMentalModelFile();
                 break;
 
             case "editUserMentalModel":
-                const editPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
                 const { oldString, newString, replaceAll = false } = args as { 
                     oldString: string; 
                     newString: string; 
                     replaceAll?: boolean; 
                 };
-                
-                try {
-                    let content = "";
-                    if (existsSync(editPath)) {
-                        content = readFileSync(editPath, "utf-8");
-                    } else {
-                        // If file doesn't exist and oldString is empty, create new file
-                        if (oldString === "") {
-                            content = "";
-                        } else {
-                            throw new Error("Mental model file not found and oldString is not empty");
-                        }
-                    }
-                    
-                    // Perform the edit
-                    let updatedContent: string;
-                    if (oldString === "") {
-                        // Creating new file or appending
-                        updatedContent = newString;
-                    } else if (replaceAll) {
-                        updatedContent = content.replaceAll(oldString, newString);
-                    } else {
-                        if (!content.includes(oldString)) {
-                            throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);
-                        }
-                        updatedContent = content.replace(oldString, newString);
-                    }
-                    
-                    // Write the updated content
-                    writeFileSync(editPath, updatedContent, "utf-8");
-                    
-                    result = {
-                        success: true,
-                        message: "User mental model updated successfully",
-                        path: editPath,
-                        operation: oldString === "" ? "created" : replaceAll ? "replaced_all" : "replaced_once",
-                        oldLength: content.length,
-                        newLength: updatedContent.length,
-                    };
-                } catch (error) {
-                    result = {
-                        success: false,
-                        error: error instanceof Error ? error.message : "Unknown error editing mental model",
-                        message: "Failed to update user mental model file",
-                        path: editPath,
-                    };
-                }
+                result = editMentalModelFile(oldString, newString, replaceAll);
                 break;
             
             default:
@@ -918,9 +959,12 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         try {
+          // Load mental model content in Node.js runtime
+          const mentalModelContent = getUserMentalModel();
+          
           const result = await generateText({
             model: anthropic(modelName),
-            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message),
+            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
             messages: modelMessages,
             tools: plannerTools,
         });
