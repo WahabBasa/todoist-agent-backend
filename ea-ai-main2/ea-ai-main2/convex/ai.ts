@@ -13,6 +13,8 @@ import {
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { api } from "./_generated/api";
 import { SystemPrompt } from "./ai/system";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
 // Use big-brain authentication pattern
 import { requireUserAuthForAction } from "./todoist/userAccess";
 import { z } from "zod";
@@ -289,6 +291,21 @@ const plannerTools = {
   internalTodoRead: tool({
     description: "Read your current internal todolist to check progress and understand what you're working on. Use this to stay organized and provide progress updates to users. This shows your internal planning state.",
     inputSchema: z.object({}),
+  }),
+
+  // User Mental Model Learning Tools - File-based approach
+  readUserMentalModel: tool({
+    description: "Read the current user mental model to understand learned behavioral patterns, work preferences, and priority frameworks. Use this to inform scheduling and prioritization decisions.",
+    inputSchema: z.object({}),
+  }),
+
+  editUserMentalModel: tool({
+    description: "Update the user mental model file based on behavioral insights discovered during conversation. Use this to continuously learn user patterns for better task management and scheduling.",
+    inputSchema: z.object({
+      oldString: z.string().describe("Exact text section to replace in the mental model file"),
+      newString: z.string().describe("Updated insights or patterns to replace the old text with"),
+      replaceAll: z.boolean().optional().describe("Replace all occurrences of the old string (default: false)"),
+    }),
   }),
 };
 
@@ -628,6 +645,92 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                     };
                 }
                 break;
+
+            case "readUserMentalModel":
+                const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+                
+                try {
+                    if (existsSync(mentalModelPath)) {
+                        const mentalModelContent = readFileSync(mentalModelPath, "utf-8");
+                        result = {
+                            success: true,
+                            content: mentalModelContent,
+                            message: "User mental model loaded successfully",
+                            path: mentalModelPath,
+                        };
+                    } else {
+                        result = {
+                            success: false,
+                            content: "",
+                            message: "User mental model file not found - needs to be created",
+                            path: mentalModelPath,
+                        };
+                    }
+                } catch (error) {
+                    result = {
+                        success: false,
+                        error: error instanceof Error ? error.message : "Unknown error reading mental model",
+                        message: "Failed to read user mental model file",
+                        path: mentalModelPath,
+                    };
+                }
+                break;
+
+            case "editUserMentalModel":
+                const editPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+                const { oldString, newString, replaceAll = false } = args as { 
+                    oldString: string; 
+                    newString: string; 
+                    replaceAll?: boolean; 
+                };
+                
+                try {
+                    let content = "";
+                    if (existsSync(editPath)) {
+                        content = readFileSync(editPath, "utf-8");
+                    } else {
+                        // If file doesn't exist and oldString is empty, create new file
+                        if (oldString === "") {
+                            content = "";
+                        } else {
+                            throw new Error("Mental model file not found and oldString is not empty");
+                        }
+                    }
+                    
+                    // Perform the edit
+                    let updatedContent: string;
+                    if (oldString === "") {
+                        // Creating new file or appending
+                        updatedContent = newString;
+                    } else if (replaceAll) {
+                        updatedContent = content.replaceAll(oldString, newString);
+                    } else {
+                        if (!content.includes(oldString)) {
+                            throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);
+                        }
+                        updatedContent = content.replace(oldString, newString);
+                    }
+                    
+                    // Write the updated content
+                    writeFileSync(editPath, updatedContent, "utf-8");
+                    
+                    result = {
+                        success: true,
+                        message: "User mental model updated successfully",
+                        path: editPath,
+                        operation: oldString === "" ? "created" : replaceAll ? "replaced_all" : "replaced_once",
+                        oldLength: content.length,
+                        newLength: updatedContent.length,
+                    };
+                } catch (error) {
+                    result = {
+                        success: false,
+                        error: error instanceof Error ? error.message : "Unknown error editing mental model",
+                        message: "Failed to update user mental model file",
+                        path: editPath,
+                    };
+                }
+                break;
             
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
@@ -817,7 +920,7 @@ Do NOT use any other tools until internal todolist is created.
         try {
           const result = await generateText({
             model: anthropic(modelName),
-            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions),
+            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message),
             messages: modelMessages,
             tools: plannerTools,
         });

@@ -1,0 +1,57 @@
+=== USER MENTAL MODEL ===
+Last Updated: 2025-08-28T10:48:00Z
+Learning Version: 1.0
+
+WORK PATTERNS:
+- Peak productivity: [Learning - observe conversation cues for energy and focus patterns]
+- Energy peaks: [Learning - detect mentions of "morning person", "afternoon productivity", etc.]
+- Focus preferences: [Learning - identify deep work vs multitasking preferences]
+- Context switching tolerance: [Learning - observe resistance to interruptions or task juggling]
+- Preferred work blocks: [Learning - detect mentions of time management preferences]
+
+EISENHOWER MATRIX PERSONALIZATION:
+- Urgent triggers: [Learning - keywords that indicate user urgency like "deadline", "ASAP", "urgent"]
+- Important categories: [Learning - user's high-value activities and goals]
+- Delegation patterns: [Learning - observe what tasks user prefers to delegate or avoid]
+- Elimination patterns: [Learning - identify time-wasters user wants to avoid]
+- Decision speed: [Learning - quick decisions vs careful deliberation patterns]
+
+SCHEDULING PREFERENCES:
+- Calendar style: [Learning - time blocking vs scattered appointments]
+- Buffer preferences: [Learning - preferred gaps between meetings and activities]
+- Optimal time windows: [Learning - best times for different types of work]
+- Interruption tolerance: [Learning - when user accepts/rejects interruptions]
+- Planning horizon: [Learning - daily, weekly, or longer-term planning preferences]
+
+BEHAVIORAL INSIGHTS:
+- Procrastination triggers: [Learning - what causes delays or avoidance]
+- Motivation patterns: [Learning - what drives action and engagement]
+- Stress indicators: [Learning - language patterns showing overwhelm or pressure]
+- Communication style: [Learning - direct vs indirect, brief vs detailed]
+- Planning approach: [Learning - detailed planning vs flexible/adaptive]
+- Task completion style: [Learning - perfectionist vs "good enough" tendencies]
+
+PRIORITY SIGNALS:
+- High importance cues: [Learning - words/phrases that indicate high-value tasks]
+- Urgency indicators: [Learning - time-based language that shows urgency]
+- Low priority patterns: [Learning - tasks user typically deprioritizes]
+- Context importance: [Learning - how work vs personal context affects priorities]
+
+CONFIDENCE SCORES (0-100):
+- Work patterns: 5
+- Priority framework: 5
+- Scheduling preferences: 5
+- Behavioral insights: 5
+- Overall model: 5
+
+LEARNING LOG:
+[2025-08-28T10:48:00Z] Mental model system initialized - ready to learn user patterns
+[Next entries will be automatically added as AI observes user behavior patterns]
+
+=== LEARNING INSTRUCTIONS FOR AI ===
+- Continuously analyze conversations for behavioral patterns
+- Update relevant sections when clear patterns emerge
+- Increase confidence scores as patterns are repeatedly observed
+- Use learned patterns to inform scheduling and prioritization decisions  
+- Look for indirect cues rather than asking direct questions
+- Focus on consistent patterns across multiple conversations
