@@ -11,8 +11,6 @@ import { requireUserAuthForAction } from "../todoist/userAccess";
 import { ToolRegistryManager } from "./toolRegistry";
 import { createProcessor, ProcessorContext } from "./processor";
 import { MessageV2 } from "./messageV2";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
 
 // OpenCode-inspired session orchestrator using streamText
 // This replaces the manual iteration loop with proper streaming integration
@@ -71,8 +69,8 @@ export const chatWithAIV2 = action({
     }
     recentCacheKeys.add(cacheKey);
 
-    // Load user mental model with caching
-    const mentalModelContent = getUserMentalModel(userId);
+    // Load user mental model from database with caching
+    const mentalModelContent = await getUserMentalModelFromDB(ctx, userId);
     
     // Intelligent context optimization (OpenCode pattern)
     const maxContextMessages = parseInt(process.env.MAX_CONTEXT_MESSAGES || "50");
@@ -253,29 +251,29 @@ Then execute systematically with progress updates.
 });
 
 /**
- * Load user mental model with caching (Node.js runtime function)
- * Extracted from original ai.ts for reuse
+ * Load user mental model from database with caching
+ * Replaces file-based mental model loading
  */
-function getUserMentalModel(userId?: string): string {
+async function getUserMentalModelFromDB(ctx: any, userId: string): Promise<string> {
   // Try cache first
-  if (userId) {
-    const cached = MessageCaching.getCachedMentalModel(userId);
-    if (cached) {
-      MessageCaching.incrementCacheHit('mental_model');
-      return cached;
-    }
-    MessageCaching.incrementCacheMiss();
+  const cached = MessageCaching.getCachedMentalModel(userId);
+  if (cached) {
+    MessageCaching.incrementCacheHit('mental_model');
+    return cached;
   }
+  MessageCaching.incrementCacheMiss();
 
   try {
-    const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
+    const mentalModelData = await ctx.runQuery(api.mentalModels.getUserMentalModel, {
+      tokenIdentifier: userId,
+    });
+
     let content: string;
     
-    if (existsSync(mentalModelPath)) {
-      const fileContent = readFileSync(mentalModelPath, "utf-8");
+    if (mentalModelData.exists && mentalModelData.content) {
       content = `
 <user_mental_model>
-${fileContent}
+${mentalModelData.content}
 </user_mental_model>`;
     } else {
       content = `
@@ -286,9 +284,7 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     }
 
     // Cache the result
-    if (userId) {
-      MessageCaching.setCachedMentalModel(userId, content);
-    }
+    MessageCaching.setCachedMentalModel(userId, content);
 
     return content;
   } catch (error) {
@@ -298,9 +294,7 @@ Error loading mental model: ${error instanceof Error ? error.message : 'Unknown 
 AI should use default behavior and attempt to create mental model during conversation.
 </user_mental_model>`;
 
-    if (userId) {
-      MessageCaching.setCachedMentalModel(userId, errorContent);
-    }
+    MessageCaching.setCachedMentalModel(userId, errorContent);
 
     return errorContent;
   }

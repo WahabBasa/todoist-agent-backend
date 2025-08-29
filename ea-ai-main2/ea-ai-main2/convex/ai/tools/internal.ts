@@ -2,8 +2,6 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
 
 // Internal AI workflow coordination tools
 // These are for AI self-management, not user task creation
@@ -113,49 +111,41 @@ export const readUserMentalModel: ToolDefinition = {
   inputSchema: z.object({}),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-      let result;
-      
-      if (existsSync(mentalModelPath)) {
-        const content = readFileSync(mentalModelPath, "utf-8");
-        result = {
-          success: true,
-          content,
-          message: "User mental model loaded successfully",
-          path: mentalModelPath,
-          size: content.length,
-          lastModified: "unknown", // Could be enhanced with fs.stat
-        };
-      } else {
-        result = {
-          success: false,
-          content: "",
-          message: "User mental model file not found - needs to be created",
-          path: mentalModelPath,
-          size: 0,
-        };
-      }
+      const result = await actionCtx.runQuery(api.mentalModels.getUserMentalModel, {
+        tokenIdentifier: ctx.userId,
+      });
 
       ctx.metadata({
-        title: result.success ? "Mental Model Loaded" : "Mental Model Not Found",
+        title: result.exists ? "Mental Model Loaded" : "Mental Model Not Found",
         metadata: { 
-          success: result.success, 
+          success: result.exists, 
           hasContent: !!result.content,
-          contentSize: result.size
+          contentSize: result.content.length,
+          version: result.version || 0
         }
       });
 
       return {
         title: "Mental Model Read",
-        metadata: { success: result.success, hasContent: !!result.content },
-        output: JSON.stringify(result)
+        metadata: { 
+          success: result.exists, 
+          hasContent: !!result.content,
+          version: result.version || 0
+        },
+        output: JSON.stringify({
+          success: result.exists,
+          content: result.content,
+          message: result.message,
+          size: result.content.length,
+          version: result.version,
+          lastUpdated: result.lastUpdated,
+        })
       };
     } catch (error) {
       const errorResult = {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        message: "Failed to read user mental model file",
-        path: join(process.cwd(), "convex", "ai", "user-mental-model.txt"),
+        message: "Failed to read user mental model from database",
       };
 
       ctx.metadata({
@@ -174,75 +164,55 @@ export const readUserMentalModel: ToolDefinition = {
 
 export const editUserMentalModel: ToolDefinition = {
   id: "editUserMentalModel",
-  description: "Update the user mental model file based on behavioral insights discovered during conversation. Use this to continuously learn user patterns for better task management and scheduling.",
+  description: "Update the user mental model based on behavioral insights discovered during conversation. Use this to continuously learn user patterns for better task management and scheduling.",
   inputSchema: z.object({
-    oldString: z.string().describe("Exact text section to replace in the mental model file"),
+    oldString: z.string().describe("Exact text section to replace in the mental model (use empty string to create new or append)"),
     newString: z.string().describe("Updated insights or patterns to replace the old text with"),
     replaceAll: z.boolean().optional().describe("Replace all occurrences of the old string (default: false)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
       const { oldString, newString, replaceAll = false } = args;
-      const editPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
       
-      let content = "";
-      let isNewFile = false;
-      
-      if (existsSync(editPath)) {
-        content = readFileSync(editPath, "utf-8");
-      } else if (oldString !== "") {
-        throw new Error("Mental model file not found and oldString is not empty. Use empty oldString to create new file.");
-      } else {
-        isNewFile = true;
-      }
-      
-      // Perform the edit
-      let updatedContent: string;
-      if (oldString === "") {
-        // Creating new file or appending
-        updatedContent = isNewFile ? newString : content + "\n" + newString;
-      } else if (replaceAll) {
-        updatedContent = content.replaceAll(oldString, newString);
-      } else {
-        if (!content.includes(oldString)) {
-          throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);
-        }
-        updatedContent = content.replace(oldString, newString);
-      }
-      
-      // Write the updated content
-      writeFileSync(editPath, updatedContent, "utf-8");
-      
-      const result = {
-        success: true,
-        message: isNewFile ? "User mental model created successfully" : "User mental model updated successfully",
-        path: editPath,
-        operation: isNewFile ? "created" : (oldString === "" ? "appended" : (replaceAll ? "replaced_all" : "replaced_once")),
-        oldLength: content.length,
-        newLength: updatedContent.length,
-        sizeDifference: updatedContent.length - content.length,
-      };
+      const result = await actionCtx.runMutation(api.mentalModels.editMentalModel, {
+        tokenIdentifier: ctx.userId,
+        oldString,
+        newString,
+        replaceAll,
+      });
 
       ctx.metadata({
-        title: isNewFile ? "Mental Model Created" : "Mental Model Updated",
+        title: result.operation === "created" ? "Mental Model Created" : "Mental Model Updated",
         metadata: { 
           operation: result.operation, 
           sizeDifference: result.sizeDifference,
-          isNewFile
+          version: result.version,
+          isNewModel: result.operation === "created"
         }
       });
 
       return {
-        title: isNewFile ? "Mental Model Created" : "Mental Model Updated",
-        metadata: { operation: result.operation, lengthChange: result.sizeDifference },
-        output: JSON.stringify(result)
+        title: result.operation === "created" ? "Mental Model Created" : "Mental Model Updated",
+        metadata: { 
+          operation: result.operation, 
+          lengthChange: result.sizeDifference,
+          version: result.version
+        },
+        output: JSON.stringify({
+          success: result.success,
+          message: result.message,
+          operation: result.operation,
+          oldLength: result.oldLength,
+          newLength: result.newLength,
+          sizeDifference: result.sizeDifference,
+          version: result.version,
+        })
       };
     } catch (error) {
       const errorResult = {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        message: "Failed to update user mental model file",
-        path: join(process.cwd(), "convex", "ai", "user-mental-model.txt"),
+        message: "Failed to update user mental model in database",
       };
 
       ctx.metadata({
