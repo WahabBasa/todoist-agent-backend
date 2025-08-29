@@ -269,7 +269,7 @@ function convertConvexMessagesToModel(
 // =================================================================
 const plannerTools = {
   createTask: tool({
-    description: "Create a new task in the user's Todoist account. Use this when they want to add something to their real to-do list. You can optionally assign it to a specific Todoist project to keep things organized.",
+    description: "Create a new task in the user's Todoist account. This is the PRIMARY tool for user task requests. EXAMPLES: User says 'Create task to call dentist' → use createTask. User says 'Create these 5 tasks: iron, clean, sweep, cook, shop' → use createTask (5 separate calls). NEVER use internalTodoWrite for user task creation.",
     inputSchema: z.object({
       title: z.string().describe("The task title or description (e.g., 'Call the dentist', 'Review quarterly reports', 'Buy groceries')"),
       projectId: z.string().optional().describe("Optional: The Todoist project ID to categorize this task. Get project IDs by calling getProjectAndTaskMap first."),
@@ -423,14 +423,14 @@ const plannerTools = {
   // =================================================================
 
   internalTodoWrite: tool({
-    description: "Create or update your internal todolist to plan complex multi-step tasks. Use this when you need to break down user requests into manageable steps and track your progress. This is your internal planning tool - the user cannot see these todos.",
+    description: "AI WORKFLOW COORDINATION ONLY. Use ONLY for complex multi-system operations requiring systematic coordination. NEVER use for simple user task creation. EXAMPLES: User wants to 'Delete all completed tasks AND reorganize by priority' → use internalTodoWrite for coordination. User wants to 'Create these 5 tasks' → do NOT use this, use createTask instead. This tool is for AI planning, not user task creation.",
     inputSchema: z.object({
       todos: z.array(z.object({
         id: z.string().describe("Unique identifier for the todo item"),
-        content: z.string().describe("Brief description of the task"),
+        content: z.string().describe("Brief description of the AI coordination task"),
         status: z.enum(["pending", "in_progress", "completed", "cancelled"]).describe("Current status of the task"),
         priority: z.enum(["high", "medium", "low"]).describe("Priority level of the task"),
-      })).describe("The updated todo list for your internal planning"),
+      })).describe("The updated todo list for your internal workflow coordination"),
     }),
   }),
 
@@ -981,9 +981,25 @@ export const chatWithAI = action({
           }
         }
         
-        // Add debug logging to verify message structure before conversion
-        const historySlice = history.slice(-10);
-        console.log(`[DEBUG] Raw history structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
+        // Smart Context Management: Preserve full conversation context
+        // Use intelligent truncation based on model capabilities and conversation importance
+        const maxContextMessages = process.env.MAX_CONTEXT_MESSAGES ? parseInt(process.env.MAX_CONTEXT_MESSAGES) : 50;
+        let historySlice = history;
+        
+        // For very long conversations, implement intelligent compression
+        if (history.length > maxContextMessages) {
+          console.log(`[CONTEXT] Long conversation detected (${history.length} messages), applying intelligent compression`);
+          
+          // Preserve conversation structure: first few messages + recent context
+          const firstMessages = history.slice(0, 3); // Opening context
+          const recentMessages = history.slice(-maxContextMessages + 3); // Recent conversation
+          historySlice = [...firstMessages, ...recentMessages];
+          
+          console.log(`[CONTEXT] Compressed conversation: ${history.length} → ${historySlice.length} messages`);
+        }
+        
+        console.log(`[DEBUG] Processing ${historySlice.length} messages for AI context`);
+        console.log(`[DEBUG] Recent message structure:`, JSON.stringify(historySlice.slice(-3), null, 2));
         
         // OpenCode-inspired: Direct conversion to ModelMessage format
         let modelMessages: ModelMessage[];

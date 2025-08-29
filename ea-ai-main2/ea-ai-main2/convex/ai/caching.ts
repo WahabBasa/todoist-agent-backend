@@ -48,6 +48,7 @@ export namespace MessageCaching {
   /**
    * Optimize message selection for caching
    * Implements intelligent conversation compaction while preserving context
+   * Updated to preserve more conversation history for better AI context
    */
   export function optimizeForCaching(messages: ModelMessage[]): ModelMessage[] {
     const systemMessages = messages.filter(msg => msg.role === "system");
@@ -56,14 +57,19 @@ export namespace MessageCaching {
     // Keep max 2 system messages (for caching efficiency)
     const optimizedSystemMessages = systemMessages.slice(0, 2);
 
-    // For conversation messages, keep recent context but compress older messages
+    // For conversation messages, preserve more context with intelligent selection
     let optimizedConversationMessages = conversationMessages;
     
-    // If we have more than 10 conversation messages, keep first 2 and last 6
-    if (conversationMessages.length > 10) {
-      const firstTwo = conversationMessages.slice(0, 2);
-      const lastSix = conversationMessages.slice(-6);
-      optimizedConversationMessages = [...firstTwo, ...lastSix];
+    // Updated thresholds: preserve more conversation history
+    const maxCachedMessages = process.env.MAX_CACHED_MESSAGES ? parseInt(process.env.MAX_CACHED_MESSAGES) : 30;
+    
+    if (conversationMessages.length > maxCachedMessages) {
+      // Preserve conversation flow: first 3 messages + recent 80% of context
+      const firstMessages = conversationMessages.slice(0, 3); // Opening context
+      const recentMessages = conversationMessages.slice(-Math.floor(maxCachedMessages * 0.8)); 
+      optimizedConversationMessages = [...firstMessages, ...recentMessages];
+      
+      console.log(`[CACHING] Optimized conversation: ${conversationMessages.length} → ${optimizedConversationMessages.length} messages`);
     }
 
     return [...optimizedSystemMessages, ...optimizedConversationMessages];
