@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, MutationCtx } from "./_generated/server";
 
 /**
  * Get the active mental model for a user
@@ -36,6 +36,59 @@ export const getUserMentalModel = query({
 });
 
 /**
+ * Shared helper function for mental model database operations
+ * Used by both upsertMentalModel and editMentalModel to avoid mutation→mutation calls
+ */
+async function upsertMentalModelHelper(
+  ctx: MutationCtx,
+  { tokenIdentifier, content }: { tokenIdentifier: string; content: string }
+) {
+  const now = Date.now();
+
+  // Check if user has an existing active mental model
+  const existingModel = await ctx.db
+    .query("mentalModels")
+    .withIndex("by_tokenIdentifier_and_active", (q) =>
+      q.eq("tokenIdentifier", tokenIdentifier).eq("isActive", true)
+    )
+    .first();
+
+  if (existingModel) {
+    // Update existing model
+    await ctx.db.patch(existingModel._id, {
+      content,
+      version: existingModel.version + 1,
+      updatedAt: now,
+    });
+
+    return {
+      success: true,
+      operation: "updated",
+      version: existingModel.version + 1,
+      message: "Mental model updated successfully",
+    };
+  } else {
+    // Create new model
+    const newModelId = await ctx.db.insert("mentalModels", {
+      tokenIdentifier,
+      content,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+    });
+
+    return {
+      success: true,
+      operation: "created",
+      version: 1,
+      modelId: newModelId,
+      message: "Mental model created successfully",
+    };
+  }
+}
+
+/**
  * Create or update a user's mental model
  */
 export const upsertMentalModel = mutation({
@@ -44,49 +97,7 @@ export const upsertMentalModel = mutation({
     content: v.string(),
   },
   handler: async (ctx, { tokenIdentifier, content }) => {
-    const now = Date.now();
-
-    // Check if user has an existing active mental model
-    const existingModel = await ctx.db
-      .query("mentalModels")
-      .withIndex("by_tokenIdentifier_and_active", (q) =>
-        q.eq("tokenIdentifier", tokenIdentifier).eq("isActive", true)
-      )
-      .first();
-
-    if (existingModel) {
-      // Update existing model
-      await ctx.db.patch(existingModel._id, {
-        content,
-        version: existingModel.version + 1,
-        updatedAt: now,
-      });
-
-      return {
-        success: true,
-        operation: "updated",
-        version: existingModel.version + 1,
-        message: "Mental model updated successfully",
-      };
-    } else {
-      // Create new model
-      const newModelId = await ctx.db.insert("mentalModels", {
-        tokenIdentifier,
-        content,
-        version: 1,
-        createdAt: now,
-        updatedAt: now,
-        isActive: true,
-      });
-
-      return {
-        success: true,
-        operation: "created",
-        version: 1,
-        modelId: newModelId,
-        message: "Mental model created successfully",
-      };
-    }
+    return await upsertMentalModelHelper(ctx, { tokenIdentifier, content });
   },
 });
 
@@ -134,8 +145,8 @@ export const editMentalModel = mutation({
       updatedContent = content.replace(oldString, newString);
     }
 
-    // Save the updated content
-    const result = await upsertMentalModel(ctx, { tokenIdentifier, content: updatedContent });
+    // Save the updated content using helper function (avoids mutation→mutation call)
+    const result = await upsertMentalModelHelper(ctx, { tokenIdentifier, content: updatedContent });
 
     return {
       success: true,
