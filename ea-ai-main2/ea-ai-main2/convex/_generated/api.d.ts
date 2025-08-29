@@ -14,7 +14,14 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as ai_caching from "../ai/caching.js";
+import type * as ai_messageV2 from "../ai/messageV2.js";
+import type * as ai_processor from "../ai/processor.js";
+import type * as ai_session from "../ai/session.js";
 import type * as ai_system from "../ai/system.js";
+import type * as ai_toolRegistry from "../ai/toolRegistry.js";
+import type * as ai_tools_internal from "../ai/tools/internal.js";
+import type * as ai_tools_todoist from "../ai/tools/todoist.js";
+import type * as ai_tools_utils from "../ai/tools/utils.js";
 import type * as ai from "../ai.js";
 import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as chatSessions from "../chatSessions.js";
@@ -43,7 +50,14 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  */
 declare const fullApi: ApiFromModules<{
   "ai/caching": typeof ai_caching;
+  "ai/messageV2": typeof ai_messageV2;
+  "ai/processor": typeof ai_processor;
+  "ai/session": typeof ai_session;
   "ai/system": typeof ai_system;
+  "ai/toolRegistry": typeof ai_toolRegistry;
+  "ai/tools/internal": typeof ai_tools_internal;
+  "ai/tools/todoist": typeof ai_tools_todoist;
+  "ai/tools/utils": typeof ai_tools_utils;
   ai: typeof ai;
   aiInternalTodos: typeof aiInternalTodos;
   chatSessions: typeof chatSessions;

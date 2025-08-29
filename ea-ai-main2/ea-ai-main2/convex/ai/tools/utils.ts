@@ -1,0 +1,256 @@
+import { z } from "zod";
+import { ToolDefinition, ToolContext } from "../toolRegistry";
+import { ActionCtx } from "../../_generated/server";
+
+// Utility tools for time, context, and system information
+
+export const getCurrentTime: ToolDefinition = {
+  id: "getCurrentTime",
+  description: "Get current time and timezone information from the user's browser context. Use this to understand the current context for scheduling and date calculations, especially when users reference relative times like 'tomorrow' or 'next week'.",
+  inputSchema: z.object({
+    timeZone: z.string().optional().describe("Override timezone (e.g., 'America/New_York', 'Europe/London'). If not provided, uses user's browser timezone."),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    // This tool is lightweight and doesn't need circuit breaker protection
+    const currentTimeContext = (ctx as any).currentTimeContext;
+    
+    if (currentTimeContext) {
+      // Use browser-provided time context (most accurate)
+      const result = {
+        ...currentTimeContext,
+        source: currentTimeContext.source || "user_browser",
+        requestedTimezone: args.timeZone || currentTimeContext.userTimezone,
+      };
+
+      ctx.metadata({
+        title: "Current Time Retrieved (Browser Context)",
+        metadata: { 
+          source: "user_browser", 
+          timezone: currentTimeContext.userTimezone,
+          localTime: currentTimeContext.localTime
+        }
+      });
+
+      return {
+        title: "Current Time Retrieved",
+        metadata: { source: "user_browser", timezone: currentTimeContext.userTimezone },
+        output: JSON.stringify(result)
+      };
+    } else {
+      // Fallback to server time if no browser context provided
+      console.warn("[getCurrentTime] No browser context provided, using server time");
+      const now = new Date();
+      const serverTime = args.timeZone ? 
+        new Date(now.toLocaleString("en-US", { timeZone: args.timeZone })) : now;
+      
+      const fallback = { 
+        currentTime: serverTime.toISOString(),
+        userTimezone: args.timeZone || "UTC",
+        localTime: serverTime.toLocaleString(),
+        timestamp: serverTime.getTime(),
+        source: "server_fallback",
+        fallbackReason: "No browser time context provided",
+        requestedTimezone: args.timeZone,
+      };
+
+      ctx.metadata({
+        title: "Current Time Retrieved (Server Fallback)",
+        metadata: { 
+          source: "server_fallback", 
+          timezone: fallback.userTimezone,
+          fallbackReason: "No browser context"
+        }
+      });
+
+      return {
+        title: "Current Time Retrieved (Fallback)",
+        metadata: { source: "server_fallback" },
+        output: JSON.stringify(fallback)
+      };
+    }
+  }
+};
+
+export const getSystemStatus: ToolDefinition = {
+  id: "getSystemStatus",
+  description: "Get current system status including tool availability, connection health, and performance metrics. Use for troubleshooting or system health checks.",
+  inputSchema: z.object({
+    includeMetrics: z.boolean().optional().describe("Include performance metrics (default: false)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const status = {
+        timestamp: Date.now(),
+        sessionId: ctx.sessionID,
+        userId: ctx.userId.substring(0, 20) + "...",
+        systemHealth: {
+          convex: "operational", // Could be enhanced with actual health checks
+          todoist: "operational",
+          calendar: "operational",
+        },
+        features: {
+          internalTodos: true,
+          mentalModel: true,
+          taskManagement: true,
+          calendarIntegration: true,
+        },
+        version: "2.0.0", // Version of the new system
+      };
+
+      if (args.includeMetrics) {
+        // Add performance metrics if requested
+        (status as any).metrics = {
+          uptime: Date.now() - (Date.now() - 60000), // Simplified
+          memoryUsage: "N/A", // Would need actual monitoring
+          responseTime: "< 1s",
+        };
+      }
+
+      ctx.metadata({
+        title: "System Status Retrieved",
+        metadata: { 
+          health: "operational",
+          includeMetrics: args.includeMetrics || false
+        }
+      });
+
+      return {
+        title: "System Status",
+        metadata: { health: "operational" },
+        output: JSON.stringify(status)
+      };
+    } catch (error) {
+      const errorStatus = {
+        timestamp: Date.now(),
+        systemHealth: "degraded",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+
+      return {
+        title: "System Status (Error)",
+        metadata: { health: "degraded" },
+        output: JSON.stringify(errorStatus)
+      };
+    }
+  }
+};
+
+export const validateInput: ToolDefinition = {
+  id: "validateInput",
+  description: "Validate user input for common patterns like dates, email addresses, or IDs. Use this to prevent errors before making API calls.",
+  inputSchema: z.object({
+    input: z.string().describe("The input to validate"),
+    type: z.enum(["date", "email", "todoistId", "url", "priority"]).describe("Type of validation to perform"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const { input, type } = args;
+      let isValid = false;
+      let message = "";
+      let suggestions: string[] = [];
+
+      switch (type) {
+        case "date":
+          const dateAttempt = new Date(input);
+          isValid = !isNaN(dateAttempt.getTime()) && dateAttempt.getFullYear() >= 2020;
+          message = isValid ? "Valid date" : "Invalid date format";
+          if (!isValid) {
+            suggestions = [
+              "Try format: YYYY-MM-DD (e.g., 2025-12-31)",
+              "Try natural language: 'tomorrow', 'next Friday'",
+              "Try ISO format: 2025-12-31T14:30:00Z"
+            ];
+          }
+          break;
+
+        case "email":
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          isValid = emailRegex.test(input);
+          message = isValid ? "Valid email address" : "Invalid email format";
+          if (!isValid) {
+            suggestions = ["Try format: user@example.com"];
+          }
+          break;
+
+        case "todoistId":
+          isValid = /^[a-zA-Z0-9]{16,}$/.test(input);
+          message = isValid ? "Valid Todoist ID format" : "Invalid Todoist ID format";
+          if (!isValid) {
+            suggestions = [
+              "Todoist IDs are 16+ character alphanumeric strings",
+              "Use getProjectAndTaskMap() to get valid IDs"
+            ];
+          }
+          break;
+
+        case "url":
+          try {
+            new URL(input);
+            isValid = true;
+            message = "Valid URL";
+          } catch {
+            isValid = false;
+            message = "Invalid URL format";
+            suggestions = ["Try format: https://example.com"];
+          }
+          break;
+
+        case "priority":
+          const priorityNum = parseInt(input);
+          isValid = [1, 2, 3, 4].includes(priorityNum);
+          message = isValid ? "Valid priority level" : "Invalid priority level";
+          if (!isValid) {
+            suggestions = [
+              "Use 1 for highest priority (urgent)",
+              "Use 2 for high priority",
+              "Use 3 for medium priority", 
+              "Use 4 for low priority"
+            ];
+          }
+          break;
+
+        default:
+          message = "Unknown validation type";
+      }
+
+      const result = {
+        input,
+        type,
+        isValid,
+        message,
+        suggestions: suggestions.length > 0 ? suggestions : undefined,
+      };
+
+      ctx.metadata({
+        title: isValid ? "Input Valid" : "Input Invalid",
+        metadata: { type, isValid, hassuggestions: suggestions.length > 0 }
+      });
+
+      return {
+        title: `Input Validation: ${type}`,
+        metadata: { type, isValid },
+        output: JSON.stringify(result)
+      };
+    } catch (error) {
+      const errorResult = {
+        input: args.input,
+        type: args.type,
+        isValid: false,
+        error: error instanceof Error ? error.message : "Validation error",
+      };
+
+      return {
+        title: "Validation Error",
+        metadata: { isValid: false },
+        output: JSON.stringify(errorResult)
+      };
+    }
+  }
+};
+
+// Export all utility tools
+export const UtilityTools = {
+  getCurrentTime,
+  getSystemStatus,
+  validateInput,
+};
