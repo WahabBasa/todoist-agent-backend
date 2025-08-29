@@ -1,4 +1,4 @@
-import { UIMessage, ModelMessage, convertToModelMessages } from "ai";
+import { UIMessage, ModelMessage, convertToModelMessages, UIMessagePart, UIDataTypes, UITools } from "ai";
 
 // OpenCode-inspired message architecture for proper AI SDK integration
 export namespace MessageV2 {
@@ -27,43 +27,12 @@ export namespace MessageV2 {
     | { status: "completed"; input: any; output: string; startTime: number; endTime: number }
     | { status: "error"; input: any; error: string; startTime: number; endTime: number };
 
-  // Message part types (following OpenCode MessageV2 structure)
-  export interface TextPart {
-    type: "text";
-    text: string;
-  }
+  // Use AI SDK's native UIMessagePart types instead of custom parts
+  export type EnhancedUIMessagePart = UIMessagePart<UIDataTypes, UITools>;
 
-  export interface ToolCallPart {
-    type: "tool-call";
-    toolCallId: string;
-    toolName: string;
-    input: any;
-  }
-
-  export interface ToolResultPart {
-    type: "tool-result";
-    toolCallId: string;
-    toolName: string;
-    output: {
-      type: "text";
-      value: string;
-    };
-  }
-
-  export interface ToolUsagePart {
-    type: `tool-${string}`;
-    state: "output-available" | "output-error";
-    toolCallId: string;
-    input: any;
-    output?: string;
-    errorText?: string;
-  }
-
-  export type MessagePart = TextPart | ToolCallPart | ToolResultPart | ToolUsagePart;
-
-  // Enhanced UIMessage structure
-  export interface EnhancedUIMessage extends UIMessage {
-    parts: MessagePart[];
+  // Enhanced UIMessage structure - now properly compatible with AI SDK
+  export interface EnhancedUIMessage extends UIMessage<unknown, UIDataTypes, UITools> {
+    // Inherits proper parts typing from AI SDK UIMessage
   }
 
   // Conversion functions following OpenCode patterns
@@ -110,23 +79,33 @@ export namespace MessageV2 {
                   const toolResult = this.findToolResult(convexMessages, i + 1, tc.toolCallId);
                   
                   if (toolResult) {
-                    // Create tool usage part with result
+                    // Determine if result is error or success
+                    const isError = toolResult.result && toolResult.result.toString().startsWith("Error:");
+                    
+                    // Create tool usage part with proper AI SDK typing
+                    if (isError) {
+                      parts.push({
+                        type: `tool-${tc.name}` as `tool-${string}`,
+                        state: "output-error" as const,
+                        toolCallId: tc.toolCallId,
+                        input: tc.args || {},
+                        errorText: this.formatToolOutput(toolResult.result)
+                      });
+                    } else {
+                      parts.push({
+                        type: `tool-${tc.name}` as `tool-${string}`,
+                        state: "output-available" as const,
+                        toolCallId: tc.toolCallId,
+                        input: tc.args || {},
+                        output: this.formatToolOutput(toolResult.result)
+                      });
+                    }
+                  } else {
+                    // Tool call without result - use AI SDK v5's tool-${string} format
                     parts.push({
                       type: `tool-${tc.name}` as `tool-${string}`,
-                      state: toolResult.result && !toolResult.result.toString().startsWith("Error:") 
-                        ? "output-available" : "output-error",
+                      state: "input-streaming" as const,
                       toolCallId: tc.toolCallId,
-                      input: tc.args || {},
-                      ...(toolResult.result && !toolResult.result.toString().startsWith("Error:")
-                        ? { output: this.formatToolOutput(toolResult.result) }
-                        : { errorText: this.formatToolOutput(toolResult.result) })
-                    });
-                  } else {
-                    // Tool call without result (pending state)
-                    parts.push({
-                      type: "tool-call",
-                      toolCallId: tc.toolCallId,
-                      toolName: tc.name,
                       input: tc.args || {}
                     });
                   }

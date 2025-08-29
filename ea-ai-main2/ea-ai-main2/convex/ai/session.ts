@@ -129,8 +129,8 @@ Then execute systematically with progress updates.
         maxRetries: 3,
         // Critical: Stop after max 3 steps to prevent rate limiting
         stopWhen: async ({ steps }) => {
-          if (steps >= 3) {
-            console.log(`[SessionV2] Stopping at step ${steps} to prevent rate limits`);
+          if (steps.length >= 3) {
+            console.log(`[SessionV2] Stopping at step ${steps.length} to prevent rate limits`);
             return true;
           }
 
@@ -320,7 +320,13 @@ export const compareChatSystems = action({
     sessionId: v.optional(v.id("chatSessions")),
     useV2: v.optional(v.boolean()),
   },
-  handler: async (ctx, { message, sessionId, useV2 = true }) => {
+  handler: async (ctx, { message, sessionId, useV2 = true }): Promise<{
+    response: string;
+    system: string;
+    processingTime: number;
+    timestamp: number;
+    error?: boolean;
+  }> => {
     const { userId } = await requireUserAuthForAction(ctx);
     
     console.log(`[Comparison] Testing ${useV2 ? 'V2' : 'V1'} system for user ${userId.substring(0, 20)}...`);

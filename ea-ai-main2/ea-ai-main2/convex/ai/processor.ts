@@ -134,7 +134,8 @@ export class StreamProcessor {
           case "tool-input-end":
             if (this.toolCalls[value.id]) {
               this.toolCalls[value.id].status = "ready";
-              this.toolCalls[value.id].input = value.input;
+              // Note: AI SDK v5 tool-input-end events don't have 'input' property
+              // The input is provided in the tool-call event instead
             }
             break;
 

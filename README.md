@@ -42,12 +42,13 @@ React Frontend (Tailwind v4) → Convex Backend → Claude AI (Anthropic) → Ad
 
 ## Tech Stack
 
-- **Frontend**: React 19 + TypeScript + Vite
-- **Backend**: Convex (database + server functions + real-time subscriptions)
-- **AI**: Claude 3.5 Sonnet/Haiku via Anthropic SDK with advanced caching
-- **UI**: TailwindCSS v4 with custom design system + shadcn/ui components
-- **Authentication**: Convex Auth with tokenIdentifier pattern
-- **Integrations**: Google Calendar OAuth, Todoist API, MCP servers
+- **Frontend**: React 19, TypeScript, Vite
+- **Backend**: Convex (real-time database + server functions)
+- **AI**: Claude 3.5 Sonnet/Haiku (Anthropic SDK)
+- **UI**: TailwindCSS v4, shadcn/ui components  
+- **Authentication**: Convex Auth
+- **Audio**: Voice recording and transcription
+- **Integrations**: Google Calendar OAuth, Todoist API, GitHub + Graphite MCP
 
 ## Quick Start
 
@@ -90,169 +91,29 @@ Once running, you can interact with TaskAI through natural language:
 **📍 Main Active Project Location**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\ea-ai-main2\ea-ai-main2\` 
 This is the primary working directory containing both frontend and backend code.
 
-### Design Reference - TodoVex
-
-**📍 Reference Project Location**: `C:\Users\AtheA\Desktop\Personal_Programs\todoist-agent-backend\references\todoist-clone-todovex\`
-
-This is the TodoVex project - a high-quality Todoist clone that serves as our primary design and architecture reference. We use this project to guide our UI/UX decisions, component structure, and overall application design patterns.
-
-### Google Calendar MCP Reference
-
-**📍 MCP Reference Location**: `C:\Users\AtheA\Desktop\Personal_Programs\google-cal-mcp\google-calendar-mcp - Copy`
-
-This is the Google Calendar MCP server implementation that serves as our reference for Google Calendar API integration patterns, authentication flows, and calendar operation implementations.
-
-#### TodoVex Directory Structure
-```
-├── app/                       # Next.js 13+ App Router structure
-│   ├── api/auth/              # NextAuth.js authentication endpoints
-│   ├── loggedin/              # Protected routes (main app pages)
-│   │   ├── projects/          # Project-specific pages
-│   │   ├── today/             # Today view page
-│   │   ├── upcoming/          # Upcoming tasks page
-│   │   └── search/            # Search functionality
-│   └── globals.css            # Global styles
-├── components/                # React components organized by feature
-│   ├── add-tasks/             # Task creation components
-│   ├── containers/            # Page container components
-│   ├── nav/                   # Navigation components
-│   ├── projects/              # Project management components
-│   ├── todos/                 # Task/todo components
-│   └── ui/                    # shadcn/ui components
-├── convex/                    # Convex backend (similar to our structure)
-│   ├── auth.ts               # Authentication functions
-│   ├── projects.ts           # Project management
-│   ├── todos.ts              # Task operations
-│   ├── labels.ts             # Label/tag system
-│   └── schema.ts             # Database schema
-├── actions/                   # Server actions
-├── lib/                       # Utility functions
-└── public/                    # Static assets
-```
 
 ### Main Project Structure
 ```
-├── convex/                    # Backend functions and database schema
-│   ├── _generated/           # Auto-generated Convex files
-│   ├── ai.ts                # 🧠 Core AI integration with 8 tools (Legacy - Node.js runtime)
-│   ├── ai/                  # 🚀 Advanced AI Systems (NEW OpenCode-Inspired Architecture)
-│   │   ├── session.ts       # 🔥 NEW: StreamText-based session orchestrator (replaces manual loops)
-│   │   ├── toolRegistry.ts  # 🔥 NEW: OpenCode-inspired tool registry with circuit breakers
-│   │   ├── processor.ts     # 🔥 NEW: Stream processing and real-time tool execution
-│   │   ├── messageV2.ts     # 🔥 NEW: UIMessage conversion and context management
-│   │   ├── tools/          # 🔥 NEW: Modular tool implementations
-│   │   │   ├── todoist.ts  # Todoist task management tools (extracted from ai.ts)
-│   │   │   ├── internal.ts # AI workflow coordination tools
-│   │   │   └── utils.ts    # Utility tools (time, validation, system status)
-│   │   ├── system.ts        # Dynamic prompt system (OpenCode-inspired)
-│   │   ├── caching.ts       # Multi-layer caching (60-80% token reduction)
-│   │   ├── user-mental-model.txt # File-based behavioral learning
-│   │   └── prompts/zen.txt  # Extracted system prompt content
-│   ├── auth.ts              # Authentication configuration
-│   ├── conversations.ts     # Chat message storage and retrieval
-│   ├── tasks.ts            # Task CRUD operations and queries
-│   ├── projects.ts         # Project management functions
-│   ├── myFunctions.ts      # Dashboard stats and user utilities
-│   ├── aiInternalTodos.ts  # Session-scoped AI task management
-│   ├── googleCalendar/     # Google Calendar OAuth integration
-│   │   └── auth.ts         # Calendar event management functions
-│   ├── schema.ts           # Database schema definitions (tokenIdentifier pattern)
-│   └── http.ts             # HTTP routes for auth
+├── convex/                 # Backend functions and database schema
+│   ├── ai/                # OpenCode-inspired AI architecture
+│   ├── auth.ts            # Authentication
+│   ├── conversations.ts   # Chat history
+│   ├── tasks.ts          # Task management
+│   ├── projects.ts       # Project management
+│   ├── schema.ts         # Database schema
+│   └── googleCalendar/   # Calendar integration
 ├── src/
-│   ├── components/         # Reusable UI components
-│   │   ├── chat/          # Chat interface components (Morphic-style architecture)
-│   │   │   ├── Chat.tsx           # Main chat controller with Convex integration
-│   │   │   ├── ChatMessages.tsx   # Message container with scroll management
-│   │   │   ├── ChatPanel.tsx      # Input panel with sticky positioning
-│   │   │   └── RenderMessage.tsx  # User/assistant message rendering
-│   │   ├── ai-elements/   # AI SDK Elements components
-│   │   ├── labels/        # Label/tag management system
-│   │   │   └── LabelManager.tsx   # Complete label CRUD with color coding
-│   │   ├── nav/           # Navigation components
-│   │   │   └── UserProfile.tsx    # User profile dropdown with settings access
-│   │   ├── projects/      # Project management components
-│   │   │   ├── AddProjectDialog.tsx # Project creation modal
-│   │   │   ├── DeleteProject.tsx    # Project deletion confirmation
-│   │   │   └── ProjectView.tsx      # Individual project display
-│   │   ├── ui/            # shadcn/ui components and custom UI elements
-│   │   │   ├── alert-dialog.tsx, alert.tsx, avatar.tsx, badge.tsx
-│   │   │   ├── button.tsx, card.tsx, carousel.tsx, checkbox.tsx
-│   │   │   ├── collapsible.tsx, copy-button.tsx, dialog.tsx
-│   │   │   ├── dropdown-menu.tsx, form.tsx, hover-card.tsx
-│   │   │   ├── input.tsx, label.tsx, markdown-renderer.tsx
-│   │   │   ├── progress.tsx, prompt-suggestions.tsx, scroll-area.tsx
-│   │   │   ├── select.tsx, separator.tsx, sheet.tsx, sidebar.tsx
-│   │   │   ├── skeleton.tsx, sonner.tsx, switch.tsx, tabs.tsx
-│   │   │   └── textarea.tsx, tooltip.tsx
-│   │   ├── SettingsModal.tsx      # ChatGPT-style settings modal (7 sections)
-│   │   ├── QuickTaskModal.tsx     # Quick task creation dialog
-│   │   └── Sidebar.tsx    # Navigation sidebar with stats
-│   ├── views/             # Main application views
-│   │   ├── ChatView.tsx   # AI chat interface (imports Chat component)
-│   │   ├── TasksView.tsx  # Task management interface
-│   │   ├── ProjectsView.tsx # Project overview
-│   │   └── SettingsView.tsx # User preferences
-│   ├── hooks/             # Custom React hooks
-│   │   ├── use-audio-recording.ts    # Audio recording functionality
-│   │   ├── use-auto-scroll.ts        # Automatic scrolling behavior
-│   │   ├── use-autosize-textarea.ts  # Auto-resizing textarea
-│   │   ├── use-copy-to-clipboard.ts  # Clipboard operations
-│   │   └── use-mobile.ts             # Mobile device detection
-│   ├── lib/               # Utility functions and helpers
-│   │   ├── audio-utils.ts # Audio recording utilities
-│   │   └── utils.ts       # General utility functions
-│   ├── App.tsx            # Main app with auth and routing
-│   ├── main.tsx           # Application entry point
-│   └── index.css          # Global styles and theme
-├── .cursor/rules/         # Development guidelines
-├── package.json           # Dependencies and scripts
-├── tailwind.config.js     # TailwindCSS + DaisyUI configuration
-└── vite.config.ts         # Vite build configuration
+│   ├── components/       # React components
+│   │   ├── chat/        # Chat interface (Morphic-style)
+│   │   ├── ui/          # shadcn/ui components
+│   │   └── nav/         # Navigation
+│   ├── views/           # Main application views
+│   ├── hooks/           # Custom React hooks
+│   └── lib/             # Utilities
+├── package.json
+└── vite.config.ts
 ```
 
-### Key Components
-
-**Backend (Advanced AI Systems - OpenCode Architecture)**
-- `ai.ts` - 🧠 Legacy AI integration (Node.js runtime) - maintained for compatibility
-- **NEW Architecture (StreamText-Based)**:
-  - `ai/session.ts` - 🔥 Main session orchestrator using streamText (replaces manual iteration loops)
-  - `ai/toolRegistry.ts` - 🔥 OpenCode-inspired tool registry with circuit breaker pattern
-  - `ai/processor.ts` - 🔥 Real-time stream processing and tool execution pipeline  
-  - `ai/messageV2.ts` - 🔥 UIMessage conversion and context optimization
-  - `ai/tools/` - 🔥 Modular tool implementations:
-    - `todoist.ts` - Task management tools with enhanced error handling
-    - `internal.ts` - AI workflow coordination tools
-    - `utils.ts` - Utility tools (time, validation, system status)
-- `ai/system.ts` - 🚀 Dynamic prompt system with OpenCode-inspired architecture
-- `ai/caching.ts` - ⚡ Multi-layer caching system (60-80% token reduction, conversation deduplication)
-- `ai/user-mental-model.txt` - 🎯 File-based behavioral learning with Eisenhower Matrix personalization
-- `aiInternalTodos.ts` - 🗂️ Session-scoped AI task management for complex workflows
-- `googleCalendar/auth.ts` - 📅 Google Calendar OAuth integration with full event management
-- `tasks.ts` - Complete task lifecycle management with filtering and project association  
-- `projects.ts` - Project CRUD with task counting and progress tracking
-- `conversations.ts` - Persistent chat history with tool call logging
-- `schema.ts` - Type-safe database schema with tokenIdentifier pattern and proper indexes
-
-**Frontend (React Components)**
-- **Chat Architecture (Morphic-style)** - Modular chat interface with clean separation of concerns
-  - `Chat.tsx` - Main controller with Convex integration and state management
-  - `ChatMessages.tsx` - Scroll container with section-based message rendering  
-  - `ChatPanel.tsx` - Sticky input panel with scroll controls and form handling
-  - `RenderMessage.tsx` - Clean user/assistant message display with integrated styling
-- **Modal System** - Comprehensive dialog-based interfaces
-  - `SettingsModal.tsx` - ChatGPT-style settings with 7 sections (General, Notifications, etc.)
-  - `QuickTaskModal.tsx` - Quick task creation dialog with form validation
-- **Navigation & Layout**
-  - `Sidebar.tsx` - Dynamic navigation with live stats and responsive design
-  - `UserProfile.tsx` - User profile dropdown with settings access
-- **Project & Label Management**
-  - `LabelManager.tsx` - Complete label/tag system with CRUD operations
-  - `AddProjectDialog.tsx`, `DeleteProject.tsx`, `ProjectView.tsx` - Project lifecycle
-- **Audio Features** - Voice recording and transcription capabilities
-  - `use-audio-recording.ts` - Custom hook for audio capture
-  - `audio-utils.ts` - Audio processing utilities
-- `ChatView.tsx` - Main chat interface wrapper (imports Chat component)
-- `ProjectsView.tsx` - Visual project overview with progress bars and statistics
 
 ## Environment Setup
 
@@ -445,3 +306,4 @@ Professional UI with attention-zone typography:
 <task_reminder> Create a development log entry that captures not just the technical changes made, but your engineering decision-making process, problem-solving approach, and the reasoning behind your choices. Write as a senior engineer explaining both what you did and why you did it that way, including alternatives considered and trade-offs evaluated. Maximum 35 lines with honest status assessment.
 
 **FILE LOCATION REQUIREMENT**: Always append your entry to the current daily devlog file in the `updates/` directory (e.g., `updates/2025-08-09_devlog.md`). If the file doesn't exist, create it. Multiple sessions per day should all be added to the same file with proper separation. </task_reminder> </development_log_guidelines_v4>
+
