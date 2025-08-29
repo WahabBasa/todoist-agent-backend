@@ -134,8 +134,16 @@ This is the Google Calendar MCP server implementation that serves as our referen
 ```
 ├── convex/                    # Backend functions and database schema
 │   ├── _generated/           # Auto-generated Convex files
-│   ├── ai.ts                # 🧠 Core AI integration with 8 tools (Node.js runtime)
-│   ├── ai/                  # 🚀 Advanced AI Systems
+│   ├── ai.ts                # 🧠 Core AI integration with 8 tools (Legacy - Node.js runtime)
+│   ├── ai/                  # 🚀 Advanced AI Systems (NEW OpenCode-Inspired Architecture)
+│   │   ├── session.ts       # 🔥 NEW: StreamText-based session orchestrator (replaces manual loops)
+│   │   ├── toolRegistry.ts  # 🔥 NEW: OpenCode-inspired tool registry with circuit breakers
+│   │   ├── processor.ts     # 🔥 NEW: Stream processing and real-time tool execution
+│   │   ├── messageV2.ts     # 🔥 NEW: UIMessage conversion and context management
+│   │   ├── tools/          # 🔥 NEW: Modular tool implementations
+│   │   │   ├── todoist.ts  # Todoist task management tools (extracted from ai.ts)
+│   │   │   ├── internal.ts # AI workflow coordination tools
+│   │   │   └── utils.ts    # Utility tools (time, validation, system status)
 │   │   ├── system.ts        # Dynamic prompt system (OpenCode-inspired)
 │   │   ├── caching.ts       # Multi-layer caching (60-80% token reduction)
 │   │   ├── user-mental-model.txt # File-based behavioral learning
@@ -204,9 +212,18 @@ This is the Google Calendar MCP server implementation that serves as our referen
 
 ### Key Components
 
-**Backend (Advanced AI Systems)**
-- `ai.ts` - 🧠 Core AI integration with 8 tool functions + mental model integration (Node.js runtime)
-- `ai/system.ts` - 🚀 Dynamic prompt system with OpenCode-inspired architecture (edge runtime)
+**Backend (Advanced AI Systems - OpenCode Architecture)**
+- `ai.ts` - 🧠 Legacy AI integration (Node.js runtime) - maintained for compatibility
+- **NEW Architecture (StreamText-Based)**:
+  - `ai/session.ts` - 🔥 Main session orchestrator using streamText (replaces manual iteration loops)
+  - `ai/toolRegistry.ts` - 🔥 OpenCode-inspired tool registry with circuit breaker pattern
+  - `ai/processor.ts` - 🔥 Real-time stream processing and tool execution pipeline  
+  - `ai/messageV2.ts` - 🔥 UIMessage conversion and context optimization
+  - `ai/tools/` - 🔥 Modular tool implementations:
+    - `todoist.ts` - Task management tools with enhanced error handling
+    - `internal.ts` - AI workflow coordination tools
+    - `utils.ts` - Utility tools (time, validation, system status)
+- `ai/system.ts` - 🚀 Dynamic prompt system with OpenCode-inspired architecture
 - `ai/caching.ts` - ⚡ Multi-layer caching system (60-80% token reduction, conversation deduplication)
 - `ai/user-mental-model.txt` - 🎯 File-based behavioral learning with Eisenhower Matrix personalization
 - `aiInternalTodos.ts` - 🗂️ Session-scoped AI task management for complex workflows
