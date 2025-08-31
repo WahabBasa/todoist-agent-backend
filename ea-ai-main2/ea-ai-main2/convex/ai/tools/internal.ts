@@ -78,7 +78,7 @@ export const internalTodoRead: ToolDefinition = {
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
       // Explicit typing to prevent deep type inference chains
-      const todoData: any = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos as any, {
+      const todoData: any = await (actionCtx.runQuery as any)("aiInternalTodos.getInternalTodos", {
         sessionId: ctx.sessionID as any,
       });
       
@@ -115,7 +115,7 @@ export const readUserMentalModel: ToolDefinition = {
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
       // Explicit typing to prevent deep type inference chains
-      const result: any = await actionCtx.runQuery(api.mentalModels.getUserMentalModel as any, {
+      const result: any = await (actionCtx.runQuery as any)("mentalModels.getUserMentalModel", {
         tokenIdentifier: ctx.userId,
       });
 
@@ -179,7 +179,7 @@ export const editUserMentalModel: ToolDefinition = {
       const { oldString, newString, replaceAll = false } = args;
       
       // Explicit typing to prevent deep type inference chains
-      const result: any = await actionCtx.runMutation(api.mentalModels.editMentalModel as any, {
+      const result: any = await (actionCtx.runMutation as any)("mentalModels.editMentalModel", {
         tokenIdentifier: ctx.userId,
         oldString,
         newString,

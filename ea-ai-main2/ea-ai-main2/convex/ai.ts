@@ -775,7 +775,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
             // INTERNAL AI AGENT TODOLIST TOOL EXECUTIONS
             // =================================================================
             case "internalTodoWrite":
-                result = await ctx.runMutation(api.aiInternalTodos.updateInternalTodos, {
+                result = await (ctx.runMutation as any)("aiInternalTodos.updateInternalTodos", {
                     sessionId: sessionId,
                     todos: args.todos,
                 });
@@ -793,7 +793,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 break;
             
             case "internalTodoRead":
-                const todoData = await ctx.runQuery(api.aiInternalTodos.getInternalTodos, {
+                const todoData = await (ctx.runQuery as any)("aiInternalTodos.getInternalTodos", {
                     sessionId: sessionId,
                 });
                 
@@ -901,10 +901,10 @@ export const chatWithAI = action({
     // Get conversation history - session-aware or default
     let conversation;
     if (sessionId) {
-      conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+      conversation = await (ctx.runQuery as any)("conversations.getConversationBySession", { sessionId });
     } else {
       // For backward compatibility, use default conversation
-      conversation = await ctx.runQuery(api.conversations.getConversation);
+      conversation = await (ctx.runQuery as any)("conversations.getConversation");
     }
     
     const history = (conversation?.messages as any[]) || [];
@@ -1113,7 +1113,7 @@ Do NOT use any other tools until internal todolist is created.
             
             // Clean up internal todolist if conversation is complete
             try {
-              await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
+              await (ctx.runMutation as any)("aiInternalTodos.deactivateInternalTodos", { sessionId });
               console.log(`[Orchestrator] Deactivated internal todolist for completed conversation`);
             } catch (error) {
               console.warn(`[Orchestrator] Failed to deactivate todolist:`, error);
@@ -1121,7 +1121,7 @@ Do NOT use any other tools until internal todolist is created.
             }
             
             // Save conversation - session-aware or default
-            await ctx.runMutation(api.conversations.upsertConversation, { 
+            await (ctx.runMutation as any)("conversations.upsertConversation", { 
               sessionId,  // Will use default session if undefined
               messages: history as any 
             });
@@ -1218,7 +1218,7 @@ export const streamChatWithAI = action({
 
     try {
       // Initialize streaming response
-      await ctx.runMutation(api.streamingResponses.createStreamingResponse, {
+      await (ctx.runMutation as any)("streamingResponses.createStreamingResponse", {
         streamId,
         sessionId,
         userMessage: message,
@@ -1230,9 +1230,9 @@ export const streamChatWithAI = action({
       // Get conversation history - session-aware or default
       let conversation;
       if (sessionId) {
-        conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+        conversation = await (ctx.runQuery as any)("conversations.getConversationBySession", { sessionId });
       } else {
-        conversation = await ctx.runQuery(api.conversations.getConversation);
+        conversation = await (ctx.runQuery as any)("conversations.getConversation");
       }
 
       const history = (conversation?.messages as any[]) || [];
@@ -1295,7 +1295,7 @@ Do NOT use any other tools until internal todolist is created.
               accumulatedText += part.text;
               // Update streaming response every few characters to avoid overwhelming the database
               if (accumulatedText.length % 20 === 0 || part.text === '\n') {
-                await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+                await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
                   streamId,
                   partialContent: accumulatedText,
                   isComplete: false,
@@ -1359,7 +1359,7 @@ Do NOT use any other tools until internal todolist is created.
         const finalToolResults = await result.toolResults;
 
         // Mark streaming as complete
-        const completedResponse: any = await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
+        const completedResponse: any = await (ctx.runMutation as any)("streamingResponses.completeStreamingResponse", {
           streamId,
           finalContent: finalText || accumulatedText,
           toolCalls: finalToolCalls,
@@ -1387,7 +1387,7 @@ Do NOT use any other tools until internal todolist is created.
         ];
 
         // Save conversation
-        await ctx.runMutation(api.conversations.upsertConversation, {
+        await (ctx.runMutation as any)("conversations.upsertConversation", {
           sessionId,
           messages: newHistory as any
         });
@@ -1402,7 +1402,7 @@ Do NOT use any other tools until internal todolist is created.
 
       } catch (streamError) {
         console.error('[STREAMING] Stream processing error:', streamError);
-        await ctx.runMutation(api.streamingResponses.markStreamingError, {
+        await (ctx.runMutation as any)("streamingResponses.markStreamingError", {
           streamId,
           errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
         });
@@ -1414,7 +1414,7 @@ Do NOT use any other tools until internal todolist is created.
       
       // Try to mark as error if stream was created
       try {
-        await ctx.runMutation(api.streamingResponses.markStreamingError, {
+        await (ctx.runMutation as any)("streamingResponses.markStreamingError", {
           streamId,
           errorMessage: error instanceof Error ? error.message : 'Failed to start streaming'
         });

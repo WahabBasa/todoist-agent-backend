@@ -43,9 +43,9 @@ export const chatWithAIV2 = action({
     // Load conversation history (session-aware)
     let conversation;
     if (sessionId) {
-      conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+      conversation = await (ctx.runQuery as any)("conversations.getConversationBySession", { sessionId });
     } else {
-      conversation = await ctx.runQuery(api.conversations.getConversation);
+      conversation = await (ctx.runQuery as any)("conversations.getConversation");
     }
     
     const history = (conversation?.messages as MessageV2.ConvexMessage[]) || [];
@@ -193,7 +193,7 @@ Then execute systematically with progress updates.
       // Clean up internal todolist if conversation is complete
       try {
         if (result.completed && !result.error) {
-          await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
+          await (ctx.runMutation as any)("aiInternalTodos.deactivateInternalTodos", { sessionId });
           console.log(`[SessionV2] Deactivated internal todolist for completed conversation`);
         }
       } catch (error) {
@@ -201,7 +201,7 @@ Then execute systematically with progress updates.
       }
 
       // Save conversation with session awareness
-      await ctx.runMutation(api.conversations.upsertConversation, { 
+      await (ctx.runMutation as any)("conversations.upsertConversation", { 
         sessionId,
         messages: finalHistory as any 
       });
@@ -233,7 +233,7 @@ Then execute systematically with progress updates.
         timestamp: Date.now(),
       }];
 
-      await ctx.runMutation(api.conversations.upsertConversation, { 
+      await (ctx.runMutation as any)("conversations.upsertConversation", { 
         sessionId,
         messages: errorHistory as any 
       });
@@ -380,9 +380,9 @@ export const getSessionStats = action({
     
     let conversation;
     if (sessionId) {
-      conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+      conversation = await (ctx.runQuery as any)("conversations.getConversationBySession", { sessionId });
     } else {
-      conversation = await ctx.runQuery(api.conversations.getConversation);
+      conversation = await (ctx.runQuery as any)("conversations.getConversation");
     }
     
     const messages = (conversation?.messages as MessageV2.ConvexMessage[]) || [];

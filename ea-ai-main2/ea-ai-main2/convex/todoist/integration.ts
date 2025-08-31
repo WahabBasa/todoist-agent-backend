@@ -18,7 +18,7 @@ export const getTodoistProjectAndTaskMap = action({
     }
 
     // Check if user has Todoist connected
-    const hasConnection = await ctx.runQuery(api.todoist.auth.hasTodoistConnection);
+    const hasConnection = await (ctx.runQuery as any)("todoist.auth.hasTodoistConnection");
     if (!hasConnection) {
       throw new Error("Todoist not connected. Please connect your Todoist account first to manage tasks.");
     }
@@ -94,7 +94,7 @@ export const getTodoistProjectDetails = action({
     }
 
     // Check Todoist connection
-    const hasConnection = await ctx.runQuery(api.todoist.auth.hasTodoistConnection);
+    const hasConnection = await (ctx.runQuery as any)("todoist.auth.hasTodoistConnection");
     if (!hasConnection) {
       throw new Error("Todoist not connected. Please connect your Todoist account first.");
     }
@@ -153,7 +153,7 @@ export const getTodoistTaskDetails = action({
     }
 
     // Check Todoist connection
-    const hasConnection = await ctx.runQuery(api.todoist.auth.hasTodoistConnection);
+    const hasConnection = await (ctx.runQuery as any)("todoist.auth.hasTodoistConnection");
     if (!hasConnection) {
       throw new Error("Todoist not connected. Please connect your Todoist account first.");
     }

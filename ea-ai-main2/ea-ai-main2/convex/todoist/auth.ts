@@ -189,7 +189,7 @@ export const removeTodoistConnection = action({
     logUserAccess(tokenIdentifier, "REMOVE_TODOIST_CONNECTION", "REQUESTED");
 
     // Get user's current token via internal query
-    const tokenData = await ctx.runQuery(internal.todoist.auth.getTodoistTokenForUser, {
+    const tokenData = await (ctx.runQuery as any)("todoist.auth.getTodoistTokenForUser", {
       tokenIdentifier,
     });
 
@@ -232,7 +232,7 @@ export const removeTodoistConnection = action({
       }
 
       // Step 2: Remove token from our database
-      await ctx.runMutation(internal.todoist.auth.deleteTodoistTokenForUser, {
+      await (ctx.runMutation as any)("todoist.auth.deleteTodoistTokenForUser", {
         tokenIdentifier,
       });
 
@@ -249,7 +249,7 @@ export const removeTodoistConnection = action({
       
       // In case of network/other errors, still attempt local deletion
       try {
-        await ctx.runMutation(internal.todoist.auth.deleteTodoistTokenForUser, {
+        await (ctx.runMutation as any)("todoist.auth.deleteTodoistTokenForUser", {
           tokenIdentifier,
         });
         
@@ -377,7 +377,7 @@ export const exchangeCodeForToken = action({
     }
 
     // Check if this access token is already being used by another user
-    const existingTokenUsers = await ctx.runQuery(internal.todoist.auth.findTokenUsers, {
+    const existingTokenUsers = await (ctx.runQuery as any)("todoist.auth.findTokenUsers", {
       accessToken: tokenData.access_token,
     });
 
@@ -405,7 +405,7 @@ export const exchangeCodeForToken = action({
     }
 
     // Store the token using the tokenIdentifier from state parameter
-    await ctx.runMutation(api.todoist.auth.storeTodoistTokenForUser, {
+    await (ctx.runMutation as any)("todoist.auth.storeTodoistTokenForUser", {
       tokenIdentifier: tokenIdentifier,
       accessToken: tokenData.access_token,
     });
