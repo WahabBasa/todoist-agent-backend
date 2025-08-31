@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
-import { todoistSyncRequest } from "../../todoist/syncApi";
+import * as TodoistModel from "../../todoist/model";
 
 // Todoist-specific tool implementations
 // Extracted from main toolRegistry for better modularity
@@ -19,7 +19,7 @@ export const createTask: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result: any = await actionCtx.runAction(api.todoist.syncApi.createTodoistTaskSync, {
+      const result: any = await TodoistModel.createTask(actionCtx, {
         content: args.title,
         description: args.description,
         projectId: args.projectId,
@@ -76,7 +76,10 @@ export const getTasks: ToolDefinition = {
         throw new Error(`Invalid project ID format: "${args.projectId}". Use getProjectAndTaskMap() first to get the correct project ID.`);
       }
 
-      const syncResult = await todoistSyncRequest(actionCtx, [], ["items"], "*");
+      const syncResult = await TodoistModel.syncTodoistData(actionCtx, {
+        resourceTypes: ["items"],
+        syncToken: "*"
+      });
 
       let result = [];
       if (syncResult && syncResult.items && syncResult._userContext) {
@@ -137,13 +140,13 @@ export const updateTask: ToolDefinition = {
       
       // Handle task completion separately with appropriate sync API calls
       if (isCompleted === true) {
-        result = await actionCtx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
+        result = await TodoistModel.completeTask(actionCtx, { taskId });
         ctx.metadata({
           title: "Task Completed",
           metadata: { taskId, action: "completed" }
         });
       } else if (isCompleted === false) {
-        result = await actionCtx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
+        result = await TodoistModel.reopenTask(actionCtx, { taskId });
         ctx.metadata({
           title: "Task Reopened",
           metadata: { taskId, action: "reopened" }
@@ -159,7 +162,7 @@ export const updateTask: ToolDefinition = {
         if (args.projectId) todoistArgs.projectId = args.projectId;
         
         if (Object.keys(todoistArgs).length > 1) { // More than just taskId
-          result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
+          result = await TodoistModel.updateTask(actionCtx, todoistArgs);
           ctx.metadata({
             title: "Task Updated",
             metadata: { taskId, fieldsUpdated: Object.keys(todoistArgs).filter(k => k !== 'taskId') }
@@ -188,7 +191,7 @@ export const deleteTask: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.syncApi.deleteTodoistTaskSync, { 
+      const result = await TodoistModel.deleteTask(actionCtx, { 
         taskId: args.taskId 
       });
       
@@ -218,7 +221,7 @@ export const createProject: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.syncApi.createTodoistProjectSync, {
+      const result = await TodoistModel.createProject(actionCtx, {
         name: args.name,
         color: args.color,
         parentId: args.parentId
@@ -260,7 +263,7 @@ export const updateProject: ToolDefinition = {
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
       const { projectId, ...updateArgs } = args;
-      const result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistProjectSync, {
+      const result = await TodoistModel.updateProject(actionCtx, {
         projectId,
         ...updateArgs
       });
@@ -289,7 +292,7 @@ export const deleteProject: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.syncApi.deleteTodoistProjectSync, { 
+      const result = await TodoistModel.deleteProject(actionCtx, { 
         projectId: args.projectId 
       });
       

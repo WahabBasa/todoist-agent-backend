@@ -39,6 +39,7 @@ import type * as migrateTokens from "../migrateTokens.js";
 import type * as streamingResponses from "../streamingResponses.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
+import type * as todoist_model from "../todoist/model.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
 import type * as todoist_userAccess from "../todoist/userAccess.js";
 
@@ -77,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   streamingResponses: typeof streamingResponses;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
+  "todoist/model": typeof todoist_model;
   "todoist/syncApi": typeof todoist_syncApi;
   "todoist/userAccess": typeof todoist_userAccess;
 }>;

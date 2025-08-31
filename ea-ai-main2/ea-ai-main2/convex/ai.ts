@@ -19,6 +19,8 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 // Use big-brain authentication pattern
 import { requireUserAuthForAction } from "./todoist/userAccess";
+// Import model layer for direct function calls (eliminates Action→Action chains)
+import * as TodoistModel from "./todoist/model";
 
 // =================================================================
 // MENTAL MODEL SYSTEM - Node.js Runtime Functions
@@ -539,7 +541,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                     priority: args.priority,
                     dueString: args.dueDate ? new Date(args.dueDate).toISOString().split('T')[0] : undefined,
                 };
-                result = await ctx.runAction(api.todoist.syncApi.createTodoistTaskSync, todoistArgs);
+                result = await TodoistModel.createTask(ctx, todoistArgs);
                 
                 // Convert Sync API response to expected format
                 if (result && result.success) {
@@ -556,7 +558,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
             }
             case "getTasks": {
                 // Use Sync API with proper user validation
-                const syncResult = await ctx.runAction(api.todoist.syncApi.syncTodoistData, {
+                const syncResult = await TodoistModel.syncTodoistData(ctx, {
                     resourceTypes: ["items"],
                     syncToken: "*" // Full sync for now, could be optimized later
                 });
@@ -594,9 +596,9 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 
                 // Handle task completion separately with Sync API
                 if (isCompleted === true) {
-                    result = await ctx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
+                    result = await TodoistModel.completeTask(ctx, { taskId });
                 } else if (isCompleted === false) {
-                    result = await ctx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
+                    result = await TodoistModel.reopenTask(ctx, { taskId });
                 } else {
                     // Update task properties with Sync API
                     const todoistArgs: any = { taskId };
@@ -607,7 +609,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                     if (dueDate) todoistArgs.dueString = new Date(dueDate).toISOString().split('T')[0];
                     
                     if (Object.keys(todoistArgs).length > 1) { // More than just taskId
-                        result = await ctx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
+                        result = await TodoistModel.updateTask(ctx, todoistArgs);
                     }
                 }
                 
@@ -616,7 +618,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 break;
             }
             case "deleteTask":
-                result = await ctx.runAction(api.todoist.syncApi.deleteTodoistTaskSync, { taskId: args.taskId });
+                result = await TodoistModel.deleteTask(ctx, { taskId: args.taskId });
                 break;
             case "createProject": {
                 const todoistArgs = {
@@ -624,7 +626,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                     color: args.color,
                     parentId: args.parentId
                 };
-                result = await ctx.runAction(api.todoist.syncApi.createTodoistProjectSync, todoistArgs);
+                result = await TodoistModel.createProject(ctx, todoistArgs);
                 
                 // Convert to expected format
                 if (result && result.success) {
@@ -640,7 +642,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
             }
             case "updateProject": {
                 const { projectId, ...updateArgs } = args;
-                result = await ctx.runAction(api.todoist.syncApi.updateTodoistProjectSync, {
+                result = await TodoistModel.updateProject(ctx, {
                     projectId,
                     ...updateArgs
                 });
@@ -650,7 +652,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 break;
             }
             case "deleteProject":
-                result = await ctx.runAction(api.todoist.syncApi.deleteTodoistProjectSync, { projectId: args.projectId });
+                result = await TodoistModel.deleteProject(ctx, { projectId: args.projectId });
                 break;
             case "getProjectAndTaskMap":
                 result = await ctx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
