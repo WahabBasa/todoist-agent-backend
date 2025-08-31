@@ -953,7 +953,7 @@ export const chatWithAI = action({
     const conversationStateTracker = new Set<string>();
     const toolCallTracker = new Map<string, number>(); // Track repeated tool calls
     
-    const MAX_ITERATIONS = 6; // Reduced from 15 to prevent rate limits
+    const MAX_ITERATIONS = 50; // Increased to allow for complex multi-step workflows
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
         
@@ -1215,16 +1215,16 @@ export const streamChatWithAI = action({
 
     // Generate unique stream ID
     const streamId = `stream_${userId.substring(0, 12)}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
 
     try {
-      // Initialize streaming response
-      await (ctx.runMutation as any)("streamingResponses.createStreamingResponse", {
+      // Initialize streaming response using new API
+      await ctx.runMutation("streamingResponses.createStreamingResponse", {
         streamId,
         sessionId,
         userMessage: message,
+        modelName,
       });
-
-      const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
       const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
       // Get conversation history - session-aware or default
@@ -1292,35 +1292,56 @@ Do NOT use any other tools until internal todolist is created.
         for await (const part of result.fullStream) {
           switch (part.type) {
             case 'text-delta':
+              // Progressive text update using new API
+              await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                streamId,
+                textDelta: part.text,
+              });
               accumulatedText += part.text;
-              // Update streaming response every few characters to avoid overwhelming the database
-              if (accumulatedText.length % 20 === 0 || part.text === '\n') {
-                await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
-                  streamId,
-                  partialContent: accumulatedText,
-                  isComplete: false,
-                });
-              }
               break;
 
             case 'tool-call':
               console.log(`[STREAMING] Tool call: ${part.toolName}`);
-              accumulatedText += `\n🔧 Executing ${part.toolName}...`;
+              
+              // Update tool execution status using new API
+              await ctx.runMutation("streamingResponses.updateToolExecution", {
+                streamId,
+                toolCallId: part.toolCallId,
+                toolName: part.toolName,
+                input: part.input,
+                status: "running",
+                startTime: Date.now(),
+              });
+              
+              // Update text content with tool execution notice
+              const toolNotice = `\n🔧 Executing ${part.toolName}...`;
+              await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                streamId,
+                textDelta: toolNotice,
+              });
+              accumulatedText += toolNotice;
+              
               toolCallsExecuted.push({
                 toolName: part.toolName,
                 args: part.input,
                 toolCallId: part.toolCallId
-              });
-              await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
-                streamId,
-                partialContent: accumulatedText,
-                toolCalls: toolCallsExecuted,
               });
               break;
 
             case 'tool-result':
               console.log(`[STREAMING] Tool result: ${part.toolName}`);
               const toolResult = part.output;
+              
+              // Update tool execution status using new API
+              await ctx.runMutation("streamingResponses.updateToolExecution", {
+                streamId,
+                toolCallId: part.toolCallId,
+                toolName: part.toolName,
+                output: toolResult,
+                status: "completed",
+                endTime: Date.now(),
+              });
+              
               toolResultsAccumulated.push({
                 toolName: part.toolName,
                 toolCallId: part.toolCallId,
@@ -1328,20 +1349,22 @@ Do NOT use any other tools until internal todolist is created.
               });
               
               // Add tool result summary to text stream
+              let resultNotice = "";
               if (toolResult && typeof toolResult === 'object' && 'success' in toolResult && toolResult.success) {
-                accumulatedText += `\n✅ ${part.toolName} completed successfully.`;
+                resultNotice = `\n✅ ${part.toolName} completed successfully.`;
               } else if (typeof toolResult === 'string') {
-                accumulatedText += `\n📝 ${toolResult}`;
+                resultNotice = `\n📝 ${toolResult}`;
               } else if (toolResult && typeof toolResult === 'object') {
-                // Handle complex tool results (like your Todoist tools that return {title, metadata, output})
-                accumulatedText += `\n🔧 ${part.toolName} executed.`;
+                resultNotice = `\n🔧 ${part.toolName} executed.`;
               }
               
-              await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
-                streamId,
-                partialContent: accumulatedText,
-                toolResults: toolResultsAccumulated,
-              });
+              if (resultNotice) {
+                await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                  streamId,
+                  textDelta: resultNotice,
+                });
+                accumulatedText += resultNotice;
+              }
               break;
 
             case 'finish':
@@ -1358,12 +1381,10 @@ Do NOT use any other tools until internal todolist is created.
         const finalToolCalls = await result.toolCalls;
         const finalToolResults = await result.toolResults;
 
-        // Mark streaming as complete
-        const completedResponse: any = await (ctx.runMutation as any)("streamingResponses.completeStreamingResponse", {
+        // Mark streaming as complete using new API
+        const completedResponse: any = await ctx.runMutation("streamingResponses.completeStreamingResponse", {
           streamId,
           finalContent: finalText || accumulatedText,
-          toolCalls: finalToolCalls,
-          toolResults: finalToolResults,
         });
 
         // Save to conversation history
@@ -1402,7 +1423,7 @@ Do NOT use any other tools until internal todolist is created.
 
       } catch (streamError) {
         console.error('[STREAMING] Stream processing error:', streamError);
-        await (ctx.runMutation as any)("streamingResponses.markStreamingError", {
+        await ctx.runMutation("streamingResponses.errorStreamingResponse", {
           streamId,
           errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
         });
@@ -1414,7 +1435,7 @@ Do NOT use any other tools until internal todolist is created.
       
       // Try to mark as error if stream was created
       try {
-        await (ctx.runMutation as any)("streamingResponses.markStreamingError", {
+        await ctx.runMutation("streamingResponses.errorStreamingResponse", {
           streamId,
           errorMessage: error instanceof Error ? error.message : 'Failed to start streaming'
         });

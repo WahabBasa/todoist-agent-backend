@@ -85,24 +85,39 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"]),
 
-  // Streaming Responses - Real-time progressive text generation tracking
+  // Streaming Responses - Convex-native real-time progressive text generation
   streamingResponses: defineTable({
     streamId: v.string(), // Unique identifier for this streaming session
     tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
     sessionId: v.optional(v.id("chatSessions")), // Link to chat session
-    partialContent: v.string(), // Accumulated text content so far
+    content: v.string(), // Accumulated text content (progressively updated)
     isComplete: v.boolean(), // Whether streaming is finished
-    status: v.union(v.literal("streaming"), v.literal("complete"), v.literal("error")), // Current stream status
-    userMessage: v.optional(v.string()), // Original user message that triggered this stream
-    toolCalls: v.optional(v.array(v.any())), // Tool calls if any were executed
-    toolResults: v.optional(v.array(v.any())), // Tool results if any were generated
+    status: v.union(
+      v.literal("streaming"), 
+      v.literal("complete"), 
+      v.literal("error")
+    ), // Current stream status
+    userMessage: v.string(), // Original user message that triggered this stream
+    modelName: v.optional(v.string()), // AI model used
+    totalTokens: v.optional(v.number()), // Token usage tracking
+    toolExecutions: v.optional(v.array(v.object({
+      toolName: v.string(),
+      toolCallId: v.string(),
+      input: v.any(),
+      output: v.any(),
+      status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("error")),
+      startTime: v.optional(v.number()),
+      endTime: v.optional(v.number()),
+    }))), // Tool execution tracking
+    errorMessage: v.optional(v.string()), // Error details if status is error
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_streamId", ["streamId"])
     .index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_session", ["sessionId"])
     .index("by_tokenIdentifier_and_session", ["tokenIdentifier", "sessionId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_updatedAt", ["updatedAt"]), // For cleanup queries
 
 };
 

@@ -1,19 +1,23 @@
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { Id } from "./_generated/dataModel";
 
 // =================================================================
-// STREAMING RESPONSES MANAGEMENT
-// Real-time progressive text generation tracking for React + Convex
+// CONVEX-NATIVE STREAMING RESPONSES
+// Single document progressive updates with built-in reactivity
+// Replaces complex event system with simple document patches
 // =================================================================
 
 /**
- * Create a new streaming response session
+ * Create a new streaming response document
+ * This initializes the streaming session
  */
 export const createStreamingResponse = mutation({
   args: {
     streamId: v.string(),
     sessionId: v.optional(v.id("chatSessions")),
-    userMessage: v.optional(v.string()),
+    userMessage: v.string(),
+    modelName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -28,33 +32,33 @@ export const createStreamingResponse = mutation({
     
     const now = Date.now();
     
-    await ctx.db.insert("streamingResponses", {
+    const responseId = await ctx.db.insert("streamingResponses", {
       streamId: args.streamId,
       tokenIdentifier,
       sessionId: args.sessionId,
-      partialContent: "",
+      content: "", // Start empty
       isComplete: false,
       status: "streaming",
       userMessage: args.userMessage,
+      modelName: args.modelName,
+      toolExecutions: [],
       createdAt: now,
       updatedAt: now,
     });
     
-    return { success: true, streamId: args.streamId };
+    return { responseId, streamId: args.streamId };
   },
 });
 
 /**
- * Update streaming response with new content
+ * Update streaming content progressively
+ * This is called repeatedly as AI generates text
  */
-export const updateStreamingResponse = mutation({
+export const updateStreamingContent = mutation({
   args: {
     streamId: v.string(),
-    partialContent: v.string(),
-    isComplete: v.optional(v.boolean()),
-    status: v.optional(v.union(v.literal("streaming"), v.literal("complete"), v.literal("error"))),
-    toolCalls: v.optional(v.array(v.any())),
-    toolResults: v.optional(v.array(v.any())),
+    textDelta: v.string(), // New text to append
+    totalTokens: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -63,37 +67,187 @@ export const updateStreamingResponse = mutation({
     }
     
     const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
-    }
     
-    // Find the streaming response by streamId and ensure it belongs to the user
-    const existing = await ctx.db
+    // Find the streaming response
+    const streamingResponse = await ctx.db
       .query("streamingResponses")
       .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
       .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
       .first();
     
-    if (!existing) {
-      throw new Error(`Streaming response not found: ${args.streamId}`);
+    if (!streamingResponse) {
+      throw new ConvexError("Streaming response not found");
     }
     
-    // Update the streaming response
-    await ctx.db.patch(existing._id, {
-      partialContent: args.partialContent,
-      isComplete: args.isComplete ?? existing.isComplete,
-      status: args.status ?? existing.status,
-      toolCalls: args.toolCalls ?? existing.toolCalls,
-      toolResults: args.toolResults ?? existing.toolResults,
+    if (streamingResponse.isComplete) {
+      console.warn(`Attempt to update completed stream ${args.streamId}`);
+      return { success: false, reason: "Stream already completed" };
+    }
+    
+    // Progressive update using ctx.db.patch - Convex handles reactivity
+    await ctx.db.patch(streamingResponse._id, {
+      content: streamingResponse.content + args.textDelta,
+      updatedAt: Date.now(),
+      ...(args.totalTokens && { totalTokens: args.totalTokens }),
+    });
+    
+    return { success: true, contentLength: streamingResponse.content.length + args.textDelta.length };
+  },
+});
+
+/**
+ * Add or update tool execution in the streaming response
+ */
+export const updateToolExecution = mutation({
+  args: {
+    streamId: v.string(),
+    toolCallId: v.string(),
+    toolName: v.string(),
+    input: v.optional(v.any()),
+    output: v.optional(v.any()),
+    status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("error")),
+    startTime: v.optional(v.number()),
+    endTime: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    
+    // Find the streaming response
+    const streamingResponse = await ctx.db
+      .query("streamingResponses")
+      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+      .first();
+    
+    if (!streamingResponse) {
+      throw new ConvexError("Streaming response not found");
+    }
+    
+    // Find or create tool execution entry
+    const toolExecutions = streamingResponse.toolExecutions || [];
+    const existingIndex = toolExecutions.findIndex(
+      (tool) => tool.toolCallId === args.toolCallId
+    );
+    
+    const toolExecution = {
+      toolName: args.toolName,
+      toolCallId: args.toolCallId,
+      input: args.input,
+      output: args.output,
+      status: args.status,
+      startTime: args.startTime,
+      endTime: args.endTime,
+    };
+    
+    if (existingIndex >= 0) {
+      // Update existing tool execution
+      toolExecutions[existingIndex] = {
+        ...toolExecutions[existingIndex],
+        ...toolExecution,
+      };
+    } else {
+      // Add new tool execution
+      toolExecutions.push(toolExecution);
+    }
+    
+    // Update document with new tool executions
+    await ctx.db.patch(streamingResponse._id, {
+      toolExecutions,
       updatedAt: Date.now(),
     });
     
-    return { success: true, updated: true };
+    return { success: true, toolExecutionsCount: toolExecutions.length };
+  },
+});
+
+/**
+ * Mark streaming response as complete
+ */
+export const completeStreamingResponse = mutation({
+  args: {
+    streamId: v.string(),
+    finalContent: v.optional(v.string()),
+    totalTokens: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    
+    // Find the streaming response
+    const streamingResponse = await ctx.db
+      .query("streamingResponses")
+      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+      .first();
+    
+    if (!streamingResponse) {
+      throw new ConvexError("Streaming response not found");
+    }
+    
+    // Mark as complete
+    await ctx.db.patch(streamingResponse._id, {
+      isComplete: true,
+      status: "complete",
+      ...(args.finalContent && { content: args.finalContent }),
+      ...(args.totalTokens && { totalTokens: args.totalTokens }),
+      updatedAt: Date.now(),
+    });
+    
+    return { success: true, streamId: args.streamId };
+  },
+});
+
+/**
+ * Mark streaming response as error
+ */
+export const errorStreamingResponse = mutation({
+  args: {
+    streamId: v.string(),
+    errorMessage: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    
+    // Find the streaming response
+    const streamingResponse = await ctx.db
+      .query("streamingResponses")
+      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+      .first();
+    
+    if (!streamingResponse) {
+      throw new ConvexError("Streaming response not found");
+    }
+    
+    // Mark as error
+    await ctx.db.patch(streamingResponse._id, {
+      isComplete: true,
+      status: "error",
+      errorMessage: args.errorMessage,
+      updatedAt: Date.now(),
+    });
+    
+    return { success: true, streamId: args.streamId };
   },
 });
 
 /**
  * Get streaming response by streamId
+ * This is used by the frontend for real-time subscriptions
  */
 export const getStreamingResponse = query({
   args: {
@@ -102,143 +256,58 @@ export const getStreamingResponse = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new ConvexError("Authentication required");
+      return null; // Allow unauthenticated reads to return null
     }
     
     const tokenIdentifier = identity.tokenIdentifier;
     if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
+      return null;
     }
     
-    const streamingResponse = await ctx.db
+    return await ctx.db
       .query("streamingResponses")
       .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
       .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
       .first();
-    
-    return streamingResponse;
   },
 });
 
 /**
- * Get active streaming responses for a session
+ * Get active streaming responses for a user
  */
-export const getActiveStreamingResponses = query({
+export const getActiveStreams = query({
   args: {
     sessionId: v.optional(v.id("chatSessions")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new ConvexError("Authentication required");
+      return [];
     }
     
     const tokenIdentifier = identity.tokenIdentifier;
     if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
+      return [];
     }
     
-    return await ctx.db
+    let query = ctx.db
       .query("streamingResponses")
-      .withIndex("by_tokenIdentifier_and_session", (q) => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
-      )
-      .filter((q) => q.eq(q.field("status"), "streaming"))
-      .collect();
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .filter((q) => q.eq(q.field("isComplete"), false));
+    
+    if (args.sessionId) {
+      query = query.filter((q) => q.eq(q.field("sessionId"), args.sessionId));
+    }
+    
+    return await query.collect();
   },
 });
 
 /**
- * Complete streaming response and clean up
+ * Clean up old completed streaming responses
+ * This prevents the database from growing indefinitely
  */
-export const completeStreamingResponse = mutation({
-  args: {
-    streamId: v.string(),
-    finalContent: v.string(),
-    toolCalls: v.optional(v.array(v.any())),
-    toolResults: v.optional(v.array(v.any())),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
-    
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
-    }
-    
-    // Find the streaming response
-    const existing = await ctx.db
-      .query("streamingResponses")
-      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
-      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
-      .first();
-    
-    if (!existing) {
-      throw new Error(`Streaming response not found: ${args.streamId}`);
-    }
-    
-    // Mark as complete
-    await ctx.db.patch(existing._id, {
-      partialContent: args.finalContent,
-      isComplete: true,
-      status: "complete",
-      toolCalls: args.toolCalls ?? existing.toolCalls,
-      toolResults: args.toolResults ?? existing.toolResults,
-      updatedAt: Date.now(),
-    });
-    
-    // Return the completed response for potential conversation saving
-    return await ctx.db.get(existing._id);
-  },
-});
-
-/**
- * Mark streaming response as error
- */
-export const markStreamingError = mutation({
-  args: {
-    streamId: v.string(),
-    errorMessage: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
-    
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
-    }
-    
-    const existing = await ctx.db
-      .query("streamingResponses")
-      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
-      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
-      .first();
-    
-    if (!existing) {
-      throw new Error(`Streaming response not found: ${args.streamId}`);
-    }
-    
-    await ctx.db.patch(existing._id, {
-      status: "error",
-      partialContent: existing.partialContent + (args.errorMessage ? `\n\nError: ${args.errorMessage}` : ""),
-      isComplete: true,
-      updatedAt: Date.now(),
-    });
-    
-    return { success: true, error: true };
-  },
-});
-
-/**
- * Cleanup old completed streaming responses (for maintenance)
- */
-export const cleanupOldStreamingResponses = mutation({
+export const cleanupOldStreams = mutation({
   args: {
     olderThanHours: v.optional(v.number()), // Default 24 hours
   },
@@ -252,28 +321,31 @@ export const cleanupOldStreamingResponses = mutation({
     if (!tokenIdentifier) {
       throw new ConvexError("Token identifier not found");
     }
+    
     const cutoffTime = Date.now() - ((args.olderThanHours ?? 24) * 60 * 60 * 1000);
     
-    const oldResponses = await ctx.db
+    // Find completed streams older than cutoff
+    const oldStreams = await ctx.db
       .query("streamingResponses")
-      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .withIndex("by_updatedAt", (q) => q.lt("updatedAt", cutoffTime))
       .filter((q) => 
         q.and(
-          q.or(
-            q.eq(q.field("status"), "complete"),
-            q.eq(q.field("status"), "error")
-          ),
-          q.lt(q.field("updatedAt"), cutoffTime)
+          q.eq(q.field("tokenIdentifier"), tokenIdentifier),
+          q.eq(q.field("isComplete"), true)
         )
       )
       .collect();
     
     let deletedCount = 0;
-    for (const response of oldResponses) {
-      await ctx.db.delete(response._id);
+    
+    for (const stream of oldStreams) {
+      await ctx.db.delete(stream._id);
       deletedCount++;
     }
     
-    return { success: true, deletedCount };
+    return { 
+      success: true, 
+      deletedStreams: deletedCount 
+    };
   },
 });

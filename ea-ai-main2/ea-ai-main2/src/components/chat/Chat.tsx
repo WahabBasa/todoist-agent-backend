@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAction, useQuery, useMutation } from "convex/react"
-import { api } from "../../../convex/_generated/api"
+import { api } from "../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Id } from "../../../convex/_generated/dataModel"
+import { Id } from "../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'
-import { useStreamingChat } from '@/hooks/use-streaming-chat'
+import { useConvexStreamingChat } from '@/hooks/use-convex-streaming-chat'
 
 // Define section structure (matching Morphic pattern)
 interface ChatSection {
@@ -30,14 +30,16 @@ export function Chat({ sessionId }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
   
-  // Streaming chat integration
+  // Use simple Convex-native streaming with built-in real-time subscriptions
   const { 
     streamingMessage, 
     isStreaming, 
     streamingError,
     sendStreamingMessage, 
     clearStreaming 
-  } = useStreamingChat({ sessionId })
+  } = useConvexStreamingChat({ 
+    sessionId
+  })
   
   // Convex integration with session support (keep for fallback and session management)
   const chatWithAI = useAction(api.ai.chatWithAI)
@@ -264,6 +266,20 @@ export function Chat({ sessionId }: ChatProps) {
       toast.error('Streaming failed: ' + streamingError)
     }
   }, [streamingError])
+
+  // Simple debug logging for streaming progress
+  useEffect(() => {
+    if (streamingMessage) {
+      console.log('[Chat] Convex streaming update:', {
+        mode: 'CONVEX_NATIVE',
+        streamId: streamingMessage.id,
+        contentLength: streamingMessage.content.length,
+        toolExecutions: streamingMessage.toolExecutions?.length || 0,
+        isComplete: streamingMessage.isComplete,
+        status: streamingMessage.status,
+      })
+    }
+  }, [streamingMessage])
 
   // Big-brain pattern: Show loading state while user authentication is resolving
   // defaultSession is undefined during auth loading, null when user not found/created yet
