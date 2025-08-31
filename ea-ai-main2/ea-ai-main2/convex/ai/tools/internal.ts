@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
-import { api } from "../../_generated/api";
 
 // Internal AI workflow coordination tools
 // These are for AI self-management, not user task creation
@@ -32,8 +31,9 @@ export const internalTodoWrite: ToolDefinition = {
         console.warn('[InternalTodo] Warning: internalTodoWrite used without clear coordination need');
       }
 
-      // Explicit typing to prevent deep type inference chains
-      const result: any = await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos as any, {
+      // Complete type system bypass to prevent circular dependencies
+      // Use string-based function call instead of api object to avoid TypeScript inference
+      const result: any = await (actionCtx.runMutation as any)("aiInternalTodos.updateInternalTodos", {
         sessionId: ctx.sessionID as any,
         todos: args.todos,
       });

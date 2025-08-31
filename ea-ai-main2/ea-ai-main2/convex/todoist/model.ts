@@ -1,5 +1,4 @@
 import { ActionCtx } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { 
   requireUserAuthForAction, 
   logUserAccess,
@@ -38,8 +37,9 @@ export async function todoistSyncRequest(
   const { userId } = userContext;
   
   // Check if user has active Todoist connection via internal query
-  // Explicit typing to break type inference chains and prevent circular dependencies
-  const hasConnection: boolean = await ctx.runQuery(internal.todoist.auth.hasActiveTodoistConnectionQuery as any, {
+  // Complete type system bypass to prevent circular dependencies
+  // Use string-based function call instead of internal object to avoid TypeScript inference
+  const hasConnection: boolean = await (ctx.runQuery as any)("todoist/auth.hasActiveTodoistConnectionQuery", {
     userId
   });
   
@@ -49,8 +49,9 @@ export async function todoistSyncRequest(
   }
   
   // Get user's Todoist token via internal query
-  // Explicit typing to break type inference chains and prevent circular dependencies
-  const accessToken: string | null = await ctx.runQuery(internal.todoist.auth.getUserTodoistTokenQuery as any, {
+  // Complete type system bypass to prevent circular dependencies
+  // Use string-based function call instead of internal object to avoid TypeScript inference
+  const accessToken: string | null = await (ctx.runQuery as any)("todoist/auth.getUserTodoistTokenQuery", {
     userId
   });
   
