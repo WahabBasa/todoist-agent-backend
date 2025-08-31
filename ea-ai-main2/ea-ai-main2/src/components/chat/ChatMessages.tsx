@@ -22,13 +22,19 @@ interface ChatMessagesProps {
   isLoading: boolean
   /** Ref for the scroll container */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  /** ID of currently streaming message */
+  streamingMessageId?: string
+  /** Whether streaming is active */
+  isStreaming?: boolean
 }
 
 export function ChatMessages({
   sections,
   onQuerySelect,
   isLoading,
-  scrollContainerRef
+  scrollContainerRef,
+  streamingMessageId,
+  isStreaming
 }: ChatMessagesProps) {
   const [openStates, setOpenStates] = useState<Record<string, boolean>>({})
   
@@ -65,8 +71,8 @@ export function ChatMessages({
   const lastUserIndex = allMessages.length - 1 - 
     [...allMessages].reverse().findIndex(msg => msg.role === 'user')
 
-  // Enhanced loading detection
-  const showLoading = isLoading && sections.length > 0 && 
+  // Enhanced loading detection - show loading when streaming starts or traditional loading
+  const showLoading = (isLoading || isStreaming) && sections.length > 0 && 
     sections[sections.length - 1].assistantMessages.length === 0
 
   const getIsOpen = (id: string) => {
@@ -157,6 +163,7 @@ export function ChatMessages({
                   getIsOpen={getIsOpen}
                   onOpenChange={handleOpenChange}
                   onQuerySelect={onQuerySelect}
+                  isStreaming={assistantMessage.id === streamingMessageId && isStreaming}
                 />
               </div>
             ))}

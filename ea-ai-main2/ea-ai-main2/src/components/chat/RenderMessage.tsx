@@ -10,6 +10,7 @@ interface RenderMessageProps {
   getIsOpen?: (id: string) => boolean
   onOpenChange?: (id: string, open: boolean) => void
   onQuerySelect?: (query: string) => void
+  isStreaming?: boolean
 }
 
 export function RenderMessage({
@@ -17,7 +18,8 @@ export function RenderMessage({
   messageId,
   getIsOpen,
   onOpenChange,
-  onQuerySelect
+  onQuerySelect,
+  isStreaming
 }: RenderMessageProps) {
   
   if (message.role === 'user') {
@@ -37,12 +39,15 @@ export function RenderMessage({
     )
   }
 
-  // Assistant message - clean Morphic-style layout
+  // Assistant message - clean Morphic-style layout with streaming support
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="max-w-none">
         <div className="text-primary whitespace-pre-wrap break-words">
           {message.content}
+          {isStreaming && (
+            <span className="animate-pulse text-muted-foreground ml-1">▊</span>
+          )}
         </div>
       </div>
     </div>

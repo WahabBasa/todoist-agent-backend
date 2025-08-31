@@ -4,6 +4,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { 
   generateText, 
+  streamText,
   tool,
   ModelMessage,
   UIMessage,
@@ -1179,6 +1180,245 @@ Do NOT use any other tools until internal todolist is created.
     }
 
     throw new Error("Maximum tool call iterations reached.");
+  }
+});
+
+// =================================================================
+// STREAMING CHAT WITH AI
+// Real-time progressive text generation with tool support
+// =================================================================
+
+export const streamChatWithAI = action({
+  args: {
+    message: v.string(),
+    useHaiku: v.optional(v.boolean()),
+    sessionId: v.optional(v.id("chatSessions")),
+    currentTimeContext: v.optional(v.object({
+      currentTime: v.string(),
+      userTimezone: v.string(),
+      localTime: v.string(),
+      timestamp: v.number(),
+      source: v.optional(v.string()),
+    })),
+  },
+  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<{
+    streamId: string;
+    success: boolean;
+    finalText: string;
+    completedResponse: any;
+  }> => {
+    // Use big-brain authentication pattern for consistent user validation
+    const { userId } = await requireUserAuthForAction(ctx);
+    console.log(`[AI Streaming] Starting stream for user: ${userId.substring(0, 20)}...`);
+
+    // Generate unique stream ID
+    const streamId = `stream_${userId.substring(0, 12)}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+    try {
+      // Initialize streaming response
+      await ctx.runMutation(api.streamingResponses.createStreamingResponse, {
+        streamId,
+        sessionId,
+        userMessage: message,
+      });
+
+      const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
+      const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+
+      // Get conversation history - session-aware or default
+      let conversation;
+      if (sessionId) {
+        conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+      } else {
+        conversation = await ctx.runQuery(api.conversations.getConversation);
+      }
+
+      const history = (conversation?.messages as any[]) || [];
+      
+      // Add current user message to history
+      const userMessage = { role: "user", content: message, timestamp: Date.now() };
+      history.push(userMessage);
+
+      // Load mental model content
+      const mentalModelContent = getUserMentalModel(userId);
+
+      // Convert conversation to model format
+      let modelMessages: ModelMessage[];
+      try {
+        modelMessages = convertConvexMessagesToModel(history);
+      } catch (error) {
+        console.warn('[STREAMING FALLBACK] Message conversion failed, using minimal context:', error);
+        modelMessages = [{ role: "user", content: message }];
+      }
+
+      // Check for complex operations that need internal todolist
+      const messageLength = message.length;
+      const hasMultipleRequests = /and|then|also|additionally|furthermore|moreover|plus|while|after|before/i.test(message);
+      const hasComplexKeywords = /plan|organize|schedule|manage|setup|create.*and|help.*with.*multiple|several|various/i.test(message);
+      const hasBulkOperations = /(?:delete|update|move|complete|modify|change|remove)\s+(?:all|every|each)(?:\s+(?:my|the))?\s+(?:task|project|event|item)/i.test(message);
+      
+      const shouldCreateTodolist = messageLength > 80 || hasMultipleRequests || hasComplexKeywords || hasBulkOperations;
+      
+      let dynamicInstructions = "";
+      if (shouldCreateTodolist) {
+        dynamicInstructions = `
+<mandatory_first_action>
+**STOP**: This request requires internal todolist management.
+Your FIRST action must be:
+1. Use internalTodoWrite to create 3-5 specific todos with priorities
+2. Only then proceed with tool execution 
+3. Mark todos "in_progress" → execute tools → mark "completed"
+4. Update user with progress: "Working on step X of Y"
+Do NOT use any other tools until internal todolist is created.
+</mandatory_first_action>`;
+      }
+
+      // Start streaming with AI SDK
+      const result = streamText({
+        model: openrouter(modelName),
+        system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
+        messages: modelMessages,
+        tools: plannerTools,
+      });
+
+      // Process the stream and update the database progressively
+      let accumulatedText = '';
+      let toolCallsExecuted: any[] = [];
+      let toolResultsAccumulated: any[] = [];
+
+      try {
+        for await (const part of result.fullStream) {
+          switch (part.type) {
+            case 'text-delta':
+              accumulatedText += part.text;
+              // Update streaming response every few characters to avoid overwhelming the database
+              if (accumulatedText.length % 20 === 0 || part.text === '\n') {
+                await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+                  streamId,
+                  partialContent: accumulatedText,
+                  isComplete: false,
+                });
+              }
+              break;
+
+            case 'tool-call':
+              console.log(`[STREAMING] Tool call: ${part.toolName}`);
+              accumulatedText += `\n🔧 Executing ${part.toolName}...`;
+              toolCallsExecuted.push({
+                toolName: part.toolName,
+                args: part.input,
+                toolCallId: part.toolCallId
+              });
+              await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+                streamId,
+                partialContent: accumulatedText,
+                toolCalls: toolCallsExecuted,
+              });
+              break;
+
+            case 'tool-result':
+              console.log(`[STREAMING] Tool result: ${part.toolName}`);
+              const toolResult = part.output;
+              toolResultsAccumulated.push({
+                toolName: part.toolName,
+                toolCallId: part.toolCallId,
+                result: toolResult
+              });
+              
+              // Add tool result summary to text stream
+              if (typeof toolResult === 'object' && toolResult.success) {
+                accumulatedText += `\n✅ ${part.toolName} completed successfully.`;
+              } else if (typeof toolResult === 'string') {
+                accumulatedText += `\n📝 ${toolResult}`;
+              }
+              
+              await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+                streamId,
+                partialContent: accumulatedText,
+                toolResults: toolResultsAccumulated,
+              });
+              break;
+
+            case 'finish':
+              console.log('[STREAMING] Stream finished');
+              break;
+          }
+
+          // Small delay to prevent overwhelming the database
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+
+        // Get final content and finalize
+        const finalText = await result.text;
+        const finalToolCalls = await result.toolCalls;
+        const finalToolResults = await result.toolResults;
+
+        // Mark streaming as complete
+        const completedResponse: any = await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
+          streamId,
+          finalContent: finalText || accumulatedText,
+          toolCalls: finalToolCalls,
+          toolResults: finalToolResults,
+        });
+
+        // Save to conversation history
+        const newHistory = [
+          ...history,
+          {
+            role: "assistant",
+            content: finalText || accumulatedText,
+            toolCalls: finalToolCalls?.map((tc: any) => ({
+              name: tc.toolName,
+              args: tc.args,
+              toolCallId: tc.toolCallId
+            })),
+            toolResults: finalToolResults?.map((tr: any) => ({
+              toolCallId: tr.toolCallId,
+              toolName: tr.toolName,
+              result: tr.result
+            })),
+            timestamp: Date.now(),
+          }
+        ];
+
+        // Save conversation
+        await ctx.runMutation(api.conversations.upsertConversation, {
+          sessionId,
+          messages: newHistory as any
+        });
+
+        console.log(`[STREAMING] Completed successfully. Stream ID: ${streamId}`);
+        return { 
+          streamId, 
+          success: true, 
+          finalText: finalText || accumulatedText,
+          completedResponse 
+        };
+
+      } catch (streamError) {
+        console.error('[STREAMING] Stream processing error:', streamError);
+        await ctx.runMutation(api.streamingResponses.markStreamingError, {
+          streamId,
+          errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
+        });
+        throw streamError;
+      }
+
+    } catch (error) {
+      console.error(`[STREAMING] Failed to start stream:`, error);
+      
+      // Try to mark as error if stream was created
+      try {
+        await ctx.runMutation(api.streamingResponses.markStreamingError, {
+          streamId,
+          errorMessage: error instanceof Error ? error.message : 'Failed to start streaming'
+        });
+      } catch (cleanupError) {
+        console.warn('[STREAMING] Failed to mark stream as error:', cleanupError);
+      }
+      
+      throw error;
+    }
   }
 });
 

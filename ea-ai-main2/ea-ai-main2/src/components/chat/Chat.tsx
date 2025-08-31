@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'
+import { useStreamingChat } from '@/hooks/use-streaming-chat'
 
 // Define section structure (matching Morphic pattern)
 interface ChatSection {
@@ -29,7 +30,16 @@ export function Chat({ sessionId }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
   
-  // Convex integration with session support
+  // Streaming chat integration
+  const { 
+    streamingMessage, 
+    isStreaming, 
+    streamingError,
+    sendStreamingMessage, 
+    clearStreaming 
+  } = useStreamingChat({ sessionId })
+  
+  // Convex integration with session support (keep for fallback and session management)
   const chatWithAI = useAction(api.ai.chatWithAI)
   const createDefaultSession = useMutation(api.chatSessions.createDefaultSession)
   const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage)
@@ -56,6 +66,9 @@ export function Chat({ sessionId }: ChatProps) {
   const [useHaiku] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  
+  // Local pending user message for immediate UI feedback
+  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null)
 
   // Convert existing conversation messages to display format
   const messages = useMemo(() => {
@@ -70,11 +83,12 @@ export function Chat({ sessionId }: ChatProps) {
       : []
   }, [activeConversation])
 
-  // Convert messages array to sections array (matching Morphic pattern)
+  // Convert messages array to sections array with streaming support
   const sections = useMemo<ChatSection[]>(() => {
     const result: ChatSection[] = []
     let currentSection: ChatSection | null = null
 
+    // Process existing conversation messages
     for (const message of messages) {
       if (message.role === 'user') {
         // Start a new section when a user message is found
@@ -98,8 +112,22 @@ export function Chat({ sessionId }: ChatProps) {
       result.push(currentSection)
     }
 
+    // Add pending user message + streaming response as new section
+    if (pendingUserMessage) {
+      const streamingSection: ChatSection = {
+        id: pendingUserMessage.id,
+        userMessage: pendingUserMessage,
+        assistantMessages: streamingMessage ? [{
+          id: streamingMessage.id,
+          role: 'assistant',
+          content: streamingMessage.content
+        }] : []
+      }
+      result.push(streamingSection)
+    }
+
     return result
-  }, [messages])
+  }, [messages, pendingUserMessage, streamingMessage])
 
   // Detect if scroll container is at the bottom (matching Morphic)
   useEffect(() => {
@@ -137,45 +165,40 @@ export function Chat({ sessionId }: ChatProps) {
     }
   }, [sections, messages])
 
-  // Session-aware handleSubmit for Convex integration
+  // Streaming handleSubmit with immediate user message display
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading || isStreaming) return
 
     setIsLoading(true)
     const inputValue = input.trim()
     setInput("")
 
     try {
+      // Handle session management
       let currentSessionId = sessionId
-      
-      // If no session ID provided, use or create default session
       if (!currentSessionId) {
         if (defaultSession) {
           currentSessionId = defaultSession._id
         } else {
-          // Create default session only when user starts chatting
           currentSessionId = await createDefaultSession()
         }
       }
 
-      // Create current time context from user's browser
-      const currentTimeContext = {
-        currentTime: new Date().toISOString(),
-        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        localTime: new Date().toLocaleString(),
-        timestamp: Date.now(),
-        source: "user_browser"
+      // Create pending user message for immediate UI feedback
+      const userMessage: Message = {
+        id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        role: 'user',
+        content: inputValue
       }
-
-      // Send message with session context and current time
-      const result = await chatWithAI({ 
-        message: inputValue, 
-        useHaiku,
-        sessionId: currentSessionId,
-        currentTimeContext
-      })
       
+      // Immediately show user message in UI
+      setPendingUserMessage(userMessage)
+
+      // Start streaming response
+      console.log('[Chat] Starting streaming for message:', inputValue.substring(0, 50) + '...')
+      await sendStreamingMessage(inputValue, useHaiku)
+
       // Update chat title if this is the first message
       if (messages.length === 0 && currentSessionId) {
         try {
@@ -187,29 +210,17 @@ export function Chat({ sessionId }: ChatProps) {
           console.warn("Failed to update chat title:", error)
         }
       }
-      
-      // Handle tool results feedback (preserve existing logic)
-      if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
-        const toolResults = (result as any).toolResults
-        if (toolResults.length > 0) {
-          const successfulToolCalls = toolResults.filter((tc: any) => tc.success)
-          if (successfulToolCalls.length > 0) {
-            toast.success(`Executed ${successfulToolCalls.length} action(s) successfully`)
-          }
-          
-          const failedToolCalls = toolResults.filter((tc: any) => !tc.success)
-          if (failedToolCalls.length > 0) {
-            toast.error(`${failedToolCalls.length} action(s) failed`)
-          }
-        }
-      }
 
       // Trigger chat history update
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
       
     } catch (error) {
-      console.error("Chat error:", error)
-      toast.error("Failed to send message")
+      console.error("Streaming chat error:", error)
+      toast.error(streamingError || "Failed to send message")
+      
+      // Clear pending message on error
+      setPendingUserMessage(null)
+      clearStreaming()
     } finally {
       setIsLoading(false)
     }
@@ -232,6 +243,27 @@ export function Chat({ sessionId }: ChatProps) {
   const onQuerySelect = (query: string) => {
     setInput(query)
   }
+
+  // Cleanup completed streams and pending messages
+  useEffect(() => {
+    if (streamingMessage?.isComplete) {
+      // Small delay to let user see the completed response
+      const timer = setTimeout(() => {
+        setPendingUserMessage(null)
+        clearStreaming()
+      }, 1000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [streamingMessage?.isComplete, clearStreaming])
+
+  // Handle streaming errors
+  useEffect(() => {
+    if (streamingError) {
+      console.error('[Chat] Streaming error:', streamingError)
+      toast.error('Streaming failed: ' + streamingError)
+    }
+  }, [streamingError])
 
   // Big-brain pattern: Show loading state while user authentication is resolving
   // defaultSession is undefined during auth loading, null when user not found/created yet
@@ -259,14 +291,16 @@ export function Chat({ sessionId }: ChatProps) {
       <ChatMessages
         sections={sections}
         onQuerySelect={onQuerySelect}
-        isLoading={isLoading}
+        isLoading={isLoading || isStreaming}
         scrollContainerRef={scrollContainerRef}
+        streamingMessageId={streamingMessage?.id}
+        isStreaming={isStreaming}
       />
       <ChatPanel
         input={input}
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
-        isLoading={isLoading}
+        isLoading={isLoading || isStreaming}
         messages={messages}
         showScrollToBottomButton={!isAtBottom}
         scrollContainerRef={scrollContainerRef}

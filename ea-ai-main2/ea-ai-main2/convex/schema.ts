@@ -85,6 +85,25 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"]),
 
+  // Streaming Responses - Real-time progressive text generation tracking
+  streamingResponses: defineTable({
+    streamId: v.string(), // Unique identifier for this streaming session
+    tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
+    sessionId: v.optional(v.id("chatSessions")), // Link to chat session
+    partialContent: v.string(), // Accumulated text content so far
+    isComplete: v.boolean(), // Whether streaming is finished
+    status: v.union(v.literal("streaming"), v.literal("complete"), v.literal("error")), // Current stream status
+    userMessage: v.optional(v.string()), // Original user message that triggered this stream
+    toolCalls: v.optional(v.array(v.any())), // Tool calls if any were executed
+    toolResults: v.optional(v.array(v.any())), // Tool results if any were generated
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_streamId", ["streamId"])
+    .index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_session", ["sessionId"])
+    .index("by_tokenIdentifier_and_session", ["tokenIdentifier", "sessionId"])
+    .index("by_status", ["status"]),
+
 };
 
 // Export schema with tokenIdentifier-based tables (big-brain pattern)

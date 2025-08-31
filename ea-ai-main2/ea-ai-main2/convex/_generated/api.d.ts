@@ -36,6 +36,7 @@ import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as http from "../http.js";
 import type * as mentalModels from "../mentalModels.js";
 import type * as migrateTokens from "../migrateTokens.js";
+import type * as streamingResponses from "../streamingResponses.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mentalModels: typeof mentalModels;
   migrateTokens: typeof migrateTokens;
+  streamingResponses: typeof streamingResponses;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
   "todoist/syncApi": typeof todoist_syncApi;
