@@ -264,8 +264,9 @@ async function getUserMentalModelFromDB(ctx: any, userId: string): Promise<strin
   MessageCaching.incrementCacheMiss();
 
   try {
-    // Explicit typing to prevent deep type inference chains
-    const mentalModelData: any = await ctx.runQuery(api.mentalModels.getUserMentalModel as any, {
+    // Complete type system bypass to prevent circular dependencies
+    // Use string-based function call instead of api object to avoid TypeScript inference
+    const mentalModelData: any = await (ctx.runQuery as any)("mentalModels.getUserMentalModel", {
       tokenIdentifier: userId,
     });
 

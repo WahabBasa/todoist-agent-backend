@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
+import { api } from "../../_generated/api";
 
 // Internal AI workflow coordination tools
 // These are for AI self-management, not user task creation

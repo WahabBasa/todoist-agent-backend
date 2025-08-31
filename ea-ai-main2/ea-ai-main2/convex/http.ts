@@ -14,7 +14,9 @@ http.route({
     const headerPayload = request.headers;
 
     try {
-      const result: any = await ctx.runAction(internal.clerk.fulfill, {
+      // Complete type system bypass to prevent circular dependencies
+      // Use string-based function call instead of internal object to avoid TypeScript inference
+      const result: any = await (ctx.runAction as any)("clerk.fulfill", {
         payload: payloadString,
         headers: {
           "svix-id": headerPayload.get("svix-id")!,
