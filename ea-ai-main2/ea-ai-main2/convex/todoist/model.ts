@@ -38,7 +38,8 @@ export async function todoistSyncRequest(
   const { userId } = userContext;
   
   // Check if user has active Todoist connection via internal query
-  const hasConnection = await ctx.runQuery(internal.todoist.auth.hasActiveTodoistConnectionQuery, {
+  // Explicit typing to break type inference chains and prevent circular dependencies
+  const hasConnection: boolean = await ctx.runQuery(internal.todoist.auth.hasActiveTodoistConnectionQuery as any, {
     userId
   });
   
@@ -48,7 +49,8 @@ export async function todoistSyncRequest(
   }
   
   // Get user's Todoist token via internal query
-  const accessToken = await ctx.runQuery(internal.todoist.auth.getUserTodoistTokenQuery, {
+  // Explicit typing to break type inference chains and prevent circular dependencies
+  const accessToken: string | null = await ctx.runQuery(internal.todoist.auth.getUserTodoistTokenQuery as any, {
     userId
   });
   
@@ -475,6 +477,148 @@ export async function createLabel(
     success: true,
     tempId,
     sync_token: result.sync_token,
+  };
+}
+
+// =================================================================
+// INTEGRATION LAYER FUNCTIONS (Extracted from integration.ts)
+// =================================================================
+
+export async function getTodoistProjectAndTaskMap(
+  ctx: ActionCtx,
+  { includeCompleted = false }: { includeCompleted?: boolean } = {}
+): Promise<any> {
+  // Get projects and tasks in parallel using model functions
+  const [projects, allTasks] = await Promise.all([
+    getTodoistProjects(ctx),
+    getTodoistTasks(ctx, {})
+  ]);
+
+  // Filter tasks based on completion status if needed
+  const filteredTasks = includeCompleted 
+    ? allTasks 
+    : allTasks.filter((task: any) => !task.is_completed);
+
+  // Group tasks by project
+  const tasksGroupedByProject: Record<string, Array<{ _id: string; title: string; }>> = 
+    filteredTasks.reduce((acc: Record<string, Array<{ _id: string; title: string; }>>, task: any) => {
+      const projectId = task.project_id;
+      if (!acc[projectId]) {
+        acc[projectId] = [];
+      }
+      acc[projectId].push({
+        _id: task.id,
+        title: task.content
+      });
+      return acc;
+    }, {});
+
+  // Build project structure with tasks
+  const projectsWithTasks = projects.map((project: any) => ({
+    _id: project.id,
+    name: project.name,
+    color: project.color,
+    tasks: tasksGroupedByProject[project.id] || []
+  }));
+
+  // Find unassigned tasks (tasks not belonging to any project)
+  const assignedTaskIds = new Set();
+  Object.values(tasksGroupedByProject).forEach((tasks) => {
+    tasks.forEach((task) => assignedTaskIds.add(task._id));
+  });
+
+  const unassignedTasks = filteredTasks
+    .filter((task: any) => !assignedTaskIds.has(task.id))
+    .map((task: any) => ({
+      _id: task.id,
+      title: task.content
+    }));
+
+  return {
+    projects: projectsWithTasks,
+    unassignedTasks: unassignedTasks
+  };
+}
+
+export async function getTodoistProjectDetails(
+  ctx: ActionCtx,
+  { projectId }: { projectId: string }
+): Promise<any> {
+  // Get project details and associated tasks using model functions
+  const [projects, tasks] = await Promise.all([
+    getTodoistProjects(ctx),
+    getTodoistTasks(ctx, { projectId })
+  ]);
+
+  const project = projects.find((p: any) => p.id === projectId);
+  if (!project) {
+    throw new Error(`Project with ID ${projectId} not found`);
+  }
+
+  // Convert tasks to expected format
+  const formattedTasks = tasks.map((task: any) => ({
+    _id: task.id,
+    title: task.content,
+    description: task.description || "",
+    priority: task.priority || 1,
+    dueDate: task.due ? new Date(task.due.datetime || task.due.date).getTime() : undefined,
+    isCompleted: task.is_completed,
+    labels: task.labels || [],
+    createdAt: new Date(task.created_at).getTime(),
+    updatedAt: task.updated_at ? new Date(task.updated_at).getTime() : undefined
+  }));
+
+  return {
+    _id: project.id,
+    name: project.name,
+    color: project.color,
+    description: project.comment || "",
+    tasks: formattedTasks,
+    taskCount: formattedTasks.length,
+    completedTaskCount: formattedTasks.filter((t) => t.isCompleted).length
+  };
+}
+
+export async function getTodoistTaskDetails(
+  ctx: ActionCtx,
+  { taskId }: { taskId: string }
+): Promise<any> {
+  // Get all tasks and find the specific one using model functions
+  const allTasks = await getTodoistTasks(ctx, {});
+  const task = allTasks.find((t: any) => t.id === taskId);
+
+  if (!task) {
+    throw new Error(`Task with ID ${taskId} not found`);
+  }
+
+  // Get project info if task belongs to a project
+  let projectInfo = null;
+  if (task.project_id) {
+    const projects = await getTodoistProjects(ctx);
+    const project = projects.find((p: any) => p.id === task.project_id);
+    if (project) {
+      projectInfo = {
+        _id: project.id,
+        name: project.name,
+        color: project.color
+      };
+    }
+  }
+
+  // Format task details
+  return {
+    _id: task.id,
+    title: task.content,
+    description: task.description || "",
+    projectId: task.project_id,
+    project: projectInfo,
+    priority: task.priority || 1,
+    dueDate: task.due ? new Date(task.due.datetime || task.due.date).getTime() : undefined,
+    isCompleted: task.is_completed,
+    labels: task.labels || [],
+    createdAt: new Date(task.created_at).getTime(),
+    updatedAt: task.updated_at ? new Date(task.updated_at).getTime() : undefined,
+    url: task.url
   };
 }
 

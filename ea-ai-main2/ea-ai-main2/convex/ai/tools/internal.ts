@@ -32,7 +32,8 @@ export const internalTodoWrite: ToolDefinition = {
         console.warn('[InternalTodo] Warning: internalTodoWrite used without clear coordination need');
       }
 
-      const result = await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos, {
+      // Explicit typing to prevent deep type inference chains
+      const result: any = await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos as any, {
         sessionId: ctx.sessionID as any,
         todos: args.todos,
       });
@@ -75,7 +76,8 @@ export const internalTodoRead: ToolDefinition = {
   inputSchema: z.object({}),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const todoData = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, {
+      // Explicit typing to prevent deep type inference chains
+      const todoData: any = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos as any, {
         sessionId: ctx.sessionID as any,
       });
       
@@ -111,7 +113,8 @@ export const readUserMentalModel: ToolDefinition = {
   inputSchema: z.object({}),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runQuery(api.mentalModels.getUserMentalModel, {
+      // Explicit typing to prevent deep type inference chains
+      const result: any = await actionCtx.runQuery(api.mentalModels.getUserMentalModel as any, {
         tokenIdentifier: ctx.userId,
       });
 
@@ -174,7 +177,8 @@ export const editUserMentalModel: ToolDefinition = {
     try {
       const { oldString, newString, replaceAll = false } = args;
       
-      const result = await actionCtx.runMutation(api.mentalModels.editMentalModel, {
+      // Explicit typing to prevent deep type inference chains
+      const result: any = await actionCtx.runMutation(api.mentalModels.editMentalModel as any, {
         tokenIdentifier: ctx.userId,
         oldString,
         newString,

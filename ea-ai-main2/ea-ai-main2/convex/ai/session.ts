@@ -264,7 +264,8 @@ async function getUserMentalModelFromDB(ctx: any, userId: string): Promise<strin
   MessageCaching.incrementCacheMiss();
 
   try {
-    const mentalModelData = await ctx.runQuery(api.mentalModels.getUserMentalModel, {
+    // Explicit typing to prevent deep type inference chains
+    const mentalModelData: any = await ctx.runQuery(api.mentalModels.getUserMentalModel as any, {
       tokenIdentifier: userId,
     });
 

@@ -327,7 +327,7 @@ export const getProjectAndTaskMap: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
+      const result = await TodoistModel.getTodoistProjectAndTaskMap(actionCtx, {
         includeCompleted: args.includeCompleted || false
       });
 
@@ -364,7 +364,7 @@ export const getProjectDetails: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.integration.getTodoistProjectDetails, { 
+      const result = await TodoistModel.getTodoistProjectDetails(actionCtx, { 
         projectId: args.projectId 
       });
 
@@ -395,7 +395,7 @@ export const getTaskDetails: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
+      const result = await TodoistModel.getTodoistTaskDetails(actionCtx, { 
         taskId: args.taskId 
       });
 

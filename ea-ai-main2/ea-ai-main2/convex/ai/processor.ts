@@ -147,15 +147,16 @@ export class StreamProcessor {
               
               try {
                 // Execute tool using our registry
-                const tools = await ToolRegistryManager.getTools("anthropic", "claude-3-5-haiku-20241022");
-                const tool = tools[value.toolName];
+                // Explicit typing to prevent deep type inference chains
+                const tools: Record<string, any> = await ToolRegistryManager.getTools("anthropic", "claude-3-5-haiku-20241022");
+                const tool: any = tools[value.toolName];
                 
                 if (!tool) {
                   throw new Error(`Tool not found: ${value.toolName}`);
                 }
 
-                // Create tool execution context
-                const toolResult = await tool.execute(value.input, {
+                // Create tool execution context with explicit typing
+                const toolResult: any = await tool.execute(value.input, {
                   toolCallId: value.toolCallId,
                   abortSignal: new AbortController().signal,
                   sessionID: this.context.sessionID,
