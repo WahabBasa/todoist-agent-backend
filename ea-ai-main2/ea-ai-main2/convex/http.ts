@@ -14,7 +14,7 @@ http.route({
     const headerPayload = request.headers;
 
     try {
-      const result: WebhookEvent = await ctx.runAction(internal.clerk.fulfill, {
+      const result: any = await ctx.runAction(internal.clerk.fulfill, {
         payload: payloadString,
         headers: {
           "svix-id": headerPayload.get("svix-id")!,

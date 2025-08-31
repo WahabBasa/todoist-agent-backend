@@ -1326,10 +1326,13 @@ Do NOT use any other tools until internal todolist is created.
               });
               
               // Add tool result summary to text stream
-              if (typeof toolResult === 'object' && toolResult.success) {
+              if (toolResult && typeof toolResult === 'object' && 'success' in toolResult && toolResult.success) {
                 accumulatedText += `\n✅ ${part.toolName} completed successfully.`;
               } else if (typeof toolResult === 'string') {
                 accumulatedText += `\n📝 ${toolResult}`;
+              } else if (toolResult && typeof toolResult === 'object') {
+                // Handle complex tool results (like your Todoist tools that return {title, metadata, output})
+                accumulatedText += `\n🔧 ${part.toolName} executed.`;
               }
               
               await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {

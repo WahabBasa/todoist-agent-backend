@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
+import { todoistSyncRequest } from "../../todoist/syncApi";
 
 // Todoist-specific tool implementations
 // Extracted from main toolRegistry for better modularity
@@ -18,7 +19,7 @@ export const createTask: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      const result = await actionCtx.runAction(api.todoist.syncApi.createTodoistTaskSync, {
+      const result: any = await actionCtx.runAction(api.todoist.syncApi.createTodoistTaskSync, {
         content: args.title,
         description: args.description,
         projectId: args.projectId,
@@ -75,10 +76,7 @@ export const getTasks: ToolDefinition = {
         throw new Error(`Invalid project ID format: "${args.projectId}". Use getProjectAndTaskMap() first to get the correct project ID.`);
       }
 
-      const syncResult = await actionCtx.runAction(api.todoist.syncApi.syncTodoistData, {
-        resourceTypes: ["items"],
-        syncToken: "*"
-      });
+      const syncResult = await todoistSyncRequest(actionCtx, [], ["items"], "*");
 
       let result = [];
       if (syncResult && syncResult.items && syncResult._userContext) {

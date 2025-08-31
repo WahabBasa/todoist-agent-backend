@@ -21,7 +21,8 @@ function generateTempId(prefix: string = "temp"): string {
 }
 
 // Helper function to make authenticated Todoist Sync API requests with user validation (for actions)
-async function todoistSyncRequest(
+// Exported to allow direct calls from tools (avoiding action->action anti-pattern)
+export async function todoistSyncRequest(
   ctx: any, 
   commands: any[] = [], 
   resourceTypes: string[] = ["all"],
