@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAction, useQuery, useMutation } from "convex/react"
-import { api } from "../../convex/_generated/api"
+import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { Id } from "../../convex/_generated/dataModel"
+import { Id } from "../../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'

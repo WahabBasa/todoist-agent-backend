@@ -10,4 +10,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    fs: {
+      // Allow Vite to access parent directories for potential Convex files
+      allow: ['..']
+    }
+  }
 });

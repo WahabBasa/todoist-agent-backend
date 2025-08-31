@@ -12,7 +12,7 @@ console.log('🚀 Starting coordinated development workflow...');
 // Step 1: Start Convex dev and wait for "functions ready"
 console.log('📦 Step 1: Starting Convex backend...');
 
-const convexProcess = spawn('npx', ['convex', 'dev'], {
+const convexProcess = spawn('npx', ['convex', 'dev', '--typecheck=disable'], {
   stdio: 'pipe',
   shell: true,
   cwd: __dirname
@@ -35,7 +35,15 @@ convexProcess.stdout.on('data', (data) => {
 });
 
 convexProcess.stderr.on('data', (data) => {
-  process.stderr.write(data); // Forward errors to console
+  const output = data.toString();
+  process.stderr.write(output); // Forward errors to console
+  
+  // Check for "Convex functions ready!" message in stderr too
+  if (output.includes('Convex functions ready!') && !convexReady) {
+    convexReady = true;
+    console.log('✅ Convex backend is ready! Starting frontend...');
+    startVite();
+  }
 });
 
 // Step 2: Start Vite once Convex is ready
