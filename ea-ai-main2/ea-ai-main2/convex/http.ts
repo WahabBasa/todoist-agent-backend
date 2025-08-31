@@ -96,7 +96,7 @@ http.route({
       });
 
       // Exchange code for access token using existing action
-      const result = await ctx.runAction(api.todoist.auth.exchangeCodeForToken, {
+      const result = await (ctx.runAction as any)("todoist.auth.exchangeCodeForToken", {
         code,
         state,
       });

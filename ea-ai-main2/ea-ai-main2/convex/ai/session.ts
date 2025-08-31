@@ -332,13 +332,13 @@ export const compareChatSystems = action({
     try {
       let result;
       if (useV2) {
-        result = await ctx.runAction(api.ai.session.chatWithAIV2, {
+        result = await (ctx.runAction as any)("ai.session.chatWithAIV2", {
           message,
           sessionId,
           useHaiku: true
         });
       } else {
-        result = await ctx.runAction(api.ai.chatWithAI, {
+        result = await (ctx.runAction as any)("ai.chatWithAI", {
           message,
           sessionId,
           useHaiku: true

@@ -655,17 +655,17 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 result = await TodoistModel.deleteProject(ctx, { projectId: args.projectId });
                 break;
             case "getProjectAndTaskMap":
-                result = await ctx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
+                result = await (ctx.runAction as any)("todoist.integration.getTodoistProjectAndTaskMap", {
                     includeCompleted: args.includeCompleted || false
                 });
                 break;
             case "getProjectDetails":
-                result = await ctx.runAction(api.todoist.integration.getTodoistProjectDetails, { 
+                result = await (ctx.runAction as any)("todoist.integration.getTodoistProjectDetails", { 
                     projectId: args.projectId 
                 });
                 break;
             case "getTaskDetails":
-                result = await ctx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
+                result = await (ctx.runAction as any)("todoist.integration.getTodoistTaskDetails", { 
                     taskId: args.taskId 
                 });
                 break;
@@ -679,7 +679,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 const endTime = args.endDate ? new Date(args.endDate) : new Date(startTime.getTime() + 60 * 60000); // Default 1 hour
                 const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
                 
-                result = await ctx.runAction(api.googleCalendar.auth.createCalendarEvent, {
+                result = await (ctx.runAction as any)("googleCalendar.auth.createCalendarEvent", {
                     title: args.summary,
                     startTime: startTime.toISOString(),
                     durationMinutes,
@@ -739,7 +739,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                     }
                 }
                 
-                result = await ctx.runAction(api.googleCalendar.auth.getCalendarEventTimes, {
+                result = await (ctx.runAction as any)("googleCalendar.auth.getCalendarEventTimes", {
                     start: timeMin || new Date().toISOString(),
                     end: timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default 7 days
                 });
@@ -1311,7 +1311,7 @@ Do NOT use any other tools until internal todolist is created.
                 args: part.input,
                 toolCallId: part.toolCallId
               });
-              await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+              await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
                 streamId,
                 partialContent: accumulatedText,
                 toolCalls: toolCallsExecuted,
@@ -1337,7 +1337,7 @@ Do NOT use any other tools until internal todolist is created.
                 accumulatedText += `\n🔧 ${part.toolName} executed.`;
               }
               
-              await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+              await (ctx.runMutation as any)("streamingResponses.updateStreamingResponse", {
                 streamId,
                 partialContent: accumulatedText,
                 toolResults: toolResultsAccumulated,
