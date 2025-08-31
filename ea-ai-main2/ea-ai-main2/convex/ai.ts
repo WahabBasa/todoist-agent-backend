@@ -10,7 +10,7 @@ import {
   convertToModelMessages,
   ToolResultPart
 } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "./_generated/api";
 import { SystemPrompt } from "./ai/system";
 import { MessageCaching } from "./ai/caching";
@@ -892,8 +892,8 @@ export const chatWithAI = action({
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
 
-    const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
-    const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
+    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
     // Get conversation history - session-aware or default
     let conversation;
@@ -1057,7 +1057,7 @@ Do NOT use any other tools until internal todolist is created.
           MessageCaching.incrementMessagesCached();
           
           const result = await generateText({
-            model: anthropic(modelName),
+            model: openrouter(modelName),
             system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
             messages: optimizedMessages,
             tools: plannerTools,
@@ -1092,7 +1092,7 @@ Do NOT use any other tools until internal todolist is created.
             }
             
             const fallbackResult = await generateText({ 
-              model: anthropic(modelName),
+              model: openrouter(modelName),
               system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects.`,
               messages: fallbackMessages,
               tools: plannerTools,
