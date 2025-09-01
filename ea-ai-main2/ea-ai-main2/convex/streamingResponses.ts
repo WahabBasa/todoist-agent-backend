@@ -20,33 +20,201 @@ export const createStreamingResponse = mutation({
     modelName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
-    
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
-    }
-    
-    const now = Date.now();
-    
-    const responseId = await ctx.db.insert("streamingResponses", {
-      streamId: args.streamId,
-      tokenIdentifier,
+    console.log('[STREAMING_CREATE] Starting createStreamingResponse', {
+      streamId: args.streamId?.substring(0, 20) + '...',
       sessionId: args.sessionId,
-      content: "", // Start empty
-      isComplete: false,
-      status: "streaming",
-      userMessage: args.userMessage,
+      userMessageLength: args.userMessage?.length,
       modelName: args.modelName,
-      toolExecutions: [],
-      createdAt: now,
-      updatedAt: now,
+      timestamp: Date.now()
     });
     
-    return { responseId, streamId: args.streamId };
+    // Parameter validation and schema debugging
+    console.log('[STREAMING_CREATE] Validating parameters...', {
+      hasStreamId: !!args.streamId,
+      streamIdType: typeof args.streamId,
+      streamIdLength: args.streamId?.length,
+      hasSessionId: !!args.sessionId,
+      sessionIdType: typeof args.sessionId,
+      sessionIdValue: args.sessionId,
+      hasUserMessage: !!args.userMessage,
+      userMessageType: typeof args.userMessage,
+      hasModelName: !!args.modelName,
+      modelNameType: typeof args.modelName,
+      modelNameValue: args.modelName
+    });
+    
+    // Validate required fields
+    if (!args.streamId || typeof args.streamId !== 'string' || args.streamId.length === 0) {
+      console.error('[STREAMING_CREATE] Invalid streamId parameter:', args.streamId);
+      throw new ConvexError("Invalid streamId: must be a non-empty string");
+    }
+    
+    if (!args.userMessage || typeof args.userMessage !== 'string' || args.userMessage.length === 0) {
+      console.error('[STREAMING_CREATE] Invalid userMessage parameter:', {
+        userMessage: args.userMessage,
+        type: typeof args.userMessage,
+        length: args.userMessage?.length
+      });
+      throw new ConvexError("Invalid userMessage: must be a non-empty string");
+    }
+    
+    // Validate optional sessionId format if provided
+    if (args.sessionId !== undefined && args.sessionId !== null) {
+      console.log('[STREAMING_CREATE] Validating sessionId format...', {
+        sessionId: args.sessionId,
+        sessionIdType: typeof args.sessionId
+      });
+      
+      // Check if it's a valid Convex ID format (basic check)
+      if (typeof args.sessionId !== 'string' || !args.sessionId.startsWith('k')) {
+        console.error('[STREAMING_CREATE] Invalid sessionId format:', {
+          sessionId: args.sessionId,
+          type: typeof args.sessionId,
+          startsWithK: typeof args.sessionId === 'string' ? args.sessionId.startsWith('k') : false
+        });
+        throw new ConvexError("Invalid sessionId format: must be a valid Convex ID");
+      }
+    }
+    
+    console.log('[STREAMING_CREATE] Parameter validation passed');
+    
+    try {
+      console.log('[STREAMING_CREATE] Getting user identity...');
+      
+      // Defensive auth with retry logic - sometimes auth context takes time to propagate
+      let identity;
+      let authAttempt = 0;
+      const maxAuthAttempts = 3;
+      const authRetryDelayMs = 100;
+      
+      while (authAttempt < maxAuthAttempts) {
+        try {
+          console.log(`[STREAMING_CREATE] Auth attempt ${authAttempt + 1}/${maxAuthAttempts}...`);
+          identity = await ctx.auth.getUserIdentity();
+          
+          if (identity) {
+            console.log(`[STREAMING_CREATE] Auth successful on attempt ${authAttempt + 1}`);
+            break;
+          }
+          
+          console.warn(`[STREAMING_CREATE] No identity on attempt ${authAttempt + 1}, retrying...`);
+          authAttempt++;
+          
+          if (authAttempt < maxAuthAttempts) {
+            await new Promise(resolve => setTimeout(resolve, authRetryDelayMs));
+          }
+        } catch (authError) {
+          console.error(`[STREAMING_CREATE] Auth error on attempt ${authAttempt + 1}:`, authError);
+          authAttempt++;
+          
+          if (authAttempt >= maxAuthAttempts) {
+            throw new ConvexError("Authentication system error after retries");
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, authRetryDelayMs));
+        }
+      }
+      
+      if (!identity) {
+        console.error('[STREAMING_CREATE] No identity found after all retries - authentication failed');
+        throw new ConvexError("Authentication required - unable to verify user identity");
+      }
+      
+      console.log('[STREAMING_CREATE] Identity obtained:', {
+        hasTokenIdentifier: !!identity.tokenIdentifier,
+        hasSubject: !!identity.subject,
+        hasIssuer: !!identity.issuer,
+        identityKeys: Object.keys(identity),
+        identityType: typeof identity
+      });
+      
+      // More defensive token identifier check
+      const tokenIdentifier = identity.tokenIdentifier;
+      if (!tokenIdentifier) {
+        console.error('[STREAMING_CREATE] Token identifier not found in identity:', {
+          identity: identity,
+          hasTokenIdentifier: 'tokenIdentifier' in identity,
+          tokenIdentifierValue: identity.tokenIdentifier,
+          tokenIdentifierType: typeof identity.tokenIdentifier
+        });
+        throw new ConvexError("Token identifier not found");
+      }
+      
+      if (typeof tokenIdentifier !== 'string' || tokenIdentifier.length === 0) {
+        console.error('[STREAMING_CREATE] Token identifier invalid format:', {
+          tokenIdentifier,
+          type: typeof tokenIdentifier,
+          length: tokenIdentifier?.length
+        });
+        throw new ConvexError("Invalid token identifier format");
+      }
+      
+      console.log('[STREAMING_CREATE] Token identifier validated:', {
+        tokenIdentifierPrefix: tokenIdentifier.substring(0, 20) + '...',
+        tokenIdentifierLength: tokenIdentifier.length
+      });
+      
+      const now = Date.now();
+      
+      console.log('[STREAMING_CREATE] Preparing to insert streaming response with data:', {
+        streamId: args.streamId,
+        tokenIdentifier: tokenIdentifier.substring(0, 20) + '...',
+        sessionId: args.sessionId,
+        userMessageLength: args.userMessage.length,
+        modelName: args.modelName,
+        now
+      });
+      
+      // Schema validation - prepare data for insert
+      const insertData = {
+        streamId: args.streamId,
+        tokenIdentifier,
+        sessionId: args.sessionId,
+        content: "", // Start empty
+        isComplete: false,
+        status: "streaming" as const,
+        userMessage: args.userMessage,
+        modelName: args.modelName,
+        toolExecutions: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      console.log('[STREAMING_CREATE] Schema validation - checking insert data types:', {
+        streamIdType: typeof insertData.streamId,
+        tokenIdentifierType: typeof insertData.tokenIdentifier,
+        sessionIdType: typeof insertData.sessionId,
+        contentType: typeof insertData.content,
+        isCompleteType: typeof insertData.isComplete,
+        statusType: typeof insertData.status,
+        userMessageType: typeof insertData.userMessage,
+        modelNameType: typeof insertData.modelName,
+        toolExecutionsType: typeof insertData.toolExecutions,
+        toolExecutionsIsArray: Array.isArray(insertData.toolExecutions),
+        createdAtType: typeof insertData.createdAt,
+        updatedAtType: typeof insertData.updatedAt
+      });
+      
+      console.log('[STREAMING_CREATE] Attempting database insert...');
+      const responseId = await ctx.db.insert("streamingResponses", insertData);
+      
+      console.log('[STREAMING_CREATE] Successfully created streaming response:', {
+        responseId,
+        streamId: args.streamId,
+        tokenIdentifier: tokenIdentifier.substring(0, 20) + '...'
+      });
+      
+      return { responseId, streamId: args.streamId };
+      
+    } catch (error) {
+      console.error('[STREAMING_CREATE] Error in createStreamingResponse:', {
+        error: error instanceof Error ? error.message : error,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        streamId: args.streamId,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
   },
 });
 
@@ -215,33 +383,112 @@ export const errorStreamingResponse = mutation({
     errorMessage: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
-    
-    const tokenIdentifier = identity.tokenIdentifier;
-    
-    // Find the streaming response
-    const streamingResponse = await ctx.db
-      .query("streamingResponses")
-      .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
-      .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
-      .first();
-    
-    if (!streamingResponse) {
-      throw new ConvexError("Streaming response not found");
-    }
-    
-    // Mark as error
-    await ctx.db.patch(streamingResponse._id, {
-      isComplete: true,
-      status: "error",
-      errorMessage: args.errorMessage,
-      updatedAt: Date.now(),
+    console.log('[STREAMING_ERROR] Starting errorStreamingResponse', {
+      streamId: args.streamId?.substring(0, 20) + '...',
+      errorMessage: args.errorMessage?.substring(0, 100) + '...',
+      timestamp: Date.now()
     });
     
-    return { success: true, streamId: args.streamId };
+    try {
+      console.log('[STREAMING_ERROR] Getting user identity...');
+      
+      // Use defensive auth pattern matching createStreamingResponse
+      let identity;
+      try {
+        identity = await ctx.auth.getUserIdentity();
+      } catch (authError) {
+        console.error('[STREAMING_ERROR] Error getting user identity:', authError);
+        throw new ConvexError("Authentication system error");
+      }
+      
+      if (!identity) {
+        console.error('[STREAMING_ERROR] No identity found - authentication failed');
+        throw new ConvexError("Authentication required");
+      }
+      
+      console.log('[STREAMING_ERROR] Identity obtained:', {
+        hasTokenIdentifier: !!identity.tokenIdentifier,
+        hasSubject: !!identity.subject,
+        identityKeys: Object.keys(identity),
+        identityType: typeof identity
+      });
+      
+      // More defensive token identifier check
+      const tokenIdentifier = identity.tokenIdentifier;
+      if (!tokenIdentifier) {
+        console.error('[STREAMING_ERROR] Token identifier not found in identity:', {
+          identity: identity,
+          hasTokenIdentifier: 'tokenIdentifier' in identity,
+          tokenIdentifierValue: identity.tokenIdentifier,
+          tokenIdentifierType: typeof identity.tokenIdentifier
+        });
+        throw new ConvexError("Token identifier not found");
+      }
+      
+      if (typeof tokenIdentifier !== 'string' || tokenIdentifier.length === 0) {
+        console.error('[STREAMING_ERROR] Token identifier invalid format:', {
+          tokenIdentifier,
+          type: typeof tokenIdentifier,
+          length: tokenIdentifier?.length
+        });
+        throw new ConvexError("Invalid token identifier format");
+      }
+      
+      console.log('[STREAMING_ERROR] Token identifier validated:', {
+        tokenIdentifierPrefix: tokenIdentifier.substring(0, 20) + '...',
+        tokenIdentifierLength: tokenIdentifier.length
+      });
+      
+      console.log('[STREAMING_ERROR] Searching for streaming response:', {
+        streamId: args.streamId,
+        tokenIdentifier: tokenIdentifier.substring(0, 20) + '...'
+      });
+      
+      // Find the streaming response
+      const streamingResponse = await ctx.db
+        .query("streamingResponses")
+        .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+        .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+        .first();
+      
+      if (!streamingResponse) {
+        console.error('[STREAMING_ERROR] Streaming response not found:', {
+          streamId: args.streamId,
+          tokenIdentifier: tokenIdentifier.substring(0, 20) + '...'
+        });
+        throw new ConvexError("Streaming response not found");
+      }
+      
+      console.log('[STREAMING_ERROR] Found streaming response, marking as error:', {
+        responseId: streamingResponse._id,
+        currentStatus: streamingResponse.status,
+        isComplete: streamingResponse.isComplete
+      });
+      
+      // Mark as error
+      await ctx.db.patch(streamingResponse._id, {
+        isComplete: true,
+        status: "error",
+        errorMessage: args.errorMessage,
+        updatedAt: Date.now(),
+      });
+      
+      console.log('[STREAMING_ERROR] Successfully marked streaming response as error:', {
+        streamId: args.streamId,
+        responseId: streamingResponse._id
+      });
+      
+      return { success: true, streamId: args.streamId };
+      
+    } catch (error) {
+      console.error('[STREAMING_ERROR] Error in errorStreamingResponse:', {
+        error: error instanceof Error ? error.message : error,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        streamId: args.streamId,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
   },
 });
 
@@ -300,6 +547,110 @@ export const getActiveStreams = query({
     }
     
     return await query.collect();
+  },
+});
+
+/**
+ * Robust cleanup for streaming responses with error recovery
+ * This handles edge cases where normal error cleanup fails
+ */
+export const robustCleanupStreamingResponse = mutation({
+  args: {
+    streamId: v.string(),
+    errorMessage: v.optional(v.string()),
+    forceCleanup: v.optional(v.boolean()), // Allow cleanup even without auth in extreme cases
+  },
+  handler: async (ctx, args) => {
+    console.log('[STREAMING_ROBUST_CLEANUP] Starting robust cleanup', {
+      streamId: args.streamId?.substring(0, 20) + '...',
+      hasErrorMessage: !!args.errorMessage,
+      forceCleanup: !!args.forceCleanup,
+      timestamp: Date.now()
+    });
+    
+    try {
+      // Try to get auth context, but don't fail if it's not available in force cleanup mode
+      let tokenIdentifier = null;
+      
+      try {
+        const identity = await ctx.auth.getUserIdentity();
+        tokenIdentifier = identity?.tokenIdentifier || null;
+        console.log('[STREAMING_ROBUST_CLEANUP] Auth context:', {
+          hasIdentity: !!identity,
+          hasTokenIdentifier: !!tokenIdentifier
+        });
+      } catch (authError) {
+        if (!args.forceCleanup) {
+          console.error('[STREAMING_ROBUST_CLEANUP] Auth failed and force cleanup not enabled:', authError);
+          throw new ConvexError("Authentication required for cleanup");
+        }
+        
+        console.warn('[STREAMING_ROBUST_CLEANUP] Auth failed but force cleanup enabled:', authError);
+      }
+      
+      // Try to find the streaming response with or without auth filter
+      let streamingResponse;
+      
+      if (tokenIdentifier) {
+        // Normal authenticated cleanup
+        console.log('[STREAMING_ROBUST_CLEANUP] Searching with auth filter...');
+        streamingResponse = await ctx.db
+          .query("streamingResponses")
+          .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+          .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
+          .first();
+      } else if (args.forceCleanup) {
+        // Force cleanup mode - search without auth filter
+        console.log('[STREAMING_ROBUST_CLEANUP] Force cleanup: searching without auth filter...');
+        streamingResponse = await ctx.db
+          .query("streamingResponses")
+          .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
+          .first();
+      }
+      
+      if (!streamingResponse) {
+        console.log('[STREAMING_ROBUST_CLEANUP] No streaming response found - cleanup not needed');
+        return { success: true, found: false, action: "none" };
+      }
+      
+      console.log('[STREAMING_ROBUST_CLEANUP] Found streaming response:', {
+        responseId: streamingResponse._id,
+        currentStatus: streamingResponse.status,
+        isComplete: streamingResponse.isComplete,
+        tokenIdentifier: streamingResponse.tokenIdentifier?.substring(0, 20) + '...'
+      });
+      
+      // Update the record to mark as error
+      const updateData: any = {
+        isComplete: true,
+        status: "error",
+        updatedAt: Date.now(),
+      };
+      
+      if (args.errorMessage) {
+        updateData.errorMessage = args.errorMessage;
+      }
+      
+      await ctx.db.patch(streamingResponse._id, updateData);
+      
+      console.log('[STREAMING_ROBUST_CLEANUP] Successfully cleaned up streaming response');
+      return { 
+        success: true, 
+        found: true, 
+        action: "marked_as_error",
+        streamId: args.streamId,
+        responseId: streamingResponse._id
+      };
+      
+    } catch (error) {
+      console.error('[STREAMING_ROBUST_CLEANUP] Robust cleanup failed:', {
+        error: error instanceof Error ? error.message : error,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        streamId: args.streamId,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
   },
 });
 

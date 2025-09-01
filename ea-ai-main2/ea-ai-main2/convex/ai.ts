@@ -1209,15 +1209,41 @@ export const streamChatWithAI = action({
     finalText: string;
     completedResponse: any;
   }> => {
+    console.log(`[AI_STREAMING] === STARTING STREAM CHAT ===`);
+    console.log(`[AI_STREAMING] Auth context check - getting user identity...`);
+    
+    // First verify the auth context in the action
+    const actionIdentity = await ctx.auth.getUserIdentity();
+    console.log(`[AI_STREAMING] Action auth context:`, {
+      hasIdentity: !!actionIdentity,
+      hasTokenIdentifier: !!actionIdentity?.tokenIdentifier,
+      hasSubject: !!actionIdentity?.subject,
+      identityKeys: actionIdentity ? Object.keys(actionIdentity) : [],
+      tokenIdentifierPrefix: actionIdentity?.tokenIdentifier?.substring(0, 20) + '...'
+    });
+
     // Use big-brain authentication pattern for consistent user validation
     const { userId } = await requireUserAuthForAction(ctx);
-    console.log(`[AI Streaming] Starting stream for user: ${userId.substring(0, 20)}...`);
+    console.log(`[AI_STREAMING] UserAccess pattern result:`, {
+      userId: userId.substring(0, 20) + '...',
+      userIdLength: userId.length
+    });
 
     // Generate unique stream ID
     const streamId = `stream_${userId.substring(0, 12)}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
 
+    console.log(`[AI_STREAMING] Generated stream parameters:`, {
+      streamId,
+      sessionId,
+      modelName,
+      messageLength: message.length,
+      timestamp: Date.now()
+    });
+
     try {
+      console.log(`[AI_STREAMING] About to call createStreamingResponse mutation...`);
+      
       // Initialize streaming response using new API
       await ctx.runMutation("streamingResponses.createStreamingResponse", {
         streamId,
@@ -1225,6 +1251,8 @@ export const streamChatWithAI = action({
         userMessage: message,
         modelName,
       });
+      
+      console.log(`[AI_STREAMING] Successfully called createStreamingResponse mutation`);
       const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
       // Get conversation history - session-aware or default
@@ -1431,16 +1459,98 @@ Do NOT use any other tools until internal todolist is created.
       }
 
     } catch (error) {
-      console.error(`[STREAMING] Failed to start stream:`, error);
+      console.error(`[AI_STREAMING] === CRITICAL ERROR: Failed to start stream ===`);
+      console.error(`[AI_STREAMING] Main error details:`, {
+        error: error instanceof Error ? error.message : error,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        streamId,
+        sessionId,
+        userIdPrefix: userId?.substring(0, 20) + '...',
+        timestamp: Date.now(),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       
-      // Try to mark as error if stream was created
+      // Check auth context again during error to see if it changed
       try {
+        const errorTimeIdentity = await ctx.auth.getUserIdentity();
+        console.error(`[AI_STREAMING] Auth context during error:`, {
+          hasIdentity: !!errorTimeIdentity,
+          hasTokenIdentifier: !!errorTimeIdentity?.tokenIdentifier,
+          tokenIdentifierPrefix: errorTimeIdentity?.tokenIdentifier?.substring(0, 20) + '...'
+        });
+      } catch (authCheckError) {
+        console.error(`[AI_STREAMING] Could not check auth during error:`, authCheckError);
+      }
+      
+      // Try to mark as error if stream was created - with enhanced error isolation
+      console.log(`[AI_STREAMING] Attempting error cleanup with errorStreamingResponse...`);
+      
+      // Enhanced cleanup with multiple fallback strategies
+      let cleanupSuccess = false;
+      
+      // Strategy 1: Try the normal errorStreamingResponse mutation
+      try {
+        console.log(`[AI_STREAMING] Cleanup strategy 1: Using errorStreamingResponse mutation`);
         await ctx.runMutation("streamingResponses.errorStreamingResponse", {
           streamId,
           errorMessage: error instanceof Error ? error.message : 'Failed to start streaming'
         });
+        console.log(`[AI_STREAMING] Successfully marked stream as error during cleanup (strategy 1)`);
+        cleanupSuccess = true;
       } catch (cleanupError) {
-        console.warn('[STREAMING] Failed to mark stream as error:', cleanupError);
+        console.error(`[AI_STREAMING] Cleanup strategy 1 failed:`, {
+          cleanupError: cleanupError instanceof Error ? cleanupError.message : cleanupError,
+          cleanupErrorType: cleanupError instanceof Error ? cleanupError.constructor.name : typeof cleanupError
+        });
+      }
+      
+      // Strategy 2: If normal cleanup failed, try the robust cleanup mechanism
+      if (!cleanupSuccess) {
+        try {
+          console.log(`[AI_STREAMING] Cleanup strategy 2: Using robust cleanup mechanism`);
+          
+          const robustCleanupResult = await ctx.runMutation("streamingResponses.robustCleanupStreamingResponse", {
+            streamId,
+            errorMessage: error instanceof Error ? error.message : 'Failed to start streaming',
+            forceCleanup: false // Still require auth for security
+          });
+          
+          if (robustCleanupResult.success) {
+            console.log(`[AI_STREAMING] Robust cleanup successful:`, robustCleanupResult);
+            cleanupSuccess = true;
+          }
+        } catch (robustCleanupError) {
+          console.error(`[AI_STREAMING] Cleanup strategy 2 (robust) failed:`, {
+            robustCleanupError: robustCleanupError instanceof Error ? robustCleanupError.message : robustCleanupError,
+            robustCleanupErrorType: robustCleanupError instanceof Error ? robustCleanupError.constructor.name : typeof robustCleanupError
+          });
+        }
+      }
+      
+      // Strategy 3: Last resort - force cleanup (only in extreme cases)
+      if (!cleanupSuccess) {
+        try {
+          console.log(`[AI_STREAMING] Cleanup strategy 3: Force cleanup (last resort)`);
+          
+          const forceCleanupResult = await ctx.runMutation("streamingResponses.robustCleanupStreamingResponse", {
+            streamId,
+            errorMessage: 'Force cleanup after all strategies failed',
+            forceCleanup: true // Allow cleanup even without auth
+          });
+          
+          if (forceCleanupResult.success) {
+            console.log(`[AI_STREAMING] Force cleanup successful:`, forceCleanupResult);
+            cleanupSuccess = true;
+          }
+        } catch (forceCleanupError) {
+          console.error(`[AI_STREAMING] Cleanup strategy 3 (force) failed:`, forceCleanupError);
+        }
+      }
+      
+      if (!cleanupSuccess) {
+        console.error(`[AI_STREAMING] === ALL CLEANUP STRATEGIES FAILED ===`);
+        console.error(`[AI_STREAMING] This may result in an orphaned streaming response record`);
+        console.error(`[AI_STREAMING] StreamId for manual cleanup: ${streamId}`);
       }
       
       throw error;

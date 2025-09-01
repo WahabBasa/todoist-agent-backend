@@ -14,12 +14,16 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as ai_caching from "../ai/caching.js";
+import type * as ai_eventDrivenProcessor from "../ai/eventDrivenProcessor.js";
 import type * as ai_messageV2 from "../ai/messageV2.js";
 import type * as ai_processor from "../ai/processor.js";
 import type * as ai_session from "../ai/session.js";
+import type * as ai_stateOrchestrator from "../ai/stateOrchestrator.js";
 import type * as ai_system from "../ai/system.js";
+import type * as ai_toolIntegration from "../ai/toolIntegration.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_internal from "../ai/tools/internal.js";
+import type * as ai_tools_pureTools from "../ai/tools/pureTools.js";
 import type * as ai_tools_todoist from "../ai/tools/todoist.js";
 import type * as ai_tools_utils from "../ai/tools/utils.js";
 import type * as ai from "../ai.js";
@@ -36,6 +40,8 @@ import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as http from "../http.js";
 import type * as mentalModels from "../mentalModels.js";
 import type * as migrateTokens from "../migrateTokens.js";
+import type * as streamEvents from "../streamEvents.js";
+import type * as streamingCompat from "../streamingCompat.js";
 import type * as streamingResponses from "../streamingResponses.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
@@ -53,12 +59,16 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  */
 declare const fullApi: ApiFromModules<{
   "ai/caching": typeof ai_caching;
+  "ai/eventDrivenProcessor": typeof ai_eventDrivenProcessor;
   "ai/messageV2": typeof ai_messageV2;
   "ai/processor": typeof ai_processor;
   "ai/session": typeof ai_session;
+  "ai/stateOrchestrator": typeof ai_stateOrchestrator;
   "ai/system": typeof ai_system;
+  "ai/toolIntegration": typeof ai_toolIntegration;
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/internal": typeof ai_tools_internal;
+  "ai/tools/pureTools": typeof ai_tools_pureTools;
   "ai/tools/todoist": typeof ai_tools_todoist;
   "ai/tools/utils": typeof ai_tools_utils;
   ai: typeof ai;
@@ -75,6 +85,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mentalModels: typeof mentalModels;
   migrateTokens: typeof migrateTokens;
+  streamEvents: typeof streamEvents;
+  streamingCompat: typeof streamingCompat;
   streamingResponses: typeof streamingResponses;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
