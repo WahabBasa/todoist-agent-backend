@@ -7,7 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'
-import { useConvexStreamingChat } from '@/hooks/use-convex-streaming-chat'
+import { useConvexStreamingChat } from '@/hooks/use-persistent-streaming-chat'
 
 // Define section structure (matching Morphic pattern)
 interface ChatSection {
@@ -274,7 +274,6 @@ export function Chat({ sessionId }: ChatProps) {
         mode: 'CONVEX_NATIVE',
         streamId: streamingMessage.id,
         contentLength: streamingMessage.content.length,
-        toolExecutions: streamingMessage.toolExecutions?.length || 0,
         isComplete: streamingMessage.isComplete,
         status: streamingMessage.status,
       })

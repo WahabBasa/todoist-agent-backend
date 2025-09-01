@@ -3,7 +3,6 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { 
-  generateText, 
   streamText,
   tool,
   ModelMessage,
@@ -1059,18 +1058,19 @@ Do NOT use any other tools until internal todolist is created.
           console.log(`[Caching] Optimized messages: ${modelMessages.length} -> ${optimizedMessages.length}`);
           MessageCaching.incrementMessagesCached();
           
-          const result = await generateText({
+          const result = streamText({
             model: openrouter(modelName),
             system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
             messages: optimizedMessages,
             tools: plannerTools,
         });
         
-        text = result.text;
-        toolCalls = result.toolCalls;
+        // Get final results from stream (maintains backward compatibility)
+        text = await result.text;
+        toolCalls = await result.toolCalls;
         
         } catch (error: any) {
-          console.error('[ERROR] AI SDK generateText failed:', {
+          console.error('[ERROR] AI SDK streamText failed:', {
             message: error.message,
             type: error.constructor.name,
             modelMessagesCount: modelMessages.length,
@@ -1094,14 +1094,14 @@ Do NOT use any other tools until internal todolist is created.
               fallbackMessages.push({ role: 'user', content: message });
             }
             
-            const fallbackResult = await generateText({ 
+            const fallbackResult = streamText({ 
               model: openrouter(modelName),
               system: `You are an intelligent executive assistant that helps users manage their personal and professional tasks and projects.`,
               messages: fallbackMessages,
               tools: plannerTools,
             });
-            text = fallbackResult.text;
-            toolCalls = fallbackResult.toolCalls;
+            text = await fallbackResult.text;
+            toolCalls = await fallbackResult.toolCalls;
           } else {
             throw error;
           }
@@ -1186,8 +1186,8 @@ Do NOT use any other tools until internal todolist is created.
 });
 
 // =================================================================
-// STREAMING CHAT WITH AI
-// Real-time progressive text generation with tool support
+// STREAMING CHAT WITH AI - NEW HTTP ACTION APPROACH
+// Initializes streaming via HTTP Action with persistent text streaming
 // =================================================================
 
 export const streamChatWithAI = action({
@@ -1205,324 +1205,41 @@ export const streamChatWithAI = action({
   },
   handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<{
     streamId: string;
+    chatId: string;
     success: boolean;
-    finalText: string;
-    completedResponse: any;
+    endpoint: string;
   }> => {
-    console.log(`[AI_STREAMING] === STARTING STREAM CHAT ===`);
-    console.log(`[AI_STREAMING] Auth context check - getting user identity...`);
+    console.log(`[AI_STREAMING_V2] === STARTING NEW STREAMING APPROACH ===`);
     
-    // First verify the auth context in the action
-    const actionIdentity = await ctx.auth.getUserIdentity();
-    console.log(`[AI_STREAMING] Action auth context:`, {
-      hasIdentity: !!actionIdentity,
-      hasTokenIdentifier: !!actionIdentity?.tokenIdentifier,
-      hasSubject: !!actionIdentity?.subject,
-      identityKeys: actionIdentity ? Object.keys(actionIdentity) : [],
-      tokenIdentifierPrefix: actionIdentity?.tokenIdentifier?.substring(0, 20) + '...'
-    });
-
-    // Use big-brain authentication pattern for consistent user validation
+    // Use authentication for consistency
     const { userId } = await requireUserAuthForAction(ctx);
-    console.log(`[AI_STREAMING] UserAccess pattern result:`, {
-      userId: userId.substring(0, 20) + '...',
-      userIdLength: userId.length
-    });
-
-    // Generate unique stream ID
-    const streamId = `stream_${userId.substring(0, 12)}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const modelName = useHaiku ? "anthropic/claude-3-haiku" : "anthropic/claude-3-haiku";
-
-    console.log(`[AI_STREAMING] Generated stream parameters:`, {
-      streamId,
-      sessionId,
-      modelName,
-      messageLength: message.length,
-      timestamp: Date.now()
-    });
+    console.log(`[AI_STREAMING_V2] Authenticated user: ${userId.substring(0, 20)}...`);
 
     try {
-      console.log(`[AI_STREAMING] About to call createStreamingResponse mutation...`);
-      
-      // Initialize streaming response using new API
-      await ctx.runMutation("streamingResponses.createStreamingResponse", {
-        streamId,
+      // Create a new chat stream using the new component-based approach
+      const streamResult = await ctx.runMutation("chat.createChat", {
+        prompt: message,
         sessionId,
-        userMessage: message,
-        modelName,
-      });
-      
-      console.log(`[AI_STREAMING] Successfully called createStreamingResponse mutation`);
-      const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
-
-      // Get conversation history - session-aware or default
-      let conversation;
-      if (sessionId) {
-        conversation = await (ctx.runQuery as any)("conversations.getConversationBySession", { sessionId });
-      } else {
-        conversation = await (ctx.runQuery as any)("conversations.getConversation");
-      }
-
-      const history = (conversation?.messages as any[]) || [];
-      
-      // Add current user message to history
-      const userMessage = { role: "user", content: message, timestamp: Date.now() };
-      history.push(userMessage);
-
-      // Load mental model content
-      const mentalModelContent = getUserMentalModel(userId);
-
-      // Convert conversation to model format
-      let modelMessages: ModelMessage[];
-      try {
-        modelMessages = convertConvexMessagesToModel(history);
-      } catch (error) {
-        console.warn('[STREAMING FALLBACK] Message conversion failed, using minimal context:', error);
-        modelMessages = [{ role: "user", content: message }];
-      }
-
-      // Check for complex operations that need internal todolist
-      const messageLength = message.length;
-      const hasMultipleRequests = /and|then|also|additionally|furthermore|moreover|plus|while|after|before/i.test(message);
-      const hasComplexKeywords = /plan|organize|schedule|manage|setup|create.*and|help.*with.*multiple|several|various/i.test(message);
-      const hasBulkOperations = /(?:delete|update|move|complete|modify|change|remove)\s+(?:all|every|each)(?:\s+(?:my|the))?\s+(?:task|project|event|item)/i.test(message);
-      
-      const shouldCreateTodolist = messageLength > 80 || hasMultipleRequests || hasComplexKeywords || hasBulkOperations;
-      
-      let dynamicInstructions = "";
-      if (shouldCreateTodolist) {
-        dynamicInstructions = `
-<mandatory_first_action>
-**STOP**: This request requires internal todolist management.
-Your FIRST action must be:
-1. Use internalTodoWrite to create 3-5 specific todos with priorities
-2. Only then proceed with tool execution 
-3. Mark todos "in_progress" → execute tools → mark "completed"
-4. Update user with progress: "Working on step X of Y"
-Do NOT use any other tools until internal todolist is created.
-</mandatory_first_action>`;
-      }
-
-      // Start streaming with AI SDK
-      const result = streamText({
-        model: openrouter(modelName),
-        system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
-        messages: modelMessages,
-        tools: plannerTools,
+        useHaiku,
       });
 
-      // Process the stream with batched updates to prevent overwhelming mutation system
-      let accumulatedText = '';
-      let toolCallsExecuted: any[] = [];
-      let toolResultsAccumulated: any[] = [];
-      let textChunks: string[] = [];
-      let lastUpdate = Date.now();
-      const UPDATE_INTERVAL_MS = 500; // Update every 500ms instead of every chunk
+      console.log(`[AI_STREAMING_V2] Stream created successfully:`, {
+        streamId: streamResult.streamId,
+        chatId: streamResult.chatId
+      });
 
-      console.log('[STREAMING] Starting stream processing with batched updates...');
+      // The client should now call the HTTP endpoint to start streaming
+      const endpoint = "/chat-stream";
 
-      try {
-        for await (const part of result.fullStream) {
-          switch (part.type) {
-            case 'text-delta':
-              // Accumulate text locally instead of immediate mutation calls
-              textChunks.push(part.text);
-              accumulatedText += part.text;
-              
-              // Only update database at intervals to prevent overwhelming mutations
-              const now = Date.now();
-              if (now - lastUpdate >= UPDATE_INTERVAL_MS && textChunks.length > 0) {
-                const batchedText = textChunks.join('');
-                console.log(`[STREAMING] Batched text update: ${batchedText.length} chars`);
-                
-                try {
-                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                    streamId,
-                    textDelta: batchedText,
-                  });
-                  textChunks = []; // Clear the batch
-                  lastUpdate = now;
-                } catch (updateError) {
-                  console.warn('[STREAMING] Failed to update content, continuing:', updateError);
-                  // Continue streaming even if updates fail
-                }
-              }
-              break;
-
-            case 'tool-call':
-              console.log(`[STREAMING] Tool call: ${part.toolName}`);
-              
-              // Add tool notice to text accumulation
-              const toolNotice = `\n🔧 Executing ${part.toolName}...`;
-              textChunks.push(toolNotice);
-              accumulatedText += toolNotice;
-              
-              toolCallsExecuted.push({
-                toolName: part.toolName,
-                args: part.input,
-                toolCallId: part.toolCallId
-              });
-              
-              // Force immediate update for tool calls (important events)
-              if (textChunks.length > 0) {
-                const batchedText = textChunks.join('');
-                try {
-                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                    streamId,
-                    textDelta: batchedText,
-                  });
-                  textChunks = [];
-                  lastUpdate = Date.now();
-                } catch (updateError) {
-                  console.warn('[STREAMING] Failed to update tool call, continuing:', updateError);
-                }
-              }
-              break;
-
-            case 'tool-result':
-              console.log(`[STREAMING] Tool result: ${part.toolName}`);
-              const toolResult = part.output;
-              
-              toolResultsAccumulated.push({
-                toolName: part.toolName,
-                toolCallId: part.toolCallId,
-                result: toolResult
-              });
-              
-              // Add tool result summary to text stream
-              let resultNotice = "";
-              if (toolResult && typeof toolResult === 'object' && 'success' in toolResult && toolResult.success) {
-                resultNotice = `\n✅ ${part.toolName} completed successfully.`;
-              } else if (typeof toolResult === 'string') {
-                resultNotice = `\n📝 ${toolResult}`;
-              } else if (toolResult && typeof toolResult === 'object') {
-                resultNotice = `\n🔧 ${part.toolName} executed.`;
-              }
-              
-              if (resultNotice) {
-                textChunks.push(resultNotice);
-                accumulatedText += resultNotice;
-              }
-              
-              // Force immediate update for tool results (important events)
-              if (textChunks.length > 0) {
-                const batchedText = textChunks.join('');
-                try {
-                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                    streamId,
-                    textDelta: batchedText,
-                  });
-                  textChunks = [];
-                  lastUpdate = Date.now();
-                } catch (updateError) {
-                  console.warn('[STREAMING] Failed to update tool result, continuing:', updateError);
-                }
-              }
-              break;
-
-            case 'finish':
-              console.log('[STREAMING] Stream finished');
-              break;
-          }
-        }
-        
-        // Send any remaining text chunks
-        if (textChunks.length > 0) {
-          const finalBatch = textChunks.join('');
-          console.log(`[STREAMING] Final batch update: ${finalBatch.length} chars`);
-          try {
-            await ctx.runMutation("streamingResponses.updateStreamingContent", {
-              streamId,
-              textDelta: finalBatch,
-            });
-          } catch (updateError) {
-            console.warn('[STREAMING] Failed final batch update:', updateError);
-          }
-        }
-
-        // Get final content and finalize
-        const finalText = await result.text;
-        const finalToolCalls = await result.toolCalls;
-        const finalToolResults = await result.toolResults;
-
-        // Mark streaming as complete using new API
-        const completedResponse: any = await ctx.runMutation("streamingResponses.completeStreamingResponse", {
-          streamId,
-          finalContent: finalText || accumulatedText,
-        });
-
-        // Save to conversation history
-        const newHistory = [
-          ...history,
-          {
-            role: "assistant",
-            content: finalText || accumulatedText,
-            toolCalls: finalToolCalls?.map((tc: any) => ({
-              name: tc.toolName,
-              args: tc.args,
-              toolCallId: tc.toolCallId
-            })),
-            toolResults: finalToolResults?.map((tr: any) => ({
-              toolCallId: tr.toolCallId,
-              toolName: tr.toolName,
-              result: tr.result
-            })),
-            timestamp: Date.now(),
-          }
-        ];
-
-        // Save conversation
-        await (ctx.runMutation as any)("conversations.upsertConversation", {
-          sessionId,
-          messages: newHistory as any
-        });
-
-        console.log(`[STREAMING] Completed successfully. Stream ID: ${streamId}`);
-        return { 
-          streamId, 
-          success: true, 
-          finalText: finalText || accumulatedText,
-          completedResponse 
-        };
-
-      } catch (streamError) {
-        console.error('[STREAMING] Stream processing error:', streamError);
-        try {
-          await ctx.runMutation("streamingResponses.errorStreamingResponse", {
-            streamId,
-            errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
-          });
-        } catch (cleanupError) {
-          console.warn('[STREAMING] Error cleanup failed (non-critical):', cleanupError);
-        }
-        throw streamError;
-      }
+      return {
+        streamId: streamResult.streamId,
+        chatId: streamResult.chatId,
+        success: true,
+        endpoint: endpoint,
+      };
 
     } catch (error) {
-      console.error(`[AI_STREAMING] === CRITICAL ERROR: Failed to start stream ===`);
-      console.error(`[AI_STREAMING] Main error details:`, {
-        error: error instanceof Error ? error.message : error,
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-        streamId,
-        sessionId,
-        userIdPrefix: userId?.substring(0, 20) + '...',
-        timestamp: Date.now(),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      // Simple error cleanup - with batched updates, complex retries are unnecessary  
-      console.log(`[AI_STREAMING] Attempting simple error cleanup...`);
-      try {
-        await ctx.runMutation("streamingResponses.errorStreamingResponse", {
-          streamId,
-          errorMessage: error instanceof Error ? error.message : 'Streaming failed'
-        });
-        console.log(`[AI_STREAMING] Successfully marked stream as error`);
-      } catch (cleanupError) {
-        console.warn(`[AI_STREAMING] Error cleanup failed (non-critical):`, cleanupError);
-        // Continue - this is non-critical with batched approach
-      }
-      
+      console.error(`[AI_STREAMING_V2] Failed to create stream:`, error);
       throw error;
     }
   }
