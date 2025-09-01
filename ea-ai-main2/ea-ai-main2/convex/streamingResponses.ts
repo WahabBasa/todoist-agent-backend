@@ -10,7 +10,7 @@ import { Id } from "./_generated/dataModel";
 
 /**
  * Create a new streaming response document
- * This initializes the streaming session
+ * Simplified version following working mutation patterns
  */
 export const createStreamingResponse = mutation({
   args: {
@@ -20,201 +20,40 @@ export const createStreamingResponse = mutation({
     modelName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    console.log('[STREAMING_CREATE] Starting createStreamingResponse', {
-      streamId: args.streamId?.substring(0, 20) + '...',
+    // Simple auth check following working pattern
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
+      throw new ConvexError("Token identifier not found");
+    }
+
+    // Basic parameter validation
+    if (!args.streamId || !args.userMessage) {
+      throw new ConvexError("StreamId and userMessage are required");
+    }
+
+    const now = Date.now();
+    
+    // Clean database insert
+    const responseId = await ctx.db.insert("streamingResponses", {
+      streamId: args.streamId,
+      tokenIdentifier,
       sessionId: args.sessionId,
-      userMessageLength: args.userMessage?.length,
+      content: "",
+      isComplete: false,
+      status: "streaming" as const,
+      userMessage: args.userMessage,
       modelName: args.modelName,
-      timestamp: Date.now()
+      toolExecutions: [],
+      createdAt: now,
+      updatedAt: now,
     });
     
-    // Parameter validation and schema debugging
-    console.log('[STREAMING_CREATE] Validating parameters...', {
-      hasStreamId: !!args.streamId,
-      streamIdType: typeof args.streamId,
-      streamIdLength: args.streamId?.length,
-      hasSessionId: !!args.sessionId,
-      sessionIdType: typeof args.sessionId,
-      sessionIdValue: args.sessionId,
-      hasUserMessage: !!args.userMessage,
-      userMessageType: typeof args.userMessage,
-      hasModelName: !!args.modelName,
-      modelNameType: typeof args.modelName,
-      modelNameValue: args.modelName
-    });
-    
-    // Validate required fields
-    if (!args.streamId || typeof args.streamId !== 'string' || args.streamId.length === 0) {
-      console.error('[STREAMING_CREATE] Invalid streamId parameter:', args.streamId);
-      throw new ConvexError("Invalid streamId: must be a non-empty string");
-    }
-    
-    if (!args.userMessage || typeof args.userMessage !== 'string' || args.userMessage.length === 0) {
-      console.error('[STREAMING_CREATE] Invalid userMessage parameter:', {
-        userMessage: args.userMessage,
-        type: typeof args.userMessage,
-        length: args.userMessage?.length
-      });
-      throw new ConvexError("Invalid userMessage: must be a non-empty string");
-    }
-    
-    // Validate optional sessionId format if provided
-    if (args.sessionId !== undefined && args.sessionId !== null) {
-      console.log('[STREAMING_CREATE] Validating sessionId format...', {
-        sessionId: args.sessionId,
-        sessionIdType: typeof args.sessionId
-      });
-      
-      // Check if it's a valid Convex ID format (basic check)
-      if (typeof args.sessionId !== 'string' || !args.sessionId.startsWith('k')) {
-        console.error('[STREAMING_CREATE] Invalid sessionId format:', {
-          sessionId: args.sessionId,
-          type: typeof args.sessionId,
-          startsWithK: typeof args.sessionId === 'string' ? args.sessionId.startsWith('k') : false
-        });
-        throw new ConvexError("Invalid sessionId format: must be a valid Convex ID");
-      }
-    }
-    
-    console.log('[STREAMING_CREATE] Parameter validation passed');
-    
-    try {
-      console.log('[STREAMING_CREATE] Getting user identity...');
-      
-      // Defensive auth with retry logic - sometimes auth context takes time to propagate
-      let identity;
-      let authAttempt = 0;
-      const maxAuthAttempts = 3;
-      const authRetryDelayMs = 100;
-      
-      while (authAttempt < maxAuthAttempts) {
-        try {
-          console.log(`[STREAMING_CREATE] Auth attempt ${authAttempt + 1}/${maxAuthAttempts}...`);
-          identity = await ctx.auth.getUserIdentity();
-          
-          if (identity) {
-            console.log(`[STREAMING_CREATE] Auth successful on attempt ${authAttempt + 1}`);
-            break;
-          }
-          
-          console.warn(`[STREAMING_CREATE] No identity on attempt ${authAttempt + 1}, retrying...`);
-          authAttempt++;
-          
-          if (authAttempt < maxAuthAttempts) {
-            await new Promise(resolve => setTimeout(resolve, authRetryDelayMs));
-          }
-        } catch (authError) {
-          console.error(`[STREAMING_CREATE] Auth error on attempt ${authAttempt + 1}:`, authError);
-          authAttempt++;
-          
-          if (authAttempt >= maxAuthAttempts) {
-            throw new ConvexError("Authentication system error after retries");
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, authRetryDelayMs));
-        }
-      }
-      
-      if (!identity) {
-        console.error('[STREAMING_CREATE] No identity found after all retries - authentication failed');
-        throw new ConvexError("Authentication required - unable to verify user identity");
-      }
-      
-      console.log('[STREAMING_CREATE] Identity obtained:', {
-        hasTokenIdentifier: !!identity.tokenIdentifier,
-        hasSubject: !!identity.subject,
-        hasIssuer: !!identity.issuer,
-        identityKeys: Object.keys(identity),
-        identityType: typeof identity
-      });
-      
-      // More defensive token identifier check
-      const tokenIdentifier = identity.tokenIdentifier;
-      if (!tokenIdentifier) {
-        console.error('[STREAMING_CREATE] Token identifier not found in identity:', {
-          identity: identity,
-          hasTokenIdentifier: 'tokenIdentifier' in identity,
-          tokenIdentifierValue: identity.tokenIdentifier,
-          tokenIdentifierType: typeof identity.tokenIdentifier
-        });
-        throw new ConvexError("Token identifier not found");
-      }
-      
-      if (typeof tokenIdentifier !== 'string' || tokenIdentifier.length === 0) {
-        console.error('[STREAMING_CREATE] Token identifier invalid format:', {
-          tokenIdentifier,
-          type: typeof tokenIdentifier,
-          length: tokenIdentifier?.length
-        });
-        throw new ConvexError("Invalid token identifier format");
-      }
-      
-      console.log('[STREAMING_CREATE] Token identifier validated:', {
-        tokenIdentifierPrefix: tokenIdentifier.substring(0, 20) + '...',
-        tokenIdentifierLength: tokenIdentifier.length
-      });
-      
-      const now = Date.now();
-      
-      console.log('[STREAMING_CREATE] Preparing to insert streaming response with data:', {
-        streamId: args.streamId,
-        tokenIdentifier: tokenIdentifier.substring(0, 20) + '...',
-        sessionId: args.sessionId,
-        userMessageLength: args.userMessage.length,
-        modelName: args.modelName,
-        now
-      });
-      
-      // Schema validation - prepare data for insert
-      const insertData = {
-        streamId: args.streamId,
-        tokenIdentifier,
-        sessionId: args.sessionId,
-        content: "", // Start empty
-        isComplete: false,
-        status: "streaming" as const,
-        userMessage: args.userMessage,
-        modelName: args.modelName,
-        toolExecutions: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-      
-      console.log('[STREAMING_CREATE] Schema validation - checking insert data types:', {
-        streamIdType: typeof insertData.streamId,
-        tokenIdentifierType: typeof insertData.tokenIdentifier,
-        sessionIdType: typeof insertData.sessionId,
-        contentType: typeof insertData.content,
-        isCompleteType: typeof insertData.isComplete,
-        statusType: typeof insertData.status,
-        userMessageType: typeof insertData.userMessage,
-        modelNameType: typeof insertData.modelName,
-        toolExecutionsType: typeof insertData.toolExecutions,
-        toolExecutionsIsArray: Array.isArray(insertData.toolExecutions),
-        createdAtType: typeof insertData.createdAt,
-        updatedAtType: typeof insertData.updatedAt
-      });
-      
-      console.log('[STREAMING_CREATE] Attempting database insert...');
-      const responseId = await ctx.db.insert("streamingResponses", insertData);
-      
-      console.log('[STREAMING_CREATE] Successfully created streaming response:', {
-        responseId,
-        streamId: args.streamId,
-        tokenIdentifier: tokenIdentifier.substring(0, 20) + '...'
-      });
-      
-      return { responseId, streamId: args.streamId };
-      
-    } catch (error) {
-      console.error('[STREAMING_CREATE] Error in createStreamingResponse:', {
-        error: error instanceof Error ? error.message : error,
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-        streamId: args.streamId,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      throw error;
-    }
+    return { responseId, streamId: args.streamId };
   },
 });
 

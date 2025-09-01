@@ -1311,42 +1311,50 @@ Do NOT use any other tools until internal todolist is created.
         tools: plannerTools,
       });
 
-      // Process the stream and update the database progressively
+      // Process the stream with batched updates to prevent overwhelming mutation system
       let accumulatedText = '';
       let toolCallsExecuted: any[] = [];
       let toolResultsAccumulated: any[] = [];
+      let textChunks: string[] = [];
+      let lastUpdate = Date.now();
+      const UPDATE_INTERVAL_MS = 500; // Update every 500ms instead of every chunk
+
+      console.log('[STREAMING] Starting stream processing with batched updates...');
 
       try {
         for await (const part of result.fullStream) {
           switch (part.type) {
             case 'text-delta':
-              // Progressive text update using new API
-              await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                streamId,
-                textDelta: part.text,
-              });
+              // Accumulate text locally instead of immediate mutation calls
+              textChunks.push(part.text);
               accumulatedText += part.text;
+              
+              // Only update database at intervals to prevent overwhelming mutations
+              const now = Date.now();
+              if (now - lastUpdate >= UPDATE_INTERVAL_MS && textChunks.length > 0) {
+                const batchedText = textChunks.join('');
+                console.log(`[STREAMING] Batched text update: ${batchedText.length} chars`);
+                
+                try {
+                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                    streamId,
+                    textDelta: batchedText,
+                  });
+                  textChunks = []; // Clear the batch
+                  lastUpdate = now;
+                } catch (updateError) {
+                  console.warn('[STREAMING] Failed to update content, continuing:', updateError);
+                  // Continue streaming even if updates fail
+                }
+              }
               break;
 
             case 'tool-call':
               console.log(`[STREAMING] Tool call: ${part.toolName}`);
               
-              // Update tool execution status using new API
-              await ctx.runMutation("streamingResponses.updateToolExecution", {
-                streamId,
-                toolCallId: part.toolCallId,
-                toolName: part.toolName,
-                input: part.input,
-                status: "running",
-                startTime: Date.now(),
-              });
-              
-              // Update text content with tool execution notice
+              // Add tool notice to text accumulation
               const toolNotice = `\n🔧 Executing ${part.toolName}...`;
-              await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                streamId,
-                textDelta: toolNotice,
-              });
+              textChunks.push(toolNotice);
               accumulatedText += toolNotice;
               
               toolCallsExecuted.push({
@@ -1354,21 +1362,26 @@ Do NOT use any other tools until internal todolist is created.
                 args: part.input,
                 toolCallId: part.toolCallId
               });
+              
+              // Force immediate update for tool calls (important events)
+              if (textChunks.length > 0) {
+                const batchedText = textChunks.join('');
+                try {
+                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                    streamId,
+                    textDelta: batchedText,
+                  });
+                  textChunks = [];
+                  lastUpdate = Date.now();
+                } catch (updateError) {
+                  console.warn('[STREAMING] Failed to update tool call, continuing:', updateError);
+                }
+              }
               break;
 
             case 'tool-result':
               console.log(`[STREAMING] Tool result: ${part.toolName}`);
               const toolResult = part.output;
-              
-              // Update tool execution status using new API
-              await ctx.runMutation("streamingResponses.updateToolExecution", {
-                streamId,
-                toolCallId: part.toolCallId,
-                toolName: part.toolName,
-                output: toolResult,
-                status: "completed",
-                endTime: Date.now(),
-              });
               
               toolResultsAccumulated.push({
                 toolName: part.toolName,
@@ -1387,11 +1400,23 @@ Do NOT use any other tools until internal todolist is created.
               }
               
               if (resultNotice) {
-                await ctx.runMutation("streamingResponses.updateStreamingContent", {
-                  streamId,
-                  textDelta: resultNotice,
-                });
+                textChunks.push(resultNotice);
                 accumulatedText += resultNotice;
+              }
+              
+              // Force immediate update for tool results (important events)
+              if (textChunks.length > 0) {
+                const batchedText = textChunks.join('');
+                try {
+                  await ctx.runMutation("streamingResponses.updateStreamingContent", {
+                    streamId,
+                    textDelta: batchedText,
+                  });
+                  textChunks = [];
+                  lastUpdate = Date.now();
+                } catch (updateError) {
+                  console.warn('[STREAMING] Failed to update tool result, continuing:', updateError);
+                }
               }
               break;
 
@@ -1399,9 +1424,20 @@ Do NOT use any other tools until internal todolist is created.
               console.log('[STREAMING] Stream finished');
               break;
           }
-
-          // Small delay to prevent overwhelming the database
-          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        
+        // Send any remaining text chunks
+        if (textChunks.length > 0) {
+          const finalBatch = textChunks.join('');
+          console.log(`[STREAMING] Final batch update: ${finalBatch.length} chars`);
+          try {
+            await ctx.runMutation("streamingResponses.updateStreamingContent", {
+              streamId,
+              textDelta: finalBatch,
+            });
+          } catch (updateError) {
+            console.warn('[STREAMING] Failed final batch update:', updateError);
+          }
         }
 
         // Get final content and finalize
@@ -1451,10 +1487,14 @@ Do NOT use any other tools until internal todolist is created.
 
       } catch (streamError) {
         console.error('[STREAMING] Stream processing error:', streamError);
-        await ctx.runMutation("streamingResponses.errorStreamingResponse", {
-          streamId,
-          errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
-        });
+        try {
+          await ctx.runMutation("streamingResponses.errorStreamingResponse", {
+            streamId,
+            errorMessage: streamError instanceof Error ? streamError.message : 'Unknown streaming error'
+          });
+        } catch (cleanupError) {
+          console.warn('[STREAMING] Error cleanup failed (non-critical):', cleanupError);
+        }
         throw streamError;
       }
 
@@ -1470,87 +1510,17 @@ Do NOT use any other tools until internal todolist is created.
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // Check auth context again during error to see if it changed
+      // Simple error cleanup - with batched updates, complex retries are unnecessary  
+      console.log(`[AI_STREAMING] Attempting simple error cleanup...`);
       try {
-        const errorTimeIdentity = await ctx.auth.getUserIdentity();
-        console.error(`[AI_STREAMING] Auth context during error:`, {
-          hasIdentity: !!errorTimeIdentity,
-          hasTokenIdentifier: !!errorTimeIdentity?.tokenIdentifier,
-          tokenIdentifierPrefix: errorTimeIdentity?.tokenIdentifier?.substring(0, 20) + '...'
-        });
-      } catch (authCheckError) {
-        console.error(`[AI_STREAMING] Could not check auth during error:`, authCheckError);
-      }
-      
-      // Try to mark as error if stream was created - with enhanced error isolation
-      console.log(`[AI_STREAMING] Attempting error cleanup with errorStreamingResponse...`);
-      
-      // Enhanced cleanup with multiple fallback strategies
-      let cleanupSuccess = false;
-      
-      // Strategy 1: Try the normal errorStreamingResponse mutation
-      try {
-        console.log(`[AI_STREAMING] Cleanup strategy 1: Using errorStreamingResponse mutation`);
         await ctx.runMutation("streamingResponses.errorStreamingResponse", {
           streamId,
-          errorMessage: error instanceof Error ? error.message : 'Failed to start streaming'
+          errorMessage: error instanceof Error ? error.message : 'Streaming failed'
         });
-        console.log(`[AI_STREAMING] Successfully marked stream as error during cleanup (strategy 1)`);
-        cleanupSuccess = true;
+        console.log(`[AI_STREAMING] Successfully marked stream as error`);
       } catch (cleanupError) {
-        console.error(`[AI_STREAMING] Cleanup strategy 1 failed:`, {
-          cleanupError: cleanupError instanceof Error ? cleanupError.message : cleanupError,
-          cleanupErrorType: cleanupError instanceof Error ? cleanupError.constructor.name : typeof cleanupError
-        });
-      }
-      
-      // Strategy 2: If normal cleanup failed, try the robust cleanup mechanism
-      if (!cleanupSuccess) {
-        try {
-          console.log(`[AI_STREAMING] Cleanup strategy 2: Using robust cleanup mechanism`);
-          
-          const robustCleanupResult = await ctx.runMutation("streamingResponses.robustCleanupStreamingResponse", {
-            streamId,
-            errorMessage: error instanceof Error ? error.message : 'Failed to start streaming',
-            forceCleanup: false // Still require auth for security
-          });
-          
-          if (robustCleanupResult.success) {
-            console.log(`[AI_STREAMING] Robust cleanup successful:`, robustCleanupResult);
-            cleanupSuccess = true;
-          }
-        } catch (robustCleanupError) {
-          console.error(`[AI_STREAMING] Cleanup strategy 2 (robust) failed:`, {
-            robustCleanupError: robustCleanupError instanceof Error ? robustCleanupError.message : robustCleanupError,
-            robustCleanupErrorType: robustCleanupError instanceof Error ? robustCleanupError.constructor.name : typeof robustCleanupError
-          });
-        }
-      }
-      
-      // Strategy 3: Last resort - force cleanup (only in extreme cases)
-      if (!cleanupSuccess) {
-        try {
-          console.log(`[AI_STREAMING] Cleanup strategy 3: Force cleanup (last resort)`);
-          
-          const forceCleanupResult = await ctx.runMutation("streamingResponses.robustCleanupStreamingResponse", {
-            streamId,
-            errorMessage: 'Force cleanup after all strategies failed',
-            forceCleanup: true // Allow cleanup even without auth
-          });
-          
-          if (forceCleanupResult.success) {
-            console.log(`[AI_STREAMING] Force cleanup successful:`, forceCleanupResult);
-            cleanupSuccess = true;
-          }
-        } catch (forceCleanupError) {
-          console.error(`[AI_STREAMING] Cleanup strategy 3 (force) failed:`, forceCleanupError);
-        }
-      }
-      
-      if (!cleanupSuccess) {
-        console.error(`[AI_STREAMING] === ALL CLEANUP STRATEGIES FAILED ===`);
-        console.error(`[AI_STREAMING] This may result in an orphaned streaming response record`);
-        console.error(`[AI_STREAMING] StreamId for manual cleanup: ${streamId}`);
+        console.warn(`[AI_STREAMING] Error cleanup failed (non-critical):`, cleanupError);
+        // Continue - this is non-critical with batched approach
       }
       
       throw error;
