@@ -129,11 +129,9 @@ export const updateStreamingTextHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamingResponses.updateStreamingContent, {
           streamId: args.streamId,
-          partialContent: args.accumulatedText,
-          isComplete: false,
-          status: "streaming",
+          textDelta: args.textDelta,
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -199,12 +197,12 @@ export const updateStreamingToolCallHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamingResponses.updateToolExecution, {
           streamId: args.streamId,
-          partialContent: args.accumulatedText,
-          toolCalls: args.toolCalls,
-          isComplete: false,
-          status: "streaming",
+          toolCallId: args.toolCallId,
+          toolName: args.toolName,
+          input: args.input,
+          status: "running",
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -273,12 +271,12 @@ export const updateStreamingToolResultHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamingResponses.updateToolExecution, {
           streamId: args.streamId,
-          partialContent: args.accumulatedText,
-          toolResults: args.toolResults,
-          isComplete: false,
-          status: "streaming",
+          toolCallId: args.toolCallId,
+          toolName: args.toolName,
+          output: args.output,
+          status: "completed",
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -348,8 +346,6 @@ export const finishStreamingHybrid = mutation({
         const legacyResult = await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
           streamId: args.streamId,
           finalContent: args.finalContent,
-          toolCalls: args.toolCalls,
-          toolResults: args.toolResults,
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -410,7 +406,7 @@ export const errorStreamingHybrid = mutation({
     // Mark legacy system as error
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.markStreamingError, {
+        const legacyResult = await ctx.runMutation(api.streamingResponses.errorStreamingResponse, {
           streamId: args.streamId,
           errorMessage: args.error,
         });
@@ -558,44 +554,44 @@ export const migrateLegacyStreamToEvents = mutation({
     });
     
     // Create text-delta events from final content
-    if (legacyStream.partialContent) {
+    if (legacyStream.content) {
       await ctx.runMutation(api.streamEvents.publishEvent, {
         streamId: args.streamId,
         eventType: "text-delta",
         payload: {
-          text: legacyStream.partialContent,
-          accumulated: legacyStream.partialContent,
+          text: legacyStream.content,
+          accumulated: legacyStream.content,
         },
       });
     }
     
     // Create tool events if they exist
-    if (legacyStream.toolCalls) {
-      for (const toolCall of legacyStream.toolCalls) {
+    if (legacyStream.toolExecutions) {
+      for (const toolExecution of legacyStream.toolExecutions) {
+        // Create tool-call event
         await ctx.runMutation(api.streamEvents.publishEvent, {
           streamId: args.streamId,
           eventType: "tool-call",
           payload: {
-            toolName: toolCall.name || "unknown",
-            toolCallId: toolCall.toolCallId || "migrated",
-            input: toolCall.args,
+            toolName: toolExecution.toolName || "unknown",
+            toolCallId: toolExecution.toolCallId || "migrated",
+            input: toolExecution.input,
           },
         });
-      }
-    }
-    
-    if (legacyStream.toolResults) {
-      for (const toolResult of legacyStream.toolResults) {
-        await ctx.runMutation(api.streamEvents.publishEvent, {
-          streamId: args.streamId,
-          eventType: "tool-result",
-          payload: {
-            toolName: toolResult.toolName || "unknown",
-            toolCallId: toolResult.toolCallId || "migrated",
-            output: toolResult.result,
-            success: true,
-          },
-        });
+        
+        // Create tool-result event if completed
+        if (toolExecution.status === "completed" && toolExecution.output) {
+          await ctx.runMutation(api.streamEvents.publishEvent, {
+            streamId: args.streamId,
+            eventType: "tool-result",
+            payload: {
+              toolName: toolExecution.toolName || "unknown",
+              toolCallId: toolExecution.toolCallId || "migrated",
+              output: toolExecution.output,
+              success: toolExecution.status === "completed",
+            },
+          });
+        }
       }
     }
     
@@ -610,9 +606,7 @@ export const migrateLegacyStreamToEvents = mutation({
       } else {
         await ctx.runMutation(api.streamEvents.finishStream, {
           streamId: args.streamId,
-          finalContent: legacyStream.partialContent || "",
-          toolCalls: legacyStream.toolCalls,
-          toolResults: legacyStream.toolResults,
+          finalContent: legacyStream.content || "",
         });
       }
     }

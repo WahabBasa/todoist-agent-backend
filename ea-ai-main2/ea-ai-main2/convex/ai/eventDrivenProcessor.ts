@@ -1,5 +1,6 @@
 import { ActionCtx } from "../_generated/server";
 import { api } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 import { streamText } from "ai";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
@@ -382,7 +383,7 @@ export async function processWithHybrid(
   // Start both systems
   await ctx.runMutation(api.streamingCompat.startStreamingHybrid, {
     streamId,
-    sessionId,
+    sessionId: sessionId as Id<"chatSessions">,
     userMessage,
     modelName,
     config: {

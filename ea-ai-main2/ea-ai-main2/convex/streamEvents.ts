@@ -267,7 +267,7 @@ export const getStreamEvents = query({
     }
     
     // Build the complete query chain before awaiting
-    const query = ctx.db
+    const results = await ctx.db
       .query("streamEvents")
       .withIndex("by_streamId_and_order", (q) => {
         if (args.fromOrder !== undefined) {
@@ -277,9 +277,11 @@ export const getStreamEvents = query({
       })
       .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
       .order("asc")
-      .take(args.limit ?? 100); // Apply limit in the chain
+      .collect();
     
-    return await query.collect();
+    // Apply limit after collection
+    const limit = args.limit ?? 100;
+    return results.slice(0, limit);
   },
 });
 
@@ -548,7 +550,7 @@ export const getEventsByType = query({
     
     for (const eventType of args.eventTypes) {
       // Build the complete query chain before awaiting
-      const eventsQuery = ctx.db
+      const events = await ctx.db
         .query("streamEvents")
         .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
         .filter((q) => 
@@ -558,11 +560,11 @@ export const getEventsByType = query({
           )
         )
         .order("asc")
-        .take(args.limit ?? 50);
+        .collect();
       
-      // Await only at the end
-      const events = await eventsQuery.collect();
-      results.push(...events);
+      // Apply limit after collection
+      const limit = args.limit ?? 50;
+      results.push(...events.slice(0, limit));
     }
     
     // Sort by order since we combined multiple queries

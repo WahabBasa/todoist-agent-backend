@@ -1213,8 +1213,8 @@ export const streamChatWithAI = action({
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[AI_STREAMING] Authenticated user: ${userId.substring(0, 20)}...`);
 
-    // Create unique stream ID
-    const streamId = crypto.randomUUID();
+    // Create unique stream ID using Web Crypto API compatible approach
+    const streamId = 'stream_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     
     try {
       // Step 1: Create streaming response document
