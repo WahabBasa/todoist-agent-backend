@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { api } from "./_generated/api";
 import { v, ConvexError } from "convex/values";
+import { Id } from "./_generated/dataModel";
 
 // =================================================================
 // STREAM EVENTS MANAGEMENT
@@ -133,7 +134,7 @@ export const publishEvent = mutation({
     const nextOrder = (lastEvent?.order ?? -1) + 1;
     
     // Get session info from the start event if needed
-    let sessionId: string | undefined;
+    let sessionId: Id<"chatSessions"> | undefined;
     let userMessage: string | undefined;
     
     if (nextOrder > 0) { // Not the start event, get context from start event
@@ -265,7 +266,8 @@ export const getStreamEvents = query({
       throw new ConvexError("Token identifier not found");
     }
     
-    let query = ctx.db
+    // Build the complete query chain before awaiting
+    const query = ctx.db
       .query("streamEvents")
       .withIndex("by_streamId_and_order", (q) => {
         if (args.fromOrder !== undefined) {
@@ -274,13 +276,8 @@ export const getStreamEvents = query({
         return q.eq("streamId", args.streamId);
       })
       .filter((q) => q.eq(q.field("tokenIdentifier"), tokenIdentifier))
-      .order("asc");
-      
-    if (args.limit) {
-      query = query.take(args.limit);
-    } else {
-      query = query.take(100); // Reasonable default
-    }
+      .order("asc")
+      .take(args.limit ?? 100); // Apply limit in the chain
     
     return await query.collect();
   },
@@ -369,7 +366,7 @@ export const finishStream = mutation({
     toolCalls: v.optional(v.array(v.any())),
     toolResults: v.optional(v.array(v.any())),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("Authentication required");
@@ -417,7 +414,7 @@ export const errorStream = mutation({
     )),
     recoverable: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const errorPayload: StreamEventPayload['stream-error'] = {
       error: args.error,
       errorType: args.errorType ?? 'system',
@@ -550,7 +547,8 @@ export const getEventsByType = query({
     const results = [];
     
     for (const eventType of args.eventTypes) {
-      const events = await ctx.db
+      // Build the complete query chain before awaiting
+      const eventsQuery = ctx.db
         .query("streamEvents")
         .withIndex("by_streamId", (q) => q.eq("streamId", args.streamId))
         .filter((q) => 
@@ -560,9 +558,10 @@ export const getEventsByType = query({
           )
         )
         .order("asc")
-        .take(args.limit ?? 50)
-        .collect();
+        .take(args.limit ?? 50);
       
+      // Await only at the end
+      const events = await eventsQuery.collect();
       results.push(...events);
     }
     

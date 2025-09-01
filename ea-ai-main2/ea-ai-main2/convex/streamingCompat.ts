@@ -451,7 +451,7 @@ export const getStreamingDataSmart = query({
     streamId: v.string(),
     preferEvents: v.optional(v.boolean()), // Default true
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<any> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new ConvexError("Authentication required");
@@ -462,13 +462,13 @@ export const getStreamingDataSmart = query({
     if (preferEvents) {
       // Try event system first
       try {
-        const eventState = await ctx.runQuery(api.streamEvents.getStreamState, {
+        const eventState: any = await ctx.runQuery(api.streamEvents.getStreamState, {
           streamId: args.streamId,
         });
         
         if (eventState) {
           // Reconstruct content from events
-          const reconstructed = await ctx.runQuery(api.streamEvents.reconstructStreamContent, {
+          const reconstructed: any = await ctx.runQuery(api.streamEvents.reconstructStreamContent, {
             streamId: args.streamId,
           });
           
@@ -496,7 +496,7 @@ export const getStreamingDataSmart = query({
     
     // Fall back to legacy system
     try {
-      const legacyData = await ctx.runQuery(api.streamingResponses.getStreamingResponse, {
+      const legacyData: any = await ctx.runQuery(api.streamingResponses.getStreamingResponse, {
         streamId: args.streamId,
       });
       
