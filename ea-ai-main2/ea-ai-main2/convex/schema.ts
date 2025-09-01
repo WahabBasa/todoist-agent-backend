@@ -119,6 +119,21 @@ const applicationTables = {
     .index("by_status", ["status"])
     .index("by_updatedAt", ["updatedAt"]), // For cleanup queries
 
+  // Event-Driven Streaming - OpenCode-inspired event sourcing for real-time updates
+  streamEvents: defineTable({
+    streamId: v.string(), // Unique identifier for the stream this event belongs to
+    tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
+    sessionId: v.optional(v.id("chatSessions")), // Link to chat session
+    eventType: v.string(), // Event type: 'stream-start', 'text-delta', 'tool-call', 'tool-result', 'stream-finish', 'stream-error'
+    payload: v.any(), // Event-specific data (varies by eventType)
+    order: v.number(), // Event sequence number within the stream (ensures correct ordering)
+    userMessage: v.optional(v.string()), // Original user message (stored on start-event for context)
+    createdAt: v.number(), // Event creation timestamp
+  }).index("by_streamId", ["streamId"])
+    .index("by_streamId_and_order", ["streamId", "order"])
+    .index("by_eventType", ["eventType"])
+    .index("by_tokenIdentifier", ["tokenIdentifier"]),
+
 };
 
 // Export schema with tokenIdentifier-based tables (big-brain pattern)

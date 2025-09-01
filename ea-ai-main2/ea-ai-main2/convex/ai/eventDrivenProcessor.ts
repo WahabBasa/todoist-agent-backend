@@ -1,4 +1,5 @@
 import { ActionCtx } from "../_generated/server";
+import { api } from "../_generated/api";
 import { streamText } from "ai";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
@@ -316,7 +317,7 @@ export class EventDrivenProcessor {
    */
   private async publishEvent(eventType: string, payload: any): Promise<void> {
     try {
-      await this.ctx.ctx.runMutation("streamEvents.publishEvent", {
+      await this.ctx.ctx.runMutation(api.streamEvents.publishEvent, {
         streamId: this.ctx.streamId,
         eventType,
         payload,
@@ -379,7 +380,7 @@ export async function processWithHybrid(
 ): Promise<ProcessingResult> {
   
   // Start both systems
-  await ctx.runMutation("streamingCompat.startStreamingHybrid", {
+  await ctx.runMutation(api.streamingCompat.startStreamingHybrid, {
     streamId,
     sessionId,
     userMessage,
@@ -400,7 +401,7 @@ export async function processWithHybrid(
   // Update legacy system for compatibility
   if (eventResult.success) {
     try {
-      await ctx.runMutation("streamingCompat.finishStreamingHybrid", {
+      await ctx.runMutation(api.streamingCompat.finishStreamingHybrid, {
         streamId,
         finalContent: eventResult.finalContent,
         toolCalls: eventResult.toolCallsExecuted,

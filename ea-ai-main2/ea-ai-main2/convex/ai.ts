@@ -1218,7 +1218,7 @@ export const streamChatWithAI = action({
     
     try {
       // Step 1: Create streaming response document
-      await ctx.runMutation("streamingResponses.createStreamingResponse", {
+      await ctx.runMutation(api.streamingResponses.createStreamingResponse, {
         streamId,
         sessionId,
         userMessage: message,
@@ -1248,7 +1248,7 @@ export const streamChatWithAI = action({
       
       // Mark stream as error
       try {
-        await ctx.runMutation("streamingResponses.errorStreamingResponse", {
+        await ctx.runMutation(api.streamingResponses.errorStreamingResponse, {
           streamId,
           errorMessage: error instanceof Error ? error.message : "Stream processing failed"
         });
@@ -1307,12 +1307,12 @@ async function processAIStreamingInBackground(ctx: any, {
     console.log(`[AI_STREAMING] Duplicate request detected: ${cacheKey}`);
     MessageCaching.incrementCacheHit();
     
-    await ctx.runMutation("streamingResponses.updateStreamingContent", {
+    await ctx.runMutation(api.streamingResponses.updateStreamingContent, {
       streamId,
       textDelta: "This request appears identical to a recent one. Please wait a moment before trying again."
     });
     
-    await ctx.runMutation("streamingResponses.completeStreamingResponse", {
+    await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
       streamId,
       finalContent: "This request appears identical to a recent one. Please wait a moment before trying again."
     });
@@ -1447,7 +1447,7 @@ Do NOT use any other tools until internal todolist is created.
         if (part.type === 'text-delta' && part.text) {
           accumulatedText += part.text;
           // Update the streaming document with each text chunk - this triggers frontend updates
-          await ctx.runMutation("streamingResponses.updateStreamingContent", {
+          await ctx.runMutation(api.streamingResponses.updateStreamingContent, {
             streamId,
             textDelta: part.text,
           });
@@ -1456,11 +1456,11 @@ Do NOT use any other tools until internal todolist is created.
         if (part.type === 'tool-call') {
           console.log(`[AI_STREAMING] Tool call: ${part.toolName}`);
           // Update tool execution status
-          await ctx.runMutation("streamingResponses.updateToolExecution", {
+          await ctx.runMutation(api.streamingResponses.updateToolExecution, {
             streamId,
             toolCallId: part.toolCallId,
             toolName: part.toolName,
-            input: part.args,
+            input: part.input,
             status: "running" as const,
             startTime: Date.now(),
           });
@@ -1469,11 +1469,11 @@ Do NOT use any other tools until internal todolist is created.
         if (part.type === 'tool-result') {
           console.log(`[AI_STREAMING] Tool result: ${part.toolName}`);
           // Update tool execution with result
-          await ctx.runMutation("streamingResponses.updateToolExecution", {
+          await ctx.runMutation(api.streamingResponses.updateToolExecution, {
             streamId,
             toolCallId: part.toolCallId,
             toolName: part.toolName,
-            output: part.result,
+            output: part.output,
             status: "completed" as const,
             endTime: Date.now(),
           });
@@ -1515,7 +1515,7 @@ Do NOT use any other tools until internal todolist is created.
         for await (const part of fallbackResult.fullStream) {
           if (part.type === 'text-delta' && part.text) {
             fallbackAccumulated += part.text;
-            await ctx.runMutation("streamingResponses.updateStreamingContent", {
+            await ctx.runMutation(api.streamingResponses.updateStreamingContent, {
               streamId,
               textDelta: part.text,
             });
@@ -1548,7 +1548,7 @@ Do NOT use any other tools until internal todolist is created.
       });
       
       // Mark streaming as complete
-      await ctx.runMutation("streamingResponses.completeStreamingResponse", {
+      await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
         streamId,
         finalContent: text
       });

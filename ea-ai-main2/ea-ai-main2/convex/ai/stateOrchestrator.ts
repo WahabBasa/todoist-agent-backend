@@ -1,4 +1,5 @@
 import { ActionCtx } from "../_generated/server";
+import { api } from "../_generated/api";
 import { ToolResult, SideEffect } from "./tools/pureTools";
 
 // =================================================================
@@ -215,22 +216,22 @@ export class StateOrchestrator {
     try {
       switch (operation) {
         case 'aiInternalTodos.updateInternalTodos':
-          return await this.ctx.actionCtx.runMutation("aiInternalTodos.updateInternalTodos", args);
+          return await this.ctx.actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos, args);
           
         case 'mentalModels.editMentalModel':
-          return await this.ctx.actionCtx.runMutation("mentalModels.editMentalModel", args);
+          return await this.ctx.actionCtx.runMutation(api.mentalModels.editMentalModel, args);
           
         case 'streamEvents.publishEvent':
-          return await this.ctx.actionCtx.runMutation("streamEvents.publishEvent", args);
+          return await this.ctx.actionCtx.runMutation(api.streamEvents.publishEvent, args);
           
         case 'streamingCompat.updateStreamingTextHybrid':
-          return await this.ctx.actionCtx.runMutation("streamingCompat.updateStreamingTextHybrid", args);
+          return await this.ctx.actionCtx.runMutation(api.streamingCompat.updateStreamingTextHybrid, args);
           
         case 'streamingCompat.updateStreamingToolCallHybrid':
-          return await this.ctx.actionCtx.runMutation("streamingCompat.updateStreamingToolCallHybrid", args);
+          return await this.ctx.actionCtx.runMutation(api.streamingCompat.updateStreamingToolCallHybrid, args);
           
         case 'streamingCompat.updateStreamingToolResultHybrid':
-          return await this.ctx.actionCtx.runMutation("streamingCompat.updateStreamingToolResultHybrid", args);
+          return await this.ctx.actionCtx.runMutation(api.streamingCompat.updateStreamingToolResultHybrid, args);
           
         default:
           throw new Error(`Unknown mutation operation: ${operation}`);
@@ -248,16 +249,16 @@ export class StateOrchestrator {
     try {
       switch (operation) {
         case 'aiInternalTodos.getInternalTodos':
-          return await this.ctx.actionCtx.runQuery("aiInternalTodos.getInternalTodos", args);
+          return await this.ctx.actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, args);
           
         case 'mentalModels.getUserMentalModel':
-          return await this.ctx.actionCtx.runQuery("mentalModels.getUserMentalModel", args);
+          return await this.ctx.actionCtx.runQuery(api.mentalModels.getUserMentalModel, args);
           
         case 'streamEvents.getStreamState':
-          return await this.ctx.actionCtx.runQuery("streamEvents.getStreamState", args);
+          return await this.ctx.actionCtx.runQuery(api.streamEvents.getStreamState, args);
           
         case 'streamEvents.getStreamEvents':
-          return await this.ctx.actionCtx.runQuery("streamEvents.getStreamEvents", args);
+          return await this.ctx.actionCtx.runQuery(api.streamEvents.getStreamEvents, args);
           
         default:
           throw new Error(`Unknown query operation: ${operation}`);
@@ -349,7 +350,7 @@ export class StateOrchestrator {
    */
   private async publishEvent(eventType: string, payload: any): Promise<string> {
     try {
-      const result = await this.ctx.actionCtx.runMutation("streamEvents.publishEvent", {
+      const result = await this.ctx.actionCtx.runMutation(api.streamEvents.publishEvent, {
         streamId: this.ctx.streamId,
         eventType,
         payload,

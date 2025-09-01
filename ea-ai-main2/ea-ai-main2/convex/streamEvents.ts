@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import { v, ConvexError } from "convex/values";
 
 // =================================================================
@@ -393,7 +394,7 @@ export const finishStream = mutation({
       toolResults: args.toolResults,
     };
     
-    return await ctx.runMutation("streamEvents.publishEvent", {
+    return await ctx.runMutation(api.streamEvents.publishEvent, {
       streamId: args.streamId,
       eventType: 'stream-finish',
       payload: finishPayload,
@@ -423,7 +424,7 @@ export const errorStream = mutation({
       recoverable: args.recoverable ?? false,
     };
     
-    return await ctx.runMutation("streamEvents.publishEvent", {
+    return await ctx.runMutation(api.streamEvents.publishEvent, {
       streamId: args.streamId,
       eventType: 'stream-error',
       payload: errorPayload,
