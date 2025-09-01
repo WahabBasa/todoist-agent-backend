@@ -3,7 +3,6 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
 import { WebhookEvent } from "@clerk/backend";
-import { streamChat } from "./chatActions";
 
 const http = httpRouter();
 
@@ -214,11 +213,5 @@ http.route({
   }),
 });
 
-// Streaming chat endpoint using persistent text streaming component
-http.route({
-  path: "/chat-stream",
-  method: "POST",
-  handler: streamChat,
-});
 
 export default http;

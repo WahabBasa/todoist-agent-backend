@@ -8,13 +8,10 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_eventDrivenProcessor from "../ai/eventDrivenProcessor.js";
+import type * as ai_mentalModel from "../ai/mentalModel.js";
+import type * as ai_messageConversion from "../ai/messageConversion.js";
 import type * as ai_messageV2 from "../ai/messageV2.js";
 import type * as ai_processor from "../ai/processor.js";
 import type * as ai_session from "../ai/session.js";
@@ -40,6 +37,7 @@ import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as http from "../http.js";
 import type * as mentalModels from "../mentalModels.js";
 import type * as migrateTokens from "../migrateTokens.js";
+import type * as shared_tools from "../shared/tools.js";
 import type * as streamEvents from "../streamEvents.js";
 import type * as streamingCompat from "../streamingCompat.js";
 import type * as streamingResponses from "../streamingResponses.js";
@@ -48,6 +46,12 @@ import type * as todoist_integration from "../todoist/integration.js";
 import type * as todoist_model from "../todoist/model.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
 import type * as todoist_userAccess from "../todoist/userAccess.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -60,6 +64,8 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
 declare const fullApi: ApiFromModules<{
   "ai/caching": typeof ai_caching;
   "ai/eventDrivenProcessor": typeof ai_eventDrivenProcessor;
+  "ai/mentalModel": typeof ai_mentalModel;
+  "ai/messageConversion": typeof ai_messageConversion;
   "ai/messageV2": typeof ai_messageV2;
   "ai/processor": typeof ai_processor;
   "ai/session": typeof ai_session;
@@ -85,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mentalModels: typeof mentalModels;
   migrateTokens: typeof migrateTokens;
+  "shared/tools": typeof shared_tools;
   streamEvents: typeof streamEvents;
   streamingCompat: typeof streamingCompat;
   streamingResponses: typeof streamingResponses;
@@ -94,11 +101,51 @@ declare const fullApi: ApiFromModules<{
   "todoist/syncApi": typeof todoist_syncApi;
   "todoist/userAccess": typeof todoist_userAccess;
 }>;
+declare const fullApiWithMounts: typeof fullApi;
+
 export declare const api: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {
+  persistentTextStreaming: {
+    lib: {
+      addChunk: FunctionReference<
+        "mutation",
+        "internal",
+        { final: boolean; streamId: string; text: string },
+        any
+      >;
+      createStream: FunctionReference<"mutation", "internal", {}, any>;
+      getStreamStatus: FunctionReference<
+        "query",
+        "internal",
+        { streamId: string },
+        "pending" | "streaming" | "done" | "error" | "timeout"
+      >;
+      getStreamText: FunctionReference<
+        "query",
+        "internal",
+        { streamId: string },
+        {
+          status: "pending" | "streaming" | "done" | "error" | "timeout";
+          text: string;
+        }
+      >;
+      setStreamStatus: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          status: "pending" | "streaming" | "done" | "error" | "timeout";
+          streamId: string;
+        },
+        any
+      >;
+    };
+  };
+};

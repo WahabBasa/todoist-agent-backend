@@ -19,7 +19,6 @@
     "@clerk/backend": "^2.9.4",
     "@clerk/clerk-react": "^5.43.1",
     "@clerk/themes": "^2.4.13",
-    "@convex-dev/persistent-text-streaming": "^0.2.3",
     "@hookform/resolvers": "^5.2.1",
     "@icons-pack/react-simple-icons": "^13.7.0",
     "@openrouter/ai-sdk-provider": "^1.1.2",
