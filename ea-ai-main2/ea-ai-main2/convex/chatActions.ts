@@ -11,10 +11,17 @@ import { z } from "zod";
 // Declare the components global that Convex provides when app is configured with components
 declare const components: any;
 
-// Initialize the persistent text streaming component for Node.js runtime
-const persistentTextStreaming = new PersistentTextStreaming(
-  components.persistentTextStreaming
-);
+// Lazy initialize the persistent text streaming component for Node.js runtime
+let persistentTextStreaming: PersistentTextStreaming | null = null;
+
+function getPersistentTextStreaming(): PersistentTextStreaming {
+  if (!persistentTextStreaming) {
+    persistentTextStreaming = new PersistentTextStreaming(
+      components.persistentTextStreaming
+    );
+  }
+  return persistentTextStreaming;
+}
 
 // Simple tools for basic functionality
 const plannerTools = {
@@ -297,7 +304,7 @@ This user prefers direct, efficient task management assistance. Provide clear, a
   };
 
   // Use the persistent text streaming component to handle the stream
-  const response = await persistentTextStreaming.stream(
+  const response = await getPersistentTextStreaming().stream(
     ctx,
     request,
     body.streamId as StreamId,

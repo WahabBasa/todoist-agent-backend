@@ -5,10 +5,17 @@ import { PersistentTextStreaming, StreamIdValidator } from "@convex-dev/persiste
 // Declare the components global that Convex provides when app is configured with components
 declare const components: any;
 
-// Initialize the persistent text streaming component at module level
-const persistentTextStreaming = new PersistentTextStreaming(
-  components.persistentTextStreaming
-);
+// Lazy initialize the persistent text streaming component
+let persistentTextStreaming: PersistentTextStreaming | null = null;
+
+function getPersistentTextStreaming(): PersistentTextStreaming {
+  if (!persistentTextStreaming) {
+    persistentTextStreaming = new PersistentTextStreaming(
+      components.persistentTextStreaming
+    );
+  }
+  return persistentTextStreaming;
+}
 
 /**
  * Create a new chat stream using the persistent text streaming component
@@ -33,7 +40,7 @@ export const createChat = mutation({
     }
 
     // Create a stream using the component
-    const streamId = await persistentTextStreaming.createStream(ctx);
+    const streamId = await getPersistentTextStreaming().createStream(ctx);
     
     // Store the chat conversation in the database
     const chatId = await ctx.db.insert("conversations", {
@@ -81,7 +88,7 @@ export const getChatBody = query({
     streamId: StreamIdValidator,
   },
   handler: async (ctx, args) => {
-    return await persistentTextStreaming.getStreamBody(
+    return await getPersistentTextStreaming().getStreamBody(
       ctx,
       args.streamId
     );
