@@ -112,15 +112,11 @@ Error loading mental model - AI should use default behavior and attempt to creat
 
     // Return streaming response with post-stream persistence
     return result.toUIMessageStreamResponse({
-      onFinish: async (finishResult) => {
+      onFinish: async ({ messages }) => {
         // Save conversation to Convex after streaming completes
+        // messages already contains the complete conversation including the new assistant response
         await saveConversationToConvex(ctx, {
-          messages: [...allMessages, {
-            role: "assistant",
-            content: finishResult.text,
-            toolCalls: finishResult.toolCalls,
-            timestamp: Date.now()
-          }],
+          messages,
           sessionId,
           tokenIdentifier
         });
