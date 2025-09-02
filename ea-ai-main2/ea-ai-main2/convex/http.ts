@@ -219,29 +219,54 @@ http.route({
   path: "/api/chat",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Handle CORS preflight requests
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      });
+    }
+
     try {
       const { messages, sessionId } = await request.json();
       
       // Get user authentication from request headers
       const authHeader = request.headers.get("Authorization");
       if (!authHeader) {
-        return new Response("Unauthorized", { status: 401 });
+        return new Response("Unauthorized", { 
+          status: 401,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
       }
 
       // Import streaming logic
       const { createChatStreamResponse } = await import("./chatStream");
       
-      return createChatStreamResponse({
+      const response = await createChatStreamResponse({
         ctx,
         messages,
         sessionId,
         authHeader
       });
+
+      // Add CORS headers to the streaming response
+      response.headers.set("Access-Control-Allow-Origin", "*");
+      
+      return response;
       
     } catch (error) {
       console.error("Chat API error:", error);
       return new Response("Error processing chat request", {
         status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+        },
       });
     }
   }),

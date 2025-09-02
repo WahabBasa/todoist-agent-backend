@@ -74,7 +74,7 @@ export function Chat({ sessionId }: ChatProps) {
     setMessages
   } = useChat({
     transport: new DefaultChatTransport({
-      api: `${import.meta.env.VITE_CONVEX_URL}/convex-http/api/chat`, // Points to our Convex HTTP route
+      api: `${import.meta.env.VITE_CONVEX_URL.replace('.convex.cloud', '.convex.site')}/api/chat`, // HTTP actions use .convex.site domain
       headers: async () => {
         // Get Clerk JWT token for authentication
         if (!user) throw new Error('User not authenticated')
