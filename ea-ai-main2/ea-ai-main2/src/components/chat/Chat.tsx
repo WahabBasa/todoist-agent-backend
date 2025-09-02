@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAction, useQuery, useMutation } from "convex/react"
+import { useQuery, useMutation } from "convex/react"
+import { useUser } from '@clerk/clerk-react'
+import { useChat } from '@ai-sdk/react'
 import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -7,7 +9,6 @@ import { Id } from "../../../convex/_generated/dataModel"
 
 import { ChatMessages } from './ChatMessages'
 import { ChatPanel } from './ChatPanel'
-import { useConvexStreamingChat } from '@/hooks/use-convex-streaming-chat'
 
 // Define section structure (matching Morphic pattern)
 interface ChatSection {
@@ -29,68 +30,80 @@ interface ChatProps {
 export function Chat({ sessionId }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
+  const [isComposing, setIsComposing] = useState(false)
+  const [enterDisabled, setEnterDisabled] = useState(false)
+  const { user } = useUser()
   
-  // Use simple Convex-native streaming with built-in real-time subscriptions
-  const { 
-    streamingMessage, 
-    isStreaming, 
-    streamingError,
-    sendStreamingMessage, 
-    clearStreaming 
-  } = useConvexStreamingChat({ 
-    sessionId
-  })
-  
-  // Convex integration with session support (keep for fallback and session management)
-  const chatWithAI = useAction(api.ai.chatWithAI)
+  // Convex integration for session management
   const createDefaultSession = useMutation(api.chatSessions.createDefaultSession)
-  const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage)
   
-  // Big-brain pattern: Query for default session (returns null if user not found)
+  // Query for default session
   const defaultSession = useQuery(api.chatSessions.getDefaultSession, {})
   
-  // Use session-aware conversation query or fallback to legacy
+  // Load initial conversation data
   const conversation = useQuery(api.conversations.getConversationBySession, 
     sessionId ? { sessionId } : { sessionId: undefined }
   )
-  
-  // Fallback to default session query if no session ID provided
   const defaultConversation = useQuery(api.conversations.getConversation, 
     sessionId ? undefined : {}
   )
-  
-  // Use the appropriate conversation data
   const activeConversation = sessionId ? conversation : defaultConversation
-  
-  // Local state for chat interface
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [useHaiku] = useState(false)
-  const [isComposing, setIsComposing] = useState(false)
-  const [enterDisabled, setEnterDisabled] = useState(false)
-  
-  // Local pending user message for immediate UI feedback
-  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null)
 
-  // Convert existing conversation messages to display format
-  const messages = useMemo(() => {
-    return activeConversation ? 
-      ((activeConversation.messages as any[]) || [])
-        .filter(msg => msg.role === "user" || msg.role === "assistant")
-        .map((msg, index) => ({
-          id: `${msg.timestamp}-${index}`,
-          role: msg.role as 'user' | 'assistant',
-          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        }))
-      : []
+  // Get saved messages for initial state
+  const savedMessages = useMemo(() => {
+    if (!activeConversation?.messages) return []
+    
+    return (activeConversation.messages as any[])
+      .filter(msg => msg.role === "user" || msg.role === "assistant")
+      .map((msg, index) => ({
+        id: `${msg.timestamp}-${index}`,
+        role: msg.role as 'user' | 'assistant',
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      }))
   }, [activeConversation])
 
-  // Convert messages array to sections array with streaming support
+  // Vercel AI SDK useChat hook - pointing to our HTTP API route
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: aiHandleSubmit,
+    isLoading,
+    stop,
+    append,
+    setMessages,
+    data
+  } = useChat({
+    api: '/convex-http/api/chat', // Points to our Convex HTTP route
+    headers: async () => {
+      // Get Clerk JWT token for authentication
+      if (!user) throw new Error('User not authenticated')
+      const token = await user.getToken()
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    },
+    body: {
+      sessionId: sessionId || (defaultSession?._id)
+    },
+    initialMessages: savedMessages,
+    onFinish: async (message, options) => {
+      // Note: Conversation saving is now handled in the chatStream.ts onFinish callback
+      // Just trigger chat history update for UI refresh
+      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+    },
+    onError: (error) => {
+      console.error('Chat error:', error)
+      toast.error(`Chat error: ${error.message}`)
+    }
+  })
+
+  // Convert messages array to sections array (matching Morphic pattern)
   const sections = useMemo<ChatSection[]>(() => {
     const result: ChatSection[] = []
     let currentSection: ChatSection | null = null
 
-    // Process existing conversation messages
     for (const message of messages) {
       if (message.role === 'user') {
         // Start a new section when a user message is found
@@ -106,7 +119,6 @@ export function Chat({ sessionId }: ChatProps) {
         // Add assistant message to the current section
         currentSection.assistantMessages.push(message)
       }
-      // Ignore other role types
     }
 
     // Add the last section if exists
@@ -114,31 +126,17 @@ export function Chat({ sessionId }: ChatProps) {
       result.push(currentSection)
     }
 
-    // Add pending user message + streaming response as new section
-    if (pendingUserMessage) {
-      const streamingSection: ChatSection = {
-        id: pendingUserMessage.id,
-        userMessage: pendingUserMessage,
-        assistantMessages: streamingMessage ? [{
-          id: streamingMessage.id,
-          role: 'assistant',
-          content: streamingMessage.content
-        }] : []
-      }
-      result.push(streamingSection)
-    }
-
     return result
-  }, [messages, pendingUserMessage, streamingMessage])
+  }, [messages])
 
-  // Detect if scroll container is at the bottom (matching Morphic)
+  // Detect if scroll container is at the bottom
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      const threshold = 50 // threshold in pixels
+      const threshold = 50
       if (scrollHeight - scrollTop - clientHeight < threshold) {
         setIsAtBottom(true)
       } else {
@@ -147,17 +145,16 @@ export function Chat({ sessionId }: ChatProps) {
     }
 
     container.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll() // Set initial state
+    handleScroll()
 
     return () => container.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Scroll to the section when a new user message is sent (matching Morphic)
+  // Scroll to the section when a new user message is sent
   useEffect(() => {
     if (sections.length > 0) {
       const lastMessage = messages[messages.length - 1]
       if (lastMessage && lastMessage.role === 'user') {
-        // If the last message is from user, find the corresponding section
         const sectionId = lastMessage.id
         requestAnimationFrame(() => {
           const sectionElement = document.getElementById(`section-${sectionId}`)
@@ -167,14 +164,10 @@ export function Chat({ sessionId }: ChatProps) {
     }
   }, [sections, messages])
 
-  // Streaming handleSubmit with immediate user message display
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!input.trim() || isLoading || isStreaming) return
-
-    setIsLoading(true)
-    const inputValue = input.trim()
-    setInput("")
+    if (!input.trim() || isLoading) return
 
     try {
       // Handle session management
@@ -187,49 +180,24 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Create pending user message for immediate UI feedback
-      const userMessage: Message = {
-        id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-        role: 'user',
-        content: inputValue
-      }
-      
-      // Immediately show user message in UI
-      setPendingUserMessage(userMessage)
-
-      // Start streaming response
-      console.log('[Chat] Starting streaming for message:', inputValue.substring(0, 50) + '...')
-      await sendStreamingMessage(inputValue, useHaiku)
-
-      // Update chat title if this is the first message
-      if (messages.length === 0 && currentSessionId) {
-        try {
-          await updateChatTitle({
-            sessionId: currentSessionId,
-            firstMessage: inputValue
-          })
-        } catch (error) {
-          console.warn("Failed to update chat title:", error)
+      // Update the body with current session ID
+      aiHandleSubmit(e, {
+        body: {
+          sessionId: currentSessionId
         }
-      }
+      })
 
-      // Trigger chat history update
-      window.dispatchEvent(new CustomEvent('chat-history-updated'))
-      
     } catch (error) {
-      console.error("Streaming chat error:", error)
-      toast.error(streamingError || "Failed to send message")
-      
-      // Clear pending message on error
-      setPendingUserMessage(null)
-      clearStreaming()
-    } finally {
-      setIsLoading(false)
+      console.error("Chat submission error:", error)
+      toast.error("Failed to send message")
     }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
+  const onQuerySelect = (query: string) => {
+    append({
+      role: 'user',
+      content: query
+    })
   }
 
   const handleCompositionStart = () => setIsComposing(true)
@@ -242,47 +210,8 @@ export function Chat({ sessionId }: ChatProps) {
     }, 300)
   }
 
-  const onQuerySelect = (query: string) => {
-    setInput(query)
-  }
-
-  // Cleanup completed streams and pending messages
-  useEffect(() => {
-    if (streamingMessage?.isComplete) {
-      // Small delay to let user see the completed response
-      const timer = setTimeout(() => {
-        setPendingUserMessage(null)
-        clearStreaming()
-      }, 1000)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [streamingMessage?.isComplete, clearStreaming])
-
-  // Handle streaming errors
-  useEffect(() => {
-    if (streamingError) {
-      console.error('[Chat] Streaming error:', streamingError)
-      toast.error('Streaming failed: ' + streamingError)
-    }
-  }, [streamingError])
-
-  // Simple debug logging for streaming progress
-  useEffect(() => {
-    if (streamingMessage) {
-      console.log('[Chat] Convex streaming update:', {
-        mode: 'CONVEX_NATIVE',
-        streamId: streamingMessage.id,
-        contentLength: streamingMessage.content.length,
-        isComplete: streamingMessage.isComplete,
-        status: streamingMessage.status,
-      })
-    }
-  }, [streamingMessage])
-
-  // Big-brain pattern: Show loading state while user authentication is resolving
-  // defaultSession is undefined during auth loading, null when user not found/created yet
-  if (activeConversation === undefined && !sessionId && defaultSession === undefined) {
+  // Show loading state while authentication is resolving
+  if (!user || (activeConversation === undefined && !sessionId && defaultSession === undefined)) {
     return (
       <div className="h-full flex flex-col bg-background">
         <div className="flex-1 flex flex-col items-center justify-center p-6">
@@ -306,16 +235,15 @@ export function Chat({ sessionId }: ChatProps) {
       <ChatMessages
         sections={sections}
         onQuerySelect={onQuerySelect}
-        isLoading={isLoading || isStreaming}
+        isLoading={isLoading}
         scrollContainerRef={scrollContainerRef}
-        streamingMessageId={streamingMessage?.id}
-        isStreaming={isStreaming}
+        isStreaming={isLoading}
       />
       <ChatPanel
         input={input}
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
-        isLoading={isLoading || isStreaming}
+        isLoading={isLoading}
         messages={messages}
         showScrollToBottomButton={!isAtBottom}
         scrollContainerRef={scrollContainerRef}

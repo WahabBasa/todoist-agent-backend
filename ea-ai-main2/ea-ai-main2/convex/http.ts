@@ -214,4 +214,37 @@ http.route({
 });
 
 
+// AI Chat streaming route - using Vercel AI SDK properly in HTTP context
+http.route({
+  path: "/api/chat",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const { messages, sessionId } = await request.json();
+      
+      // Get user authentication from request headers
+      const authHeader = request.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      // Import streaming logic
+      const { createChatStreamResponse } = await import("./chatStream");
+      
+      return createChatStreamResponse({
+        ctx,
+        messages,
+        sessionId,
+        authHeader
+      });
+      
+    } catch (error) {
+      console.error("Chat API error:", error);
+      return new Response("Error processing chat request", {
+        status: 500,
+      });
+    }
+  }),
+});
+
 export default http;

@@ -55,7 +55,7 @@ export const startStreamingHybrid = mutation({
     // Create legacy streaming response if enabled
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.createStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.startStream, {
           streamId: args.streamId,
           sessionId: args.sessionId,
           userMessage: args.userMessage,
@@ -129,9 +129,10 @@ export const updateStreamingTextHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateStreamingContent, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.publishEvent, {
           streamId: args.streamId,
-          textDelta: args.textDelta,
+          eventType: "text-delta",
+          payload: { text: args.textDelta },
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -197,12 +198,14 @@ export const updateStreamingToolCallHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateToolExecution, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.publishEvent, {
           streamId: args.streamId,
-          toolCallId: args.toolCallId,
-          toolName: args.toolName,
-          input: args.input,
-          status: "running",
+          eventType: "tool-call",
+          payload: {
+            toolName: args.toolName,
+            toolCallId: args.toolCallId,
+            input: args.input,
+          },
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -271,12 +274,16 @@ export const updateStreamingToolResultHybrid = mutation({
     // Update legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.updateToolExecution, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.publishEvent, {
           streamId: args.streamId,
-          toolCallId: args.toolCallId,
-          toolName: args.toolName,
-          output: args.output,
-          status: "completed",
+          eventType: "tool-result",
+          payload: {
+            toolName: args.toolName,
+            toolCallId: args.toolCallId,
+            output: args.output,
+            success: args.success ?? true,
+            error: args.error,
+          },
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -343,7 +350,7 @@ export const finishStreamingHybrid = mutation({
     // Complete legacy system
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.completeStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.finishStream, {
           streamId: args.streamId,
           finalContent: args.finalContent,
         });
@@ -406,9 +413,9 @@ export const errorStreamingHybrid = mutation({
     // Mark legacy system as error
     if (config.useLegacySystem || config.hybridMode) {
       try {
-        const legacyResult = await ctx.runMutation(api.streamingResponses.errorStreamingResponse, {
+        const legacyResult = await ctx.runMutation(api.streamEvents.errorStream, {
           streamId: args.streamId,
-          errorMessage: args.error,
+          error: args.error,
         });
         results.legacy = legacyResult;
       } catch (error) {
@@ -492,7 +499,7 @@ export const getStreamingDataSmart = query({
     
     // Fall back to legacy system
     try {
-      const legacyData: any = await ctx.runQuery(api.streamingResponses.getStreamingResponse, {
+      const legacyData: any = await ctx.runQuery(api.streamEvents.getStreamState, {
         streamId: args.streamId,
       });
       
@@ -525,7 +532,7 @@ export const migrateLegacyStreamToEvents = mutation({
     }
     
     // Get legacy stream data
-    const legacyStream = await ctx.runQuery(api.streamingResponses.getStreamingResponse, {
+    const legacyStream = await ctx.runQuery(api.streamEvents.getStreamState, {
       streamId: args.streamId,
     });
     
