@@ -1,4 +1,4 @@
-"use client";
+
 
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton } from "@clerk/clerk-react";

@@ -1,11 +1,11 @@
-"use client";
+
 
 import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { dark } from "@clerk/themes";
 import { ThemeProvider } from "./theme-provider";
-import { useTheme } from "next-themes";
+import { useTheme } from "./theme-provider";
 
 const convex = new ConvexReactClient(
   import.meta.env.VITE_CONVEX_URL as string
