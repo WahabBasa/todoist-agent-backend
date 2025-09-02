@@ -84,6 +84,7 @@ export function ChatPanel({
         <div className="relative flex flex-col w-full gap-primary bg-muted rounded-design-lg border border-input">
           <Textarea
             ref={inputRef}
+            id="chat-input"
             name="input"
             rows={2}
             maxRows={5}
