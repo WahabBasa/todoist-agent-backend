@@ -518,6 +518,38 @@ export const getStreamingDataSmart = query({
 });
 
 /**
+ * Helper function to reconstruct tool executions from tool events
+ */
+function reconstructToolExecutionsFromEvents(toolEvents: any[]): any[] {
+  const toolCallMap = new Map<string, any>();
+  
+  // Group tool events by toolCallId
+  for (const event of toolEvents) {
+    const payload = event.payload;
+    const toolCallId = payload.toolCallId;
+    
+    if (event.eventType === "tool-call") {
+      toolCallMap.set(toolCallId, {
+        toolName: payload.toolName,
+        toolCallId: payload.toolCallId,
+        input: payload.input,
+        output: null,
+        status: "pending",
+      });
+    } else if (event.eventType === "tool-result") {
+      const toolCall = toolCallMap.get(toolCallId);
+      if (toolCall) {
+        toolCall.output = payload.output;
+        toolCall.status = payload.success ? "completed" : "error";
+      }
+    }
+  }
+  
+  // Convert map values to array
+  return Array.from(toolCallMap.values());
+}
+
+/**
  * Migration utility: Convert legacy stream to events
  */
 export const migrateLegacyStreamToEvents = mutation({
@@ -531,50 +563,58 @@ export const migrateLegacyStreamToEvents = mutation({
       throw new ConvexError("Authentication required");
     }
     
-    // Get legacy stream data
-    const legacyStream = await ctx.runQuery(api.streamEvents.getStreamState, {
+    // Get stream metadata
+    const streamMetadata = await ctx.runQuery(api.streamEvents.getStreamState, {
       streamId: args.streamId,
     });
     
-    if (!legacyStream) {
-      throw new ConvexError(`Legacy stream not found: ${args.streamId}`);
+    if (!streamMetadata) {
+      throw new ConvexError(`Stream not found: ${args.streamId}`);
     }
     
-    // Check if events already exist
-    const existingEvents = await ctx.runQuery(api.streamEvents.getStreamState, {
+    // Reconstruct content from events
+    const contentResult = await ctx.runQuery(api.streamEvents.reconstructStreamContent, {
       streamId: args.streamId,
     });
     
-    if (existingEvents) {
+    // Get tool events for reconstruction
+    const toolEvents = await ctx.runQuery(api.streamEvents.getEventsByType, {
+      streamId: args.streamId,
+      eventTypes: ["tool-call", "tool-result"],
+    });
+    
+    // Check if this is actually a migration scenario (stream already has events)
+    if (streamMetadata.totalEvents > 0) {
       return {
         success: true,
-        message: "Events already exist for this stream",
+        message: "Stream already exists in event system",
         streamId: args.streamId,
       };
     }
     
-    // Create event stream from legacy data
-    const startResult = await ctx.runMutation(api.streamEvents.startStream, {
+    // Create event stream from metadata
+    await ctx.runMutation(api.streamEvents.startStream, {
       streamId: args.streamId,
-      sessionId: legacyStream.sessionId,
-      userMessage: legacyStream.userMessage || "Migrated stream",
+      sessionId: streamMetadata.sessionId,
+      userMessage: streamMetadata.userMessage || "Migrated stream",
     });
     
-    // Create text-delta events from final content
-    if (legacyStream.content) {
+    // Create text-delta events from reconstructed content
+    if (contentResult && contentResult.finalContent) {
       await ctx.runMutation(api.streamEvents.publishEvent, {
         streamId: args.streamId,
         eventType: "text-delta",
         payload: {
-          text: legacyStream.content,
-          accumulated: legacyStream.content,
+          text: contentResult.finalContent,
+          accumulated: contentResult.finalContent,
         },
       });
     }
     
-    // Create tool events if they exist
-    if (legacyStream.toolExecutions) {
-      for (const toolExecution of legacyStream.toolExecutions) {
+    // Reconstruct and create tool events if they exist
+    const reconstructedToolExecutions = reconstructToolExecutionsFromEvents(toolEvents);
+    if (reconstructedToolExecutions.length > 0) {
+      for (const toolExecution of reconstructedToolExecutions) {
         // Create tool-call event
         await ctx.runMutation(api.streamEvents.publishEvent, {
           streamId: args.streamId,
@@ -602,9 +642,9 @@ export const migrateLegacyStreamToEvents = mutation({
       }
     }
     
-    // Finish the stream
-    if (legacyStream.isComplete) {
-      if (legacyStream.status === "error") {
+    // Finish the stream based on metadata
+    if (streamMetadata.isComplete) {
+      if (streamMetadata.status === "error") {
         await ctx.runMutation(api.streamEvents.errorStream, {
           streamId: args.streamId,
           error: "Migrated error stream",
@@ -613,7 +653,7 @@ export const migrateLegacyStreamToEvents = mutation({
       } else {
         await ctx.runMutation(api.streamEvents.finishStream, {
           streamId: args.streamId,
-          finalContent: legacyStream.content || "",
+          finalContent: contentResult?.finalContent || "",
         });
       }
     }
