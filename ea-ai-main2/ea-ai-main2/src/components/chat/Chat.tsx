@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation } from "convex/react"
-import { useUser } from '@clerk/clerk-react'
+import { useUser, useAuth } from '@clerk/clerk-react'
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -32,7 +33,9 @@ export function Chat({ sessionId }: ChatProps) {
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  const [input, setInput] = useState('')
   const { user } = useUser()
+  const { getToken } = useAuth()
   
   // Convex integration for session management
   const createDefaultSession = useMutation(api.chatSessions.createDefaultSession)
@@ -62,33 +65,31 @@ export function Chat({ sessionId }: ChatProps) {
       }))
   }, [activeConversation])
 
-  // Vercel AI SDK useChat hook - pointing to our HTTP API route
+  // AI SDK v5 useChat hook - transport-based architecture
   const {
     messages,
-    input,
-    handleInputChange,
-    handleSubmit: aiHandleSubmit,
-    isLoading,
+    sendMessage,
+    status,
     stop,
-    append,
-    setMessages,
-    data
+    setMessages
   } = useChat({
-    api: '/convex-http/api/chat', // Points to our Convex HTTP route
-    headers: async () => {
-      // Get Clerk JWT token for authentication
-      if (!user) throw new Error('User not authenticated')
-      const token = await user.getToken()
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    },
-    body: {
-      sessionId: sessionId || (defaultSession?._id)
-    },
+    transport: new DefaultChatTransport({
+      api: '/convex-http/api/chat', // Points to our Convex HTTP route
+      headers: async () => {
+        // Get Clerk JWT token for authentication
+        if (!user) throw new Error('User not authenticated')
+        const token = await getToken()
+        return {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      },
+      body: () => ({
+        sessionId: sessionId || (defaultSession?._id)
+      })
+    }),
     initialMessages: savedMessages,
-    onFinish: async (message, options) => {
+    onFinish: async (message) => {
       // Note: Conversation saving is now handled in the chatStream.ts onFinish callback
       // Just trigger chat history update for UI refresh
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
@@ -98,6 +99,9 @@ export function Chat({ sessionId }: ChatProps) {
       toast.error(`Chat error: ${error.message}`)
     }
   })
+
+  // Derived state for compatibility
+  const isLoading = status === 'streaming' || status === 'submitted'
 
   // Convert messages array to sections array (matching Morphic pattern)
   const sections = useMemo<ChatSection[]>(() => {
@@ -164,7 +168,7 @@ export function Chat({ sessionId }: ChatProps) {
     }
   }, [sections, messages])
 
-  // Handle form submission
+  // Handle form submission  
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
@@ -180,24 +184,35 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Update the body with current session ID
-      aiHandleSubmit(e, {
+      // Send message with AI SDK v5 pattern
+      await sendMessage({
+        text: input
+      }, {
         body: {
           sessionId: currentSessionId
         }
       })
+      
+      // Clear input after sending
+      setInput('')
 
     } catch (error) {
       console.error("Chat submission error:", error)
       toast.error("Failed to send message")
     }
   }
+  
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+  }
 
-  const onQuerySelect = (query: string) => {
-    append({
-      role: 'user',
-      content: query
+  const onQuerySelect = async (query: string) => {
+    setInput(query)
+    await sendMessage({
+      text: query
     })
+    setInput('')
   }
 
   const handleCompositionStart = () => setIsComposing(true)

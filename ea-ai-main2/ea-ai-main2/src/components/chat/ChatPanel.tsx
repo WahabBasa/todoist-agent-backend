@@ -92,7 +92,7 @@ export function ChatPanel({
             onCompositionEnd={onCompositionEnd}
             placeholder="Ask a question..."
             spellCheck={false}
-            value={input}
+            value={input ?? ''}
             disabled={isLoading}
             className="resize-none w-full min-h-12 bg-transparent border-0 p-4 text-primary placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             onChange={handleInputChange}
@@ -103,7 +103,7 @@ export function ChatPanel({
                 !isComposing &&
                 !enterDisabled
               ) {
-                if (input.trim().length === 0) {
+                if (!input?.trim() || input.trim().length === 0) {
                   e.preventDefault()
                   return
                 }
@@ -130,7 +130,7 @@ export function ChatPanel({
                   'rounded-design-md btn-blue-primary transition-all duration-200',
                   isLoading ? 'animate-pulse' : ''
                 )}
-                disabled={input.length === 0 && !isLoading}
+                disabled={(!input || input.length === 0) && !isLoading}
                 onClick={isLoading ? () => {} : undefined}
               >
                 {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
