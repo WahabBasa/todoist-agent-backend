@@ -4,6 +4,7 @@ import { ActionCtx } from "../_generated/server";
 import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
+import { ProcessorContext } from "./processor";
 
 // OpenCode-inspired tool definition interface
 export interface ToolContext {
@@ -15,6 +16,7 @@ export interface ToolContext {
   metadata: (input: { title?: string; metadata?: any }) => void;
 }
 
+// Tool definition interface - ActionCtx is guaranteed to be available
 export interface ToolDefinition {
   id: string;
   description: string;
@@ -25,6 +27,8 @@ export interface ToolDefinition {
     output: string;
   }>;
 }
+
+// ProcessorContext is imported from processor.ts (shared interface)
 
 // Circuit breaker for tool failures (similar to OpenCode)
 class CircuitBreaker {
@@ -71,9 +75,18 @@ export const ToolRegistry = {
   ...UtilityTools,
 };
 
-// Provider-specific adaptations (similar to OpenCode)
+// Convex-recommended tool creation pattern (fixes ActionCtx context loss)
 export class ToolRegistryManager {
-  static async getTools(providerID: string = "anthropic", modelID: string = "claude-3-5-haiku-20241022") {
+  /**
+   * Creates tools with ActionCtx captured in closure (Convex best practice)
+   * This ensures ActionCtx is always available and prevents context loss issues
+   */
+  static async getTools(
+    actionCtx: ActionCtx,
+    processorContext: Omit<ProcessorContext, 'actionCtx'>,
+    providerID: string = "anthropic", 
+    modelID: string = "claude-3-5-haiku-20241022"
+  ) {
     const tools: Record<string, any> = {};
     
     // Debug: Log available tools from registry
@@ -85,6 +98,7 @@ export class ToolRegistryManager {
     console.log(`[ToolRegistry] Batch tools found:`, batchTools.join(', ') || 'NONE');
     
     for (const [key, toolDef] of Object.entries(ToolRegistry)) {
+      // Capture ActionCtx in closure - Convex recommended pattern
       tools[key] = tool({
         id: toolDef.id as any,
         description: toolDef.description,
@@ -96,27 +110,27 @@ export class ToolRegistryManager {
             throw new Error(`Tool ${toolDef.id} temporarily unavailable due to repeated failures. Please try again later.`);
           }
 
+          // Build ToolContext with processor context
           const context: ToolContext = {
-            sessionID: (options as any).sessionID || "default",
-            messageID: (options as any).messageID || "default", 
+            sessionID: processorContext.sessionID,
+            messageID: processorContext.messageID,
             callID: options.toolCallId,
             abort: options.abortSignal!,
-            userId: (options as any).userId || "unknown",
+            userId: processorContext.userId,
             metadata: (val) => {
               // Metadata callback for real-time updates
-              if ((options as any).onMetadata) {
-                (options as any).onMetadata(val);
-              }
+              console.log(`[ToolRegistry] Tool ${toolDef.id} metadata:`, val);
             }
           };
 
           // Add current time context if available
-          if ((options as any).currentTimeContext) {
-            (context as any).currentTimeContext = (options as any).currentTimeContext;
+          if (processorContext.currentTimeContext) {
+            (context as any).currentTimeContext = processorContext.currentTimeContext;
           }
 
           try {
-            const result = await toolDef.execute(args, context, (options as any).actionCtx);
+            // ActionCtx is captured in closure - guaranteed to be available
+            const result = await toolDef.execute(args, context, actionCtx);
             
             // Record success for circuit breaker
             circuitBreaker.recordSuccess(toolDef.id);
@@ -129,11 +143,14 @@ export class ToolRegistryManager {
           } catch (error) {
             // Record failure for circuit breaker
             circuitBreaker.recordFailure(toolDef.id);
+            console.error(`[ToolRegistry] Tool ${toolDef.id} execution failed:`, error);
             throw error;
           }
         }
       });
     }
+
+    console.log(`[ToolRegistry] ✅ Created ${Object.keys(tools).length} tools with ActionCtx bound`);
 
     // Provider-specific adaptations
     if (providerID === "openai" || providerID === "azure") {
@@ -157,6 +174,14 @@ export class ToolRegistryManager {
   private static sanitizeGeminiParameters(tools: Record<string, any>): Record<string, any> {
     // Implementation similar to OpenCode's sanitizeGeminiParameters  
     return tools; // Simplified for now - would implement full sanitization
+  }
+
+  // Legacy method for backward compatibility - now requires ActionCtx
+  static async getLegacyTools(providerID: string = "anthropic", modelID: string = "claude-3-5-haiku-20241022") {
+    throw new Error(
+      `Legacy getTools() method is deprecated. Use getTools(actionCtx, processorContext, providerID, modelID) instead. ` +
+      `This ensures ActionCtx is properly bound to tools and prevents context loss issues.`
+    );
   }
 
   // Get enabled tools based on provider/model restrictions (OpenCode pattern)

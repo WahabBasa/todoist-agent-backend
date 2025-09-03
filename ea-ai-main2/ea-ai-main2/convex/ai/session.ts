@@ -114,12 +114,25 @@ Then execute systematically with progress updates.
     }
 
     try {
-      // Get tools from registry with enhanced logging
-      const tools = await ToolRegistryManager.getTools("anthropic", modelName);
+      // Create processor context with ActionCtx bound
+      const processorContext = {
+        sessionID: sessionId || "default",
+        messageID: `msg-${Date.now()}`,
+        userId,
+        currentTimeContext
+      };
+
+      // Get tools using Convex-recommended pattern (ActionCtx captured in closure)
+      const tools = await ToolRegistryManager.getTools(
+        ctx, // ActionCtx passed directly - prevents context loss
+        processorContext,
+        "anthropic", 
+        modelName
+      );
       const toolNames = Object.keys(tools);
       const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
       
-      console.log(`[SessionV2] Loaded ${toolNames.length} tools from registry`);
+      console.log(`[SessionV2] ✅ Created ${toolNames.length} tools with ActionCtx bound`);
       console.log(`[SessionV2] Available tools: ${toolNames.join(', ')}`);
       console.log(`[SessionV2] Batch tools available: ${batchTools.length > 0 ? batchTools.join(', ') : 'NONE FOUND'}`);
       
@@ -129,8 +142,8 @@ Then execute systematically with progress updates.
         console.log(`[SessionV2] ✅ Batch tools successfully loaded: ${batchTools.length}/6`);
       }
 
-      // Create processor for handling stream results
-      const processorContext: ProcessorContext = {
+      // Create full processor context for stream processing
+      const fullProcessorContext: ProcessorContext = {
         sessionID: sessionId || "default",
         messageID: `msg-${Date.now()}`,
         userId,
@@ -138,7 +151,7 @@ Then execute systematically with progress updates.
         currentTimeContext
       };
       
-      const processor = createProcessor(processorContext);
+      const processor = createProcessor(fullProcessorContext);
 
       // Use streamText with proper stopping conditions (OpenCode pattern)
       const stream = streamText({
