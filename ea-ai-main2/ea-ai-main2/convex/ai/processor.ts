@@ -91,7 +91,8 @@ export class StreamProcessor {
     this.iterationManager.reset();
     
     try {
-      console.log('[Processor] Starting stream processing...');
+      console.log('[Processor] Starting stream processing with corrected OpenCode pattern...');
+      console.log('[Processor] ✅ Using event-driven tool execution (no manual tool calls)');
       
       for await (const value of stream.fullStream) {
         console.log(`[Processor] Processing stream event: ${value.type}`);
@@ -139,69 +140,67 @@ export class StreamProcessor {
             }
             break;
 
-          case "tool-call":
-            console.log(`[Processor] Executing tool: ${value.toolName}`);
+          case "tool-call": {
+            console.log(`[Processor] Tool call started: ${value.toolName}`);
             
             if (this.toolCalls[value.toolCallId]) {
+              // Update tool call state to running - let SDK handle execution
               this.toolCalls[value.toolCallId].status = "running";
+              this.toolCalls[value.toolCallId].input = value.input;
               
-              try {
-                // Execute tool using our registry
-                const tools = await ToolRegistryManager.getTools("anthropic", "claude-3-5-haiku-20241022");
-                const tool = tools[value.toolName];
-                
-                if (!tool) {
-                  throw new Error(`Tool not found: ${value.toolName}`);
-                }
-
-                // Create tool execution context
-                const toolResult = await tool.execute(value.input, {
-                  toolCallId: value.toolCallId,
-                  abortSignal: new AbortController().signal,
-                  sessionID: this.context.sessionID,
-                  messageID: this.context.messageID,
-                  userId: this.context.userId,
-                  actionCtx: this.context.actionCtx,
-                  currentTimeContext: this.context.currentTimeContext,
-                  onMetadata: (metadata: any) => {
-                    console.log(`[Processor] Tool metadata: ${value.toolName}:`, metadata);
-                  }
-                });
-
-                this.toolCalls[value.toolCallId].status = "completed";
-                this.toolCalls[value.toolCallId].result = toolResult;
-                this.toolCalls[value.toolCallId].endTime = Date.now();
-
-                // Add to results array for conversation history
-                this.allToolResults.push({
-                  toolCallId: value.toolCallId,
-                  toolName: value.toolName,
-                  result: toolResult.output
-                });
-
-                console.log(`[Processor] ✅ Tool ${value.toolName} completed successfully`);
-                
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : "Unknown tool execution error";
-                console.error(`[Processor] ❌ Tool ${value.toolName} failed:`, errorMessage);
-                
-                this.toolCalls[value.toolCallId].status = "error";
-                this.toolCalls[value.toolCallId].error = errorMessage;
-                this.toolCalls[value.toolCallId].endTime = Date.now();
-
-                // Add error result to conversation
-                this.allToolResults.push({
-                  toolCallId: value.toolCallId,
-                  toolName: value.toolName,
-                  result: `Error: ${errorMessage}`
-                });
-              }
+              console.log(`[Processor] 🔄 Tool ${value.toolName} is now running (SDK will handle execution)`);
             }
             break;
+          }
 
-          case "tool-result":
-            // Tool result is handled in tool-call case above
+          case "tool-result": {
+            console.log(`[Processor] Tool result received: ${value.toolName}`);
+            
+            const toolCall = this.toolCalls[value.toolCallId];
+            if (toolCall && toolCall.status === "running") {
+              // Process SDK-generated tool result
+              toolCall.status = "completed";
+              toolCall.result = value.output;
+              toolCall.endTime = Date.now();
+
+              // Add to results array for conversation history
+              this.allToolResults.push({
+                toolCallId: value.toolCallId,
+                toolName: value.toolName,
+                result: typeof value.output === 'string' ? value.output : JSON.stringify(value.output)
+              });
+
+              console.log(`[Processor] ✅ Tool ${value.toolName} completed successfully via SDK`);
+            } else {
+              console.warn(`[Processor] Received tool-result for unknown or inactive tool call: ${value.toolCallId}`);
+            }
             break;
+          }
+
+          case "tool-error": {
+            console.log(`[Processor] Tool error received: ${value.toolName}`);
+            
+            const toolCall = this.toolCalls[value.toolCallId];
+            if (toolCall && toolCall.status === "running") {
+              const errorMessage = value.error instanceof Error ? value.error.message : "Unknown tool execution error";
+              
+              toolCall.status = "error";
+              toolCall.error = errorMessage;
+              toolCall.endTime = Date.now();
+
+              // Add error result to conversation
+              this.allToolResults.push({
+                toolCallId: value.toolCallId,
+                toolName: value.toolName,
+                result: `Error: ${errorMessage}`
+              });
+
+              console.error(`[Processor] ❌ Tool ${value.toolName} failed: ${errorMessage}`);
+            } else {
+              console.warn(`[Processor] Received tool-error for unknown or inactive tool call: ${value.toolCallId}`);
+            }
+            break;
+          }
 
           case "finish-step":
             // Accumulate token usage and costs

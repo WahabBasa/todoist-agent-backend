@@ -103,9 +103,20 @@ Then execute systematically with progress updates.
     }
 
     try {
-      // Get tools from registry
+      // Get tools from registry with enhanced logging
       const tools = await ToolRegistryManager.getTools("anthropic", modelName);
-      console.log(`[SessionV2] Loaded ${Object.keys(tools).length} tools from registry`);
+      const toolNames = Object.keys(tools);
+      const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
+      
+      console.log(`[SessionV2] Loaded ${toolNames.length} tools from registry`);
+      console.log(`[SessionV2] Available tools: ${toolNames.join(', ')}`);
+      console.log(`[SessionV2] Batch tools available: ${batchTools.length > 0 ? batchTools.join(', ') : 'NONE FOUND'}`);
+      
+      if (batchTools.length === 0) {
+        console.warn(`[SessionV2] ⚠️  No batch tools found! Expected: createBatchTasks, deleteBatchTasks, completeBatchTasks, updateBatchTasks, createProjectWithTasks, reorganizeTasksBatch`);
+      } else {
+        console.log(`[SessionV2] ✅ Batch tools successfully loaded: ${batchTools.length}/6`);
+      }
 
       // Create processor for handling stream results
       const processorContext: ProcessorContext = {
