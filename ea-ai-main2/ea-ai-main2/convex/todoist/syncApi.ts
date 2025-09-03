@@ -535,3 +535,43 @@ export const deleteTodoistProjectSync = action({
     };
   },
 });
+
+// Batch operations - Execute multiple commands in a single request
+export const executeBatchSync = action({
+  args: {
+    commands: v.any(), // Array of BatchCommand objects from BatchTodoistHandler
+  },
+  handler: async (ctx, { commands }): Promise<any> => {
+    // Validate input
+    if (!Array.isArray(commands)) {
+      throw new Error("Commands must be an array");
+    }
+
+    if (commands.length === 0) {
+      return {
+        sync_status: {},
+        temp_id_mapping: {},
+        full_sync: false,
+      };
+    }
+
+    // Validate command count (Todoist API limit)
+    if (commands.length > 100) {
+      throw new Error(`Too many commands: ${commands.length}. Maximum is 100 commands per batch.`);
+    }
+
+    // Validate command structure
+    for (let i = 0; i < commands.length; i++) {
+      const cmd = commands[i];
+      if (!cmd.type || !cmd.uuid || !cmd.args) {
+        throw new Error(`Invalid command structure at index ${i}. Required fields: type, uuid, args`);
+      }
+    }
+
+    // Execute batch via existing todoistSyncRequest
+    const result = await todoistSyncRequest(ctx, commands, ["all"], "*");
+    
+    // Return the raw result - BatchTodoistHandler will parse it
+    return result;
+  },
+});

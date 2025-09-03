@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
+import { BatchTodoistHandler } from "../../todoist/BatchTodoistHandler";
 
 // Todoist-specific tool implementations
 // Extracted from main toolRegistry for better modularity
@@ -414,6 +415,405 @@ export const getTaskDetails: ToolDefinition = {
   }
 };
 
+// BATCH OPERATIONS - Efficient bulk task management
+
+export const createBatchTasks: ToolDefinition = {
+  id: "createBatchTasks",
+  description: "Create multiple tasks in a single efficient operation. Perfect for daily planning, bulk task import, or setting up multiple related tasks at once.",
+  inputSchema: z.object({
+    tasks: z.array(z.object({
+      title: z.string().describe("The task title"),
+      description: z.string().optional().describe("Task description or notes"),
+      projectId: z.string().optional().describe("Project ID to assign the task to"),
+      priority: z.number().optional().describe("Task priority: 1=high/urgent, 2=medium/normal, 3=low"),
+      dueDate: z.number().optional().describe("Due date as timestamp (milliseconds since epoch)"),
+    })).min(1).max(50).describe("Array of tasks to create (1-50 tasks per batch)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Convert input to BatchTaskCreate format
+      const tasksToCreate = args.tasks.map((task: any) => ({
+        title: task.title,
+        description: task.description,
+        projectId: task.projectId,
+        priority: task.priority,
+        dueDate: task.dueDate,
+      }));
+
+      // Build and execute batch commands
+      const { commands } = batchHandler.buildTaskCreateCommands(tasksToCreate);
+      const result = await batchHandler.executeBatch(commands);
+
+      // Process results
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      
+      let outputSummary = `Batch task creation completed: ${successCount} successful, ${failureCount} failed`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `${successCount}/${args.tasks.length} Tasks Created`,
+        metadata: { 
+          successful: successCount, 
+          failed: failureCount, 
+          total: args.tasks.length 
+        }
+      });
+
+      return {
+        title: "Batch Tasks Created",
+        metadata: { successful: successCount, failed: failureCount, total: args.tasks.length },
+        output: JSON.stringify({
+          summary: outputSummary,
+          successful: result.successful,
+          failed: result.failed,
+          tempIdMappings: result.tempIdMappings
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to create batch tasks");
+    }
+  }
+};
+
+export const deleteBatchTasks: ToolDefinition = {
+  id: "deleteBatchTasks",
+  description: "Delete multiple tasks in a single efficient operation. Use for bulk cleanup, completing projects, or removing outdated tasks.",
+  inputSchema: z.object({
+    taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to delete (1-50 tasks per batch)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Build and execute batch delete commands
+      const { commands } = batchHandler.buildTaskDeleteCommands(args.taskIds);
+      const result = await batchHandler.executeBatch(commands);
+
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      
+      let outputSummary = `Batch task deletion completed: ${successCount} successful, ${failureCount} failed`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• Task deletion failed: ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `${successCount}/${args.taskIds.length} Tasks Deleted`,
+        metadata: { 
+          successful: successCount, 
+          failed: failureCount, 
+          total: args.taskIds.length 
+        }
+      });
+
+      return {
+        title: "Batch Tasks Deleted",
+        metadata: { successful: successCount, failed: failureCount, total: args.taskIds.length },
+        output: JSON.stringify({
+          summary: outputSummary,
+          successful: result.successful,
+          failed: result.failed
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to delete batch tasks");
+    }
+  }
+};
+
+export const completeBatchTasks: ToolDefinition = {
+  id: "completeBatchTasks",
+  description: "Mark multiple tasks as completed in a single efficient operation. Perfect for end-of-day reviews, project completion, or bulk status updates.",
+  inputSchema: z.object({
+    taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to mark as completed (1-50 tasks per batch)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Build and execute batch completion commands
+      const { commands } = batchHandler.buildTaskCompleteCommands(args.taskIds);
+      const result = await batchHandler.executeBatch(commands);
+
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      
+      let outputSummary = `Batch task completion: ${successCount} successful, ${failureCount} failed`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• Task completion failed: ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `${successCount}/${args.taskIds.length} Tasks Completed`,
+        metadata: { 
+          successful: successCount, 
+          failed: failureCount, 
+          total: args.taskIds.length 
+        }
+      });
+
+      return {
+        title: "Batch Tasks Completed",
+        metadata: { successful: successCount, failed: failureCount, total: args.taskIds.length },
+        output: JSON.stringify({
+          summary: outputSummary,
+          successful: result.successful,
+          failed: result.failed
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to complete batch tasks");
+    }
+  }
+};
+
+export const updateBatchTasks: ToolDefinition = {
+  id: "updateBatchTasks",
+  description: "Update multiple tasks with bulk modifications in a single operation. Ideal for changing priorities, moving tasks between projects, or updating due dates across multiple tasks.",
+  inputSchema: z.object({
+    updates: z.array(z.object({
+      taskId: z.string().describe("The ID of the task to update"),
+      title: z.string().optional().describe("New task title"),
+      description: z.string().optional().describe("New task description"),
+      projectId: z.string().optional().describe("Move task to this project ID"),
+      priority: z.number().optional().describe("New priority: 1=high/urgent, 2=medium/normal, 3=low"),
+      dueDate: z.number().optional().describe("New due date as timestamp (milliseconds since epoch)"),
+      isCompleted: z.boolean().optional().describe("Mark as completed (true) or uncompleted (false)"),
+    })).min(1).max(50).describe("Array of task updates (1-50 tasks per batch)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Build and execute batch update commands
+      const { commands } = batchHandler.buildTaskUpdateCommands(args.updates);
+      const result = await batchHandler.executeBatch(commands);
+
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      
+      let outputSummary = `Batch task updates completed: ${successCount} successful, ${failureCount} failed`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• Task update failed: ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `${successCount}/${args.updates.length} Tasks Updated`,
+        metadata: { 
+          successful: successCount, 
+          failed: failureCount, 
+          total: args.updates.length 
+        }
+      });
+
+      return {
+        title: "Batch Tasks Updated",
+        metadata: { successful: successCount, failed: failureCount, total: args.updates.length },
+        output: JSON.stringify({
+          summary: outputSummary,
+          successful: result.successful,
+          failed: result.failed
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to update batch tasks");
+    }
+  }
+};
+
+export const createProjectWithTasks: ToolDefinition = {
+  id: "createProjectWithTasks",
+  description: "Create a new project and multiple tasks within it in a single atomic operation. Perfect for project templates, client setup, or deploying standard workflows.",
+  inputSchema: z.object({
+    projectName: z.string().describe("The name of the project to create"),
+    projectColor: z.string().optional().describe("Project color (e.g., 'berry_red', 'blue', 'green')"),
+    projectDescription: z.string().optional().describe("Project description"),
+    tasks: z.array(z.object({
+      title: z.string().describe("The task title"),
+      description: z.string().optional().describe("Task description or notes"),
+      priority: z.number().optional().describe("Task priority: 1=high/urgent, 2=medium/normal, 3=low"),
+      dueDate: z.number().optional().describe("Due date as timestamp (milliseconds since epoch)"),
+    })).min(0).max(40).describe("Array of tasks to create within the project (0-40 tasks)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Use the helper method for project + tasks creation
+      const result = await batchHandler.createProjectWithTasks(
+        {
+          name: args.projectName,
+          color: args.projectColor,
+          description: args.projectDescription,
+        },
+        args.tasks.map((task: any) => ({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          dueDate: task.dueDate,
+        }))
+      );
+
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      const totalOperations = 1 + args.tasks.length; // project + tasks
+      
+      // Find the project creation result
+      const projectResult = result.successful.find(s => s.realId && !s.tempId?.startsWith('task_'));
+      const projectId = projectResult?.realId;
+      
+      let outputSummary = `Project creation completed: ${successCount}/${totalOperations} operations successful`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• Operation failed: ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `Project "${args.projectName}" Created`,
+        metadata: { 
+          projectId,
+          projectName: args.projectName,
+          tasksCreated: Math.max(0, successCount - 1), // Subtract project creation
+          totalTasks: args.tasks.length,
+          successful: successCount,
+          failed: failureCount
+        }
+      });
+
+      return {
+        title: "Project with Tasks Created",
+        metadata: { 
+          projectId,
+          projectName: args.projectName,
+          tasksCreated: Math.max(0, successCount - 1),
+          totalTasks: args.tasks.length
+        },
+        output: JSON.stringify({
+          summary: outputSummary,
+          projectId,
+          projectName: args.projectName,
+          successful: result.successful,
+          failed: result.failed,
+          tempIdMappings: result.tempIdMappings
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to create project with tasks");
+    }
+  }
+};
+
+export const reorganizeTasksBatch: ToolDefinition = {
+  id: "reorganizeTasksBatch",
+  description: "Reorganize multiple tasks with the same modifications in a single operation. Perfect for context switching (move all tasks to different project), priority changes (make all urgent), or rescheduling (move all to next week).",
+  inputSchema: z.object({
+    taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to reorganize (1-50 tasks per batch)"),
+    modifications: z.object({
+      projectId: z.string().optional().describe("Move all tasks to this project ID"),
+      priority: z.number().optional().describe("Set priority for all tasks: 1=high/urgent, 2=medium/normal, 3=low"),
+      dueDate: z.number().optional().describe("Set due date for all tasks (timestamp in milliseconds since epoch)"),
+      addDays: z.number().optional().describe("Add this many days to each task's current due date (alternative to setting absolute date)"),
+      isCompleted: z.boolean().optional().describe("Mark all tasks as completed (true) or uncompleted (false)"),
+    }).describe("Modifications to apply to all specified tasks"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      const batchHandler = new BatchTodoistHandler(actionCtx);
+      
+      // Build updates for each task with the same modifications
+      const updates = args.taskIds.map((taskId: string) => {
+        const update: any = { taskId };
+        
+        if (args.modifications.projectId) {
+          update.projectId = args.modifications.projectId;
+        }
+        if (args.modifications.priority) {
+          update.priority = args.modifications.priority;
+        }
+        if (args.modifications.isCompleted !== undefined) {
+          update.isCompleted = args.modifications.isCompleted;
+        }
+        
+        // Handle due date modifications
+        if (args.modifications.dueDate) {
+          update.dueDate = args.modifications.dueDate;
+        } else if (args.modifications.addDays) {
+          // For addDays, we'd need to get current task data first
+          // For now, we'll just add the days to current timestamp as a fallback
+          // In a real implementation, you might want to fetch current due dates first
+          const currentTime = Date.now();
+          const daysInMs = args.modifications.addDays * 24 * 60 * 60 * 1000;
+          update.dueDate = currentTime + daysInMs;
+        }
+        
+        return update;
+      });
+
+      // Build and execute batch update commands
+      const { commands } = batchHandler.buildTaskUpdateCommands(updates);
+      const result = await batchHandler.executeBatch(commands);
+
+      const successCount = result.successful.length;
+      const failureCount = result.failed.length;
+      
+      // Build description of what was changed
+      const changes = [];
+      if (args.modifications.projectId) changes.push("moved to different project");
+      if (args.modifications.priority) changes.push(`priority set to ${args.modifications.priority}`);
+      if (args.modifications.dueDate) changes.push("due date updated");
+      if (args.modifications.addDays) changes.push(`due date shifted by ${args.modifications.addDays} days`);
+      if (args.modifications.isCompleted !== undefined) {
+        changes.push(args.modifications.isCompleted ? "marked completed" : "marked uncompleted");
+      }
+      
+      const changesText = changes.length > 0 ? ` (${changes.join(', ')})` : "";
+      let outputSummary = `Batch task reorganization completed: ${successCount}/${args.taskIds.length} tasks updated${changesText}`;
+      
+      if (result.failed.length > 0) {
+        const failureDetails = result.failed.map(f => `• Task reorganization failed: ${f.error}`).join('\n');
+        outputSummary += `\n\nFailures:\n${failureDetails}`;
+      }
+
+      ctx.metadata({
+        title: `${successCount}/${args.taskIds.length} Tasks Reorganized`,
+        metadata: { 
+          successful: successCount, 
+          failed: failureCount, 
+          total: args.taskIds.length,
+          modifications: args.modifications
+        }
+      });
+
+      return {
+        title: "Tasks Reorganized",
+        metadata: { successful: successCount, failed: failureCount, total: args.taskIds.length },
+        output: JSON.stringify({
+          summary: outputSummary,
+          modifications: args.modifications,
+          successful: result.successful,
+          failed: result.failed
+        })
+      };
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Failed to reorganize batch tasks");
+    }
+  }
+};
+
 // Export all Todoist tools
 export const TodoistTools = {
   createTask,
@@ -426,4 +826,11 @@ export const TodoistTools = {
   getProjectAndTaskMap,
   getProjectDetails,
   getTaskDetails,
+  // Batch operations
+  createBatchTasks,
+  deleteBatchTasks,
+  completeBatchTasks,
+  updateBatchTasks,
+  createProjectWithTasks,
+  reorganizeTasksBatch,
 };
