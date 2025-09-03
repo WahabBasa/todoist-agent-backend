@@ -76,6 +76,14 @@ export class ToolRegistryManager {
   static async getTools(providerID: string = "anthropic", modelID: string = "claude-3-5-haiku-20241022") {
     const tools: Record<string, any> = {};
     
+    // Debug: Log available tools from registry
+    const registryKeys = Object.keys(ToolRegistry);
+    console.log(`[ToolRegistry] Loading ${registryKeys.length} tools:`, registryKeys.join(', '));
+    
+    // Debug: Check for batch tools specifically
+    const batchTools = registryKeys.filter(key => key.includes('Batch') || key.includes('batch'));
+    console.log(`[ToolRegistry] Batch tools found:`, batchTools.join(', ') || 'NONE');
+    
     for (const [key, toolDef] of Object.entries(ToolRegistry)) {
       tools[key] = tool({
         id: toolDef.id as any,

@@ -53,6 +53,11 @@ export interface BatchResult {
   syncToken?: string;
 }
 
+interface TodoistErrorResponse {
+  error?: string;
+  [key: string]: any;
+}
+
 export class BatchTodoistHandler {
   private uuidCounter = 0;
   private tempIdCounter = 0;
@@ -277,7 +282,10 @@ export class BatchTodoistHandler {
           });
         } else {
           // Command failed - status contains error details
-          const errorInfo = typeof status === 'object' ? status : { error: String(status) };
+          const errorInfo: TodoistErrorResponse = 
+            typeof status === 'object' && status !== null 
+              ? status as TodoistErrorResponse
+              : { error: String(status) };
           
           result.failed.push({
             tempId: command.temp_id,
