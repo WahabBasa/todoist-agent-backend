@@ -347,7 +347,7 @@ export const compareChatSystems = action({
           useHaiku: true
         });
       } else {
-        result = await ctx.runAction(api.ai.chatWithAI, {
+        result = await ctx.runAction(api.ai.chatWithAILegacy, {
           message,
           sessionId,
           useHaiku: true

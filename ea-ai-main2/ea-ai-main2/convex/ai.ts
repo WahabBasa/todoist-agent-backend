@@ -874,7 +874,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
 // =================================================================
 // 3. THE ORCHESTRATOR: Manages the agentic workflow.
 // =================================================================
-export const chatWithAI = action({
+export const chatWithAILegacy = action({
   args: {
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
@@ -1226,3 +1226,6 @@ export const cleanupCache = action({
     };
   },
 });
+
+// Re-export the new chatWithAI from session module for API compatibility
+export { chatWithAI } from "./ai/session";

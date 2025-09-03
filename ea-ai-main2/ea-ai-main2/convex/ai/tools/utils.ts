@@ -248,9 +248,98 @@ export const validateInput: ToolDefinition = {
   }
 };
 
+export const listTools: ToolDefinition = {
+  id: "listTools",
+  description: "List all available tools and their descriptions. Use this when users ask 'what tools do you have' or want to understand available capabilities.",
+  inputSchema: z.object({
+    category: z.enum(["all", "todoist", "calendar", "internal", "utility"]).optional().describe("Filter tools by category (default: all)"),
+  }),
+  async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    try {
+      // Import ToolRegistry to get all available tools
+      const { ToolRegistry } = await import("../toolRegistry");
+      
+      const allTools = Object.entries(ToolRegistry).map(([key, tool]) => ({
+        id: tool.id,
+        name: key,
+        description: tool.description,
+        category: key.startsWith('create') || key.startsWith('get') || key.startsWith('update') || key.startsWith('delete') || key.includes('Task') || key.includes('Project') || key.includes('Batch') ? 
+          (key.includes('Calendar') || key.includes('Event') ? 'calendar' : 'todoist') :
+          key.startsWith('internal') ? 'internal' : 'utility'
+      }));
+
+      // Filter by category if specified
+      let filteredTools = allTools;
+      if (args.category && args.category !== 'all') {
+        filteredTools = allTools.filter(tool => tool.category === args.category);
+      }
+
+      // Group tools by category for better organization
+      const toolsByCategory = filteredTools.reduce((acc: any, tool) => {
+        const category = tool.category;
+        if (!acc[category]) {
+          acc[category] = [];
+        }
+        acc[category].push({
+          name: tool.name,
+          description: tool.description
+        });
+        return acc;
+      }, {});
+
+      // Count batch tools specifically
+      const batchTools = allTools.filter(tool => tool.name.includes('Batch') || tool.name.includes('batch'));
+      
+      const result = {
+        totalTools: allTools.length,
+        filteredTools: filteredTools.length,
+        batchTools: batchTools.length,
+        batchToolNames: batchTools.map(t => t.name),
+        requestedCategory: args.category || 'all',
+        toolsByCategory,
+        allToolNames: args.category === 'all' ? allTools.map(t => t.name) : undefined,
+        timestamp: Date.now()
+      };
+
+      ctx.metadata({
+        title: `Listed ${filteredTools.length} Tools`,
+        metadata: { 
+          category: args.category || 'all',
+          totalTools: allTools.length,
+          batchTools: batchTools.length,
+          filteredCount: filteredTools.length
+        }
+      });
+
+      return {
+        title: "Available Tools Listed",
+        metadata: { 
+          category: args.category || 'all', 
+          count: filteredTools.length,
+          batchToolsFound: batchTools.length
+        },
+        output: JSON.stringify(result, null, 2)
+      };
+    } catch (error) {
+      const errorResult = {
+        error: error instanceof Error ? error.message : "Failed to list tools",
+        category: args.category || 'all',
+        timestamp: Date.now()
+      };
+
+      return {
+        title: "Tool Listing Error",
+        metadata: { error: true },
+        output: JSON.stringify(errorResult)
+      };
+    }
+  }
+};
+
 // Export all utility tools
 export const UtilityTools = {
   getCurrentTime,
   getSystemStatus,
   validateInput,
+  listTools,
 };
