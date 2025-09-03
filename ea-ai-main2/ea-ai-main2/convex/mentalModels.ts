@@ -137,7 +137,7 @@ export const editMentalModel = mutation({
       // Creating new model or appending
       updatedContent = isNewModel ? newString : content + "\n" + newString;
     } else if (replaceAll) {
-      updatedContent = content.replaceAll(oldString, newString);
+      updatedContent = content.replace(new RegExp(oldString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newString);
     } else {
       if (!content.includes(oldString)) {
         throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);

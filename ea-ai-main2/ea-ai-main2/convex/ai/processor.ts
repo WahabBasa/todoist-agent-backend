@@ -41,7 +41,7 @@ class IterationManager {
     }
 
     // Detect tool call oscillation
-    for (const [toolName, count] of this.toolCallCount) {
+    for (const [toolName, count] of Array.from(this.toolCallCount)) {
       if (count >= 2) {
         console.warn(`[Processor] Tool oscillation detected: ${toolName} called ${count} times`);
         return true;

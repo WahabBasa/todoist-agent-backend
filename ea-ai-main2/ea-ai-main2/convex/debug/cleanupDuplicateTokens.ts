@@ -25,7 +25,7 @@ export const cleanupDuplicateTodoistTokens = mutation({
     let keptCount = 0;
     
     // For each base URL, keep the most recent full tokenIdentifier and delete others
-    for (const [baseUrl, tokens] of tokensByBaseUrl.entries()) {
+    for (const [baseUrl, tokens] of Array.from(tokensByBaseUrl.entries())) {
       if (tokens.length > 1) {
         console.log(`🔍 Found ${tokens.length} tokens for base URL: ${baseUrl}`);
         

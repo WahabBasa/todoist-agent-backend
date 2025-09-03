@@ -255,21 +255,21 @@ export namespace MessageCaching {
     const now = Date.now();
     
     // Clean mental model cache (10 minute expiry)
-    for (const [key, value] of mentalModelCache.entries()) {
+    for (const [key, value] of Array.from(mentalModelCache.entries())) {
       if (now - value.timestamp > 10 * 60 * 1000) {
         mentalModelCache.delete(key);
       }
     }
 
     // Clean system prompt cache (5 minute expiry)
-    for (const [key, value] of systemPromptCache.entries()) {
+    for (const [key, value] of Array.from(systemPromptCache.entries())) {
       if (now - value.timestamp > 5 * 60 * 1000) {
         systemPromptCache.delete(key);
       }
     }
 
     // Clean tool call cache (2 minute expiry)
-    for (const [key, value] of toolCallCache.entries()) {
+    for (const [key, value] of Array.from(toolCallCache.entries())) {
       if (now - value.timestamp > 2 * 60 * 1000) {
         toolCallCache.delete(key);
       }
