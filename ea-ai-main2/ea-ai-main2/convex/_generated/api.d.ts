@@ -29,6 +29,7 @@ import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
 import type * as clerk from "../clerk.js";
 import type * as conversations from "../conversations.js";
+import type * as customSystemPrompts from "../customSystemPrompts.js";
 import type * as debug_cleanupDuplicateTokens from "../debug/cleanupDuplicateTokens.js";
 import type * as debug_fixTokenIdentifier from "../debug/fixTokenIdentifier.js";
 import type * as debug_todoistDebug from "../debug/todoistDebug.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   cleanupTables: typeof cleanupTables;
   clerk: typeof clerk;
   conversations: typeof conversations;
+  customSystemPrompts: typeof customSystemPrompts;
   "debug/cleanupDuplicateTokens": typeof debug_cleanupDuplicateTokens;
   "debug/fixTokenIdentifier": typeof debug_fixTokenIdentifier;
   "debug/todoistDebug": typeof debug_todoistDebug;

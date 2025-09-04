@@ -1058,7 +1058,7 @@ Do NOT use any other tools until internal todolist is created.
           
           const result = await generateText({
             model: openrouter(modelName),
-            system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
+            system: SystemPrompt.getSystemPromptSync(modelName, dynamicInstructions, message, mentalModelContent),
             messages: optimizedMessages,
             tools: plannerTools,
         });

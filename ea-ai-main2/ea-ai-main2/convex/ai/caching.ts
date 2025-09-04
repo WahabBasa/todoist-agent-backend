@@ -140,6 +140,43 @@ export namespace MessageCaching {
   }
 
   /**
+   * Custom system prompt content caching
+   * Avoids database I/O on every request by caching custom prompt data
+   */
+  const customPromptCache = new Map<string, { 
+    content: string; 
+    timestamp: number; 
+    userId: string; 
+    promptName: string;
+  }>();
+
+  export function getCachedCustomPrompt(userId: string): string | null {
+    const cached = customPromptCache.get(userId);
+    
+    // Cache expires after 10 minutes (same as mental models)
+    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+      return cached.content;
+    }
+    
+    // Clean expired cache
+    customPromptCache.delete(userId);
+    return null;
+  }
+
+  export function setCachedCustomPrompt(userId: string, content: string, promptName: string = "active"): void {
+    customPromptCache.set(userId, {
+      content,
+      timestamp: Date.now(),
+      userId,
+      promptName
+    });
+  }
+
+  export function invalidateCustomPromptCache(userId: string): void {
+    customPromptCache.delete(userId);
+  }
+
+  /**
    * System prompt component caching
    * Caches environment context and other dynamic prompt parts
    */
@@ -216,6 +253,7 @@ export namespace MessageCaching {
     cacheHits: number;
     cacheMisses: number;
     mentalModelHits: number;
+    customPromptHits: number;
     toolCallHits: number;
     lastCleanup: number;
   }
@@ -225,6 +263,7 @@ export namespace MessageCaching {
     cacheHits: 0,
     cacheMisses: 0,
     mentalModelHits: 0,
+    customPromptHits: 0,
     toolCallHits: 0,
     lastCleanup: Date.now()
   };
@@ -233,9 +272,10 @@ export namespace MessageCaching {
     return { ...cacheStats };
   }
 
-  export function incrementCacheHit(type: 'message' | 'mental_model' | 'tool_call' = 'message'): void {
+  export function incrementCacheHit(type: 'message' | 'mental_model' | 'custom_prompt' | 'tool_call' = 'message'): void {
     cacheStats.cacheHits++;
     if (type === 'mental_model') cacheStats.mentalModelHits++;
+    if (type === 'custom_prompt') cacheStats.customPromptHits++;
     if (type === 'tool_call') cacheStats.toolCallHits++;
   }
 
@@ -258,6 +298,13 @@ export namespace MessageCaching {
     for (const [key, value] of Array.from(mentalModelCache.entries())) {
       if (now - value.timestamp > 10 * 60 * 1000) {
         mentalModelCache.delete(key);
+      }
+    }
+
+    // Clean custom prompt cache (10 minute expiry)
+    for (const [key, value] of Array.from(customPromptCache.entries())) {
+      if (now - value.timestamp > 10 * 60 * 1000) {
+        customPromptCache.delete(key);
       }
     }
 

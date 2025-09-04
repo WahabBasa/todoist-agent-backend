@@ -40,129 +40,104 @@ export namespace MessageV2 {
     
     /**
      * Convert Convex message format to AI SDK UIMessage format
-     * This is the key transformation that enables proper AI SDK integration
+     * Simplified approach inspired by OpenCode's systematic conversion
      */
     static toUIMessages(convexMessages: ConvexMessage[]): UIMessage[] {
       const uiMessages: UIMessage[] = [];
+      console.log(`[MessageV2] Converting ${convexMessages.length} Convex messages to UIMessages`);
       
       for (let i = 0; i < convexMessages.length; i++) {
         const message = convexMessages[i];
         
         try {
+          // Handle user messages - simple text conversion
           if (message.role === "user" && message.content) {
             uiMessages.push({
-              id: `user-${i}-${Date.now()}`,
+              id: `user-${i}-${message.timestamp || Date.now()}`,
               role: "user",
               parts: [{
                 type: "text",
                 text: message.content
-              }] as UIMessage["parts"]
+              }]
             });
+            console.log(`[MessageV2] ✅ Converted user message ${i}: "${message.content.substring(0, 50)}..."`);
           }
           
-          else if (message.role === "assistant") {
-            const parts: UIMessage["parts"] = [];
-            
-            // Add text content if present
-            if (message.content) {
-              parts.push({
+          // Handle assistant messages - text only, skip complex tool reconstruction
+          else if (message.role === "assistant" && message.content) {
+            uiMessages.push({
+              id: `assistant-${i}-${message.timestamp || Date.now()}`,
+              role: "assistant", 
+              parts: [{
                 type: "text",
                 text: message.content
-              });
-            }
-            
-            // Add tool calls if present
-            if (message.toolCalls && message.toolCalls.length > 0) {
-              for (const tc of message.toolCalls) {
-                if (tc.toolCallId && tc.name) {
-                  // Find corresponding tool result in subsequent messages
-                  const toolResult = this.findToolResult(convexMessages, i + 1, tc.toolCallId);
-                  
-                  if (toolResult) {
-                    // Determine if result is error or success
-                    const isError = toolResult.result && toolResult.result.toString().startsWith("Error:");
-                    
-                    // Create tool usage part with proper AI SDK typing
-                    if (isError) {
-                      parts.push({
-                        type: `tool-${tc.name}` as `tool-${string}`,
-                        state: "output-error" as const,
-                        toolCallId: tc.toolCallId,
-                        input: tc.args || {},
-                        errorText: this.formatToolOutput(toolResult.result)
-                      });
-                    } else {
-                      parts.push({
-                        type: `tool-${tc.name}` as `tool-${string}`,
-                        state: "output-available" as const,
-                        toolCallId: tc.toolCallId,
-                        input: tc.args || {},
-                        output: this.formatToolOutput(toolResult.result)
-                      });
-                    }
-                  } else {
-                    // Tool call without result - use AI SDK v5's tool-${string} format
-                    parts.push({
-                      type: `tool-${tc.name}` as `tool-${string}`,
-                      state: "input-streaming" as const,
-                      toolCallId: tc.toolCallId,
-                      input: tc.args || {}
-                    });
-                  }
-                }
-              }
-            }
-            
-            if (parts.length > 0) {
-              uiMessages.push({
-                id: `assistant-${i}-${Date.now()}`,
-                role: "assistant",
-                parts
-              });
-            }
+              }]
+            });
+            console.log(`[MessageV2] ✅ Converted assistant message ${i}: "${message.content.substring(0, 50)}..."`);
           }
           
-          // Tool messages are handled above with assistant messages
-          // This follows OpenCode's approach of grouping tool results with assistant responses
+          // Skip tool messages and complex assistant messages for now
+          // This prevents the conversion failures that were breaking everything
+          else {
+            console.log(`[MessageV2] ⏭️ Skipping complex message ${i} (role: ${message.role}, hasContent: ${!!message.content}, hasToolCalls: ${!!message.toolCalls})`);
+          }
           
         } catch (error) {
-          console.warn('[MessageV2] Skipping invalid message at index', i, ':', error);
+          console.warn(`[MessageV2] ⚠️ Failed to convert message ${i}:`, error);
+          console.warn(`[MessageV2] Problematic message:`, JSON.stringify(message, null, 2));
+          // Continue processing other messages instead of failing entirely
           continue;
         }
       }
       
+      console.log(`[MessageV2] ✅ Successfully converted ${uiMessages.length}/${convexMessages.length} messages`);
       return uiMessages;
     }
 
     /**
      * Convert UIMessages to ModelMessages using AI SDK's native function
-     * This ensures compatibility with the AI SDK's expectations
+     * Enhanced with robust error handling and validation
      */
     static toModelMessages(uiMessages: UIMessage[]): ModelMessage[] {
+      console.log(`[MessageV2] Converting ${uiMessages.length} UIMessages to ModelMessages`);
+      
+      // Pre-validate UIMessages before conversion
+      const validUIMessages = this.validateUIMessages(uiMessages);
+      console.log(`[MessageV2] Validated ${validUIMessages.length}/${uiMessages.length} UIMessages`);
+      
       try {
-        return convertToModelMessages(uiMessages);
+        const modelMessages = convertToModelMessages(validUIMessages);
+        console.log(`[MessageV2] ✅ Successfully converted to ${modelMessages.length} ModelMessages`);
+        return modelMessages;
       } catch (error) {
-        console.error('[MessageV2] Failed to convert UIMessages to ModelMessages:', error);
+        console.error('[MessageV2] convertToModelMessages failed:', error);
         
-        // Fallback: create minimal valid conversation
+        // Enhanced fallback: preserve more conversation context
         const fallbackMessages: ModelMessage[] = [];
         
-        // Find the last user message to preserve context
-        for (let i = uiMessages.length - 1; i >= 0; i--) {
-          const msg = uiMessages[i];
-          if (msg.role === "user") {
-            const textPart = msg.parts?.find(p => p.type === "text") as { text: string } | undefined;
-            if (textPart) {
-              fallbackMessages.unshift({
-                role: "user",
-                content: textPart.text
-              });
-              break;
+        for (const msg of validUIMessages) {
+          try {
+            if (msg.role === "user" || msg.role === "assistant") {
+              const textParts = msg.parts?.filter(p => p.type === "text") as { text: string }[] || [];
+              if (textParts.length > 0) {
+                const content = textParts.map(p => p.text).join(" ").trim();
+                if (content) {
+                  fallbackMessages.push({
+                    role: msg.role,
+                    content
+                  });
+                }
+              }
             }
+          } catch (msgError) {
+            console.warn('[MessageV2] Skipping problematic UIMessage in fallback:', msgError);
+            continue;
           }
         }
         
-        // If no user message found, create a generic one
+        console.log(`[MessageV2] Fallback preserved ${fallbackMessages.length} messages`);
+        
+        // Ensure we have at least one message
         if (fallbackMessages.length === 0) {
           fallbackMessages.push({
             role: "user",
@@ -172,6 +147,50 @@ export namespace MessageV2 {
         
         return fallbackMessages;
       }
+    }
+
+    /**
+     * Validate and sanitize UIMessages before conversion
+     */
+    private static validateUIMessages(uiMessages: UIMessage[]): UIMessage[] {
+      const validMessages: UIMessage[] = [];
+      
+      for (let i = 0; i < uiMessages.length; i++) {
+        const msg = uiMessages[i];
+        
+        try {
+          // Basic validation
+          if (!msg.id || !msg.role || !msg.parts || !Array.isArray(msg.parts)) {
+            console.warn(`[MessageV2] Invalid UIMessage structure at index ${i}`);
+            continue;
+          }
+          
+          // Ensure we have valid parts
+          const validParts = msg.parts.filter(part => {
+            return part && typeof part === 'object' && 'type' in part;
+          });
+          
+          if (validParts.length === 0) {
+            console.warn(`[MessageV2] UIMessage ${i} has no valid parts`);
+            continue;
+          }
+          
+          // Create clean message
+          const cleanMessage: UIMessage = {
+            id: msg.id,
+            role: msg.role,
+            parts: validParts
+          };
+          
+          validMessages.push(cleanMessage);
+          
+        } catch (error) {
+          console.warn(`[MessageV2] Failed to validate UIMessage ${i}:`, error);
+          continue;
+        }
+      }
+      
+      return validMessages;
     }
 
     /**
@@ -298,32 +317,49 @@ export namespace MessageV2 {
   export class ErrorHandler {
     
     /**
-     * Handle message conversion errors gracefully
+     * Handle message conversion errors gracefully - preserve as much context as possible
      */
     static handleConversionError(error: Error, originalMessages: ConvexMessage[]): ModelMessage[] {
       console.error('[MessageV2] Message conversion failed:', error);
+      console.log('[MessageV2] Attempting to preserve conversation context...');
       
-      // Create safe fallback conversation
       const fallbackMessages: ModelMessage[] = [];
       
-      // Find the most recent user message
-      for (let i = originalMessages.length - 1; i >= 0; i--) {
-        const msg = originalMessages[i];
-        if (msg.role === "user" && msg.content) {
-          fallbackMessages.unshift({
-            role: "user",
-            content: msg.content
-          });
-          break;
+      // Try to preserve multiple recent exchanges instead of just the last message
+      const recentMessages = originalMessages.slice(-6); // Last 6 messages for context
+      let userMessages = 0;
+      let assistantMessages = 0;
+      
+      for (const msg of recentMessages) {
+        try {
+          if (msg.role === "user" && msg.content && msg.content.trim()) {
+            fallbackMessages.push({
+              role: "user",
+              content: msg.content.trim()
+            });
+            userMessages++;
+          } else if (msg.role === "assistant" && msg.content && msg.content.trim()) {
+            fallbackMessages.push({
+              role: "assistant", 
+              content: msg.content.trim()
+            });
+            assistantMessages++;
+          }
+        } catch (msgError) {
+          console.warn('[MessageV2] Skipping problematic message in fallback:', msgError);
+          continue;
         }
       }
       
-      // If no user message found, create a generic prompt
+      console.log(`[MessageV2] Preserved context: ${userMessages} user + ${assistantMessages} assistant messages`);
+      
+      // If we didn't preserve any messages, create a minimal context
       if (fallbackMessages.length === 0) {
         fallbackMessages.push({
           role: "user",
-          content: "I need help organizing my tasks. Please start by checking my current Todoist workspace."
+          content: "Please continue helping me with my tasks."
         });
+        console.log('[MessageV2] Created minimal fallback context');
       }
       
       return fallbackMessages;

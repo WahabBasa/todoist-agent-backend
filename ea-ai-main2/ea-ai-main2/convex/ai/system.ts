@@ -1,4 +1,7 @@
 // OpenCode-inspired dynamic prompt system for Todoist Agent Backend
+import { api } from "../_generated/api";
+import { MessageCaching } from "./caching";
+
 export namespace SystemPrompt {
   
   // Provider-based prompt selection
@@ -78,8 +81,71 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     return hasBulkOperations || hasQuantifiedTasks || hasCrossSystemWork || hasComplexAnalysis || hasWorkflowCoordination;
   }
 
+  // Load user's active custom system prompt from database with caching
+  export async function getCustomSystemPromptFromDB(ctx: any, userId: string): Promise<string> {
+    // Try cache first
+    const cached = MessageCaching.getCachedCustomPrompt(userId);
+    if (cached) {
+      MessageCaching.incrementCacheHit('custom_prompt');
+      return cached;
+    }
+    MessageCaching.incrementCacheMiss();
+
+    try {
+      const customPromptData = await ctx.runQuery(api.customSystemPrompts.getActiveCustomPrompt, {
+        tokenIdentifier: userId,
+      });
+
+      let formattedContent: string;
+      
+      if (customPromptData.exists && customPromptData.content) {
+        formattedContent = `\n<custom_system_prompt>\n${customPromptData.content}\n</custom_system_prompt>\n`;
+      } else {
+        formattedContent = ""; // No custom prompt
+      }
+      
+      // Cache the result
+      MessageCaching.setCachedCustomPrompt(userId, formattedContent, customPromptData.name || "active");
+      
+      return formattedContent;
+    } catch (error) {
+      console.warn(`[SystemPrompt] Failed to load custom system prompt for user ${userId.substring(0, 20)}...:`, error);
+      return ""; // Graceful degradation
+    }
+  }
+
   // Main prompt getter that combines provider selection with environment  
-  export function getSystemPrompt(modelID: string, dynamicInstructions: string = "", userMessage: string = "", mentalModelContent?: string): string {
+  export async function getSystemPrompt(
+    ctx: any, // ActionCtx for database access
+    modelID: string, 
+    dynamicInstructions: string = "", 
+    userMessage: string = "", 
+    mentalModelContent?: string,
+    userId?: string
+  ): Promise<string> {
+    let promptName = provider(modelID);
+    
+    // Use enhanced internal todo prompt for complex operations
+    if (shouldUseEnhancedTodoPrompt(userMessage)) {
+      promptName = "internal-todo-enhanced";
+    }
+    
+    const basePrompt = getPrompt(promptName);
+    const envContext = environment();
+    const mentalModel = formatMentalModel(mentalModelContent);
+    
+    // Load user's custom system prompt if available
+    let customPrompt = "";
+    if (userId && ctx) {
+      customPrompt = await getCustomSystemPromptFromDB(ctx, userId);
+    }
+    
+    // Integration point: Custom prompt gets injected after base prompt, before environment context
+    return basePrompt + customPrompt + envContext + mentalModel + dynamicInstructions;
+  }
+
+  // Synchronous version for backward compatibility (without custom prompts)
+  export function getSystemPromptSync(modelID: string, dynamicInstructions: string = "", userMessage: string = "", mentalModelContent?: string): string {
     let promptName = provider(modelID);
     
     // Use enhanced internal todo prompt for complex operations

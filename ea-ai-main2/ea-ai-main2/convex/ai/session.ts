@@ -153,10 +153,25 @@ Then execute systematically with progress updates.
       
       const processor = createProcessor(fullProcessorContext);
 
+      // Generate system prompt with custom prompts integration (async)
+      const systemPrompt = await SystemPrompt.getSystemPrompt(
+        ctx, // ActionCtx for database access
+        modelName, 
+        dynamicInstructions, 
+        message, 
+        mentalModelContent,
+        userId // User ID for custom prompt loading
+      );
+      
+      console.log(`[SessionV2] System prompt generated for user ${userId.substring(0, 20)}... (length: ${systemPrompt.length})`);
+      if (systemPrompt.includes('<custom_system_prompt>')) {
+        console.log(`[SessionV2] ✅ Custom system prompt loaded and integrated`);
+      }
+
       // Use streamText with proper stopping conditions (OpenCode pattern)
       const stream = streamText({
         model: anthropic(modelName),
-        system: SystemPrompt.getSystemPrompt(modelName, dynamicInstructions, message, mentalModelContent),
+        system: systemPrompt,
         messages: modelMessages,
         tools,
         maxRetries: 3,

@@ -85,6 +85,20 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"]),
 
+  // Custom System Prompts - User-defined system prompts for AI personalization
+  customSystemPrompts: defineTable({
+    tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
+    name: v.string(), // Prompt name (e.g., "coding-assistant", "creative-writer")
+    content: v.string(), // The custom system prompt content
+    version: v.number(), // Version number for tracking updates
+    isActive: v.boolean(), // Track if this is the current active custom prompt
+    isDefault: v.boolean(), // Whether this is the user's default prompt
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"])
+    .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"]),
+
 };
 
 // Export schema with tokenIdentifier-based tables (big-brain pattern)
