@@ -261,6 +261,121 @@
 
 /* Essential component utilities */
 @layer components {
+  /* ChatGPT Clone Architecture - Chat Page */
+  .chat-page {
+    height: 100%; /* Simple inheritance like ChatGPT clone */
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centers content when empty - ChatGPT clone pattern */
+    position: relative;
+  }
+  
+  .wrapper {
+    flex: 1;
+    overflow: scroll; /* Match ChatGPT clone exactly */
+    width: 100%;
+    display: flex;
+    justify-content: center; /* Only horizontal centering - no align-items */
+  }
+  
+  .chat {
+    width: 50%; /* Fixed width like ChatGPT clone */
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; /* 24px consistent spacing */
+  }
+  
+  /* Message styling - vertical stacking with dynamic sizing */
+  .message {
+    /* No fixed width - allows natural sizing like ChatGPT clone */
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: var(--font-primary-size);
+    font-weight: var(--font-primary-weight);
+    line-height: var(--font-primary-line-height);
+    color: var(--color-text-primary);
+  }
+  
+  .message.user {
+    background-color: var(--color-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    max-width: 80%; /* Dynamic width with max limit - ChatGPT clone pattern */
+    align-self: flex-end; /* Right-align user messages */
+  }
+  
+  .message.assistant {
+    /* Clean text presentation, no background */
+    background: transparent;
+    border: none;
+    padding: 1rem 0;
+    align-self: flex-start; /* Explicit left alignment */
+  }
+  
+  /* Form styling - part of scrollable content */
+  .new-form {
+    margin-top: 1rem;
+    width: 100%;
+  }
+  
+  .form-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: var(--spacing-primary-gap);
+    background-color: var(--color-muted);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-input);
+    padding: 1rem; /* Generous padding to provide visual substance */
+    min-height: 4rem; /* Minimum height to ensure container substance */
+  }
+  
+  .form-textarea {
+    resize: none;
+    width: 100%;
+    min-height: 3rem;
+    background: transparent;
+    border: 0;
+    font-size: var(--font-primary-size);
+    font-weight: var(--font-primary-weight);
+    line-height: var(--font-primary-line-height);
+    color: var(--color-text-primary);
+  }
+  
+  .form-textarea::placeholder {
+    color: var(--color-muted-foreground);
+  }
+  
+  .form-textarea:focus {
+    outline: none;
+  }
+  
+  .form-textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  
+  .form-submit-button {
+    align-self: flex-end;
+    border-radius: var(--radius-md);
+    background-color: var(--color-blue-primary);
+    color: var(--color-blue-primary-foreground);
+    border: 1px solid var(--color-blue-primary);
+    transition: all 0.2s ease;
+  }
+  
+  .form-submit-button:hover:not(:disabled) {
+    background-color: var(--color-blue-primary-hover);
+    border-color: var(--color-blue-primary-hover);
+  }
+  
+  .form-submit-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   /* Custom account blue components - preserved for branding */
   .account-blue {
     background-color: var(--color-accent-blue-foreground);

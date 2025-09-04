@@ -4,16 +4,9 @@ import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Id } from "../../../convex/_generated/dataModel"
-
-import { ChatMessages } from './ChatMessages'
-import { ChatPanel } from './ChatPanel'
-
-// Define section structure (matching Morphic pattern)
-interface ChatSection {
-  id: string // User message ID
-  userMessage: Message
-  assistantMessages: Message[]
-}
+import Textarea from 'react-textarea-autosize'
+import { ArrowUp, Square } from 'lucide-react'
+import { Button } from "../ui/button"
 
 interface Message {
   id: string
@@ -21,15 +14,14 @@ interface Message {
   content: string
 }
 
-
 interface ChatProps {
   sessionId?: Id<"chatSessions"> | null
 }
 
 export function Chat({ sessionId }: ChatProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const topMarkerRef = useRef<HTMLDivElement>(null)
-  const [isAtBottom, setIsAtBottom] = useState(true)
+  const endRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   
   // Convex integration with session support
   const chatWithAI = useAction(api.ai.chatWithAI)
@@ -52,18 +44,15 @@ export function Chat({ sessionId }: ChatProps) {
   // Use the appropriate conversation data
   const activeConversation = sessionId ? conversation : defaultConversation
   
-  // Local state for chat interface
+  // ChatGPT clone state pattern - simple and clean
   const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [useHaiku] = useState(false)
+  const [question, setQuestion] = useState("") // Current user question (optimistic UI)
+  const [isLoading, setIsLoading] = useState(false) // For "thinking" animation
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
-  
-  // Simple pending user message state (matching ChatGPT clone pattern)
-  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
 
   // Convert existing conversation messages to display format
-  const savedMessages = useMemo(() => {
+  const messages = useMemo(() => {
     return activeConversation ? 
       ((activeConversation.messages as any[]) || [])
         .filter(msg => msg.role === "user" || msg.role === "assistant")
@@ -75,67 +64,10 @@ export function Chat({ sessionId }: ChatProps) {
       : []
   }, [activeConversation])
 
-  // Use saved messages directly - much simpler approach
-  const messages = savedMessages
-
-  // Convert messages array to sections array (matching Morphic pattern)
-  const sections = useMemo<ChatSection[]>(() => {
-    const result: ChatSection[] = []
-    let currentSection: ChatSection | null = null
-
-    for (const message of messages) {
-      if (message.role === 'user') {
-        // Start a new section when a user message is found
-        if (currentSection) {
-          result.push(currentSection)
-        }
-        currentSection = {
-          id: message.id,
-          userMessage: message,
-          assistantMessages: []
-        }
-      } else if (currentSection && message.role === 'assistant') {
-        // Add assistant message to the current section
-        currentSection.assistantMessages.push(message)
-      }
-      // Ignore other role types
-    }
-
-    // Add the last section if exists
-    if (currentSection) {
-      result.push(currentSection)
-    }
-
-    return result
-  }, [messages])
-
-  // Detect if scroll container is at the bottom (matching Morphic)
+  // ChatGPT clone scroll behavior - simple and reliable
   useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const threshold = 50 // threshold in pixels
-      if (scrollHeight - scrollTop - clientHeight < threshold) {
-        setIsAtBottom(true)
-      } else {
-        setIsAtBottom(false)
-      }
-    }
-
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll() // Set initial state
-
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [])
-
-  // Auto-scroll to position newest content at top of viewport (matching ChatGPT clone pattern)
-  useEffect(() => {
-    if (topMarkerRef.current) {
-      topMarkerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
-    }
-  }, [savedMessages, pendingUserMessage, isLoading]) // Scroll on any message state change
+    endRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, question, isLoading])
 
   // Session-aware handleSubmit for Convex integration
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -144,10 +76,8 @@ export function Chat({ sessionId }: ChatProps) {
 
     const inputValue = input.trim()
     setInput("")
+    setQuestion(inputValue) // Show user message immediately (optimistic UI)
     setIsLoading(true)
-
-    // Show pending message immediately for better UX (matching ChatGPT clone)
-    setPendingUserMessage(inputValue)
 
     try {
       let currentSessionId = sessionId
@@ -174,13 +104,13 @@ export function Chat({ sessionId }: ChatProps) {
       // Send message with session context and current time
       const result = await chatWithAI({ 
         message: inputValue, 
-        useHaiku,
+        useHaiku: false,
         sessionId: currentSessionId,
         currentTimeContext
       })
       
-      // Update chat title if this is the first message (use savedMessages to avoid counting optimistic messages)
-      if (savedMessages.length === 0 && currentSessionId) {
+      // Update chat title if this is the first message
+      if (messages.length === 0 && currentSessionId) {
         try {
           await updateChatTitle({
             sessionId: currentSessionId,
@@ -191,7 +121,7 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
       
-      // Handle tool results feedback (preserve existing logic)
+      // Handle tool results feedback
       if (result && typeof result === 'object' && 'toolResults' in result && Array.isArray((result as any).toolResults)) {
         const toolResults = (result as any).toolResults
         if (toolResults.length > 0) {
@@ -207,18 +137,16 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Clear pending message once backend call completes (matching ChatGPT clone)
-      setPendingUserMessage(null)
-
+      // Clear optimistic UI once backend completes
+      setQuestion("")
+      
       // Trigger chat history update
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
       
     } catch (error) {
       console.error("Chat error:", error)
       toast.error("Failed to send message")
-      
-      // Clear pending message on error
-      setPendingUserMessage(null)
+      setQuestion("") // Clear optimistic message on error
     } finally {
       setIsLoading(false)
     }
@@ -238,12 +166,7 @@ export function Chat({ sessionId }: ChatProps) {
     }, 300)
   }
 
-  const onQuerySelect = (query: string) => {
-    setInput(query)
-  }
-
   // Big-brain pattern: Show loading state while user authentication is resolving
-  // defaultSession is undefined during auth loading, null when user not found/created yet
   if (activeConversation === undefined && !sessionId && defaultSession === undefined) {
     return (
       <div className="h-full flex flex-col bg-background">
@@ -258,34 +181,90 @@ export function Chat({ sessionId }: ChatProps) {
   }
 
   return (
-    <div
-      className={cn(
-        'relative flex h-full min-w-0 flex-1 flex-col',
-        messages.length === 0 ? 'items-center justify-center' : ''
-      )}
-      data-testid="full-chat"
-    >
-      <ChatMessages
-        sections={sections}
-        onQuerySelect={onQuerySelect}
-        isLoading={isLoading}
-        pendingUserMessage={pendingUserMessage}
-        scrollContainerRef={scrollContainerRef}
-        topMarkerRef={topMarkerRef}
-      />
-      <ChatPanel
-        input={input}
-        handleInputChange={handleInputChange}
-        handleSubmit={handleSubmit}
-        isLoading={isLoading}
-        messages={messages}
-        showScrollToBottomButton={!isAtBottom}
-        scrollContainerRef={scrollContainerRef}
-        isComposing={isComposing}
-        enterDisabled={enterDisabled}
-        onCompositionStart={handleCompositionStart}
-        onCompositionEnd={handleCompositionEnd}
-      />
+    <div className="chat-page">
+      <div className="wrapper">
+        <div className="chat">
+          {/* LAYER 1: Historical messages - vertical stacking */}
+          {messages.map((message, i) => (
+            <div
+              key={message.id}
+              className={cn(
+                "message",
+                message.role === "user" ? "user" : "assistant"
+              )}
+            >
+              {message.content}
+            </div>
+          ))}
+
+          {/* LAYER 2: Active conversation - ChatGPT clone pattern */}
+          {question && <div className="message user">{question}</div>}
+          
+          {/* Thinking animation */}
+          {isLoading && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
+                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />
+                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.4s' }} />
+              </div>
+              <span className="text-xs">Thinking...</span>
+            </div>
+          )}
+
+          {/* Scroll marker at very end - ChatGPT clone pattern */}
+          <div ref={endRef}></div>
+          
+          {/* Form as part of scrollable content - ChatGPT clone pattern */}
+          <form className="new-form" onSubmit={handleSubmit} ref={formRef}>
+            <div className="form-container">
+              <Textarea
+                ref={inputRef}
+                name="input"
+                rows={2}
+                maxRows={5}
+                tabIndex={0}
+                onCompositionStart={handleCompositionStart}
+                onCompositionEnd={handleCompositionEnd}
+                placeholder="Ask a question..."
+                spellCheck={false}
+                value={input}
+                disabled={isLoading}
+                className="form-textarea"
+                onChange={handleInputChange}
+                onKeyDown={e => {
+                  if (
+                    e.key === 'Enter' &&
+                    !e.shiftKey &&
+                    !isComposing &&
+                    !enterDisabled
+                  ) {
+                    if (input.trim().length === 0) {
+                      e.preventDefault()
+                      return
+                    }
+                    e.preventDefault()
+                    const textarea = e.target as HTMLTextAreaElement
+                    textarea.form?.requestSubmit()
+                  }
+                }}
+              />
+              
+              <Button
+                type={isLoading ? 'button' : 'submit'}
+                size="icon"
+                className={cn(
+                  'form-submit-button',
+                  isLoading ? 'animate-pulse' : ''
+                )}
+                disabled={input.length === 0 && !isLoading}
+              >
+                {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }
