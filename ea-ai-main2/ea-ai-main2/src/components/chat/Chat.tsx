@@ -21,12 +21,14 @@ interface Message {
   content: string
 }
 
+
 interface ChatProps {
   sessionId?: Id<"chatSessions"> | null
 }
 
 export function Chat({ sessionId }: ChatProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const topMarkerRef = useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
   
   // Convex integration with session support
@@ -57,7 +59,7 @@ export function Chat({ sessionId }: ChatProps) {
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
   
-  // Simple pending user message for immediate display
+  // Simple pending user message state (matching ChatGPT clone pattern)
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
 
   // Convert existing conversation messages to display format
@@ -128,20 +130,12 @@ export function Chat({ sessionId }: ChatProps) {
     return () => container.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Scroll to the section when a new user message is sent (matching Morphic)
+  // Auto-scroll to position newest content at top of viewport (matching ChatGPT clone pattern)
   useEffect(() => {
-    if (sections.length > 0) {
-      const lastMessage = messages[messages.length - 1]
-      if (lastMessage && lastMessage.role === 'user') {
-        // If the last message is from user, find the corresponding section
-        const sectionId = lastMessage.id
-        requestAnimationFrame(() => {
-          const sectionElement = document.getElementById(`section-${sectionId}`)
-          sectionElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      }
+    if (topMarkerRef.current) {
+      topMarkerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
     }
-  }, [sections, messages])
+  }, [savedMessages, pendingUserMessage, isLoading]) // Scroll on any message state change
 
   // Session-aware handleSubmit for Convex integration
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -152,7 +146,7 @@ export function Chat({ sessionId }: ChatProps) {
     setInput("")
     setIsLoading(true)
 
-    // Show pending message immediately for better UX
+    // Show pending message immediately for better UX (matching ChatGPT clone)
     setPendingUserMessage(inputValue)
 
     try {
@@ -213,7 +207,7 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Clear pending message once backend call completes
+      // Clear pending message once backend call completes (matching ChatGPT clone)
       setPendingUserMessage(null)
 
       // Trigger chat history update
@@ -277,6 +271,7 @@ export function Chat({ sessionId }: ChatProps) {
         isLoading={isLoading}
         pendingUserMessage={pendingUserMessage}
         scrollContainerRef={scrollContainerRef}
+        topMarkerRef={topMarkerRef}
       />
       <ChatPanel
         input={input}

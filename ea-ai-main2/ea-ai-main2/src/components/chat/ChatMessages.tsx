@@ -15,6 +15,7 @@ interface Message {
   content: string
 }
 
+
 interface ChatMessagesProps {
   sections: ChatSection[]
   onQuerySelect: (query: string) => void
@@ -22,6 +23,8 @@ interface ChatMessagesProps {
   pendingUserMessage: string | null
   /** Ref for the scroll container */
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  /** Ref for the top marker (equivalent to ChatGPT clone's endRef) */
+  topMarkerRef: React.RefObject<HTMLDivElement | null>
 }
 
 export function ChatMessages({
@@ -29,14 +32,12 @@ export function ChatMessages({
   onQuerySelect,
   isLoading,
   pendingUserMessage,
-  scrollContainerRef
+  scrollContainerRef,
+  topMarkerRef
 }: ChatMessagesProps) {
 
-  // Simple loading detection - show when loading and we have sections but last has no assistant response
-  const showLoading = isLoading && (
-    (sections.length > 0 && sections[sections.length - 1].assistantMessages.length === 0) ||
-    pendingUserMessage !== null
-  )
+  // Simple loading detection (matching ChatGPT clone pattern)
+  const showLoading = isLoading && pendingUserMessage !== null
 
   // Show empty state for no content
   if (!sections.length && !pendingUserMessage) {
@@ -62,19 +63,19 @@ export function ChatMessages({
       role="list"
       aria-roledescription="chat messages"
       className={cn(
-        'relative size-full pt-14',
+        'relative size-full pt-24',
         'flex-1 overflow-y-auto'
       )}
     >
       <div className="relative mx-auto w-full max-w-3xl px-4">
-        {/* Render saved message sections */}
+        {/* LAYER 1: Render saved message sections (matching ChatGPT clone) */}
         {sections.map((section, sectionIndex) => (
           <div
             key={section.id}
             id={`section-${section.id}`}
             className="chat-section mb-8"
             style={
-              sectionIndex === sections.length - 1
+              sectionIndex === sections.length - 1 && !pendingUserMessage
                 ? { minHeight: 'calc(-228px + 100dvh)' }
                 : {}
             }
@@ -93,26 +94,29 @@ export function ChatMessages({
           </div>
         ))}
 
-        {/* Pending user message section */}
+        {/* LAYER 2: Active conversation (matching ChatGPT clone's NewPrompt pattern) */}
         {pendingUserMessage && (
           <div className="chat-section mb-8">
             <div className="flex flex-col gap-4 mb-4">
               <UserMessage content={pendingUserMessage} />
-              
-              {/* Simple loading indicator */}
-              {showLoading && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
-                    <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />
-                    <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.4s' }} />
-                  </div>
-                  <span className="text-xs">Thinking...</span>
-                </div>
-              )}
             </div>
           </div>
         )}
+
+        {/* Loading indicator (matching ChatGPT clone pattern) */}
+        {showLoading && (
+          <div className="flex items-center gap-2 text-muted-foreground mb-4">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
+              <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />
+              <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.4s' }} />
+            </div>
+            <span className="text-xs">Thinking...</span>
+          </div>
+        )}
+
+        {/* DOM marker for top viewport positioning (equivalent to ChatGPT clone's endRef) */}
+        <div ref={topMarkerRef}></div>
       </div>
     </div>
   )
