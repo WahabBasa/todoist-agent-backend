@@ -56,9 +56,12 @@ export function Chat({ sessionId }: ChatProps) {
   const [useHaiku] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  
+  // Simple pending user message for immediate display
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null)
 
   // Convert existing conversation messages to display format
-  const messages = useMemo(() => {
+  const savedMessages = useMemo(() => {
     return activeConversation ? 
       ((activeConversation.messages as any[]) || [])
         .filter(msg => msg.role === "user" || msg.role === "assistant")
@@ -69,6 +72,9 @@ export function Chat({ sessionId }: ChatProps) {
         }))
       : []
   }, [activeConversation])
+
+  // Use saved messages directly - much simpler approach
+  const messages = savedMessages
 
   // Convert messages array to sections array (matching Morphic pattern)
   const sections = useMemo<ChatSection[]>(() => {
@@ -142,9 +148,12 @@ export function Chat({ sessionId }: ChatProps) {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    setIsLoading(true)
     const inputValue = input.trim()
     setInput("")
+    setIsLoading(true)
+
+    // Show pending message immediately for better UX
+    setPendingUserMessage(inputValue)
 
     try {
       let currentSessionId = sessionId
@@ -176,8 +185,8 @@ export function Chat({ sessionId }: ChatProps) {
         currentTimeContext
       })
       
-      // Update chat title if this is the first message
-      if (messages.length === 0 && currentSessionId) {
+      // Update chat title if this is the first message (use savedMessages to avoid counting optimistic messages)
+      if (savedMessages.length === 0 && currentSessionId) {
         try {
           await updateChatTitle({
             sessionId: currentSessionId,
@@ -204,12 +213,18 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
+      // Clear pending message once backend call completes
+      setPendingUserMessage(null)
+
       // Trigger chat history update
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
       
     } catch (error) {
       console.error("Chat error:", error)
       toast.error("Failed to send message")
+      
+      // Clear pending message on error
+      setPendingUserMessage(null)
     } finally {
       setIsLoading(false)
     }
@@ -260,6 +275,7 @@ export function Chat({ sessionId }: ChatProps) {
         sections={sections}
         onQuerySelect={onQuerySelect}
         isLoading={isLoading}
+        pendingUserMessage={pendingUserMessage}
         scrollContainerRef={scrollContainerRef}
       />
       <ChatPanel

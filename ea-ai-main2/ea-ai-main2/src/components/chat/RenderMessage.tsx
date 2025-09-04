@@ -10,6 +10,7 @@ interface RenderMessageProps {
   getIsOpen?: (id: string) => boolean
   onOpenChange?: (id: string, open: boolean) => void
   onQuerySelect?: (query: string) => void
+  isOptimistic?: boolean // Indicates this is an optimistic update that should animate in
 }
 
 export function RenderMessage({
@@ -17,12 +18,15 @@ export function RenderMessage({
   messageId,
   getIsOpen,
   onOpenChange,
-  onQuerySelect
+  onQuerySelect,
+  isOptimistic = false
 }: RenderMessageProps) {
   
   if (message.role === 'user') {
     return (
-      <div className="flex flex-col gap-2 w-full">
+      <div className={`flex flex-col gap-2 w-full ${
+        isOptimistic ? 'animate-in slide-in-from-bottom-2 fade-in-0 duration-300' : ''
+      }`}>
         <div className="bg-secondary rounded-design-md px-4 py-3">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 w-6 h-6 rounded-design-md bg-primary text-primary-foreground flex items-center justify-center text-utility font-medium">
