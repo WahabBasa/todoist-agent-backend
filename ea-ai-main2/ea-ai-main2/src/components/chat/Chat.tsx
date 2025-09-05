@@ -19,7 +19,7 @@ interface ChatProps {
 }
 
 export function Chat({ sessionId }: ChatProps) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const questionRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   
@@ -47,7 +47,8 @@ export function Chat({ sessionId }: ChatProps) {
   // ChatGPT clone state pattern - simple and clean
   const [input, setInput] = useState("")
   const [question, setQuestion] = useState("") // Current user question (optimistic UI)
-  const [isLoading, setIsLoading] = useState(false) // For "thinking" animation
+  const [isLoading, setIsLoading] = useState(false) // For backend processing
+  const [showThinking, setShowThinking] = useState(false) // For thinking animation after scroll
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
 
@@ -64,10 +65,43 @@ export function Chat({ sessionId }: ChatProps) {
       : []
   }, [activeConversation])
 
-  // ChatGPT clone scroll behavior - simple and reliable
+  // Custom scroll behavior - scroll to latest message (question or last backend message)
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, question, isLoading])
+    const wrapper = document.querySelector('.wrapper') as HTMLElement
+    if (wrapper) {
+      // Scroll to optimistic question message if it exists
+      if (question && questionRef.current) {
+        const messageTop = questionRef.current.offsetTop
+        const targetScrollTop = Math.max(0, messageTop - 50)
+        
+        wrapper.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth'
+        })
+        
+        // Show thinking animation after scroll completes
+        if (isLoading) {
+          const timer = setTimeout(() => {
+            setShowThinking(true)
+          }, 300)
+          return () => clearTimeout(timer)
+        }
+      }
+      // Scroll to last message when new backend messages arrive
+      else if (messages.length > 0) {
+        const lastMessage = document.querySelector('.message:last-of-type') as HTMLElement
+        if (lastMessage) {
+          const messageTop = lastMessage.offsetTop
+          const targetScrollTop = Math.max(0, messageTop - 50)
+          
+          wrapper.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth'
+          })
+        }
+      }
+    }
+  }, [messages, question, isLoading]) // Scroll on both optimistic and backend messages
 
   // Session-aware handleSubmit for Convex integration
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -139,6 +173,7 @@ export function Chat({ sessionId }: ChatProps) {
 
       // Clear optimistic UI once backend completes
       setQuestion("")
+      setShowThinking(false)
       
       // Trigger chat history update
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
@@ -147,6 +182,7 @@ export function Chat({ sessionId }: ChatProps) {
       console.error("Chat error:", error)
       toast.error("Failed to send message")
       setQuestion("") // Clear optimistic message on error
+      setShowThinking(false)
     } finally {
       setIsLoading(false)
     }
@@ -164,20 +200,6 @@ export function Chat({ sessionId }: ChatProps) {
     setTimeout(() => {
       setEnterDisabled(false)
     }, 300)
-  }
-
-  // Big-brain pattern: Show loading state while user authentication is resolving
-  if (activeConversation === undefined && !sessionId && defaultSession === undefined) {
-    return (
-      <div className="h-full flex flex-col bg-background">
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="flex items-center gap-secondary text-muted-foreground">
-            <div className="w-5 h-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            <span className="text-tertiary">Loading conversation...</span>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -198,10 +220,10 @@ export function Chat({ sessionId }: ChatProps) {
           ))}
 
           {/* LAYER 2: Active conversation - ChatGPT clone pattern */}
-          {question && <div className="message user">{question}</div>}
+          {question && <div ref={questionRef} className="message user">{question}</div>}
           
-          {/* Thinking animation */}
-          {isLoading && (
+          {/* Thinking animation - shows after scroll completes */}
+          {showThinking && (
             <div className="flex items-center gap-2 text-muted-foreground">
               <div className="flex gap-1">
                 <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
@@ -211,9 +233,9 @@ export function Chat({ sessionId }: ChatProps) {
               <span className="text-xs">Thinking...</span>
             </div>
           )}
-
-          {/* Scroll marker at very end - ChatGPT clone pattern */}
-          <div ref={endRef}></div>
+          
+          {/* Spacer - pushes form higher from bottom */}
+          <div style={{ flex: 1, minHeight: '10vh' }}></div>
           
           {/* Form as part of scrollable content - ChatGPT clone pattern */}
           <form className="new-form" onSubmit={handleSubmit} ref={formRef}>

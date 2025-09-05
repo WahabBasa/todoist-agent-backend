@@ -264,25 +264,28 @@
   /* ChatGPT Clone Architecture - Chat Page */
   .chat-page {
     height: 100%; /* Simple inheritance like ChatGPT clone */
+    width: 100%; /* Take full width of main container */
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centers content when empty - ChatGPT clone pattern */
     position: relative;
   }
   
   .wrapper {
     flex: 1;
-    overflow: scroll; /* Match ChatGPT clone exactly */
+    overflow-y: auto; /* Only vertical scrolling when needed */
+    overflow-x: hidden; /* No horizontal scrolling */
     width: 100%;
     display: flex;
-    justify-content: center; /* Only horizontal centering - no align-items */
+    justify-content: center; /* Centers .chat horizontally */
   }
   
   .chat {
-    width: 50%; /* Fixed width like ChatGPT clone */
+    width: 60%; /* Widened by 10% from 50% */
+    height: 100%; /* Take full wrapper height */
     display: flex;
     flex-direction: column;
-    gap: 1.5rem; /* 24px consistent spacing */
+    gap: 0.25rem; /* 4px extremely tight spacing between user-AI pairs */
+    justify-content: flex-start; /* Natural top-to-bottom flow for proper scroll positioning */
   }
   
   /* Message styling - vertical stacking with dynamic sizing */
@@ -301,8 +304,9 @@
     background-color: var(--color-secondary);
     border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
-    max-width: 80%; /* Dynamic width with max limit - ChatGPT clone pattern */
-    align-self: flex-end; /* Right-align user messages */
+    max-width: 79%; /* Adjusted to 79% */
+    align-self: flex-start; /* Left-align user messages */
+    margin-top: 1.5rem; /* Extra space before every user message, including first */
   }
   
   .message.assistant {
@@ -310,13 +314,15 @@
     background: transparent;
     border: none;
     padding: 1rem 0;
-    align-self: flex-start; /* Explicit left alignment */
+    max-width: 79%; /* Adjusted to 79% */
+    align-self: flex-start; /* Left-align assistant messages */
   }
   
   /* Form styling - part of scrollable content */
   .new-form {
     margin-top: 1rem;
     width: 100%;
+    margin-bottom: 2rem; /* Creates space below form, moving it away from bottom */
   }
   
   .form-container {
@@ -328,14 +334,14 @@
     background-color: var(--color-muted);
     border-radius: var(--radius-lg);
     border: 1px solid var(--color-input);
-    padding: 1rem; /* Generous padding to provide visual substance */
-    min-height: 4rem; /* Minimum height to ensure container substance */
+    padding: 0.75rem; /* Reduced padding for smaller height */
+    min-height: 3rem; /* Reduced minimum height */
   }
   
   .form-textarea {
     resize: none;
     width: 100%;
-    min-height: 3rem;
+    min-height: 2rem; /* Reduced textarea height */
     background: transparent;
     border: 0;
     font-size: var(--font-primary-size);
