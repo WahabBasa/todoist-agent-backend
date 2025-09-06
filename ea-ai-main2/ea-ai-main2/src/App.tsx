@@ -6,10 +6,9 @@ import { useState, useEffect } from "react";
 import { Toaster } from "sonner";
 
 // Import components
-import { AppSidebar } from "./components/Sidebar";
 import { ChatView } from "./views/ChatView";
 import { SettingsView } from "./views/SettingsView";
-import { SidebarProvider } from "./components/ui/sidebar";
+import { MainLayout } from "./components/layout/MainLayout";
 import { Button } from "./components/ui/button";
 import { Id } from "../convex/_generated/dataModel";
 
@@ -54,12 +53,9 @@ function MainApp() {
     if (activeView === "settings") {
       return <SettingsView onBackToChat={() => setActiveView("chat")} />;
     }
-    return <ChatView sessionId={currentSessionId} />;
-  };
-
-  return (
-    <SidebarProvider defaultOpen>
-      <AppSidebar
+    return (
+      <ChatView 
+        sessionId={currentSessionId}
         activeView={activeView}
         onViewChange={setActiveView}
         onNewChat={handleNewChat}
@@ -67,12 +63,13 @@ function MainApp() {
         onChatSelect={handleChatSelect}
         onOpenSettings={() => setActiveView("settings")}
       />
-      <div className="flex flex-col flex-1">
-        <main className="flex flex-1 min-h-0">
-          {renderActiveView()}
-        </main>
-      </div>
-    </SidebarProvider>
+    );
+  };
+
+  return (
+    <MainLayout>
+      {renderActiveView()}
+    </MainLayout>
   );
 }
 

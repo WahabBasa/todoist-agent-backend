@@ -42,62 +42,88 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
         onSubmit={onSubmit}
         className="relative"
       >
-        <div className="relative flex items-end bg-muted border border-input rounded-design-lg p-3 shadow-sm focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-          <Textarea
-            ref={ref}
-            name="input"
-            rows={1}
-            maxRows={5}
-            tabIndex={0}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            placeholder={placeholder}
-            spellCheck={false}
-            value={value}
-            disabled={disabled || isLoading}
-            className={cn(
-              "flex-1 min-h-[2.5rem] resize-none border-0 bg-transparent px-0 py-2",
-              "text-primary placeholder:text-muted-foreground",
-              "focus:outline-none focus:ring-0",
-              "scrollbar-hide"
-            )}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-          />
+        {/* ChatHub-style input container */}
+        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-zinc-100 dark:ring-zinc-700 ring-offset-2 dark:ring-offset-zinc-800 bg-zinc-50 dark:bg-white/5 w-full dark:border-white/5 rounded-2xl overflow-hidden">
           
-          <div className="flex items-center gap-1 ml-2">
-            {/* Clear Button */}
-            {showClearButton && onClear && (
+          {/* Main input row */}
+          <div className="flex flex-row items-end pl-2 md:pl-3 pr-2 py-2 w-full gap-0">
+            <Textarea
+              ref={ref}
+              name="input"
+              rows={1}
+              maxRows={5}
+              tabIndex={0}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              placeholder={placeholder}
+              spellCheck={false}
+              value={value}
+              disabled={disabled || isLoading}
+              className={cn(
+                "w-full min-h-8 text-sm md:text-base max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
+                "resize-none border-0 bg-transparent",
+                "text-foreground placeholder:text-muted-foreground",
+                "no-scrollbar leading-6"
+              )}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+            />
+
+            {/* Buttons row - only show when not loading */}
+            {!isLoading && (
+              <div className="flex items-center gap-1 ml-2">
+                {/* Clear Button */}
+                {showClearButton && onClear && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={onClear}
+                    disabled={disabled || isLoading}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Bottom row with submit button */}
+          <div className="flex flex-row items-center w-full justify-end gap-0 pt-1 pb-2 px-2">
+            <div className="flex-1"></div>
+
+            {!isLoading && (
               <Button
-                type="button"
-                variant="ghost"
+                type="submit"
                 size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={onClear}
-                disabled={disabled || isLoading}
+                className={cn(
+                  'h-8 w-8 shrink-0 rounded-full',
+                  !!value?.trim() 
+                    ? "bg-zinc-800 dark:bg-emerald-500/20 text-white dark:text-emerald-400 dark:outline-emerald-400" 
+                    : "bg-secondary text-secondary-foreground",
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                disabled={(value.trim().length === 0 && !isLoading) || disabled}
               >
-                <Trash2 size={16} />
+                <ArrowUp size={16} />
               </Button>
             )}
-            
-            {/* Submit Button */}
-            <Button
-              type={isLoading ? 'button' : 'submit'}
-              size="icon"
-              className={cn(
-                'h-8 w-8 shrink-0 rounded-md',
-                'bg-primary hover:bg-primary/90',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                isLoading && 'animate-pulse'
-              )}
-              disabled={(value.trim().length === 0 && !isLoading) || disabled}
-            >
-              {isLoading ? (
+
+            {isLoading && (
+              <Button
+                type="button"
+                size="icon"
+                className={cn(
+                  'h-8 w-8 shrink-0 rounded-full',
+                  'bg-zinc-800 dark:bg-emerald-500/20 text-white dark:text-emerald-400',
+                  'animate-pulse'
+                )}
+                disabled
+              >
                 <Square size={16} />
-              ) : (
-                <ArrowUp size={16} />
-              )}
-            </Button>
+              </Button>
+            )}
           </div>
         </div>
       </form>
