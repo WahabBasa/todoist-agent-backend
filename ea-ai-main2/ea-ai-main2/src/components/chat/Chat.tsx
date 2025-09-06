@@ -26,6 +26,7 @@ export function Chat({ sessionId }: ChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const prevMessageCountRef = useRef(0) // Track previous message count for new message detection
   
   // Sidebar state for fixed input positioning
   const { state, isMobile } = useSidebar()
@@ -35,21 +36,26 @@ export function Chat({ sessionId }: ChatProps) {
   const createDefaultSession = useMutation(api.chatSessions.createDefaultSession)
   const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage)
   
-  // Big-brain pattern: Query for default session (returns null if user not found)
+  // Simplified query approach - single conversation query
   const defaultSession = useQuery(api.chatSessions.getDefaultSession, {})
   
-  // Use session-aware conversation query or fallback to legacy
-  const conversation = useQuery(api.conversations.getConversationBySession, 
-    sessionId ? { sessionId } : { sessionId: undefined }
+  // Single query that handles both session-specific and default conversations
+  const activeConversation = useQuery(
+    api.conversations.getConversationBySession, 
+    sessionId 
+      ? { sessionId } // Use provided session ID
+      : defaultSession 
+        ? { sessionId: defaultSession._id } // Use default session ID when available
+        : "skip" // Skip query if no session available
   )
   
-  // Fallback to default session query if no session ID provided
-  const defaultConversation = useQuery(api.conversations.getConversation, 
-    sessionId ? undefined : {}
-  )
-  
-  // Use the appropriate conversation data
-  const activeConversation = sessionId ? conversation : defaultConversation
+  console.log('🔍 Query state:', { 
+    sessionId, 
+    hasDefaultSession: !!defaultSession, 
+    defaultSessionId: defaultSession?._id,
+    hasActiveConversation: !!activeConversation,
+    messageCount: activeConversation?.messages?.length || 0
+  })
   
   // ChatGPT clone state pattern - simple and clean
   const [input, setInput] = useState("")
@@ -75,38 +81,80 @@ export function Chat({ sessionId }: ChatProps) {
 
   // Enhanced UI state - empty chat detection and input positioning
   const isEmpty = messages.length === 0 && !question
-
-  // Enhanced scroll behavior - works with fixed input architecture
+  
+  // Initialize prevMessageCountRef when messages first load (prevents initial auto-scroll)
   useEffect(() => {
-    const scrollArea = messagesAreaRef.current
-    if (scrollArea) {
-      // Scroll to optimistic question message if it exists
-      if (question && questionRef.current) {
-        // Use scrollIntoView for precise positioning of user messages
-        questionRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'end',
-          inline: 'nearest'
-        })
-        
-        // Show thinking animation after scroll completes
-        if (isLoading) {
-          const timer = setTimeout(() => {
-            setShowThinking(true)
-          }, 300)
-          return () => clearTimeout(timer)
+    if (messages.length > 0 && prevMessageCountRef.current === 0) {
+      prevMessageCountRef.current = messages.length
+      console.log('🚀 Initialized message count:', messages.length)
+    }
+  }, [messages])
+
+  // Separate scroll effects for better control
+  
+  // Effect 1: Scroll to user message immediately when question is set
+  useEffect(() => {
+    if (question && questionRef.current) {
+      console.log('🎯 User message scroll: Scrolling to user question')
+      // Immediately scroll to user message with slight delay to ensure DOM is ready
+      requestAnimationFrame(() => {
+        if (questionRef.current) {
+          questionRef.current.scrollIntoView({ 
+            behavior: 'auto', // Immediate scrolling
+            block: 'end', // Show user message at bottom of viewport
+            inline: 'nearest'
+          })
+          console.log('🎯 User message scroll: Completed')
         }
-      }
-      // Scroll to bottom when new backend messages arrive
-      else if (messages.length > 0) {
-        // Scroll to bottom of messages area - fixed input stays visible
-        scrollArea.scrollTo({
-          top: scrollArea.scrollHeight,
-          behavior: 'smooth'
-        })
+      })
+      
+      // Show thinking animation after scroll completes
+      if (isLoading) {
+        const timer = setTimeout(() => {
+          setShowThinking(true)
+        }, 300)
+        return () => clearTimeout(timer)
       }
     }
-  }, [messages, question, isLoading]) // Scroll on both optimistic and backend messages
+  }, [question, isLoading]) // Separate dependency for user message scroll
+  
+  // Effect 2: Scroll after AI response arrives (only if user is near bottom)
+  useEffect(() => {
+    const scrollArea = messagesAreaRef.current
+    if (!scrollArea) return
+    
+    // Only scroll when we actually get a NEW message (not on every render)
+    if (messages.length > prevMessageCountRef.current && messages.length > 0) {
+      console.log('🤖 AI response scroll: New message detected', {
+        newCount: messages.length, 
+        prevCount: prevMessageCountRef.current,
+        scrollHeight: scrollArea.scrollHeight
+      })
+      
+      // Update the ref to track current count
+      prevMessageCountRef.current = messages.length
+      
+      // Check if user is near bottom (within 100px) - only auto-scroll if they are
+      const isNearBottom = scrollArea.scrollTop + scrollArea.clientHeight >= scrollArea.scrollHeight - 100
+      
+      if (isNearBottom) {
+        console.log('🤖 AI response scroll: User is near bottom, executing auto-scroll')
+        // Use requestAnimationFrame to ensure DOM is fully rendered
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Double RAF ensures layout is complete
+            console.log('🤖 AI response scroll: Executing scroll to height:', scrollArea.scrollHeight)
+            scrollArea.scrollTo({
+              top: scrollArea.scrollHeight,
+              behavior: 'smooth' // Smooth scroll for AI response
+            })
+          })
+        })
+      } else {
+        console.log('🤖 AI response scroll: User is reading older messages, skipping auto-scroll')
+      }
+    }
+  }, [messages]) // Separate dependency for AI response scroll
 
   // Session-aware handleSubmit for Convex integration
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -117,6 +165,8 @@ export function Chat({ sessionId }: ChatProps) {
     setInput("")
     setQuestion(inputValue) // Show user message immediately (optimistic UI)
     setIsLoading(true)
+    
+    console.log('📝 User message submitted:', inputValue, '- Optimistic UI set')
     
     // Track that the chat has started for UI positioning
     if (isEmpty) {
@@ -131,10 +181,14 @@ export function Chat({ sessionId }: ChatProps) {
       if (!currentSessionId) {
         if (defaultSession) {
           currentSessionId = defaultSession._id
+          console.log('📋 Using existing default session:', currentSessionId)
         } else {
           // Create default session only when user starts chatting
+          console.log('📋 Creating new default session')
           currentSessionId = await createDefaultSession()
         }
+      } else {
+        console.log('📋 Using provided session:', currentSessionId)
       }
 
       // Create current time context from user's browser
@@ -182,12 +236,33 @@ export function Chat({ sessionId }: ChatProps) {
         }
       }
 
-      // Clear optimistic UI once backend completes
-      setQuestion("")
-      setShowThinking(false)
+      // Clear optimistic UI only after ensuring messages are updated
+      console.log('✅ AI response completed, waiting for message update before clearing optimistic UI')
       
-      // Trigger chat history update
+      // Trigger chat history update first
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
+      
+      // Use a small delay to ensure Convex query has time to update
+      // This prevents the user message from briefly disappearing
+      const checkAndClearOptimisticUI = () => {
+        // Check if the messages array includes our user message
+        const userMessageExists = activeConversation?.messages?.some((msg: any) => 
+          msg.role === 'user' && msg.content === inputValue
+        )
+        
+        if (userMessageExists) {
+          console.log('✅ User message confirmed in messages array, clearing optimistic UI')
+          setQuestion("")
+          setShowThinking(false)
+        } else {
+          console.log('⏳ User message not yet in messages array, waiting...')
+          // Try again after a short delay
+          setTimeout(checkAndClearOptimisticUI, 100)
+        }
+      }
+      
+      // Start checking after initial delay
+      setTimeout(checkAndClearOptimisticUI, 100)
       
     } catch (error) {
       console.error("Chat error:", error)
@@ -208,7 +283,8 @@ export function Chat({ sessionId }: ChatProps) {
       }
       
       toast.error(errorMessage)
-      setQuestion("") // Clear optimistic message on error
+      console.log('❌ AI response failed, clearing optimistic UI immediately')
+      setQuestion("") // Clear optimistic message on error immediately
       setShowThinking(false)
     } finally {
       setIsLoading(false)

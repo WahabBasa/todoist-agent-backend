@@ -200,8 +200,8 @@ export namespace MessageV2 {
     static convexToModelMessages(convexMessages: ConvexMessage[]): ModelMessage[] {
       console.log(`[MessageV2] Converting ${convexMessages.length} Convex messages to ModelMessages`);
       
-      const uiMessages = this.toUIMessages(convexMessages);
-      const modelMessages = this.toModelMessages(uiMessages);
+      const uiMessages = MessageConverter.toUIMessages(convexMessages); // Fixed: use class name for static method
+      const modelMessages = MessageConverter.toModelMessages(uiMessages); // Fixed: use class name for static method
       
       console.log(`[MessageV2] Conversion result: ${convexMessages.length} → ${uiMessages.length} → ${modelMessages.length}`);
       
