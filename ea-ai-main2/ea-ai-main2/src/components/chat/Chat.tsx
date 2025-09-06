@@ -8,6 +8,7 @@ import { UserMessage } from './UserMessage'
 import { AssistantMessage } from './AssistantMessage'
 import { TypingIndicator } from './TypingIndicator'
 import { ChatInput } from './ChatInput'
+import { ChatGreeting } from './ChatGreeting'
 import { useSidebar } from '../ui/sidebar'
 
 interface Message {
@@ -25,7 +26,7 @@ export function Chat({ sessionId }: ChatProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   
-  // Sidebar state for fixed input positioning
+  // Sidebar state for positioning context (no longer needed for fixed input)
   const { state, isMobile } = useSidebar()
   
   // Convex integration with session support
@@ -59,6 +60,7 @@ export function Chat({ sessionId }: ChatProps) {
   const [isLoading, setIsLoading] = useState(false) // For backend processing
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  const [hasUserInteracted, setHasUserInteracted] = useState(false) // Track if user has started chatting
 
   // Convert existing conversation messages to display format
   const messages = useMemo(() => {
@@ -76,6 +78,7 @@ export function Chat({ sessionId }: ChatProps) {
   // Simplified UI state - derived from messages
   const isEmpty = messages.length === 0
   const hasStartedChat = messages.length > 0
+  const shouldShowCentered = isEmpty && !hasUserInteracted // Show centered only if empty AND user hasn't interacted
 
   // Natural scroll behavior following Gemini clone pattern
   useEffect(() => {
@@ -102,6 +105,7 @@ export function Chat({ sessionId }: ChatProps) {
     const inputValue = input.trim()
     setInput("") // Clear input immediately
     setIsLoading(true) // Show loading state
+    setHasUserInteracted(true) // Trigger immediate UI transition
     
     console.log('📝 User message submitted:', inputValue)
 
@@ -224,54 +228,50 @@ export function Chat({ sessionId }: ChatProps) {
   }
 
   return (
-    <>
-      {/* Main Chat Container */}
-      <div className="flex flex-col h-full w-full">
-        {/* Header */}
-        <header className="p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        </header>
+    <div className="flex flex-col h-full w-full">
+      {/* Header */}
+      <header className="p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      </header>
 
-        {/* Messages Area - Full height with bottom padding for fixed input */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Empty State Welcome */}
-          {isEmpty && !hasStartedChat && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-16 h-16 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center mb-6">
-                <div className="text-2xl font-bold">T</div>
-              </div>
-              <h2 className="text-2xl font-semibold mb-3">Welcome to TaskAI</h2>
-              <p className="text-muted-foreground text-lg mb-8 max-w-2xl">
-                Your intelligent task management assistant. Ask me anything about organizing your work, managing projects, or planning your day.
-              </p>
-            </div>
-          )}
+      {/* Messages Area - Scrollable Only */}
+      <div className="flex-1 overflow-hidden">
+        {/* Messages Scroll Area */}
+        <div ref={messagesAreaRef} className="h-full overflow-y-auto pb-32">
+          <div ref={messagesContainerRef} className="max-w-4xl mx-auto px-4 py-6 space-y-1">
+            {/* Messages from Convex */}
+            {messages.map((message) => (
+              message.role === 'user' ? (
+                <UserMessage key={message.id} content={message.content} />
+              ) : (
+                <AssistantMessage key={message.id} content={message.content} />
+              )
+            ))}
 
-          {/* Messages Scroll Area */}
-          <div ref={messagesAreaRef} className="flex-1 overflow-y-auto pb-24">
-            <div ref={messagesContainerRef} className="max-w-4xl mx-auto px-4 py-6 space-y-1">
-              {/* Messages from Convex */}
-              {messages.map((message) => (
-                message.role === 'user' ? (
-                  <UserMessage key={message.id} content={message.content} />
-                ) : (
-                  <AssistantMessage key={message.id} content={message.content} />
-                )
-              ))}
-
-              {/* Thinking indicator - show when loading */}
-              <TypingIndicator show={isLoading} />
-            </div>
+            {/* Thinking indicator - show when loading */}
+            <TypingIndicator show={isLoading} />
           </div>
         </div>
       </div>
 
-      {/* Fixed Input Area - Outside main container, positioned fixed at bottom */}
+      {/* Dynamic Input Container - ChatHub Pattern */}
       <div className={cn(
-        "fixed bottom-0 right-0 z-10 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-        // Adjust left positioning based on sidebar state
-        isMobile || state === 'collapsed' ? 'left-0' : 'left-72'
+        "absolute bottom-0 left-0 right-0 w-full flex flex-col items-center z-10",
+        "justify-end md:justify-center px-2 md:px-4 pb-4 pt-16 gap-2",
+        "bg-gradient-to-t from-background via-background/95 to-transparent",
+        "transition-all duration-500 ease-in-out",
+        shouldShowCentered && "top-0"
       )}>
-        <div className="max-w-4xl mx-auto p-4">
+        {/* Content Container with Constrained Width */}
+        <div className="w-full md:w-[700px] lg:w-[720px] flex flex-col gap-3">
+          {/* Greeting - Only show when centered */}
+          {shouldShowCentered && <ChatGreeting />}
+          
+          {/* Input Container */}
+          <div className={cn(
+            "w-full p-4",
+            "border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-design-lg",
+            shouldShowCentered && "border-t-0 bg-transparent backdrop-blur-none rounded-design-lg"
+          )}>
           <ChatInput
             ref={inputRef}
             value={input}
@@ -301,8 +301,9 @@ export function Chat({ sessionId }: ChatProps) {
               }
             }}
           />
+          </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
