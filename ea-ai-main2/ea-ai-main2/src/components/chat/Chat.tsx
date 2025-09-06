@@ -26,8 +26,14 @@ export function Chat({ sessionId }: ChatProps) {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   
-  // Sidebar state for positioning context (no longer needed for fixed input)
+  // Sidebar state for positioning context - needed for sidebar-aware positioning
   const { state, isMobile } = useSidebar()
+  
+  // Calculate sidebar-aware positioning
+  const sidebarOffset = useMemo(() => {
+    if (isMobile) return "left-0" // Full width on mobile
+    return state === "expanded" ? "left-72" : "left-16" // Respect desktop sidebar states
+  }, [isMobile, state])
   
   // Convex integration with session support
   const chatWithAI = useAction(api.ai.chatWithAI)
@@ -60,7 +66,6 @@ export function Chat({ sessionId }: ChatProps) {
   const [isLoading, setIsLoading] = useState(false) // For backend processing
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
-  const [hasUserInteracted, setHasUserInteracted] = useState(false) // Track if user has started chatting
 
   // Convert existing conversation messages to display format
   const messages = useMemo(() => {
@@ -75,10 +80,20 @@ export function Chat({ sessionId }: ChatProps) {
       : []
   }, [activeConversation])
 
-  // Simplified UI state - derived from messages
+  // Simplified UI state - derived from messages (ChatHub pattern)
   const isEmpty = messages.length === 0
   const hasStartedChat = messages.length > 0
-  const shouldShowCentered = isEmpty && !hasUserInteracted // Show centered only if empty AND user hasn't interacted
+  const shouldShowCentered = isEmpty // ChatHub's simple pattern: just check if messages exist
+  
+  // Debug logging for centering state
+  console.log('🐛 Debug centering:', { 
+    isEmpty: isEmpty, 
+    messagesLength: messages.length,
+    shouldShowCentered: shouldShowCentered,
+    sessionId: sessionId || 'null',
+    hasDefaultSession: !!defaultSession,
+    defaultSessionId: defaultSession?._id || 'none'
+  })
 
   // Natural scroll behavior following Gemini clone pattern
   useEffect(() => {
@@ -105,7 +120,6 @@ export function Chat({ sessionId }: ChatProps) {
     const inputValue = input.trim()
     setInput("") // Clear input immediately
     setIsLoading(true) // Show loading state
-    setHasUserInteracted(true) // Trigger immediate UI transition
     
     console.log('📝 User message submitted:', inputValue)
 
@@ -236,8 +250,11 @@ export function Chat({ sessionId }: ChatProps) {
       {/* Messages Area - Scrollable Only */}
       <div className="flex-1 overflow-hidden">
         {/* Messages Scroll Area */}
-        <div ref={messagesAreaRef} className="h-full overflow-y-auto pb-32">
-          <div ref={messagesContainerRef} className="max-w-4xl mx-auto px-4 py-6 space-y-1">
+        <div 
+          ref={messagesAreaRef} 
+          className="h-full overflow-y-auto pb-32"
+        >
+          <div ref={messagesContainerRef} className="w-full md:w-[700px] lg:w-[720px] mx-auto px-4 py-6 space-y-1">
             {/* Messages from Convex */}
             {messages.map((message) => (
               message.role === 'user' ? (
@@ -253,16 +270,18 @@ export function Chat({ sessionId }: ChatProps) {
         </div>
       </div>
 
-      {/* Dynamic Input Container - ChatHub Pattern */}
+      {/* Dynamic Input Container - Sidebar-Aware Pattern */}
       <div className={cn(
-        "absolute bottom-0 left-0 right-0 w-full flex flex-col items-center z-10",
-        "justify-end md:justify-center px-2 md:px-4 pb-4 pt-16 gap-2",
+        "absolute bottom-0 right-0 flex flex-col items-center z-10",
+        sidebarOffset, // Dynamic left positioning based on sidebar state
+        shouldShowCentered ? "justify-center" : "justify-end", // ChatHub's conditional vertical positioning
+        "px-2 md:px-4 pb-4 pt-16 gap-2",
         "bg-gradient-to-t from-background via-background/95 to-transparent",
-        "transition-all duration-500 ease-in-out",
+        "transition-all duration-300 ease-in-out", // Smooth sidebar transitions
         shouldShowCentered && "top-0"
       )}>
         {/* Content Container with Constrained Width */}
-        <div className="w-full md:w-[700px] lg:w-[720px] flex flex-col gap-3">
+        <div className="w-full md:w-[700px] lg:w-[720px] mx-auto flex flex-col gap-3">
           {/* Greeting - Only show when centered */}
           {shouldShowCentered && <ChatGreeting />}
           
