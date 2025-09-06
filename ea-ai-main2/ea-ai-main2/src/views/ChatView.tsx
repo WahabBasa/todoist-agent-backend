@@ -1,5 +1,5 @@
 import { Chat } from "../components/chat/Chat"
-import { Navbar } from "../components/layout/Navbar"
+import { CollapsibleSidebar } from "../components/layout/CollapsibleSidebar"
 import { Id } from "../../convex/_generated/dataModel"
 
 interface ChatViewProps {
@@ -22,9 +22,9 @@ export function ChatView({
   onOpenSettings 
 }: ChatViewProps) {
   return (
-    <div className="w-full h-[100%] bg-white dark:bg-zinc-800 rounded-xl flex flex-row relative overflow-hidden">
-      {/* Internal Navbar - ChatHub Pattern */}
-      <Navbar
+    <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
+      {/* Unified Collapsible Sidebar */}
+      <CollapsibleSidebar
         activeView={activeView}
         onViewChange={onViewChange}
         onNewChat={onNewChat}
@@ -33,8 +33,10 @@ export function ChatView({
         onOpenSettings={onOpenSettings}
       />
       
-      {/* Chat Content */}
-      <Chat sessionId={sessionId} />
+      {/* Main Chat Content */}
+      <div className="flex-1">
+        <Chat sessionId={sessionId} />
+      </div>
     </div>
   )
 }

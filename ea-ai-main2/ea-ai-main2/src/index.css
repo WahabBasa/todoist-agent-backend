@@ -212,6 +212,44 @@
     display: none;
   }
 
+  /* Dark theme scrollbars for sidebar */
+  .scrollbar-dark::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-dark::-webkit-scrollbar-track {
+    background: var(--color-muted);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-dark::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+  }
+  
+  .scrollbar-dark {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) var(--color-muted);
+  }
+
+  /* Collapsible Sidebar transitions */
+  .sidebar-transition {
+    transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
+  }
+  
+  /* Smooth hover effects for sidebar items */
+  .sidebar-item {
+    transition: all 0.2s ease;
+  }
+  
+  .sidebar-item:hover {
+    transform: translateX(2px);
+  }
+
   /* Border Radius Design System Utilities */
   .rounded-design-sm { border-radius: var(--radius-sm); }
   .rounded-design-md { border-radius: var(--radius-md); }

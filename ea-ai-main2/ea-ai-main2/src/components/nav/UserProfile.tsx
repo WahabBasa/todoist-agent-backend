@@ -1,13 +1,13 @@
 import { UserButton } from "@clerk/clerk-react"
 import { useUser } from "@clerk/clerk-react"
-import { Button } from "@/components/ui/button"
-import { Settings } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface UserProfileProps {
   onOpenSettings?: () => void;
+  collapsed?: boolean;
 }
 
-export function UserProfile({ onOpenSettings }: UserProfileProps) {
+export function UserProfile({ collapsed = false }: UserProfileProps) {
   const { user, isLoaded } = useUser()
 
   if (!isLoaded) {
@@ -15,15 +15,20 @@ export function UserProfile({ onOpenSettings }: UserProfileProps) {
   }
 
   return (
-    <div className="padding-secondary flex items-center gap-2">
-      <Button 
-        variant="ghost" 
-        size="sm"
-        onClick={onOpenSettings}
-        className="text-tertiary"
-      >
-        <Settings className="h-4 w-4" />
-      </Button>
+    <div className={cn(
+      "flex items-center transition-all",
+      collapsed ? "justify-center" : "justify-between gap-2 px-2"
+    )}>
+      {!collapsed && user && (
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-sm font-medium text-foreground truncate">
+            {user.firstName || user.username || "User"}
+          </span>
+          <span className="text-xs text-muted-foreground truncate">
+            {user.primaryEmailAddress?.emailAddress}
+          </span>
+        </div>
+      )}
       
       <div id="clerk-user-button">
         <UserButton 
@@ -38,7 +43,7 @@ export function UserProfile({ onOpenSettings }: UserProfileProps) {
           }}
           appearance={{
             elements: {
-              avatarBox: "h-8 w-8",
+              avatarBox: collapsed ? "h-8 w-8" : "h-10 w-10",
               userButtonPopoverCard: "bg-card border-border",
               userButtonPopoverActions__manageAccount: "text-foreground hover:bg-accent",
               userButtonPopoverActions__signOut: "text-foreground hover:bg-accent",

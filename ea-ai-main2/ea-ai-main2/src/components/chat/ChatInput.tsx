@@ -43,7 +43,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
         className="relative"
       >
         {/* ChatHub-style input container */}
-        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-zinc-100 dark:ring-zinc-700 ring-offset-2 dark:ring-offset-zinc-800 bg-zinc-50 dark:bg-white/5 w-full dark:border-white/5 rounded-2xl overflow-hidden">
+        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-border ring-offset-2 ring-offset-background bg-muted w-full border border-border rounded-2xl overflow-hidden">
           
           {/* Main input row */}
           <div className="flex flex-row items-end pl-2 md:pl-3 pr-2 py-2 w-full gap-0">
@@ -100,7 +100,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full',
                   !!value?.trim() 
-                    ? "bg-zinc-800 dark:bg-emerald-500/20 text-white dark:text-emerald-400 dark:outline-emerald-400" 
+                    ? "bg-[var(--color-blue-primary)] text-[var(--color-blue-primary-foreground)] hover:bg-[var(--color-blue-primary-hover)]" 
                     : "bg-secondary text-secondary-foreground",
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
@@ -116,7 +116,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 size="icon"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full',
-                  'bg-zinc-800 dark:bg-emerald-500/20 text-white dark:text-emerald-400',
+                  'bg-[var(--color-blue-primary)] text-[var(--color-blue-primary-foreground)]',
                   'animate-pulse'
                 )}
                 disabled

@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { UserProfile } from "../nav/UserProfile";
-import { HistorySidebar } from "../history/HistorySidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,12 +84,7 @@ export function Navbar({
         {renderNewSession()}
       </div>
 
-      <div className="flex flex-col gap-2 items-center">
-        <HistorySidebar 
-          currentSessionId={currentSessionId}
-          onChatSelect={handleChatSelect}
-        />
-      </div>
+      {/* Chat history now in persistent sidebar */}
 
       <div className="flex-1" />
 

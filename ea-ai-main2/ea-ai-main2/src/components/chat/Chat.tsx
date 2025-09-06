@@ -225,7 +225,7 @@ export function Chat({ sessionId }: ChatProps) {
   }
 
   return (
-    <div className="w-full h-[100%] bg-white dark:bg-zinc-800 rounded-xl flex flex-row relative overflow-hidden">
+    <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
       {/* Messages Container - ChatHub Pattern */}
       <div
         className="flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[200px]"
@@ -253,7 +253,7 @@ export function Chat({ sessionId }: ChatProps) {
       <div
         className={cn(
           "w-full flex flex-col items-center absolute bottom-0 px-2 md:px-4 pb-4 pt-16 right-0 gap-2",
-          "bg-gradient-to-t transition-all ease-in-out duration-1000 from-white dark:from-zinc-800 to-transparent from-70% left-0",
+          "bg-gradient-to-t transition-all ease-in-out duration-1000 from-background to-transparent from-70% left-0",
           isFreshSession && "top-0 justify-center" // Full height centering like ChatHub
         )}
       >

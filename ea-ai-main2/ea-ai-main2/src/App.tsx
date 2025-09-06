@@ -14,7 +14,7 @@ import { Id } from "../convex/_generated/dataModel";
 
 export default function App() {
   return (
-    <div className="h-full">
+    <div className="h-full" suppressHydrationWarning>
       <Toaster position="top-right" />
       <AuthLoading>
         <div className="h-full flex items-center justify-center">

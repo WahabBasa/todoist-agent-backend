@@ -27,7 +27,7 @@ export const HistorySidebar = ({
   const [open, setOpen] = useState(false);
   
   // Get chat sessions from Convex
-  const sessions = useQuery(api.chatSessions.listSessions, {});
+  const sessions = useQuery(api.chatSessions.getChatSessions, {});
   const deleteChatSession = useMutation(api.chatSessions.deleteChatSession);
 
   const handleChatSelect = (sessionId: Id<"chatSessions">) => {
@@ -86,7 +86,7 @@ export const HistorySidebar = ({
 
           {/* Sessions List */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {sessions?.map((session) => (
+            {sessions?.sessions?.map((session) => (
               <ChatMenuItem
                 key={session._id}
                 chat={session}
@@ -96,7 +96,7 @@ export const HistorySidebar = ({
               />
             ))}
             
-            {sessions?.length === 0 && (
+            {sessions?.sessions?.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
                 <MessageSquare size={48} className="mb-4 opacity-50" />
                 <p className="text-sm">No conversations yet</p>
