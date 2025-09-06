@@ -93,9 +93,9 @@ export function ChatHistory({ currentSessionId, onChatSelect, className }: ChatH
 
   return (
     <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground">Chat history unavailable</div>}>
-      <div className={cn("flex flex-col h-full", className)}>
+      <div className={cn("flex flex-col h-full min-h-0", className)}>
         {/* Sessions List */}
-        <div className="flex-1 overflow-y-auto space-y-1 scrollbar-dark">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-1 scrollbar-dark pb-2">
           {sessions?.sessions?.map((session) => (
             <ChatSessionItem
               key={session._id}

@@ -188,13 +188,13 @@ export function CollapsibleSidebar({
 
       {/* Chat History - Only in expanded state */}
       {!collapsed && (
-        <div className="flex-1 min-h-0">
-          <div className="px-2 py-1">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="px-2 py-1 shrink-0">
             <div className="text-xs font-medium text-muted-foreground px-2 py-2">
               Recent Chats
             </div>
           </div>
-          <div className="flex-1 px-2">
+          <div className="flex-1 min-h-0 px-2">
             <ChatHistory
               currentSessionId={currentSessionId}
               onChatSelect={onChatSelect}
@@ -205,14 +205,8 @@ export function CollapsibleSidebar({
       )}
 
       {/* Footer with User Profile */}
-      <div className="p-2 border-t border-border">
-        {collapsed ? (
-          <div className="flex justify-center">
-            <UserProfile onOpenSettings={onOpenSettings} collapsed={true} />
-          </div>
-        ) : (
-          <UserProfile onOpenSettings={onOpenSettings} collapsed={false} />
-        )}
+      <div className="mt-auto shrink-0 p-2 border-t border-border">
+        <UserProfile onOpenSettings={onOpenSettings} collapsed={collapsed} />
       </div>
     </div>
   );

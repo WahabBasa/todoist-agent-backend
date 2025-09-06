@@ -23,7 +23,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 
   return (
     <div className="flex justify-start mb-6 group">
-      <div className="flex items-start gap-3 max-w-[79%] w-full">
+      <div className="flex items-start gap-3 max-w-[88%] w-full">
         {/* AI Avatar */}
         <div 
           className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center"

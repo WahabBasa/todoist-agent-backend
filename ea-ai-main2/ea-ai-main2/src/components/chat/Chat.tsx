@@ -232,7 +232,7 @@ export function Chat({ sessionId }: ChatProps) {
         ref={messagesAreaRef}
         id="chat-container"
       >
-        <div ref={messagesContainerRef} className="w-full md:w-[700px] lg:w-[720px] p-2 flex flex-1 flex-col gap-24">
+        <div ref={messagesContainerRef} className="w-full md:w-[650px] lg:w-[680px] pl-8 pr-4 py-2 flex flex-1 flex-col gap-24">
           <div className="flex flex-col gap-8 w-full items-start">
             {/* Messages from Convex */}
             {messages.map((message) => (
