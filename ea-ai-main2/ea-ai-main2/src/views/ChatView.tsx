@@ -6,5 +6,9 @@ interface ChatViewProps {
 }
 
 export function ChatView({ sessionId }: ChatViewProps) {
-  return <Chat sessionId={sessionId} />
+  return (
+    <div className="flex flex-col h-full w-full">
+      <Chat sessionId={sessionId} />
+    </div>
+  )
 }

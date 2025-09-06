@@ -4,9 +4,11 @@ import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Id } from "../../../convex/_generated/dataModel"
-import Textarea from 'react-textarea-autosize'
-import { ArrowUp, Square } from 'lucide-react'
-import { Button } from "../ui/button"
+import { UserMessage } from './UserMessage'
+import { AssistantMessage } from './AssistantMessage'
+import { TypingIndicator } from './TypingIndicator'
+import { ChatInput } from './ChatInput'
+import { useSidebar } from '../ui/sidebar'
 
 interface Message {
   id: string
@@ -22,6 +24,11 @@ export function Chat({ sessionId }: ChatProps) {
   const questionRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const messagesAreaRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Sidebar state for fixed input positioning
+  const { state, isMobile } = useSidebar()
   
   // Convex integration with session support
   const chatWithAI = useAction(api.ai.chatWithAI)
@@ -69,18 +76,17 @@ export function Chat({ sessionId }: ChatProps) {
   // Enhanced UI state - empty chat detection and input positioning
   const isEmpty = messages.length === 0 && !question
 
-  // Custom scroll behavior - scroll to latest message (question or last backend message)
+  // Enhanced scroll behavior - works with fixed input architecture
   useEffect(() => {
-    const wrapper = document.querySelector('.wrapper') as HTMLElement
-    if (wrapper) {
+    const scrollArea = messagesAreaRef.current
+    if (scrollArea) {
       // Scroll to optimistic question message if it exists
       if (question && questionRef.current) {
-        const messageTop = questionRef.current.offsetTop
-        const targetScrollTop = Math.max(0, messageTop - 50)
-        
-        wrapper.scrollTo({
-          top: targetScrollTop,
-          behavior: 'smooth'
+        // Use scrollIntoView for precise positioning of user messages
+        questionRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'end',
+          inline: 'nearest'
         })
         
         // Show thinking animation after scroll completes
@@ -91,18 +97,13 @@ export function Chat({ sessionId }: ChatProps) {
           return () => clearTimeout(timer)
         }
       }
-      // Scroll to last message when new backend messages arrive
+      // Scroll to bottom when new backend messages arrive
       else if (messages.length > 0) {
-        const lastMessage = document.querySelector('.message:last-of-type') as HTMLElement
-        if (lastMessage) {
-          const messageTop = lastMessage.offsetTop
-          const targetScrollTop = Math.max(0, messageTop - 50)
-          
-          wrapper.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth'
-          })
-        }
+        // Scroll to bottom of messages area - fixed input stays visible
+        scrollArea.scrollTo({
+          top: scrollArea.scrollHeight,
+          behavior: 'smooth'
+        })
       }
     }
   }, [messages, question, isLoading]) // Scroll on both optimistic and backend messages
@@ -190,7 +191,23 @@ export function Chat({ sessionId }: ChatProps) {
       
     } catch (error) {
       console.error("Chat error:", error)
-      toast.error("Failed to send message")
+      
+      // Enhanced error handling with specific messages
+      let errorMessage = "Failed to send message"
+      
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = "Network error. Please check your connection and try again."
+        } else if (error.message.includes('rate limit')) {
+          errorMessage = "Too many requests. Please wait a moment before trying again."
+        } else if (error.message.includes('authentication') || error.message.includes('unauthorized')) {
+          errorMessage = "Authentication error. Please refresh the page and try again."
+        } else if (error.message.includes('timeout')) {
+          errorMessage = "Request timed out. The AI may be busy, please try again."
+        }
+      }
+      
+      toast.error(errorMessage)
       setQuestion("") // Clear optimistic message on error
       setShowThinking(false)
     } finally {
@@ -212,98 +229,108 @@ export function Chat({ sessionId }: ChatProps) {
     }, 300)
   }
 
-  return (
-    <div className="chat-page">
-      <div className="wrapper">
-        <div className={cn(
-          "chat",
-          isEmpty && "chat-empty",
-          hasStartedChat && "chat-has-started"
-        )}>
-          {/* LAYER 1: Historical messages - vertical stacking */}
-          {messages.map((message, i) => (
-            <div
-              key={message.id}
-              className={cn(
-                "message",
-                message.role === "user" ? "user" : "assistant"
-              )}
-            >
-              {message.content}
-            </div>
-          ))}
+  const handleClearChat = () => {
+    if (messages.length === 0 && !question) return
+    
+    // Clear optimistic state
+    setQuestion("")
+    setShowThinking(false)
+    setInput("")
+    setHasStartedChat(false)
+    
+    // Trigger a chat history refresh (this will clear messages from DB)
+    window.dispatchEvent(new CustomEvent('clear-chat-requested'))
+    
+    toast.success("Chat cleared")
+  }
 
-          {/* LAYER 2: Active conversation - ChatGPT clone pattern */}
-          {question && <div ref={questionRef} className="message user">{question}</div>}
-          
-          {/* Thinking animation - shows after scroll completes */}
-          {showThinking && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" />
-                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />
-                <div className="w-2 h-2 bg-current rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.4s' }} />
+  return (
+    <>
+      {/* Main Chat Container */}
+      <div className="flex flex-col h-full w-full">
+        {/* Header */}
+        <header className="p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        </header>
+
+        {/* Messages Area - Full height with bottom padding for fixed input */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Empty State Welcome */}
+          {isEmpty && !hasStartedChat && (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="w-16 h-16 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center mb-6">
+                <div className="text-2xl font-bold">T</div>
               </div>
-              <span className="text-xs">Thinking...</span>
+              <h2 className="text-2xl font-semibold mb-3">Welcome to TaskAI</h2>
+              <p className="text-muted-foreground text-lg mb-8 max-w-2xl">
+                Your intelligent task management assistant. Ask me anything about organizing your work, managing projects, or planning your day.
+              </p>
             </div>
           )}
-          
-          {/* Spacer - pushes form higher from bottom (only when chat has content) */}
-          {!isEmpty && <div style={{ flex: 1, minHeight: '10vh' }}></div>}
-          
-          {/* Form with simplified positioning - slide down after first message */}
-          <form className={cn(
-            "new-form",
-            isEmpty && !hasStartedChat ? "form-centered" : "form-slide-down"
-          )} onSubmit={handleSubmit} ref={formRef}>
-            <div className="form-container">
-              <Textarea
-                ref={inputRef}
-                name="input"
-                rows={2}
-                maxRows={5}
-                tabIndex={0}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
-                placeholder="Ask a question..."
-                spellCheck={false}
-                value={input}
-                disabled={isLoading}
-                className="form-textarea"
-                onChange={handleInputChange}
-                onKeyDown={e => {
-                  if (
-                    e.key === 'Enter' &&
-                    !e.shiftKey &&
-                    !isComposing &&
-                    !enterDisabled
-                  ) {
-                    if (input.trim().length === 0) {
-                      e.preventDefault()
-                      return
-                    }
-                    e.preventDefault()
-                    const textarea = e.target as HTMLTextAreaElement
-                    textarea.form?.requestSubmit()
-                  }
-                }}
-              />
-              
-              <Button
-                type={isLoading ? 'button' : 'submit'}
-                size="icon"
-                className={cn(
-                  'form-submit-button',
-                  isLoading ? 'animate-pulse' : ''
-                )}
-                disabled={input.length === 0 && !isLoading}
-              >
-                {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
-              </Button>
+
+          {/* Messages Scroll Area */}
+          <div ref={messagesAreaRef} className="flex-1 overflow-y-auto pb-24">
+            <div ref={messagesContainerRef} className="max-w-4xl mx-auto px-4 py-6 space-y-1">
+              {/* Historical messages */}
+              {messages.map((message) => (
+                message.role === 'user' ? (
+                  <UserMessage key={message.id} content={message.content} />
+                ) : (
+                  <AssistantMessage key={message.id} content={message.content} />
+                )
+              ))}
+
+              {/* Optimistic user message */}
+              {question && (
+                <div ref={questionRef}>
+                  <UserMessage content={question} />
+                </div>
+              )}
+
+              {/* Typing indicator */}
+              <TypingIndicator show={showThinking} />
             </div>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Fixed Input Area - Outside main container, positioned fixed at bottom */}
+      <div className={cn(
+        "fixed bottom-0 right-0 z-10 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        // Adjust left positioning based on sidebar state
+        isMobile || state === 'collapsed' ? 'left-0' : 'left-72'
+      )}>
+        <div className="max-w-4xl mx-auto p-4">
+          <ChatInput
+            ref={inputRef}
+            value={input}
+            onChange={handleInputChange}
+            onSubmit={handleSubmit}
+            onClear={handleClearChat}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
+            isLoading={isLoading}
+            disabled={isLoading}
+            placeholder="Ask a question..."
+            showClearButton={messages.length > 0 || !!question}
+            onKeyDown={e => {
+              if (
+                e.key === 'Enter' &&
+                !e.shiftKey &&
+                !isComposing &&
+                !enterDisabled
+              ) {
+                if (input.trim().length === 0) {
+                  e.preventDefault()
+                  return
+                }
+                e.preventDefault()
+                const form = e.currentTarget.closest('form')
+                form?.requestSubmit()
+              }
+            }}
+          />
+        </div>
+      </div>
+    </>
   )
 }
