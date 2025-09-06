@@ -51,6 +51,7 @@ export function Chat({ sessionId }: ChatProps) {
   const [showThinking, setShowThinking] = useState(false) // For thinking animation after scroll
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  const [hasStartedChat, setHasStartedChat] = useState(false)
 
   // Convert existing conversation messages to display format
   const messages = useMemo(() => {
@@ -64,6 +65,9 @@ export function Chat({ sessionId }: ChatProps) {
         }))
       : []
   }, [activeConversation])
+
+  // Enhanced UI state - empty chat detection and input positioning
+  const isEmpty = messages.length === 0 && !question
 
   // Custom scroll behavior - scroll to latest message (question or last backend message)
   useEffect(() => {
@@ -112,6 +116,12 @@ export function Chat({ sessionId }: ChatProps) {
     setInput("")
     setQuestion(inputValue) // Show user message immediately (optimistic UI)
     setIsLoading(true)
+    
+    // Track that the chat has started for UI positioning
+    if (isEmpty) {
+      console.log('🎯 DEBUG: Starting new chat - isEmpty:', isEmpty, 'hasStartedChat:', hasStartedChat)
+      setHasStartedChat(true)
+    }
 
     try {
       let currentSessionId = sessionId
@@ -205,7 +215,11 @@ export function Chat({ sessionId }: ChatProps) {
   return (
     <div className="chat-page">
       <div className="wrapper">
-        <div className="chat">
+        <div className={cn(
+          "chat",
+          isEmpty && "chat-empty",
+          hasStartedChat && "chat-has-started"
+        )}>
           {/* LAYER 1: Historical messages - vertical stacking */}
           {messages.map((message, i) => (
             <div
@@ -234,11 +248,14 @@ export function Chat({ sessionId }: ChatProps) {
             </div>
           )}
           
-          {/* Spacer - pushes form higher from bottom */}
-          <div style={{ flex: 1, minHeight: '10vh' }}></div>
+          {/* Spacer - pushes form higher from bottom (only when chat has content) */}
+          {!isEmpty && <div style={{ flex: 1, minHeight: '10vh' }}></div>}
           
-          {/* Form as part of scrollable content - ChatGPT clone pattern */}
-          <form className="new-form" onSubmit={handleSubmit} ref={formRef}>
+          {/* Form with simplified positioning - slide down after first message */}
+          <form className={cn(
+            "new-form",
+            isEmpty && !hasStartedChat ? "form-centered" : "form-slide-down"
+          )} onSubmit={handleSubmit} ref={formRef}>
             <div className="form-container">
               <Textarea
                 ref={inputRef}

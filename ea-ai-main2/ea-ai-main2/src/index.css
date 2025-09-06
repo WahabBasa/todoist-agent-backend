@@ -257,6 +257,34 @@
 
   /* Chat position animation */
   .chat-transition { transition: var(--chat-position-transition); }
+  
+  /* Empty chat state - center the form vertically and horizontally */
+  .chat-empty {
+    justify-content: center; /* Center form vertically in flex column */
+    align-items: center;     /* Center form horizontally */
+  }
+  
+  /* Simplified form positioning - clean slide-down animation */
+  .form-centered {
+    /* Form starts in centered position naturally via parent .chat-empty */
+    position: static;
+    transform: none; /* No initial transform needed - centering handled by flexbox */
+    transition: none; /* No initial transitions to prevent sliding from left */
+  }
+  
+  .form-slide-down {
+    /* Slide down to normal bottom position after first message */
+    position: static;
+    transform: translateY(20vh); /* Move down to simulate sliding to bottom */
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth slide-down */
+  }
+  
+  /* Ensure no unwanted animations after slide-down completes */
+  .form-started {
+    transition: none !important;
+    position: static !important;
+    /* Remove transform override to allow slide-down animation */
+  }
 }
 
 /* Essential component utilities */
@@ -280,12 +308,22 @@
   }
   
   .chat {
-    width: 60%; /* Widened by 10% from 50% */
+    width: 75%; /* Widened chat content area for better readability */
+    max-width: 800px; /* Constrain maximum width */
     height: 100%; /* Take full wrapper height */
     display: flex;
     flex-direction: column;
     gap: 0.25rem; /* 4px extremely tight spacing between user-AI pairs */
     justify-content: flex-start; /* Natural top-to-bottom flow for proper scroll positioning */
+    /* DEBUG: Disable transitions temporarily */
+    transition: none !important;
+  }
+  
+  /* Debug state for chat that has started */
+  .chat-has-started {
+    /* Ensure no sliding animations after chat starts */
+    transform: none !important;
+    transition: none !important;
   }
   
   /* Message styling - vertical stacking with dynamic sizing */
@@ -322,7 +360,10 @@
   .new-form {
     margin-top: 1rem;
     width: 100%;
+    max-width: 100%; /* Prevent width overflow */
     margin-bottom: 2rem; /* Creates space below form, moving it away from bottom */
+    /* DEBUG: Disable transitions that might cause sliding */
+    transition: none !important;
   }
   
   .form-container {
