@@ -11,6 +11,8 @@ import { SettingsView } from "./views/SettingsView";
 import { MainLayout } from "./components/layout/MainLayout";
 import { Button } from "./components/ui/button";
 import { Id } from "../convex/_generated/dataModel";
+import { ChatProvider } from "./context/chat";
+import { SessionsProvider } from "./context/sessions";
 
 export default function App() {
   return (
@@ -27,7 +29,11 @@ export default function App() {
         </div>
       </AuthLoading>
       <Authenticated>
-        <MainApp />
+        <SessionsProvider>
+          <ChatProvider>
+            <MainApp />
+          </ChatProvider>
+        </SessionsProvider>
       </Authenticated>
       <Unauthenticated>
         <LandingPage />
@@ -37,33 +43,9 @@ export default function App() {
 }
 
 function MainApp() {
-  const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
-  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(null);
-
-  const handleNewChat = () => {
-    setCurrentSessionId(null); // Clear session to start new chat
-  };
-
-  const handleChatSelect = (sessionId: Id<"chatSessions">) => {
-    setCurrentSessionId(sessionId);
-    setActiveView("chat"); // Ensure we're in chat view when selecting a session
-  };
-
+  // No more local state - use contexts instead
   const renderActiveView = () => {
-    if (activeView === "settings") {
-      return <SettingsView onBackToChat={() => setActiveView("chat")} />;
-    }
-    return (
-      <ChatView 
-        sessionId={currentSessionId}
-        activeView={activeView}
-        onViewChange={setActiveView}
-        onNewChat={handleNewChat}
-        currentSessionId={currentSessionId}
-        onChatSelect={handleChatSelect}
-        onOpenSettings={() => setActiveView("settings")}
-      />
-    );
+    return <ChatView />;
   };
 
   return (

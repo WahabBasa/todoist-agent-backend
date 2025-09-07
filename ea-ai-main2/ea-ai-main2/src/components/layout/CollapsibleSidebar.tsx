@@ -1,37 +1,16 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import { Button } from "../ui/button";
-import { Id } from "../../../convex/_generated/dataModel";
-import { toast } from "sonner";
 import {
   Plus,
-  Settings,
-  Moon,
-  Sun,
-  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { UserProfile } from "../nav/UserProfile";
 import { ChatHistory } from "../chat/ChatHistory";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useSessions } from "../../context/sessions";
 
-interface CollapsibleSidebarProps {
-  activeView: "chat" | "settings";
-  onViewChange: (view: "chat" | "settings") => void;
-  onNewChat?: () => void;
-  currentSessionId?: Id<"chatSessions"> | null;
-  onChatSelect?: (sessionId: Id<"chatSessions">) => void;
-  onOpenSettings?: () => void;
-}
+// No props needed - everything from contexts
 
 interface SidebarMenuItemProps {
   icon: React.ReactNode;
@@ -68,18 +47,17 @@ function SidebarMenuItem({
   );
 }
 
-export function CollapsibleSidebar({
-  activeView,
-  onViewChange,
-  onNewChat,
-  currentSessionId,
-  onChatSelect,
-  onOpenSettings,
-}: CollapsibleSidebarProps) {
+export function CollapsibleSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
-  const createChatSession = useMutation(api.chatSessions.createChatSession);
+  
+  // Get everything from SessionsContext
+  const { 
+    currentSessionId, 
+    createNewSession, 
+    selectSession, 
+    activeView, 
+    setActiveView 
+  } = useSessions();
 
   // Load collapse state from localStorage
   useEffect(() => {
@@ -97,17 +75,8 @@ export function CollapsibleSidebar({
   };
 
   const handleNewChat = async () => {
-    try {
-      const newSessionId = await createChatSession({});
-      onViewChange("chat");
-      onNewChat?.();
-      onChatSelect?.(newSessionId);
-      window.dispatchEvent(new CustomEvent('chat-history-updated'));
-      toast.success("New chat started");
-    } catch (error) {
-      console.error("Failed to create new chat:", error);
-      toast.error("Failed to create new chat. Please try again.");
-    }
+    // Use SessionsContext - handles everything
+    await createNewSession();
   };
 
   const sidebarWidth = collapsed ? "w-12" : "w-72";
@@ -120,7 +89,7 @@ export function CollapsibleSidebar({
       )}
     >
       {/* Header with Toggle Button */}
-      <div className="p-2 border-b border-border">
+      <div className="p-2">
         <Button
           variant="ghost"
           size="icon"
@@ -139,51 +108,6 @@ export function CollapsibleSidebar({
           onClick={handleNewChat}
           collapsed={collapsed}
         />
-
-        <SidebarMenuItem
-          icon={<Settings size={20} />}
-          label="Settings"
-          onClick={() => onOpenSettings?.()}
-          collapsed={collapsed}
-        />
-
-        <SidebarMenuItem
-          icon={<MoreHorizontal size={20} />}
-          label="More"
-          collapsed={collapsed}
-        >
-          <DropdownMenu
-            open={dropdownOpen}
-            onOpenChange={(open) => {
-              setDropdownOpen(open);
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <div className="absolute inset-0" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className="min-w-[200px]"
-              align={collapsed ? "start" : "end"}
-              side={collapsed ? "right" : "bottom"}
-              sideOffset={4}
-            >
-              <DropdownMenuItem onClick={() => {}}>About</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {}}>Feedback</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {}}>Support</DropdownMenuItem>
-              <div className="my-1 h-[1px] bg-border w-full" />
-              <DropdownMenuItem
-                onClick={() => {
-                  setTheme(theme === "light" ? "dark" : "light");
-                }}
-              >
-                {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-                <span className="ml-2">
-                  Switch to {theme === "light" ? "dark" : "light"} mode
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
       </div>
 
       {/* Chat History - Only in expanded state */}
@@ -195,18 +119,17 @@ export function CollapsibleSidebar({
             </div>
           </div>
           <div className="flex-1 min-h-0 px-2">
-            <ChatHistory
-              currentSessionId={currentSessionId}
-              onChatSelect={onChatSelect}
-              className="h-full"
-            />
+            <ChatHistory className="h-full" />
           </div>
         </div>
       )}
 
       {/* Footer with User Profile */}
-      <div className="mt-auto shrink-0 p-2 border-t border-border">
-        <UserProfile onOpenSettings={onOpenSettings} collapsed={collapsed} />
+      <div className="mt-auto shrink-0 p-2">
+        <UserProfile 
+          onOpenSettings={() => setActiveView("settings")} 
+          collapsed={collapsed} 
+        />
       </div>
     </div>
   );

@@ -1,21 +1,16 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
 import { MessageSquare, Clock, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { useSessions } from "../../context/sessions";
 
 interface ChatHistoryProps {
-  currentSessionId?: Id<"chatSessions"> | null;
-  onChatSelect?: (sessionId: Id<"chatSessions">) => void;
   className?: string;
 }
 
 interface ChatSessionItemProps {
   session: {
-    _id: Id<"chatSessions">;
+    _id: string;
     title: string;
     lastMessageAt: number;
     messageCount: number;
@@ -64,31 +59,21 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete }: ChatSessionI
   );
 }
 
-export function ChatHistory({ currentSessionId, onChatSelect, className }: ChatHistoryProps) {
-  // Get chat sessions from Convex
-  const sessions = useQuery(api.chatSessions.getChatSessions, {});
-  const deleteChatSession = useMutation(api.chatSessions.deleteChatSession);
+export function ChatHistory({ className }: ChatHistoryProps) {
+  // ChatHub pattern: Get everything from centralized SessionsContext  
+  const { 
+    currentSessionId, 
+    sessions, 
+    selectSession, 
+    deleteSession 
+  } = useSessions();
 
-  const handleChatSelect = (sessionId: Id<"chatSessions">) => {
-    onChatSelect?.(sessionId);
+  const handleChatSelect = (sessionId: string) => {
+    selectSession(sessionId as any);
   };
 
-  const handleDeleteChat = async (sessionId: Id<"chatSessions">) => {
-    try {
-      await deleteChatSession({ sessionId });
-      toast.success("Chat deleted successfully");
-      
-      // If the deleted chat was the current one, clear the current session
-      if (currentSessionId === sessionId) {
-        onChatSelect?.(null as any); // Clear current session
-      }
-      
-      // Trigger history update event for other components
-      window.dispatchEvent(new CustomEvent('chat-history-updated'));
-    } catch (error) {
-      console.error("Failed to delete chat:", error);
-      toast.error("Failed to delete chat. Please try again.");
-    }
+  const handleDeleteChat = async (sessionId: string) => {
+    await deleteSession(sessionId as any);
   };
 
   return (
@@ -96,7 +81,7 @@ export function ChatHistory({ currentSessionId, onChatSelect, className }: ChatH
       <div className={cn("flex flex-col h-full min-h-0", className)}>
         {/* Sessions List */}
         <div className="flex-1 min-h-0 overflow-y-auto space-y-1 scrollbar-dark pb-2">
-          {sessions?.sessions?.map((session) => (
+          {sessions?.map((session) => (
             <ChatSessionItem
               key={session._id}
               session={session}
@@ -106,7 +91,7 @@ export function ChatHistory({ currentSessionId, onChatSelect, className }: ChatH
             />
           ))}
           
-          {sessions?.sessions?.length === 0 && (
+          {sessions?.length === 0 && (
             <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground">
               <MessageSquare size={32} className="mb-2 opacity-50" />
               <p className="text-sm">No conversations yet</p>

@@ -1,41 +1,23 @@
 import { Chat } from "../components/chat/Chat"
 import { CollapsibleSidebar } from "../components/layout/CollapsibleSidebar"
-import { Id } from "../../convex/_generated/dataModel"
+import { SettingsView } from "./SettingsView"
+import { useSessions } from "../context/sessions"
 
-interface ChatViewProps {
-  sessionId?: Id<"chatSessions"> | null
-  activeView: "chat" | "settings"
-  onViewChange: (view: "chat" | "settings") => void
-  onNewChat?: () => void
-  currentSessionId?: Id<"chatSessions"> | null
-  onChatSelect?: (sessionId: Id<"chatSessions">) => void
-  onOpenSettings?: () => void
-}
-
-export function ChatView({ 
-  sessionId, 
-  activeView, 
-  onViewChange, 
-  onNewChat, 
-  currentSessionId, 
-  onChatSelect, 
-  onOpenSettings 
-}: ChatViewProps) {
+export function ChatView() {
+  // Get everything from SessionsContext - no props needed
+  const { activeView, setActiveView } = useSessions();
   return (
     <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
       {/* Unified Collapsible Sidebar */}
-      <CollapsibleSidebar
-        activeView={activeView}
-        onViewChange={onViewChange}
-        onNewChat={onNewChat}
-        currentSessionId={currentSessionId}
-        onChatSelect={onChatSelect}
-        onOpenSettings={onOpenSettings}
-      />
+      <CollapsibleSidebar />
       
-      {/* Main Chat Content */}
+      {/* Main Content - Chat or Settings */}
       <div className="flex-1 relative overflow-hidden">
-        <Chat sessionId={sessionId} />
+        {activeView === "settings" ? (
+          <SettingsView onBackToChat={() => setActiveView("chat")} />
+        ) : (
+          <Chat />
+        )}
       </div>
     </div>
   )
