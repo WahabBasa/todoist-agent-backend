@@ -12,7 +12,7 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { Button } from "./components/ui/button";
 import { Id } from "../convex/_generated/dataModel";
 import { ChatProvider } from "./context/chat";
-import { SessionsProvider } from "./context/sessions";
+import { SessionsProvider, useSessions } from "./context/sessions";
 
 export default function App() {
   return (
@@ -43,7 +43,17 @@ export default function App() {
 }
 
 function MainApp() {
-  // No more local state - use contexts instead
+  // ChatHub pattern: Always create fresh session on app load
+  const { createNewSession, currentSessionId } = useSessions();
+  
+  useEffect(() => {
+    // If no current session, create a new one (ChatHub pattern)
+    if (!currentSessionId) {
+      console.log('🚀 Creating fresh session for new app load');
+      createNewSession();
+    }
+  }, [currentSessionId, createNewSession]);
+
   const renderActiveView = () => {
     return <ChatView />;
   };

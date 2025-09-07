@@ -52,13 +52,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const sessions = sessionsQuery?.sessions || [];
   const isLoadingSessions = sessionsQuery === undefined;
 
-  // Initialize current session from default session
-  useEffect(() => {
-    if (defaultSession && !currentSessionId) {
-      console.log('📋 Setting default session as current:', defaultSession._id);
-      setCurrentSessionId(defaultSession._id);
-    }
-  }, [defaultSession, currentSessionId]);
+  // ChatHub pattern: No automatic default session loading
+  // Users will always start with a fresh new session created by App.tsx
 
   // ChatHub pattern: Create new session
   const createNewSession = useCallback(async (): Promise<Id<"chatSessions">> => {
