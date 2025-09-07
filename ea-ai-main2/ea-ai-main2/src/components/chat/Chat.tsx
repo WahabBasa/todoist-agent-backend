@@ -4,9 +4,7 @@ import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Id } from "../../../convex/_generated/dataModel"
-import { UserMessage } from './UserMessage'
-import { AssistantMessage } from './AssistantMessage'
-import { TypingIndicator } from './TypingIndicator'
+import { ConversationTurn } from './ConversationTurn'
 import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
 
@@ -14,6 +12,13 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+}
+
+interface ConversationTurnData {
+  id: string
+  userMessage: string
+  aiMessage?: string
+  isThinking: boolean
 }
 
 interface ChatProps {
@@ -56,44 +61,90 @@ export function Chat({ sessionId }: ChatProps) {
   const [isLoading, setIsLoading] = useState(false) // For backend processing
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  const [currentUserMessage, setCurrentUserMessage] = useState<string | null>(null) // Track message being processed
 
-  // Convert existing conversation messages to display format
-  const messages = useMemo(() => {
-    return activeConversation ? 
-      ((activeConversation.messages as any[]) || [])
+  // Convert existing conversation messages to conversation turns (ChatHub pattern)
+  const conversationTurns = useMemo(() => {
+    const turns: ConversationTurnData[] = []
+    
+    if (activeConversation?.messages) {
+      const allMessages = ((activeConversation.messages as any[]) || [])
         .filter(msg => msg.role === "user" || msg.role === "assistant")
         .map((msg, index) => ({
           id: `${msg.timestamp}-${index}`,
           role: msg.role as 'user' | 'assistant',
           content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          timestamp: msg.timestamp
         }))
-      : []
-  }, [activeConversation])
+      
+      // Group messages into conversation turns (user message + AI response)
+      let currentUserMessage: Message | null = null
+      
+      for (const message of allMessages) {
+        if (message.role === 'user') {
+          // Start a new conversation turn
+          currentUserMessage = message
+        } else if (message.role === 'assistant' && currentUserMessage) {
+          // Complete the conversation turn
+          turns.push({
+            id: currentUserMessage.id,
+            userMessage: currentUserMessage.content,
+            aiMessage: message.content,
+            isThinking: false
+          })
+          currentUserMessage = null
+        }
+      }
+      
+      // Handle incomplete turn (user message without AI response yet)
+      if (currentUserMessage) {
+        turns.push({
+          id: currentUserMessage.id,
+          userMessage: currentUserMessage.content,
+          aiMessage: undefined,
+          isThinking: isLoading // Show thinking if we're currently processing
+        })
+      }
+    }
+    
+    // Handle the case where user just sent first message and it's not in DB yet
+    if (turns.length === 0 && currentUserMessage && isLoading) {
+      turns.push({
+        id: `temp-${Date.now()}`,
+        userMessage: currentUserMessage,
+        aiMessage: undefined,
+        isThinking: true
+      })
+    }
+    
+    return turns
+  }, [activeConversation, isLoading, currentUserMessage])
 
-  // Simple fresh session detection like ChatHub
-  const isFreshSession = messages.length === 0
+  // Simple fresh session detection based on conversation turns
+  const isFreshSession = conversationTurns.length === 0 && !isLoading
   
   // Debug logging for centering state
   console.log('🐛 Debug centering:', { 
-    messagesLength: messages.length,
+    conversationTurns: conversationTurns.length,
     isFreshSession: isFreshSession,
+    isLoading: isLoading,
     sessionId: sessionId || 'null',
     hasDefaultSession: !!defaultSession,
     defaultSessionId: defaultSession?._id || 'none'
   })
 
-  // Auto-scroll when messages change or when loading
+  // Auto-scroll when conversation turns change or when loading
   useEffect(() => {
     const scrollArea = messagesAreaRef.current
     if (!scrollArea) return
     
-    if (messages.length > 0 || isLoading) {
+    if (conversationTurns.length > 0 || isLoading) {
       console.log('📜 Auto-scroll: Scrolling to bottom')
       requestAnimationFrame(() => {
         scrollArea.scrollTop = scrollArea.scrollHeight
       })
     }
-  }, [messages, isLoading])
+  }, [conversationTurns, isLoading])
 
   // Handle form submission with Convex integration (preserved exactly)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -102,6 +153,7 @@ export function Chat({ sessionId }: ChatProps) {
 
     const inputValue = input.trim()
     setInput("") // Clear input immediately
+    setCurrentUserMessage(inputValue) // Track the message being processed
     setIsLoading(true) // Show loading state
     
     console.log('📝 User message submitted:', inputValue)
@@ -140,8 +192,8 @@ export function Chat({ sessionId }: ChatProps) {
         currentTimeContext
       })
       
-      // Update chat title if this is the first message
-      if (messages.length === 0 && currentSessionId) {
+      // Update chat title if this is the first conversation turn
+      if (conversationTurns.length === 0 && currentSessionId) {
         try {
           await updateChatTitle({
             sessionId: currentSessionId,
@@ -195,6 +247,7 @@ export function Chat({ sessionId }: ChatProps) {
       console.log('❌ AI response failed')
     } finally {
       setIsLoading(false)
+      setCurrentUserMessage(null) // Clear the current message state
     }
   }
 
@@ -213,7 +266,7 @@ export function Chat({ sessionId }: ChatProps) {
   }
 
   const handleClearChat = () => {
-    if (messages.length === 0) return
+    if (conversationTurns.length === 0) return
     
     // Clear state
     setInput("")
@@ -232,36 +285,39 @@ export function Chat({ sessionId }: ChatProps) {
         ref={messagesAreaRef}
         id="chat-container"
       >
-        <div ref={messagesContainerRef} className="w-full md:w-[650px] lg:w-[680px] pl-8 pr-4 py-2 flex flex-1 flex-col gap-24">
+        <div ref={messagesContainerRef} className="w-full md:w-[735px] lg:w-[756px] pl-8 pr-4 py-2 flex flex-1 flex-col gap-24">
           <div className="flex flex-col gap-8 w-full items-start">
-            {/* Messages from Convex */}
-            {messages.map((message) => (
-              message.role === 'user' ? (
-                <UserMessage key={message.id} content={message.content} />
-              ) : (
-                <AssistantMessage key={message.id} content={message.content} />
-              )
+            {/* Conversation Turns - ChatHub Pattern */}
+            {conversationTurns.map((turn, index) => (
+              <ConversationTurn
+                key={turn.id}
+                id={turn.id}
+                userMessage={turn.userMessage}
+                aiMessage={turn.aiMessage}
+                isThinking={turn.isThinking}
+                isLast={index === conversationTurns.length - 1}
+              />
             ))}
-
-            {/* Thinking indicator - show when loading - PRESERVED EXACTLY */}
-            <TypingIndicator show={isLoading} />
           </div>
         </div>
       </div>
 
+      {/* Background mask to hide text that scrolls behind input area - positioned below input box, avoiding scrollbar */}
+      <div className="absolute bottom-0 left-0 h-20 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
+      
       {/* Chat Input - ChatHub Simple Positioning Pattern */}
       <div
         className={cn(
-          "w-full flex flex-col items-center absolute bottom-0 px-2 md:px-4 pb-4 pt-16 right-0 gap-2",
-          "bg-gradient-to-t transition-all ease-in-out duration-1000 from-background to-transparent from-70% left-0",
+          "w-full flex flex-col items-center absolute bottom-0 px-2 md:px-4 pb-2 pt-16 right-0 gap-2",
+          "transition-all ease-in-out duration-1000 left-0 z-10",
           isFreshSession && "top-0 justify-center" // Full height centering like ChatHub
         )}
       >
         {/* Greeting - Only show when fresh session */}
         {isFreshSession && <ChatGreeting />}
         
-        {/* Input Container with ChatHub Width Constraints */}
-        <div className="w-full md:w-[700px] lg:w-[720px] mx-auto flex flex-col gap-3">
+        {/* Input Container with 5% increased width */}
+        <div className="w-full md:w-[735px] lg:w-[756px] mx-auto flex flex-col gap-3">
           <ChatInput
             ref={inputRef}
             value={input}
@@ -273,7 +329,7 @@ export function Chat({ sessionId }: ChatProps) {
             isLoading={isLoading}
             disabled={isLoading}
             placeholder="Ask a question..."
-            showClearButton={messages.length > 0}
+            showClearButton={conversationTurns.length > 0}
             onKeyDown={e => {
               if (
                 e.key === 'Enter' &&

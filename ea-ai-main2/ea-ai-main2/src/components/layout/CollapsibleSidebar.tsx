@@ -56,7 +56,7 @@ function SidebarMenuItem({
         variant="ghost"
         className={cn(
           "w-full justify-start gap-3 h-10 sidebar-item",
-          collapsed ? "w-10 px-0 justify-center" : "px-3"
+          collapsed ? "w-8 px-0 justify-center" : "px-3"
         )}
         onClick={onClick}
       >
@@ -110,7 +110,7 @@ export function CollapsibleSidebar({
     }
   };
 
-  const sidebarWidth = collapsed ? "w-14" : "w-72";
+  const sidebarWidth = collapsed ? "w-12" : "w-72";
 
   return (
     <div
@@ -125,7 +125,7 @@ export function CollapsibleSidebar({
           variant="ghost"
           size="icon"
           onClick={toggleCollapsed}
-          className="h-8 w-8 mx-auto"
+          className={cn("mx-auto", collapsed ? "h-8 w-8" : "h-8 w-8")}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </Button>

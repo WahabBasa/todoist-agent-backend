@@ -34,7 +34,7 @@ export function ChatView({
       />
       
       {/* Main Chat Content */}
-      <div className="flex-1">
+      <div className="flex-1 relative overflow-hidden">
         <Chat sessionId={sessionId} />
       </div>
     </div>
