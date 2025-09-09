@@ -3,7 +3,7 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { streamText, ModelMessage } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { MessageCaching } from "./caching";
@@ -37,8 +37,8 @@ export const chatWithAIV2 = action({
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[SessionV2] Authenticated user: ${userId.substring(0, 20)}...`);
 
-    const modelName = useHaiku ? "claude-3-5-haiku-20241022" : "claude-3-haiku-20240307";
-    const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
+    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
     // Load conversation history (session-aware)
     let conversation;
@@ -170,7 +170,7 @@ Then execute systematically with progress updates.
 
       // Use streamText with proper stopping conditions (OpenCode pattern)
       const stream = streamText({
-        model: anthropic(modelName),
+        model: openrouter(modelName),
         system: systemPrompt,
         messages: modelMessages,
         tools,

@@ -411,4 +411,4 @@ Information Responses: Direct facts only
 - "You have 5 overdue tasks"
 - "Next meeting is tomorrow at 2 PM"
 - "Work project has 8 tasks, 3 completed"
-</output_formatting>
+</output_formatting>is 
