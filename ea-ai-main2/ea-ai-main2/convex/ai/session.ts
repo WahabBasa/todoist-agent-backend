@@ -175,10 +175,15 @@ Then execute systematically with progress updates.
         messages: modelMessages,
         tools,
         maxRetries: 3,
-        // Critical: Stop after max 3 steps to prevent rate limiting
+        // Allow up to 100 steps for complex multi-step tasks
         stopWhen: async ({ steps }) => {
-          if (steps.length >= 3) {
-            console.log(`[SessionV2] Stopping at step ${steps.length} to prevent rate limits`);
+          // Log progress every 10 steps for monitoring
+          if (steps.length % 10 === 0 && steps.length > 0) {
+            console.log(`[SessionV2] Step ${steps.length}/100 - continuing...`);
+          }
+          
+          if (steps.length >= 100) {
+            console.log(`[SessionV2] Stopping at step ${steps.length} - maximum steps reached`);
             return true;
           }
 
