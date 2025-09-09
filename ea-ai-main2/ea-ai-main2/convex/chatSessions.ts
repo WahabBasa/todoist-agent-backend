@@ -363,3 +363,63 @@ export const forceDeleteAllChatSessions = internalMutation({
     return { deletedSessions: deletedCount };
   },
 });
+
+// Public cleanup function to remove today's "New Chat" sessions (keeps default sessions)  
+export const cleanupTodaysNewChats = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
+      throw new ConvexError("Token identifier not found");
+    }
+
+    // Get today's date range (start and end of day)
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1;
+    
+    console.log(`Cleaning up "New Chat" sessions for user ${tokenIdentifier.slice(0, 10)}... created today (${new Date(startOfDay).toDateString()})`);
+    
+    // Find all sessions created today with title "New Chat" (not default sessions) for this user only
+    const sessions = await ctx.db
+      .query("chatSessions")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .collect();
+    
+    const toDelete = sessions.filter(session => 
+      session.createdAt >= startOfDay && 
+      session.createdAt <= endOfDay && 
+      session.title === "New Chat" && 
+      !session.isDefault
+    );
+    
+    console.log(`Found ${toDelete.length} "New Chat" sessions to delete from today`);
+    
+    let deletedCount = 0;
+    for (const session of toDelete) {
+      // Also delete associated conversations
+      const conversations = await ctx.db
+        .query("conversations")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .collect();
+      
+      // Delete conversations first
+      for (const conversation of conversations) {
+        await ctx.db.delete(conversation._id);
+      }
+      
+      // Delete the session
+      await ctx.db.delete(session._id);
+      deletedCount++;
+      console.log(`Deleted "New Chat" session: ${session._id} (created: ${new Date(session.createdAt).toLocaleString()})`);
+    }
+    
+    console.log(`Successfully cleaned up ${deletedCount} "New Chat" sessions from today`);
+    return { deletedSessions: deletedCount };
+  },
+});

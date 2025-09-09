@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useTransition } from 'react'
 import { useQuery, useAction } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import { toast } from "sonner"
@@ -30,13 +30,9 @@ interface ChatHistoryClientProps {
 }
 
 export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistoryClientProps) {
-  const [chats, setChats] = useState<ChatSession[]>([])
-  const [nextOffset, setNextOffset] = useState<number | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
   const [isPending, startTransition] = useTransition()
 
-  // Convex queries and actions
+  // Convex queries and actions - render directly from this reactive data source
   const chatSessions = useQuery(api.chatSessions.getChatSessions, { 
     limit: 20, 
     offset: 0 
@@ -45,104 +41,22 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
   const deleteChatAction = useAction(api.chatSessions.deleteChatSession)
   const clearAllChatsAction = useAction(api.chatSessions.clearAllChatSessions)
 
-  const fetchInitialChats = useCallback(async () => {
-    if (chatSessions === undefined) {
-      setIsLoading(true)
-      return
-    }
-    
-    setIsLoading(true)
-    try {
-      if (chatSessions) {
-        setChats(chatSessions.sessions)
-        setNextOffset(chatSessions.nextOffset)
-      } else {
-        setChats([])
-        setNextOffset(null)
-      }
-    } catch (error) {
-      console.error('Failed to load initial chats:', error)
-      toast.error('Failed to load chat history.')
-      setNextOffset(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [chatSessions])
+  // Direct reactive data access - no intermediate state needed
+  const chats = chatSessions?.sessions || []
+  const nextOffset = chatSessions?.nextOffset || null
+  const isLoading = chatSessions === undefined
 
-  useEffect(() => {
-    fetchInitialChats()
-  }, [fetchInitialChats])
+  // Pagination would be handled by updating the useQuery parameters
+  // For now, we return all chats as the backend is configured to do so
 
-  // Listen for chat history updates (similar to Morphic's event system)
-  useEffect(() => {
-    const handleHistoryUpdate = () => {
-      startTransition(() => {
-        fetchInitialChats()
-      })
-    }
-    window.addEventListener('chat-history-updated', handleHistoryUpdate)
-    return () => {
-      window.removeEventListener('chat-history-updated', handleHistoryUpdate)
-    }
-  }, [fetchInitialChats])
-
-  const fetchMoreChats = useCallback(async () => {
-    if (isLoading || nextOffset === null) return
-
-    setIsLoading(true)
-    try {
-      // In a real implementation, we'd need a separate query for pagination
-      // For now, this is a placeholder for the infinite scroll functionality
-      console.log('Fetching more chats with offset:', nextOffset)
-      
-      // This would need to be implemented in Convex as a separate query
-      // const moreChatSessions = await convex.query(api.chatSessions.getChatSessions, {
-      //   limit: 20,
-      //   offset: nextOffset
-      // })
-      
-      // setChats(prevChats => [...prevChats, ...moreChatSessions.sessions])
-      // setNextOffset(moreChatSessions.nextOffset)
-    } catch (error) {
-      console.error('Failed to load more chats:', error)
-      toast.error('Failed to load more chat history.')
-      setNextOffset(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [nextOffset, isLoading])
-
-  // Infinite scroll observer
-  useEffect(() => {
-    const observerRefValue = loadMoreRef.current
-    if (!observerRefValue || nextOffset === null || isPending) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !isLoading && !isPending) {
-          fetchMoreChats()
-        }
-      },
-      { threshold: 0.1 }
-    )
-
-    observer.observe(observerRefValue)
-
-    return () => {
-      if (observerRefValue) {
-        observer.unobserve(observerRefValue)
-      }
-    }
-  }, [fetchMoreChats, nextOffset, isLoading, isPending])
+  // Infinite scroll would be implemented when backend pagination is added
+  // Currently returning all sessions so no infinite scroll needed
 
   const handleDeleteChat = async (sessionId: Id<"chatSessions">) => {
     try {
       await deleteChatAction({ sessionId })
-      setChats(prevChats => prevChats.filter(chat => chat._id !== sessionId))
       toast.success('Chat deleted successfully')
-      
-      // Trigger history update event
-      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+      // Convex reactivity will automatically update the UI
     } catch (error) {
       console.error('Failed to delete chat:', error)
       toast.error('Failed to delete chat')
@@ -152,11 +66,8 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
   const handleClearAll = async () => {
     try {
       const result = await clearAllChatsAction({})
-      setChats([])
       toast.success(`Cleared ${result.deletedSessions} chat sessions`)
-      
-      // Trigger history update event
-      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+      // Convex reactivity will automatically update the UI
     } catch (error) {
       console.error('Failed to clear chats:', error)
       toast.error('Failed to clear chat history')
@@ -193,7 +104,7 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
             ))}
           </div>
         )}
-        <div ref={loadMoreRef} style={{ height: '1px' }} />
+        {/* Infinite scroll placeholder - will be implemented when backend pagination is added */}
         {(isLoading || isPending) && (
           <div className="padding-secondary">
             <ChatHistorySkeleton />

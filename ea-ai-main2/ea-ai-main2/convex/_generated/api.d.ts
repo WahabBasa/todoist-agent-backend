@@ -26,6 +26,7 @@ import type * as ai_tools_utils from "../ai/tools/utils.js";
 import type * as ai from "../ai.js";
 import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as chatSessions from "../chatSessions.js";
+import type * as cleanup from "../cleanup.js";
 import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
 import type * as clerk from "../clerk.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   aiInternalTodos: typeof aiInternalTodos;
   chatSessions: typeof chatSessions;
+  cleanup: typeof cleanup;
   cleanupOrphans: typeof cleanupOrphans;
   cleanupTables: typeof cleanupTables;
   clerk: typeof clerk;

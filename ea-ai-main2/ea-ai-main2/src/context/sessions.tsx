@@ -24,6 +24,7 @@ interface SessionsContextType {
   
   // Session operations
   createNewSession: () => Promise<Id<"chatSessions">>;
+  ensureDefaultSession: () => Promise<Id<"chatSessions">>;
   selectSession: (sessionId: Id<"chatSessions"> | null) => void;
   deleteSession: (sessionId: Id<"chatSessions">) => Promise<void>;
   
@@ -42,6 +43,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   
   // Convex mutations
   const createChatSession = useMutation(api.chatSessions.createChatSession);
+  const createDefaultSession = useMutation(api.chatSessions.createDefaultSession);
   const deleteChatSession = useMutation(api.chatSessions.deleteChatSession);
 
   // Session state - single source of truth
@@ -52,10 +54,25 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const sessions = sessionsQuery?.sessions || [];
   const isLoadingSessions = sessionsQuery === undefined;
 
-  // ChatHub pattern: No automatic default session loading
-  // Users will always start with a fresh new session created by App.tsx
+  // Fixed: Proper default session management
+  // Users start with a default session, and can create new sessions as needed
 
-  // ChatHub pattern: Create new session (pure reactive)
+  // Ensure default session exists (called once on app initialization)
+  const ensureDefaultSession = useCallback(async (): Promise<Id<"chatSessions">> => {
+    console.log('📋 Ensuring default session exists');
+    
+    try {
+      const defaultSessionId = await createDefaultSession();
+      console.log('✅ Default session ready:', defaultSessionId);
+      return defaultSessionId;
+    } catch (error) {
+      console.error("Failed to ensure default session:", error);
+      toast.error("Failed to initialize default chat. Please try again.");
+      throw error;
+    }
+  }, [createDefaultSession]);
+
+  // Create new session (explicit user action)
   const createNewSession = useCallback(async (): Promise<Id<"chatSessions">> => {
     console.log('➕ Creating new chat session');
     
@@ -113,6 +130,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     
     // Session operations
     createNewSession,
+    ensureDefaultSession,
     selectSession,
     deleteSession,
     

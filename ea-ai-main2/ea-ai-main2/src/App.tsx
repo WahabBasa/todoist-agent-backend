@@ -3,6 +3,7 @@
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 import { useState, useEffect } from "react";
+import { useQuery } from "convex/react";
 import { Toaster } from "sonner";
 
 // Import components
@@ -13,6 +14,7 @@ import { Button } from "./components/ui/button";
 import { Id } from "../convex/_generated/dataModel";
 import { ChatProvider } from "./context/chat";
 import { SessionsProvider, useSessions } from "./context/sessions";
+import { api } from "../convex/_generated/api";
 
 export default function App() {
   return (
@@ -43,16 +45,35 @@ export default function App() {
 }
 
 function MainApp() {
-  // ChatHub pattern: Always create fresh session on app load
-  const { createNewSession, currentSessionId } = useSessions();
+  // Fixed: Proper default session lifecycle management
+  const { currentSessionId, selectSession, ensureDefaultSession } = useSessions();
+  
+  // Get default session for this user
+  const defaultSession = useQuery(api.chatSessions.getDefaultSession, {});
   
   useEffect(() => {
-    // If no current session, create a new one (ChatHub pattern)
-    if (!currentSessionId) {
-      console.log('🚀 Creating fresh session for new app load');
-      createNewSession();
-    }
-  }, [currentSessionId, createNewSession]);
+    const initializeSession = async () => {
+      if (defaultSession) {
+        // Default session exists, use it if none selected
+        if (!currentSessionId) {
+          console.log('📋 Using existing default session:', defaultSession._id);
+          selectSession(defaultSession._id);
+        }
+      } else if (defaultSession === null) {
+        // No default session exists, create one
+        console.log('🚀 No default session found, creating one...');
+        try {
+          const newDefaultId = await ensureDefaultSession();
+          selectSession(newDefaultId);
+        } catch (error) {
+          console.error('Failed to create default session:', error);
+        }
+      }
+      // If defaultSession === undefined, we're still loading, do nothing
+    };
+    
+    initializeSession();
+  }, [defaultSession, currentSessionId, selectSession, ensureDefaultSession]);
 
   const renderActiveView = () => {
     return <ChatView />;
