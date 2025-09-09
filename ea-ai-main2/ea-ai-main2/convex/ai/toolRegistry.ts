@@ -4,6 +4,7 @@ import { ActionCtx } from "../_generated/server";
 import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
+import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { ProcessorContext } from "./processor";
 
 // OpenCode-inspired tool definition interface
@@ -73,6 +74,9 @@ export const ToolRegistry = {
   
   // Utility tools (time, validation, system status)
   ...UtilityTools,
+  
+  // Google Calendar integration tools
+  ...GoogleCalendarTools,
 };
 
 // Convex-recommended tool creation pattern (fixes ActionCtx context loss)

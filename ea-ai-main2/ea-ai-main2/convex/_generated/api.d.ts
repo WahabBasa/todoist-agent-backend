@@ -19,6 +19,7 @@ import type * as ai_processor from "../ai/processor.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_system from "../ai/system.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
+import type * as ai_tools_googleCalendar from "../ai/tools/googleCalendar.js";
 import type * as ai_tools_internal from "../ai/tools/internal.js";
 import type * as ai_tools_todoist from "../ai/tools/todoist.js";
 import type * as ai_tools_utils from "../ai/tools/utils.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "ai/session": typeof ai_session;
   "ai/system": typeof ai_system;
   "ai/toolRegistry": typeof ai_toolRegistry;
+  "ai/tools/googleCalendar": typeof ai_tools_googleCalendar;
   "ai/tools/internal": typeof ai_tools_internal;
   "ai/tools/todoist": typeof ai_tools_todoist;
   "ai/tools/utils": typeof ai_tools_utils;
