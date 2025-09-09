@@ -57,21 +57,22 @@ export const getChatSessions = query({
     const limit = args.limit || 20;
     const offset = args.offset || 0;
 
-    // Get sessions ordered by last message time
+    // ChatHub pattern: Get ALL sessions ordered by lastMessageAt DESC (most recent first)
     const sessions = await ctx.db
       .query("chatSessions")
       .withIndex("by_tokenIdentifier_and_time", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .order("desc")
       .collect();
 
-    // Paginate results
-    const paginatedSessions = sessions.slice(offset, offset + limit);
-    const hasMore = sessions.length > offset + limit;
-
+    // Debug: Log session count to understand missing history issue
+    console.log(`[getChatSessions] Found ${sessions.length} sessions for user ${tokenIdentifier.slice(0, 10)}...`);
+    
+    // For now, return all sessions to match ChatHub behavior (no artificial limits)
+    // TODO: Add proper database-level pagination later if needed
     return {
-      sessions: paginatedSessions,
-      hasMore,
-      nextOffset: hasMore ? offset + limit : null,
+      sessions: sessions,
+      hasMore: false,
+      nextOffset: null,
     };
   },
 });
@@ -217,7 +218,10 @@ export const updateChatTitleFromMessage = mutation({
     // Only update if it's still the default title
     if (session.title === "New Chat" || session.title === "Default Chat") {
       const newTitle = generateChatTitle(args.firstMessage);
-      await ctx.db.patch(args.sessionId, { title: newTitle });
+      await ctx.db.patch(args.sessionId, { 
+        title: newTitle,
+        lastMessageAt: Date.now(), // Also update timestamp
+      });
     }
 
     return true;
@@ -241,7 +245,15 @@ export const deleteChatSession = mutation({
     }
 
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+    
+    // ChatHub pattern: Idempotent operations like local storage filter()
+    if (!session) {
+      // Session already deleted or never existed - succeed silently like filter() would
+      return { success: true, alreadyDeleted: true };
+    }
+    
+    // Still check authorization for existing sessions
+    if (session.tokenIdentifier !== tokenIdentifier) {
       throw new ConvexError("Chat session not found or unauthorized");
     }
 
@@ -250,19 +262,20 @@ export const deleteChatSession = mutation({
       throw new ConvexError("Cannot delete default chat session");
     }
 
-    // Delete all conversations for this session
+    // Delete all conversations for this session (optimized batch deletion)
     const conversations = await ctx.db
       .query("conversations")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
       .collect();
 
-    for (const conversation of conversations) {
-      await ctx.db.delete(conversation._id);
-    }
+    // Use Promise.all for parallel deletion within the same transaction
+    await Promise.all(
+      conversations.map(conversation => ctx.db.delete(conversation._id))
+    );
 
     // Delete the session
     await ctx.db.delete(args.sessionId);
-    return true;
+    return { success: true, deleted: true };
   },
 });
 
@@ -287,19 +300,22 @@ export const clearAllChatSessions = mutation({
       .filter((q) => q.neq(q.field("isDefault"), true))
       .collect();
 
-    // Delete all conversations and sessions
+    // Delete all conversations and sessions (optimized batch deletion)
+    // Collect all conversations and sessions to delete first
+    const allConversationsToDelete = [];
     for (const session of sessions) {
       const conversations = await ctx.db
         .query("conversations")
         .withIndex("by_session", (q) => q.eq("sessionId", session._id))
         .collect();
-
-      for (const conversation of conversations) {
-        await ctx.db.delete(conversation._id);
-      }
-
-      await ctx.db.delete(session._id);
+      allConversationsToDelete.push(...conversations);
     }
+
+    // Batch delete all conversations and sessions in parallel
+    await Promise.all([
+      ...allConversationsToDelete.map(conversation => ctx.db.delete(conversation._id)),
+      ...sessions.map(session => ctx.db.delete(session._id))
+    ]);
 
     // Clear default session messages
     const defaultSession = await ctx.db
@@ -314,9 +330,10 @@ export const clearAllChatSessions = mutation({
         .withIndex("by_session", (q) => q.eq("sessionId", defaultSession._id))
         .collect();
 
-      for (const conversation of defaultConversations) {
-        await ctx.db.delete(conversation._id);
-      }
+      // Batch delete default session conversations
+      await Promise.all(
+        defaultConversations.map(conversation => ctx.db.delete(conversation._id))
+      );
 
       // Reset default session metadata
       await ctx.db.patch(defaultSession._id, {

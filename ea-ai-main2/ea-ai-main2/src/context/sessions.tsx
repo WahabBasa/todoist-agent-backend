@@ -55,18 +55,16 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   // ChatHub pattern: No automatic default session loading
   // Users will always start with a fresh new session created by App.tsx
 
-  // ChatHub pattern: Create new session
+  // ChatHub pattern: Create new session (pure reactive)
   const createNewSession = useCallback(async (): Promise<Id<"chatSessions">> => {
+    console.log('➕ Creating new chat session');
+    
     try {
-      console.log('➕ Creating new chat session');
       const newSessionId = await createChatSession({});
       
-      // Immediately switch to the new session
+      // Switch to the new session
       setCurrentSessionId(newSessionId);
       setActiveView("chat");
-      
-      // Trigger history refresh
-      window.dispatchEvent(new CustomEvent('chat-history-updated'));
       
       console.log('✅ Created and switched to new session:', newSessionId);
       return newSessionId;
@@ -87,22 +85,18 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ChatHub pattern: Delete session
+  // ChatHub pattern: Delete session (pure reactive)
   const deleteSession = useCallback(async (sessionId: Id<"chatSessions">) => {
+    console.log('🗑️ Deleting session:', sessionId);
+    
     try {
-      console.log('🗑️ Deleting session:', sessionId);
       await deleteChatSession({ sessionId });
+      console.log('✅ Session deleted - Convex reactivity will update UI');
       
-      // If deleted session was current, clear it
+      // Clear current session if it was the deleted one
       if (currentSessionId === sessionId) {
-        console.log('🔄 Deleted session was current, clearing');
         setCurrentSessionId(null);
       }
-      
-      // Trigger history refresh
-      window.dispatchEvent(new CustomEvent('chat-history-updated'));
-      
-      toast.success("Chat deleted successfully");
     } catch (error) {
       console.error("Failed to delete chat session:", error);
       toast.error("Failed to delete chat. Please try again.");

@@ -121,8 +121,8 @@ async function upsertCustomPromptHelper(
   // Check if user has an existing prompt with this name
   const existingPrompt = await ctx.db
     .query("customSystemPrompts")
-    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
-    .filter((q) => q.eq(q.field("name"), name))
+    .withIndex("by_tokenIdentifier_and_name", (q) => 
+      q.eq("tokenIdentifier", tokenIdentifier).eq("name", name))
     .first();
 
   if (existingPrompt) {

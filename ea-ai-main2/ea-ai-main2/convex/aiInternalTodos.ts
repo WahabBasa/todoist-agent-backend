@@ -39,9 +39,10 @@ export const createInternalTodoList = mutation({
     // Deactivate any existing active todolists for this session
     const existingTodos = await ctx.db
       .query("aiInternalTodos")
-      .withIndex("by_tokenIdentifier_and_session", (q) => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .withIndex("by_tokenIdentifier_session_active", (q) => 
+        q.eq("tokenIdentifier", tokenIdentifier)
+         .eq("sessionId", args.sessionId)
+         .eq("isActive", true))
       .collect();
 
     for (const todo of existingTodos) {
@@ -73,9 +74,10 @@ export const updateInternalTodos = mutation({
     // Find active todolist for this session
     const existingTodoList = await ctx.db
       .query("aiInternalTodos")
-      .withIndex("by_tokenIdentifier_and_session", (q) => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .withIndex("by_tokenIdentifier_session_active", (q) => 
+        q.eq("tokenIdentifier", tokenIdentifier)
+         .eq("sessionId", args.sessionId)
+         .eq("isActive", true))
       .first();
 
     if (!existingTodoList) {
@@ -116,9 +118,10 @@ export const getInternalTodos = query({
     // Find active todolist for this session
     const todoList = await ctx.db
       .query("aiInternalTodos")
-      .withIndex("by_tokenIdentifier_and_session", (q) => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .withIndex("by_tokenIdentifier_session_active", (q) => 
+        q.eq("tokenIdentifier", tokenIdentifier)
+         .eq("sessionId", args.sessionId)
+         .eq("isActive", true))
       .first();
 
     if (!todoList) {
@@ -192,9 +195,10 @@ export const deactivateInternalTodos = mutation({
     // Find active todolist for this session
     const activeList = await ctx.db
       .query("aiInternalTodos")
-      .withIndex("by_tokenIdentifier_and_session", (q) => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
-      .filter((q) => q.eq(q.field("isActive"), true))
+      .withIndex("by_tokenIdentifier_session_active", (q) => 
+        q.eq("tokenIdentifier", tokenIdentifier)
+         .eq("sessionId", args.sessionId)
+         .eq("isActive", true))
       .first();
 
     if (activeList) {

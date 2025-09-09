@@ -13,7 +13,8 @@ const applicationTables = {
     isDefault: v.optional(v.boolean()), // Mark the default chat session
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_time", ["tokenIdentifier", "lastMessageAt"])
-    .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"]),
+    .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
+    .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"]),
 
   conversations: defineTable({
     tokenIdentifier: v.string(),
@@ -72,7 +73,9 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_session", ["sessionId"])
     .index("by_tokenIdentifier_and_session", ["tokenIdentifier", "sessionId"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"])
+    .index("by_tokenIdentifier_session_active", ["tokenIdentifier", "sessionId", "isActive"]),
 
   // User Mental Models - AI learning about user behavioral patterns and preferences
   mentalModels: defineTable({
@@ -97,7 +100,8 @@ const applicationTables = {
     updatedAt: v.number(),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"])
-    .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"]),
+    .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
+    .index("by_tokenIdentifier_and_name", ["tokenIdentifier", "name"]),
 
 };
 

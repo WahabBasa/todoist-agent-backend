@@ -17,6 +17,47 @@ async function getTokenIdentifier(ctx: QueryCtx): Promise<string | null> {
   return identity?.tokenIdentifier || null;
 }
 
+// Helper function for schema migration: Convert legacy format to new format
+function migrateConversationSchema(conversation: any) {
+  if (!conversation) return null;
+  
+  // If already migrated or has new format, return as-is
+  if (conversation.schemaVersion === 2 || conversation.messages) {
+    return conversation;
+  }
+  
+  // Legacy format detected - convert to new format
+  if (conversation.message) {
+    const migratedMessages = [];
+    
+    // Add user message
+    migratedMessages.push({
+      role: "user" as const,
+      content: conversation.message,
+      timestamp: conversation.timestamp || Date.now(),
+    });
+    
+    // Add assistant response if exists
+    if (conversation.response) {
+      migratedMessages.push({
+        role: "assistant" as const,
+        content: conversation.response,
+        toolCalls: conversation.toolCalls || undefined,
+        timestamp: (conversation.timestamp || Date.now()) + 1, // Slightly after user message
+      });
+    }
+    
+    // Return conversation with migrated messages
+    return {
+      ...conversation,
+      messages: migratedMessages,
+      schemaVersion: 2,
+    };
+  }
+  
+  return conversation;
+}
+
 // Get conversation for specific session (new multi-chat approach)
 export const getConversationBySession = query({
   args: {
@@ -40,11 +81,14 @@ export const getConversationBySession = query({
       return null; // Big-brain pattern: return null instead of throwing
     }
 
-    return await ctx.db
+    const conversation = await ctx.db
       .query("conversations")
       .withIndex("by_tokenIdentifier_and_session", (q) => 
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .first();
+
+    // Apply schema migration if needed
+    return migrateConversationSchema(conversation);
   },
 });
 
@@ -73,15 +117,17 @@ export const getConversation = query({
         .first();
       
       if (conversation) {
-        return conversation;
+        return migrateConversationSchema(conversation);
       }
     }
 
     // Fallback to any conversation by this user
-    return await ctx.db
+    const fallbackConversation = await ctx.db
       .query("conversations")
       .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .first();
+      
+    return migrateConversationSchema(fallbackConversation);
   },
 });
 
@@ -94,10 +140,13 @@ export const getAllConversations = query({
       return [];
     }
 
-    return await ctx.db
+    const conversations = await ctx.db
       .query("conversations")
       .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .collect();
+      
+    // Apply schema migration to all conversations
+    return conversations.map(conversation => migrateConversationSchema(conversation));
   },
 });
 
@@ -161,21 +210,42 @@ export const upsertConversation = mutation({
       args.sessionId = defaultSession._id;
     }
 
+    const now = Date.now();
+    
     if (conversation) {
       // Update existing conversation
       await ctx.db.patch(conversation._id, {
         messages: args.messages,
         schemaVersion: 2,
       });
+      
+      // ChatHub pattern: Update session timestamp when messages change
+      if (args.sessionId) {
+        await ctx.db.patch(args.sessionId, {
+          lastMessageAt: now,
+          messageCount: args.messages.length,
+        });
+      }
+      
       return conversation._id;
     } else {
       // Create new conversation
-      return await ctx.db.insert("conversations", {
+      const conversationId = await ctx.db.insert("conversations", {
         tokenIdentifier,
         sessionId: args.sessionId,
         messages: args.messages,
         schemaVersion: 2,
       });
+      
+      // ChatHub pattern: Update session timestamp when messages change
+      if (args.sessionId) {
+        await ctx.db.patch(args.sessionId, {
+          lastMessageAt: now,
+          messageCount: args.messages.length,
+        });
+      }
+      
+      return conversationId;
     }
   },
 });
@@ -199,15 +269,27 @@ export const createConversation = mutation({
       }
     }
 
-    return await ctx.db.insert("conversations", {
+    const now = Date.now();
+    
+    const conversationId = await ctx.db.insert("conversations", {
       tokenIdentifier,
       sessionId: args.sessionId,
       message: args.message,
       response: args.response,
-      timestamp: Date.now(),
+      timestamp: now,
       toolCalls: args.toolCalls,
       schemaVersion: 1, // Legacy schema version
     });
+    
+    // ChatHub pattern: Update session timestamp when messages change
+    if (args.sessionId) {
+      await ctx.db.patch(args.sessionId, {
+        lastMessageAt: now,
+        messageCount: args.response ? 2 : 1, // User message + optional assistant response
+      });
+    }
+    
+    return conversationId;
   },
 });
 
@@ -231,6 +313,15 @@ export const updateConversation = mutation({
     if (args.toolCalls !== undefined) updates.toolCalls = args.toolCalls;
 
     await ctx.db.patch(args.conversationId, updates);
+    
+    // ChatHub pattern: Update session timestamp when conversation is updated
+    if (conversation.sessionId && (args.response || args.toolCalls)) {
+      const now = Date.now();
+      await ctx.db.patch(conversation.sessionId, {
+        lastMessageAt: now,
+      });
+    }
+    
     return true;
   },
 });
@@ -264,13 +355,12 @@ export const clearAllConversations = mutation({
       .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .collect();
 
-    let deletedCount = 0;
-    for (const conversation of conversations) {
-      await ctx.db.delete(conversation._id);
-      deletedCount++;
-    }
+    // Batch delete all conversations in parallel
+    await Promise.all(
+      conversations.map(conversation => ctx.db.delete(conversation._id))
+    );
 
-    return { deletedConversations: deletedCount };
+    return { deletedConversations: conversations.length };
   },
 });
 
@@ -294,12 +384,11 @@ export const clearConversationsBySession = mutation({
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .collect();
 
-    let deletedCount = 0;
-    for (const conversation of conversations) {
-      await ctx.db.delete(conversation._id);
-      deletedCount++;
-    }
+    // Batch delete all conversations for this session in parallel
+    await Promise.all(
+      conversations.map(conversation => ctx.db.delete(conversation._id))
+    );
 
-    return { deletedConversations: deletedCount };
+    return { deletedConversations: conversations.length };
   },
 });
