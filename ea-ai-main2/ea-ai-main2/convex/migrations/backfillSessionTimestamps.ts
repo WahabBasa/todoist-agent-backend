@@ -1,8 +1,16 @@
 import { internalMutation } from "../_generated/server";
+import { internal } from "../_generated/api";
+
+// Define return type for migration result
+type MigrationResult = {
+  processed: number;
+  updated: number;
+  emptySessions: number;
+};
 
 // Migration: Backfill lastMessageAt for existing sessions based on their conversations
 export const backfillSessionTimestamps = internalMutation({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<MigrationResult> => {
     console.log("🔄 Starting session timestamp backfill migration...");
     
     // Get all sessions
@@ -87,7 +95,7 @@ export const backfillSessionTimestamps = internalMutation({
 
 // Helper function to run the migration (can be called from frontend)
 export const runTimestampMigration = internalMutation({
-  handler: async (ctx) => {
-    return await backfillSessionTimestamps(ctx, {});
+  handler: async (ctx): Promise<MigrationResult> => {
+    return await ctx.runMutation(internal.migrations.backfillSessionTimestamps.backfillSessionTimestamps, {});
   },
 });

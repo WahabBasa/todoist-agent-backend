@@ -1,9 +1,23 @@
 import { mutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 
+// Define return type for migration result
+type MigrationResult = {
+  processed: number;
+  updated: number;
+  emptySessions: number;
+};
+
+// Define return type for the debug function
+type TriggerMigrationResult = {
+  success: boolean;
+  result: MigrationResult;
+  message: string;
+};
+
 // Debug function to trigger session timestamp migration
 export const triggerSessionTimestampMigration = mutation({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<TriggerMigrationResult> => {
     // Check if user is authenticated (basic safety)
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -13,7 +27,7 @@ export const triggerSessionTimestampMigration = mutation({
     console.log("🚀 Triggering session timestamp migration...");
     
     // Run the internal migration
-    const result = await ctx.runMutation(internal.migrations.backfillSessionTimestamps.runTimestampMigration, {});
+    const result: MigrationResult = await ctx.runMutation(internal.migrations.backfillSessionTimestamps.runTimestampMigration, {});
     
     return {
       success: true,
@@ -23,9 +37,24 @@ export const triggerSessionTimestampMigration = mutation({
   },
 });
 
+// Define return type for debug session info
+type DebugSessionInfo = {
+  id: string;
+  title?: string;
+  createdAt: string;
+  lastMessageAt: string;
+  messageCount?: number;
+  timeDiff: number;
+};
+
+type DebugSessionResult = {
+  totalSessions: number;
+  sessions: DebugSessionInfo[];
+};
+
 // Debug function to check session timestamps
 export const debugSessionTimestamps = mutation({
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<DebugSessionResult> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Authentication required");
