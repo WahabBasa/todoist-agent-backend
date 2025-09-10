@@ -25,6 +25,7 @@ export interface ProcessorResult {
   cost?: number;
   completed: boolean;
   error?: string;
+  providerMetadata?: any; // OpenRouter usage tracking data
 }
 
 // Circuit breaker for preventing infinite tool iterations
@@ -84,6 +85,7 @@ export class StreamProcessor {
     cache: { read: 0, write: 0 }
   };
   private totalCost = 0;
+  private streamProviderMetadata: any = null;
   
   // Logging optimization - batch similar events
   private textDeltaCount = 0;
@@ -286,6 +288,15 @@ export class StreamProcessor {
         }
       }
 
+      // Capture provider metadata from stream result (for OpenRouter usage tracking)
+      try {
+        const streamResult = await stream;
+        this.streamProviderMetadata = streamResult.providerMetadata;
+        console.log('[Processor] Captured stream provider metadata for usage tracking');
+      } catch (error) {
+        console.warn('[Processor] Could not capture stream provider metadata:', error);
+      }
+
       // Extract completed tool calls for conversation history
       const completedToolCalls = Object.values(this.toolCalls)
         .filter(tc => tc.status === "completed" || tc.status === "error")
@@ -301,7 +312,8 @@ export class StreamProcessor {
         toolResults: this.allToolResults,
         tokens: this.totalTokens,
         cost: this.totalCost,
-        completed: true
+        completed: true,
+        providerMetadata: this.streamProviderMetadata
       };
 
     } catch (error) {
@@ -322,7 +334,8 @@ export class StreamProcessor {
         tokens: this.totalTokens,
         cost: this.totalCost,
         completed: false,
-        error: errorMessage
+        error: errorMessage,
+        providerMetadata: this.streamProviderMetadata
       };
     }
   }

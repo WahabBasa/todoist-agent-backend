@@ -155,13 +155,13 @@ Then execute systematically with progress updates.
         console.log(`[SessionV2] ✅ Custom system prompt loaded and integrated`);
       }
 
-      // Add system prompt as system message for caching (OpenCode approach)
+      // Add system prompt as simple string message (AI SDK schema compliant)
       const systemMessage: ModelMessage = {
         role: "system",
         content: systemPrompt
       };
       
-      // Prepend system message to enable caching
+      // Prepend system message 
       let messagesWithSystem = [systemMessage, ...modelMessages];
       console.log(`[SessionV2] Added system prompt as cacheable system message`);
 
@@ -177,8 +177,13 @@ Then execute systematically with progress updates.
       console.log(`[SessionV2] Caching applied to messages including ${systemPrompt.length}-char system prompt`);
 
       // Use streamText with proper stopping conditions (OpenCode pattern)
+      // Use proper AI SDK pattern with openrouter.chat() method
       const stream = streamText({
-        model: openrouter(modelName),
+        model: openrouter.chat(modelName, {
+          usage: {
+            include: true, // Enable OpenRouter usage tracking for cache monitoring
+          },
+        }),
         messages: messagesWithSystem,
         tools,
         maxRetries: 3,
@@ -221,6 +226,27 @@ Then execute systematically with progress updates.
         completed: result.completed,
         error: result.error
       });
+
+      // Log OpenRouter usage tracking data for cache monitoring
+      if (result.providerMetadata?.openrouter?.usage) {
+        const usage = result.providerMetadata.openrouter.usage;
+        console.log(`[CACHE TRACKING] OpenRouter usage data:`, {
+          cost: usage.cost,
+          totalTokens: usage.totalTokens,
+          inputTokens: usage.promptTokens || usage.inputTokens,
+          outputTokens: usage.completionTokens || usage.outputTokens,
+          cacheData: usage.cache || 'No cache data available'
+        });
+        
+        // Specifically log cache performance if available
+        if (usage.cache) {
+          console.log(`[CACHE PERFORMANCE] Cache hits/misses:`, usage.cache);
+        } else {
+          console.log(`[CACHE PERFORMANCE] No cache data in response - verify caching is working`);
+        }
+      } else {
+        console.log(`[CACHE TRACKING] No OpenRouter usage metadata available - check provider configuration`);
+      }
 
       // Build final conversation history
       const finalHistory = [...history];
