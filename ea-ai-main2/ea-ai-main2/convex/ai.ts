@@ -25,13 +25,13 @@ import { requireUserAuthForAction } from "./todoist/userAccess";
 // =================================================================
 
 // Load user mental model for personalized AI behavior with caching
-function getUserMentalModel(userId?: string): string {
+async function getUserMentalModel(ctx: any, userId?: string): Promise<string> {
   // Try to get from cache first if userId provided
   if (userId) {
-    const cached = MessageCaching.getCachedMentalModel(userId);
+    const cached = await MessageCaching.getCachedMentalModel(ctx, userId);
     if (cached) {
       MessageCaching.incrementCacheHit('mental_model');
-      return cached;
+      return cached.content;
     }
     MessageCaching.incrementCacheMiss();
   }
@@ -56,7 +56,7 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
 
     // Cache the result if userId provided
     if (userId) {
-      MessageCaching.setCachedMentalModel(userId, content);
+      await MessageCaching.setCachedMentalModel(ctx, userId, content);
     }
 
     return content;
@@ -69,7 +69,7 @@ AI should use default behavior and attempt to create mental model during convers
 
     // Cache the error result to avoid repeated file I/O failures
     if (userId) {
-      MessageCaching.setCachedMentalModel(userId, errorContent);
+      await MessageCaching.setCachedMentalModel(ctx, userId, errorContent);
     }
 
     return errorContent;

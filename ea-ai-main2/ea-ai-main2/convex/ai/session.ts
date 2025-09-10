@@ -131,7 +131,6 @@ export const chatWithAIV2 = action({
         sessionId: sessionId || undefined,
         content: "processed",
         metadata: { 
-          messageText: message.substring(0, 100),
           contextLength: modelMessages.length 
         }
       });

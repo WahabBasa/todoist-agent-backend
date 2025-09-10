@@ -1,3 +1,5 @@
+"use node";
+
 // Database-backed caching system for Convex stateless environment
 // Replaces in-memory Maps to enable consistent request payloads for Anthropic ephemeral caching
 
@@ -5,7 +7,7 @@ import { query, mutation, action } from "../_generated/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
 import { ModelMessage } from "ai";
-import crypto from "crypto";
+import { createHash } from "crypto";
 
 export namespace DatabaseCaching {
   
@@ -22,8 +24,7 @@ export namespace DatabaseCaching {
     if (sessionId) components.push(sessionId);
     if (additionalData) components.push(additionalData);
     
-    return crypto
-      .createHash("sha256")
+    return createHash("sha256")
       .update(components.join("-"))
       .digest("hex")
       .substring(0, 32); // 32 chars for readability
@@ -33,8 +34,7 @@ export namespace DatabaseCaching {
    * Create content hash for fast comparison
    */
   export function createContentHash(content: string): string {
-    return crypto
-      .createHash("sha256")
+    return createHash("sha256")
       .update(content)
       .digest("hex");
   }
@@ -63,10 +63,10 @@ export const getCachedContent = query({
   args: { 
     cacheKey: v.string() 
   },
-  handler: async (ctx, { cacheKey }) => {
+  handler: async (ctx, { cacheKey }): Promise<{ content: string; contentHash: string; metadata: any; hitCount: number; _id: string } | null> => {
     const cached = await ctx.db
       .query("aiCache")
-      .withIndex("by_cache_key", q => q.eq("cacheKey", cacheKey))
+      .withIndex("by_cache_key", (q: any) => q.eq("cacheKey", cacheKey))
       .first();
 
     if (!cached) {
@@ -93,7 +93,7 @@ export const updateCacheHitCount = mutation({
   args: {
     cacheId: v.id("aiCache")
   },
-  handler: async (ctx, { cacheId }) => {
+  handler: async (ctx, { cacheId }): Promise<void> => {
     const cached = await ctx.db.get(cacheId);
     if (cached) {
       await ctx.db.patch(cacheId, {
@@ -125,7 +125,7 @@ export const setCachedContent = mutation({
       contextLength: v.optional(v.number()),
     }))
   },
-  handler: async (ctx, { cacheKey, cacheType, tokenIdentifier, sessionId, content, metadata }) => {
+  handler: async (ctx, { cacheKey, cacheType, tokenIdentifier, sessionId, content, metadata }): Promise<string> => {
     const contentHash = DatabaseCaching.createContentHash(content);
     const expiresAt = DatabaseCaching.calculateTTL(cacheType);
     const now = Date.now();
@@ -133,7 +133,7 @@ export const setCachedContent = mutation({
     // Check if entry already exists
     const existing = await ctx.db
       .query("aiCache")
-      .withIndex("by_cache_key", q => q.eq("cacheKey", cacheKey))
+      .withIndex("by_cache_key", (q: any) => q.eq("cacheKey", cacheKey))
       .first();
 
     if (existing) {
@@ -170,7 +170,7 @@ export const getUserMentalModelCached = action({
   args: { 
     tokenIdentifier: v.string() 
   },
-  handler: async (ctx, { tokenIdentifier }) => {
+  handler: async (ctx, { tokenIdentifier }): Promise<{ content: string; fromCache: boolean; hitCount: number }> => {
     const cacheKey = DatabaseCaching.createCacheKey("mental_model", tokenIdentifier);
     
     // Try cache first
@@ -219,13 +219,29 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
   }
 });
 
+// Query: Get custom prompt from database (helper for action)
+export const getCustomPromptFromDB = query({
+  args: {
+    tokenIdentifier: v.string()
+  },
+  handler: async (ctx, { tokenIdentifier }): Promise<string> => {
+    const customPrompts = await ctx.db
+      .query("customSystemPrompts")
+      .withIndex("by_tokenIdentifier_and_active", (q: any) => 
+        q.eq("tokenIdentifier", tokenIdentifier).eq("isActive", true))
+      .first();
+
+    return customPrompts?.content || "";
+  }
+});
+
 // Action: Get custom prompt with database caching
 export const getCustomPromptCached = action({
   args: { 
     tokenIdentifier: v.string(),
     promptName: v.optional(v.string())
   },
-  handler: async (ctx, { tokenIdentifier, promptName = "active" }) => {
+  handler: async (ctx, { tokenIdentifier, promptName = "active" }): Promise<{ content: string; fromCache: boolean; hitCount: number }> => {
     const cacheKey = DatabaseCaching.createCacheKey("custom_prompt", tokenIdentifier, promptName);
     
     // Try cache first
@@ -238,14 +254,10 @@ export const getCustomPromptCached = action({
       };
     }
 
-    // Cache miss - fetch from database
-    const customPrompts = await ctx.db
-      .query("customSystemPrompts")
-      .withIndex("by_tokenIdentifier_and_active", q => 
-        q.eq("tokenIdentifier", tokenIdentifier).eq("isActive", true))
-      .first();
-
-    const content = customPrompts?.content || "";
+    // Cache miss - fetch from database via helper query
+    const content = await ctx.runQuery(api.ai.databaseCaching.getCustomPromptFromDB, {
+      tokenIdentifier
+    });
 
     // Cache the result (even if empty)
     await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
@@ -276,7 +288,7 @@ export const cacheToolResult = mutation({
     sessionId: v.string(),
     tokenIdentifier: v.string()
   },
-  handler: async (ctx, { toolName, args, result, sessionId, tokenIdentifier }) => {
+  handler: async (ctx, { toolName, args, result, sessionId, tokenIdentifier }): Promise<string> => {
     const argsHash = DatabaseCaching.createContentHash(JSON.stringify(args, Object.keys(args).sort()));
     const cacheKey = DatabaseCaching.createCacheKey("tool_result", tokenIdentifier, `${toolName}-${argsHash}`, sessionId);
     
@@ -305,7 +317,7 @@ export const getCachedToolResult = query({
     sessionId: v.string(),
     tokenIdentifier: v.string()
   },
-  handler: async (ctx, { toolName, args, sessionId, tokenIdentifier }) => {
+  handler: async (ctx, { toolName, args, sessionId, tokenIdentifier }): Promise<{ result: any; fromCache: boolean; hitCount: number } | null> => {
     const argsHash = DatabaseCaching.createContentHash(JSON.stringify(args, Object.keys(args).sort()));
     const cacheKey = DatabaseCaching.createCacheKey("tool_result", tokenIdentifier, `${toolName}-${argsHash}`, sessionId);
     
@@ -331,17 +343,17 @@ export const createConsistentRequestPayload = action({
     model: v.string(),
     useHaiku: v.boolean()
   },
-  handler: async (ctx, { tokenIdentifier, sessionId, messages, model, useHaiku }) => {
+  handler: async (ctx, { tokenIdentifier, sessionId, messages, model, useHaiku }): Promise<{ requestPayload: any; payloadHash: string; cacheKey: string; cacheStats: any }> => {
     // Create a stable, deterministic request payload
     // This ensures byte-for-byte identical requests for Anthropic caching
 
     // 1. Get cached mental model
-    const mentalModel = await ctx.runQuery(api.ai.databaseCaching.getUserMentalModelCached, {
+    const mentalModel = await ctx.runAction(api.ai.databaseCaching.getUserMentalModelCached, {
       tokenIdentifier
     });
 
     // 2. Get cached custom prompt
-    const customPrompt = await ctx.runQuery(api.ai.databaseCaching.getCustomPromptCached, {
+    const customPrompt = await ctx.runAction(api.ai.databaseCaching.getCustomPromptCached, {
       tokenIdentifier
     });
 
@@ -425,13 +437,13 @@ export const createConsistentRequestPayload = action({
 // Mutation: Cleanup expired cache entries
 export const cleanupExpiredCache = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ deletedCount: number; cleanupTime: number }> => {
     const now = Date.now();
     
     // Find expired entries
     const expired = await ctx.db
       .query("aiCache")
-      .withIndex("by_expiration", q => q.lt("expiresAt", now))
+      .withIndex("by_expiration", (q: any) => q.lt("expiresAt", now))
       .collect();
 
     // Delete expired entries
@@ -444,7 +456,7 @@ export const cleanupExpiredCache = mutation({
     // Cleanup request deduplication
     const expiredRequests = await ctx.db
       .query("requestDeduplication")
-      .withIndex("by_expiration", q => q.lt("expiresAt", now))
+      .withIndex("by_expiration", (q: any) => q.lt("expiresAt", now))
       .collect();
 
     for (const entry of expiredRequests) {
@@ -465,12 +477,12 @@ export const getCacheStats = query({
     tokenIdentifier: v.string(),
     date: v.optional(v.string()) // YYYY-MM-DD format
   },
-  handler: async (ctx, { tokenIdentifier, date }) => {
+  handler: async (ctx, { tokenIdentifier, date }): Promise<{ date: string; cacheHits: number; cacheMisses: number; mentalModelHits: number; customPromptHits: number; toolCallHits: number; requestPayloadHits: number; totalRequests: number; tokensSaved: number; cacheEfficiency: number }> => {
     const targetDate = date || new Date().toISOString().split('T')[0];
     
     const stats = await ctx.db
       .query("cacheAnalytics")
-      .withIndex("by_user_and_date", q => 
+      .withIndex("by_user_and_date", (q: any) => 
         q.eq("tokenIdentifier", tokenIdentifier).eq("date", targetDate))
       .first();
 
