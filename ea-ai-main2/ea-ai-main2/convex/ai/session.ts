@@ -61,7 +61,7 @@ export const chatWithAIV2 = action({
     
     // Check for duplicate requests using database
     try {
-      const duplicateCheck = await ctx.runQuery("ai/databaseCaching:getCachedContent", {
+      const duplicateCheck = await ctx.runQuery(api.ai.databaseCaching.getCachedContent, {
         cacheKey: `dedup-${requestHash}`
       });
       
@@ -103,7 +103,7 @@ export const chatWithAIV2 = action({
     console.log(`[SessionV2] Building consistent request payload for Anthropic caching`);
     
     try {
-      const payloadResult = await ctx.runQuery("ai/databaseCaching:createConsistentRequestPayload", {
+      const payloadResult = await ctx.runAction(api.ai.databaseCaching.createConsistentRequestPayload, {
         tokenIdentifier: userId,
         sessionId: sessionId || undefined,
         messages: modelMessages.map(msg => ({
@@ -124,7 +124,7 @@ export const chatWithAIV2 = action({
       console.log(`[SessionV2] Payload optimized for Anthropic ephemeral caching`);
       
       // Mark request as processed for deduplication
-      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+      await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
         cacheKey: `dedup-${requestHash}`,
         cacheType: "request_payload",
         tokenIdentifier: userId,
@@ -439,7 +439,7 @@ export const getSessionStats = action({
     
     const messages = (conversation?.messages as MessageV2.ConvexMessage[]) || [];
     const stats = MessageV2.ContextManager.getConversationStats(messages);
-    const cacheStats = MessageCaching.getCacheStats();
+    const cacheStats = await MessageCaching.getCacheStats(ctx, userId);
     
     return {
       userId: userId.substring(0, 20) + "...",

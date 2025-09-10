@@ -1,7 +1,7 @@
 // Database-backed caching system for Convex stateless environment
 // Replaces in-memory Maps to enable consistent request payloads for Anthropic ephemeral caching
 
-import { query, mutation } from "../_generated/server";
+import { query, mutation, action } from "../_generated/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
 import { ModelMessage } from "ai";
@@ -75,23 +75,32 @@ export const getCachedContent = query({
 
     // Check if expired
     if (Date.now() > cached.expiresAt) {
-      // Delete expired cache entry
-      await ctx.db.delete(cached._id);
-      return null;
+      return null; // Expired entries will be cleaned up by separate cleanup process
     }
-
-    // Update hit count
-    await ctx.db.patch(cached._id, {
-      hitCount: cached.hitCount + 1,
-      updatedAt: Date.now()
-    });
 
     return {
       content: cached.content,
       contentHash: cached.contentHash,
       metadata: cached.metadata,
-      hitCount: cached.hitCount + 1
+      hitCount: cached.hitCount,
+      _id: cached._id // Include ID for hit count update
     };
+  }
+});
+
+// Mutation: Update hit count for cache entry
+export const updateCacheHitCount = mutation({
+  args: {
+    cacheId: v.id("aiCache")
+  },
+  handler: async (ctx, { cacheId }) => {
+    const cached = await ctx.db.get(cacheId);
+    if (cached) {
+      await ctx.db.patch(cacheId, {
+        hitCount: cached.hitCount + 1,
+        updatedAt: Date.now()
+      });
+    }
   }
 });
 
@@ -156,8 +165,8 @@ export const setCachedContent = mutation({
   }
 });
 
-// Query: Get user mental model with database caching
-export const getUserMentalModelCached = query({
+// Action: Get user mental model with database caching  
+export const getUserMentalModelCached = action({
   args: { 
     tokenIdentifier: v.string() 
   },
@@ -210,8 +219,8 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
   }
 });
 
-// Query: Get custom prompt with database caching  
-export const getCustomPromptCached = query({
+// Action: Get custom prompt with database caching
+export const getCustomPromptCached = action({
   args: { 
     tokenIdentifier: v.string(),
     promptName: v.optional(v.string())
@@ -313,8 +322,8 @@ export const getCachedToolResult = query({
   }
 });
 
-// Query: Create consistent request payload for Anthropic caching
-export const createConsistentRequestPayload = query({
+// Action: Create consistent request payload for Anthropic caching
+export const createConsistentRequestPayload = action({
   args: {
     tokenIdentifier: v.string(),
     sessionId: v.optional(v.string()),

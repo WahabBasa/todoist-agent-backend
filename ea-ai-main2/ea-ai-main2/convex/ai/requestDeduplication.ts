@@ -47,9 +47,7 @@ export const checkRequestHash = query({
 
     // Check if expired
     if (Date.now() > existing.expiresAt) {
-      // Delete expired entry
-      await ctx.db.delete(existing._id);
-      return null;
+      return null; // Expired entries will be cleaned up by separate cleanup process
     }
 
     return {

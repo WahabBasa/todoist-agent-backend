@@ -84,10 +84,10 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
   // Load user's active custom system prompt from database with caching
   export async function getCustomSystemPromptFromDB(ctx: any, userId: string): Promise<string> {
     // Try cache first
-    const cached = MessageCaching.getCachedCustomPrompt(userId);
+    const cached = await MessageCaching.getCachedCustomPrompt(ctx, userId);
     if (cached) {
       MessageCaching.incrementCacheHit('custom_prompt');
-      return cached;
+      return cached.content;
     }
     MessageCaching.incrementCacheMiss();
 
@@ -105,7 +105,7 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
       }
       
       // Cache the result
-      MessageCaching.setCachedCustomPrompt(userId, formattedContent, customPromptData.name || "active");
+      await MessageCaching.setCachedCustomPrompt(ctx, userId, formattedContent, customPromptData.name || "active");
       
       return formattedContent;
     } catch (error) {

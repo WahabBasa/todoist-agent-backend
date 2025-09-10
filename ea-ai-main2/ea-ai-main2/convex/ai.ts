@@ -485,17 +485,16 @@ function recordToolFailure(toolName: string): void {
   toolFailureTracker.set(toolName, failure);
 }
 
-async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: any, sessionId?: any): Promise<ToolResultPart> {
+async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: any, sessionId?: any, userId?: string): Promise<ToolResultPart> {
     const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
     
     // Check tool call cache for identical operations
-    if (sessionId) {
-      const cacheKey = MessageCaching.createToolCacheKey(toolName, args, sessionId);
-      const cachedResult = MessageCaching.getCachedToolResult(cacheKey);
+    if (sessionId && userId) {
+      const cachedResult = await MessageCaching.getCachedToolResult(ctx, toolName, args, sessionId, userId);
       
       if (cachedResult) {
-        console.log(`[Caching] Tool cache hit for ${toolName}:${cacheKey.substring(0, 30)}...`);
+        console.log(`[Caching] Tool cache hit for ${toolName}`);
         MessageCaching.incrementCacheHit('tool_call');
         return {
           type: 'tool-result' as const,
@@ -830,10 +829,9 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
         toolFailureTracker.delete(toolName);
         
         // Cache successful tool results for future use
-        if (sessionId) {
-          const cacheKey = MessageCaching.createToolCacheKey(toolName, args, sessionId);
-          MessageCaching.setCachedToolResult(cacheKey, result || {}, sessionId);
-          console.log(`[Caching] Tool result cached for ${toolName}:${cacheKey.substring(0, 30)}...`);
+        if (sessionId && userId) {
+          await MessageCaching.setCachedToolResult(ctx, toolName, args, result || {}, sessionId, userId);
+          console.log(`[Caching] Tool result cached for ${toolName}`);
         }
         
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
@@ -1046,8 +1044,9 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         try {
-          // Load mental model content in Node.js runtime with caching
-          const mentalModelContent = getUserMentalModel(userId);
+          // Load mental model content using database-backed caching
+          const mentalModelResult = await MessageCaching.getCachedMentalModel(ctx, userId);
+          const mentalModelContent = mentalModelResult?.content || "";
           
           // Apply intelligent caching to messages before AI generation
           let optimizedMessages = MessageCaching.optimizeForCaching(modelMessages);
@@ -1141,7 +1140,7 @@ Do NOT use any other tools until internal todolist is created.
             toolName: call.toolName,
             args: call.input,
             toolCallId: call.toolCallId
-        }, currentTimeContext, sessionId)));
+        }, currentTimeContext, sessionId, userId)));
         
         // Validate tool call ID consistency and filter out mismatched results
         const validatedResults = toolResults.filter((result: any) => {
@@ -1193,7 +1192,7 @@ export const getCacheStatistics = action({
     // Use big-brain authentication pattern
     const { userId } = await requireUserAuthForAction(ctx);
     
-    const stats = MessageCaching.getCacheStats();
+    const stats = await MessageCaching.getCacheStats(ctx, userId);
     
     // Calculate efficiency metrics
     const totalRequests = stats.cacheHits + stats.cacheMisses;
@@ -1217,7 +1216,7 @@ export const cleanupCache = action({
     const { userId } = await requireUserAuthForAction(ctx);
     
     console.log(`[Caching] Manual cache cleanup requested by user: ${userId.substring(0, 20)}...`);
-    MessageCaching.cleanupExpiredCache();
+    await MessageCaching.cleanupExpiredCache(ctx);
     
     return { 
       success: true, 

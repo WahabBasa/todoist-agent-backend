@@ -4,6 +4,7 @@
 
 import { ModelMessage } from "ai";
 import { DatabaseCaching } from "./databaseCaching";
+import { api } from "../_generated/api";
 
 export namespace MessageCaching {
   
@@ -112,7 +113,7 @@ export namespace MessageCaching {
    */
   export async function getCachedMentalModel(ctx: any, userId: string): Promise<{ content: string; fromCache: boolean } | null> {
     try {
-      return await ctx.runQuery("ai/databaseCaching:getUserMentalModelCached", {
+      return await ctx.runAction(api.ai.databaseCaching.getUserMentalModelCached, {
         tokenIdentifier: userId
       });
     } catch (error) {
@@ -124,7 +125,7 @@ export namespace MessageCaching {
   export async function setCachedMentalModel(ctx: any, userId: string, content: string): Promise<void> {
     try {
       const cacheKey = DatabaseCaching.createCacheKey("mental_model", userId);
-      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+      await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
         cacheKey,
         cacheType: "mental_model",
         tokenIdentifier: userId,
@@ -149,7 +150,7 @@ export namespace MessageCaching {
    */
   export async function getCachedCustomPrompt(ctx: any, userId: string, promptName: string = "active"): Promise<{ content: string; fromCache: boolean } | null> {
     try {
-      return await ctx.runQuery("ai/databaseCaching:getCustomPromptCached", {
+      return await ctx.runAction(api.ai.databaseCaching.getCustomPromptCached, {
         tokenIdentifier: userId,
         promptName
       });
@@ -162,7 +163,7 @@ export namespace MessageCaching {
   export async function setCachedCustomPrompt(ctx: any, userId: string, content: string, promptName: string = "active"): Promise<void> {
     try {
       const cacheKey = DatabaseCaching.createCacheKey("custom_prompt", userId, promptName);
-      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+      await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
         cacheKey,
         cacheType: "custom_prompt",
         tokenIdentifier: userId,
@@ -189,7 +190,7 @@ export namespace MessageCaching {
   export async function getCachedSystemPromptComponent(ctx: any, key: string, userId: string): Promise<string | null> {
     try {
       const cacheKey = DatabaseCaching.createCacheKey("system_prompt", userId, key);
-      const cached = await ctx.runQuery("ai/databaseCaching:getCachedContent", { cacheKey });
+      const cached = await ctx.runQuery(api.ai.databaseCaching.getCachedContent, { cacheKey });
       return cached ? cached.content : null;
     } catch (error) {
       console.warn("[MessageCaching] Failed to get cached system prompt component:", error);
@@ -200,7 +201,7 @@ export namespace MessageCaching {
   export async function setCachedSystemPromptComponent(ctx: any, key: string, content: string, userId: string): Promise<void> {
     try {
       const cacheKey = DatabaseCaching.createCacheKey("system_prompt", userId, key);
-      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+      await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
         cacheKey,
         cacheType: "system_prompt",
         tokenIdentifier: userId,
@@ -229,7 +230,7 @@ export namespace MessageCaching {
 
   export async function getCachedToolResult(ctx: any, toolName: string, args: any, sessionId: string, userId: string): Promise<any | null> {
     try {
-      const result = await ctx.runQuery("ai/databaseCaching:getCachedToolResult", {
+      const result = await ctx.runQuery(api.ai.databaseCaching.getCachedToolResult, {
         toolName,
         args,
         sessionId,
@@ -244,7 +245,7 @@ export namespace MessageCaching {
 
   export async function setCachedToolResult(ctx: any, toolName: string, args: any, result: any, sessionId: string, userId: string): Promise<void> {
     try {
-      await ctx.runMutation("ai/databaseCaching:cacheToolResult", {
+      await ctx.runMutation(api.ai.databaseCaching.cacheToolResult, {
         toolName,
         args,
         result,
@@ -275,7 +276,7 @@ export namespace MessageCaching {
 
   export async function getCacheStats(ctx: any, userId: string, date?: string): Promise<CacheStats> {
     try {
-      const stats = await ctx.runQuery("ai/databaseCaching:getCacheStats", {
+      const stats = await ctx.runQuery(api.ai.databaseCaching.getCacheStats, {
         tokenIdentifier: userId,
         date
       });
@@ -321,7 +322,7 @@ export namespace MessageCaching {
    */
   export async function cleanupExpiredCache(ctx: any): Promise<{ deletedCount: number; cleanupTime: number }> {
     try {
-      return await ctx.runMutation("ai/databaseCaching:cleanupExpiredCache", {});
+      return await ctx.runMutation(api.ai.databaseCaching.cleanupExpiredCache, {});
     } catch (error) {
       console.warn("[MessageCaching] Failed to cleanup expired cache:", error);
       return { deletedCount: 0, cleanupTime: Date.now() };
