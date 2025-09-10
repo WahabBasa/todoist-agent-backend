@@ -81,33 +81,20 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     return hasBulkOperations || hasQuantifiedTasks || hasCrossSystemWork || hasComplexAnalysis || hasWorkflowCoordination;
   }
 
-  // Load user's active custom system prompt from database with caching
+  // Load user's active custom system prompt from database
   export async function getCustomSystemPromptFromDB(ctx: any, userId: string): Promise<string> {
-    // Try cache first
-    const cached = await MessageCaching.getCachedCustomPrompt(ctx, userId);
-    if (cached) {
-      MessageCaching.incrementCacheHit('custom_prompt');
-      return cached.content;
-    }
-    MessageCaching.incrementCacheMiss();
-
     try {
       const customPromptData = await ctx.runQuery(api.customSystemPrompts.getActiveCustomPrompt, {
         tokenIdentifier: userId,
       });
 
-      let formattedContent: string;
-      
       if (customPromptData.exists && customPromptData.content) {
-        formattedContent = `\n<custom_system_prompt>\n${customPromptData.content}\n</custom_system_prompt>\n`;
+        const formattedContent = `\n<custom_system_prompt>\n${customPromptData.content}\n</custom_system_prompt>\n`;
+        console.log(`[SystemPrompt] Custom prompt loaded for user ${userId.substring(0, 20)}...`);
+        return formattedContent;
       } else {
-        formattedContent = ""; // No custom prompt
+        return ""; // No custom prompt
       }
-      
-      // Cache the result
-      await MessageCaching.setCachedCustomPrompt(ctx, userId, formattedContent, customPromptData.name || "active");
-      
-      return formattedContent;
     } catch (error) {
       console.warn(`[SystemPrompt] Failed to load custom system prompt for user ${userId.substring(0, 20)}...:`, error);
       return ""; // Graceful degradation

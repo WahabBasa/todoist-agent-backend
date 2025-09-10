@@ -16,7 +16,6 @@ import type {
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_messageV2 from "../ai/messageV2.js";
 import type * as ai_processor from "../ai/processor.js";
-import type * as ai_requestDeduplication from "../ai/requestDeduplication.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_system from "../ai/system.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
@@ -60,7 +59,6 @@ declare const fullApi: ApiFromModules<{
   "ai/caching": typeof ai_caching;
   "ai/messageV2": typeof ai_messageV2;
   "ai/processor": typeof ai_processor;
-  "ai/requestDeduplication": typeof ai_requestDeduplication;
   "ai/session": typeof ai_session;
   "ai/system": typeof ai_system;
   "ai/toolRegistry": typeof ai_toolRegistry;

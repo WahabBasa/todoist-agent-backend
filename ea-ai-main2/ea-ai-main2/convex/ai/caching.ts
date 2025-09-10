@@ -1,13 +1,14 @@
 // OpenCode-inspired caching for Anthropic models via OpenRouter
-// Enables Anthropic server-side ephemeral caching through strategic cache_control placement
+// Enables Anthropic server-side ephemeral caching by targeting expensive, static content
+// Strategy: Cache system prompts (expensive) + recent messages (context continuity)
 
 import { ModelMessage } from "ai";
 
 export namespace MessageCaching {
   
   /**
-   * Apply Anthropic ephemeral caching using OpenCode's proven strategy
-   * Works with OpenRouter using cache_control parameter in providerOptions
+   * Apply Anthropic ephemeral caching targeting expensive, static content
+   * Prioritizes system prompts and substantial content for maximum cache benefit
    */
   export function applyCaching(messages: ModelMessage[], modelName: string): ModelMessage[] {
     // Only apply to Claude models
@@ -15,11 +16,21 @@ export namespace MessageCaching {
       return messages;
     }
 
-    // OpenCode's strategy: system prompts (first 2) + recent messages (last 2)
-    const system = messages.filter((msg) => msg.role === "system").slice(0, 2);
-    const final = messages.filter((msg) => msg.role !== "system").slice(-2);
+    console.log(`[CACHING] Analyzing ${messages.length} messages for caching opportunities`);
 
-    // OpenRouter's cache_control syntax (different from direct Anthropic)
+    // Priority 1: ALL system messages (these are expensive and static)
+    const systemMessages = messages.filter((msg) => msg.role === "system");
+    
+    // Priority 2: Recent conversation context (last 2 non-system messages)  
+    const nonSystemMessages = messages.filter((msg) => msg.role !== "system");
+    const recentMessages = nonSystemMessages.slice(-2);
+
+    // Combine for caching (prioritize system messages)
+    const messagesToCache = [...systemMessages, ...recentMessages];
+
+    console.log(`[CACHING] Selected ${messagesToCache.length} messages for caching (${systemMessages.length} system + ${recentMessages.length} recent)`);
+
+    // OpenRouter's cache_control syntax for Anthropic ephemeral caching
     const providerOptions = {
       openrouter: {
         cache_control: { type: "ephemeral" },
@@ -29,10 +40,14 @@ export namespace MessageCaching {
       },
     };
 
-    // Apply cache control to unique messages (avoid duplicates)
-    const uniqueMessages = Array.from(new Set([...system, ...final]));
-    
-    for (const msg of uniqueMessages) {
+    // Apply cache control to selected messages
+    for (const msg of messagesToCache) {
+      const contentLength = typeof msg.content === 'string' 
+        ? msg.content.length 
+        : JSON.stringify(msg.content || '').length;
+
+      console.log(`[CACHING] Applying cache control to ${msg.role} message (${contentLength} chars)`);
+
       const shouldUseContentOptions = Array.isArray(msg.content) && msg.content.length > 0;
 
       if (shouldUseContentOptions) {
@@ -54,6 +69,7 @@ export namespace MessageCaching {
       };
     }
 
+    console.log(`[CACHING] Applied cache control to ${messagesToCache.length} messages`);
     return messages;
   }
 

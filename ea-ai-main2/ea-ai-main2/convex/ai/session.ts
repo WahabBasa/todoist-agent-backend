@@ -53,34 +53,20 @@ export const chatWithAIV2 = action({
 
     console.log(`[SessionV2] Starting streamText interaction for: "${message}"`);
 
-    // Initialize database-backed caching system (no longer initializes on every request)
+    // Initialize OpenCode-style caching system
     MessageCaching.initializeCaching();
 
-    // Create request hash for deduplication
-    const requestHash = MessageCaching.createCacheKey(userId, message, history.length, sessionId);
-    
-    // Check for duplicate requests using database
+    // Load user mental model directly from database
+    let mentalModelContent = "";
     try {
-      const duplicateCheck = await ctx.runQuery(api.ai.databaseCaching.getCachedContent, {
-        cacheKey: `dedup-${requestHash}`
+      const mentalModel = await ctx.runQuery(api.mentalModels.getUserMentalModel, {
+        tokenIdentifier: userId
       });
-      
-      if (duplicateCheck) {
-        console.log(`[SessionV2] Duplicate request detected: ${requestHash}`);
-        return { 
-          response: "This request appears identical to a recent one. Please wait a moment before trying again.",
-          fromCache: true 
-        };
-      }
+      mentalModelContent = mentalModel?.content || "";
+      console.log(`[SessionV2] Mental model loaded: ${mentalModelContent ? 'found' : 'not found'}`);
     } catch (error) {
-      console.warn(`[SessionV2] Duplicate check failed, proceeding:`, error);
+      console.warn(`[SessionV2] Failed to load mental model:`, error);
     }
-
-    // Load user mental model using database-backed caching
-    const mentalModelResult = await MessageCaching.getCachedMentalModel(ctx, userId);
-    const mentalModelContent = mentalModelResult?.content || "";
-    
-    console.log(`[SessionV2] Mental model loaded (fromCache: ${mentalModelResult?.fromCache || false})`);
     
     // Intelligent context optimization (OpenCode pattern)
     const maxContextMessages = parseInt(process.env.MAX_CONTEXT_MESSAGES || "50");
@@ -99,48 +85,7 @@ export const chatWithAIV2 = action({
       modelMessages = MessageV2.ErrorHandler.handleConversionError(error as Error, optimizedHistory);
     }
 
-    // Create consistent request payload for Anthropic ephemeral caching
-    console.log(`[SessionV2] Building consistent request payload for Anthropic caching`);
-    
-    try {
-      const payloadResult = await ctx.runAction(api.ai.databaseCaching.createConsistentRequestPayload, {
-        tokenIdentifier: userId,
-        sessionId: sessionId || undefined,
-        messages: modelMessages.map(msg => ({
-          role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        })),
-        model: modelName,
-        useHaiku
-      });
-      
-      console.log(`[SessionV2] Consistent payload created. Cache stats:`, payloadResult.cacheStats);
-      
-      // Use the consistent request payload
-      const { requestPayload } = payloadResult;
-      modelMessages = requestPayload.messages;
-      
-      console.log(`[SessionV2] Using request hash: ${payloadResult.payloadHash}`);
-      console.log(`[SessionV2] Payload optimized for Anthropic ephemeral caching`);
-      
-      // Mark request as processed for deduplication
-      await ctx.runMutation(api.ai.databaseCaching.setCachedContent, {
-        cacheKey: `dedup-${requestHash}`,
-        cacheType: "request_payload",
-        tokenIdentifier: userId,
-        sessionId: sessionId || undefined,
-        content: "processed",
-        metadata: { 
-          contextLength: modelMessages.length 
-        }
-      });
-      
-    } catch (error) {
-      console.warn(`[SessionV2] Failed to create consistent payload, using original messages:`, error);
-      // Fallback to original approach if database caching fails
-      modelMessages = MessageCaching.optimizeForCaching(modelMessages);
-      modelMessages = MessageCaching.applyCaching(modelMessages);
-    }
+    // Note: Caching will be applied after system prompt is added to messages
 
     // Detect enhanced internal todo prompt usage
     let dynamicInstructions = "";
@@ -210,11 +155,31 @@ Then execute systematically with progress updates.
         console.log(`[SessionV2] ✅ Custom system prompt loaded and integrated`);
       }
 
+      // Add system prompt as system message for caching (OpenCode approach)
+      const systemMessage: ModelMessage = {
+        role: "system",
+        content: systemPrompt
+      };
+      
+      // Prepend system message to enable caching
+      let messagesWithSystem = [systemMessage, ...modelMessages];
+      console.log(`[SessionV2] Added system prompt as cacheable system message`);
+
+      // Apply OpenCode-style Anthropic ephemeral caching to ALL messages (including system prompt)
+      console.log(`[SessionV2] Applying OpenCode-style caching to ${messagesWithSystem.length} messages`);
+      
+      // Optimize messages for better context management
+      messagesWithSystem = MessageCaching.optimizeForCaching(messagesWithSystem);
+      
+      // Apply Anthropic ephemeral caching (targeting system prompts + recent messages)
+      messagesWithSystem = MessageCaching.applyCaching(messagesWithSystem, modelName);
+      
+      console.log(`[SessionV2] Caching applied to messages including ${systemPrompt.length}-char system prompt`);
+
       // Use streamText with proper stopping conditions (OpenCode pattern)
       const stream = streamText({
         model: openrouter(modelName),
-        system: systemPrompt,
-        messages: modelMessages,
+        messages: messagesWithSystem,
         tools,
         maxRetries: 3,
         // Allow up to 100 steps for complex multi-step tasks
@@ -438,7 +403,12 @@ export const getSessionStats = action({
     
     const messages = (conversation?.messages as MessageV2.ConvexMessage[]) || [];
     const stats = MessageV2.ContextManager.getConversationStats(messages);
-    const cacheStats = await MessageCaching.getCacheStats(ctx, userId);
+    const cacheStats = {
+      totalRequests: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      note: "OpenCode-style server-side caching via Anthropic"
+    };
     
     return {
       userId: userId.substring(0, 20) + "...",
