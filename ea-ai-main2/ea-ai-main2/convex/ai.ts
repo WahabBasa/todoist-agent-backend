@@ -24,18 +24,8 @@ import { requireUserAuthForAction } from "./todoist/userAccess";
 // File-based user behavioral learning for personalized AI assistance
 // =================================================================
 
-// Load user mental model for personalized AI behavior with caching
+// Load user mental model for personalized AI behavior
 async function getUserMentalModel(ctx: any, userId?: string): Promise<string> {
-  // Try to get from cache first if userId provided
-  if (userId) {
-    const cached = await MessageCaching.getCachedMentalModel(ctx, userId);
-    if (cached) {
-      MessageCaching.incrementCacheHit('mental_model');
-      return cached.content;
-    }
-    MessageCaching.incrementCacheMiss();
-  }
-
   try {
     const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
     let content: string;
@@ -54,25 +44,13 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
 </user_mental_model>`;
     }
 
-    // Cache the result if userId provided
-    if (userId) {
-      await MessageCaching.setCachedMentalModel(ctx, userId, content);
-    }
-
     return content;
   } catch (error) {
-    const errorContent = `
+    return `
 <user_mental_model>
 Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
 AI should use default behavior and attempt to create mental model during conversation.
 </user_mental_model>`;
-
-    // Cache the error result to avoid repeated file I/O failures
-    if (userId) {
-      await MessageCaching.setCachedMentalModel(ctx, userId, errorContent);
-    }
-
-    return errorContent;
   }
 }
 
@@ -489,21 +467,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
     const { toolName, args, toolCallId } = toolCall;
     console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
     
-    // Check tool call cache for identical operations
-    if (sessionId && userId) {
-      const cachedResult = await MessageCaching.getCachedToolResult(ctx, toolName, args, sessionId, userId);
-      
-      if (cachedResult) {
-        console.log(`[Caching] Tool cache hit for ${toolName}`);
-        MessageCaching.incrementCacheHit('tool_call');
-        return {
-          type: 'tool-result' as const,
-          toolCallId,
-          toolName,
-          output: cachedResult
-        } as ToolResultPart;
-      }
-    }
+    // Execute tool calls fresh each time for real-time accuracy
     
     // Circuit breaker check
     if (!checkCircuitBreaker(toolName)) {
@@ -828,11 +792,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
         // Reset failure counter on success
         toolFailureTracker.delete(toolName);
         
-        // Cache successful tool results for future use
-        if (sessionId && userId) {
-          await MessageCaching.setCachedToolResult(ctx, toolName, args, result || {}, sessionId, userId);
-          console.log(`[Caching] Tool result cached for ${toolName}`);
-        }
+        // Tool execution completed
         
         console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
         return {
@@ -907,20 +867,8 @@ export const chatWithAILegacy = action({
 
     console.log(`[Orchestrator] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
 
-    // Initialize caching system on first use
+    // Initialize OpenRouter + Anthropic caching
     MessageCaching.initializeCaching();
-
-    // Check for duplicate requests using caching system
-    const cacheKey = MessageCaching.createCacheKey(userId, message, history.length, sessionId);
-    const recentCacheKeys = new Set<string>(); // TODO: This should be persistent across requests
-    
-    if (MessageCaching.isDuplicateRequest(cacheKey, recentCacheKeys)) {
-      console.log(`[Caching] Duplicate request detected: ${cacheKey}`);
-      MessageCaching.incrementCacheHit();
-      // Return cached response or handle gracefully
-      return { response: "This request appears identical to a recent one. Please wait a moment before trying again." };
-    }
-    recentCacheKeys.add(cacheKey);
 
     // Reset circuit breaker for new conversation to give tools a fresh start
     toolFailureTracker.clear();
@@ -1045,12 +993,11 @@ Do NOT use any other tools until internal todolist is created.
 
         try {
           // Load mental model content using database-backed caching
-          const mentalModelResult = await MessageCaching.getCachedMentalModel(ctx, userId);
-          const mentalModelContent = mentalModelResult?.content || "";
+          const mentalModelContent = await getUserMentalModel(ctx, userId);
           
-          // Apply intelligent caching to messages before AI generation
+          // Apply OpenCode-style caching optimization
           let optimizedMessages = MessageCaching.optimizeForCaching(modelMessages);
-          optimizedMessages = MessageCaching.applyCaching(optimizedMessages);
+          optimizedMessages = MessageCaching.applyCaching(optimizedMessages, modelName);
           
           console.log(`[Caching] Optimized messages: ${modelMessages.length} -> ${optimizedMessages.length}`);
           MessageCaching.incrementMessagesCached();
@@ -1192,35 +1139,30 @@ export const getCacheStatistics = action({
     // Use big-brain authentication pattern
     const { userId } = await requireUserAuthForAction(ctx);
     
-    const stats = await MessageCaching.getCacheStats(ctx, userId);
-    
-    // Calculate efficiency metrics
-    const totalRequests = stats.cacheHits + stats.cacheMisses;
-    const hitRate = totalRequests > 0 ? (stats.cacheHits / totalRequests * 100).toFixed(1) : '0.0';
-    
+    // OpenRouter + Anthropic ephemeral caching handles statistics automatically
     return {
-      ...stats,
-      totalRequests,
-      hitRate: `${hitRate}%`,
+      cacheType: "Anthropic Ephemeral Caching via OpenRouter",
+      note: "Cache statistics are now handled server-side by Anthropic",
+      benefits: "60-80% cost reduction on cache hits, 5-minute cache duration",
       userId: userId.substring(0, 20) + "...",
       timestamp: Date.now(),
     };
   },
 });
 
-// Cleanup cache manually (for testing/debugging)
+// Cache cleanup no longer needed (Anthropic handles server-side)
 export const cleanupCache = action({
   args: {},
   handler: async (ctx) => {
     // Use big-brain authentication pattern  
     const { userId } = await requireUserAuthForAction(ctx);
     
-    console.log(`[Caching] Manual cache cleanup requested by user: ${userId.substring(0, 20)}...`);
-    await MessageCaching.cleanupExpiredCache(ctx);
+    console.log(`[Caching] Cache cleanup requested by user: ${userId.substring(0, 20)}... (handled by Anthropic)`);
     
     return { 
       success: true, 
-      message: "Cache cleanup completed successfully",
+      message: "Anthropic ephemeral cache expires automatically (5 minutes)",
+      cacheType: "Server-side ephemeral caching",
       timestamp: Date.now()
     };
   },

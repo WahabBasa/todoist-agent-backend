@@ -103,66 +103,6 @@ const applicationTables = {
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
     .index("by_tokenIdentifier_and_name", ["tokenIdentifier", "name"]),
 
-  // AI Caching System - Database-backed caching for consistent request payloads
-  // Replaces in-memory Maps to enable Anthropic ephemeral caching in stateless environment
-  aiCache: defineTable({
-    cacheKey: v.string(), // Unique cache key for the cached content
-    cacheType: v.union(
-      v.literal("mental_model"), 
-      v.literal("custom_prompt"), 
-      v.literal("system_prompt"),
-      v.literal("tool_result"),
-      v.literal("request_payload")
-    ),
-    tokenIdentifier: v.string(), // User identifier for user-specific caches
-    sessionId: v.optional(v.string()), // Session identifier for session-specific caches
-    content: v.string(), // The cached content (JSON string for complex objects)
-    contentHash: v.string(), // SHA-256 hash of content for fast comparison
-    metadata: v.optional(v.object({
-      promptName: v.optional(v.string()),
-      toolName: v.optional(v.string()),
-      args: v.optional(v.any()),
-      contextLength: v.optional(v.number()),
-    })),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    expiresAt: v.number(), // TTL for cache expiration
-    hitCount: v.number(), // Track cache usage for analytics
-  }).index("by_cache_key", ["cacheKey"])
-    .index("by_type_and_user", ["cacheType", "tokenIdentifier"])
-    .index("by_type_user_session", ["cacheType", "tokenIdentifier", "sessionId"])
-    .index("by_expiration", ["expiresAt"])
-    .index("by_user_and_type", ["tokenIdentifier", "cacheType"])
-    .index("by_content_hash", ["contentHash"]),
-
-  // Request Deduplication - Prevent identical requests in short timeframes
-  requestDeduplication: defineTable({
-    requestHash: v.string(), // SHA-256 hash of request payload
-    tokenIdentifier: v.string(), // User identifier
-    sessionId: v.optional(v.string()), // Session identifier
-    messageText: v.string(), // Original user message (for debugging)
-    responseId: v.optional(v.string()), // ID of the cached response
-    createdAt: v.number(),
-    expiresAt: v.number(), // Short TTL (5 minutes)
-  }).index("by_request_hash", ["requestHash"])
-    .index("by_user_and_hash", ["tokenIdentifier", "requestHash"])
-    .index("by_expiration", ["expiresAt"]),
-
-  // Cache Analytics - Track caching performance and effectiveness
-  cacheAnalytics: defineTable({
-    tokenIdentifier: v.string(), // User identifier
-    date: v.string(), // Date in YYYY-MM-DD format
-    cacheHits: v.number(),
-    cacheMisses: v.number(),
-    mentalModelHits: v.number(),
-    customPromptHits: v.number(),
-    toolCallHits: v.number(),
-    requestPayloadHits: v.number(),
-    totalRequests: v.number(),
-    tokensSaved: v.number(), // Estimated tokens saved from caching
-    lastUpdated: v.number(),
-  }).index("by_user_and_date", ["tokenIdentifier", "date"])
-    .index("by_date", ["date"]),
 
 };
 
