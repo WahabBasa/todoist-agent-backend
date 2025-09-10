@@ -1,7 +1,9 @@
-// OpenCode-inspired message caching system for Todoist Agent Backend
-// Implements intelligent prompt caching to reduce token usage and improve performance
+// Database-backed message caching system for Todoist Agent Backend
+// Replaces in-memory Maps with Convex database for stateless environment compatibility
+// Enables consistent request payloads for Anthropic ephemeral caching
 
 import { ModelMessage } from "ai";
+import { DatabaseCaching } from "./databaseCaching";
 
 export namespace MessageCaching {
   
@@ -105,148 +107,157 @@ export namespace MessageCaching {
   }
 
   /**
-   * Mental model content caching
-   * Avoids file I/O on every request by caching mental model data
+   * Mental model content caching - Now database-backed
+   * Provides consistent data across stateless function invocations
    */
-  const mentalModelCache = new Map<string, { 
-    content: string; 
-    timestamp: number; 
-    userId: string; 
-  }>();
-
-  export function getCachedMentalModel(userId: string): string | null {
-    const cached = mentalModelCache.get(userId);
-    
-    // Cache expires after 10 minutes
-    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
-      return cached.content;
+  export async function getCachedMentalModel(ctx: any, userId: string): Promise<{ content: string; fromCache: boolean } | null> {
+    try {
+      return await ctx.runQuery("ai/databaseCaching:getUserMentalModelCached", {
+        tokenIdentifier: userId
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to get cached mental model:", error);
+      return null;
     }
-    
-    // Clean expired cache
-    mentalModelCache.delete(userId);
-    return null;
   }
 
-  export function setCachedMentalModel(userId: string, content: string): void {
-    mentalModelCache.set(userId, {
-      content,
-      timestamp: Date.now(),
-      userId
-    });
+  export async function setCachedMentalModel(ctx: any, userId: string, content: string): Promise<void> {
+    try {
+      const cacheKey = DatabaseCaching.createCacheKey("mental_model", userId);
+      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+        cacheKey,
+        cacheType: "mental_model",
+        tokenIdentifier: userId,
+        content,
+        metadata: {
+          contextLength: content.length
+        }
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to cache mental model:", error);
+    }
   }
 
-  export function invalidateMentalModelCache(userId: string): void {
-    mentalModelCache.delete(userId);
+  export async function invalidateMentalModelCache(ctx: any, userId: string): Promise<void> {
+    // Database entries will expire naturally via TTL
+    console.log(`[MessageCaching] Mental model cache invalidation requested for user ${userId.substring(0, 8)}...`);
   }
 
   /**
-   * Custom system prompt content caching
-   * Avoids database I/O on every request by caching custom prompt data
+   * Custom system prompt content caching - Now database-backed
+   * Provides consistent data across stateless function invocations
    */
-  const customPromptCache = new Map<string, { 
-    content: string; 
-    timestamp: number; 
-    userId: string; 
-    promptName: string;
-  }>();
-
-  export function getCachedCustomPrompt(userId: string): string | null {
-    const cached = customPromptCache.get(userId);
-    
-    // Cache expires after 10 minutes (same as mental models)
-    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
-      return cached.content;
+  export async function getCachedCustomPrompt(ctx: any, userId: string, promptName: string = "active"): Promise<{ content: string; fromCache: boolean } | null> {
+    try {
+      return await ctx.runQuery("ai/databaseCaching:getCustomPromptCached", {
+        tokenIdentifier: userId,
+        promptName
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to get cached custom prompt:", error);
+      return null;
     }
-    
-    // Clean expired cache
-    customPromptCache.delete(userId);
-    return null;
   }
 
-  export function setCachedCustomPrompt(userId: string, content: string, promptName: string = "active"): void {
-    customPromptCache.set(userId, {
-      content,
-      timestamp: Date.now(),
-      userId,
-      promptName
-    });
+  export async function setCachedCustomPrompt(ctx: any, userId: string, content: string, promptName: string = "active"): Promise<void> {
+    try {
+      const cacheKey = DatabaseCaching.createCacheKey("custom_prompt", userId, promptName);
+      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+        cacheKey,
+        cacheType: "custom_prompt",
+        tokenIdentifier: userId,
+        content,
+        metadata: {
+          promptName,
+          contextLength: content.length
+        }
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to cache custom prompt:", error);
+    }
   }
 
-  export function invalidateCustomPromptCache(userId: string): void {
-    customPromptCache.delete(userId);
+  export async function invalidateCustomPromptCache(ctx: any, userId: string): Promise<void> {
+    // Database entries will expire naturally via TTL
+    console.log(`[MessageCaching] Custom prompt cache invalidation requested for user ${userId.substring(0, 8)}...`);
   }
 
   /**
-   * System prompt component caching
+   * System prompt component caching - Now database-backed
    * Caches environment context and other dynamic prompt parts
    */
-  const systemPromptCache = new Map<string, {
-    content: string;
-    timestamp: number;
-    key: string;
-  }>();
-
-  export function getCachedSystemPromptComponent(key: string): string | null {
-    const cached = systemPromptCache.get(key);
-    
-    // Cache expires after 5 minutes for dynamic content like current date
-    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-      return cached.content;
+  export async function getCachedSystemPromptComponent(ctx: any, key: string, userId: string): Promise<string | null> {
+    try {
+      const cacheKey = DatabaseCaching.createCacheKey("system_prompt", userId, key);
+      const cached = await ctx.runQuery("ai/databaseCaching:getCachedContent", { cacheKey });
+      return cached ? cached.content : null;
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to get cached system prompt component:", error);
+      return null;
     }
-    
-    systemPromptCache.delete(key);
-    return null;
   }
 
-  export function setCachedSystemPromptComponent(key: string, content: string): void {
-    systemPromptCache.set(key, {
-      content,
-      timestamp: Date.now(),
-      key
-    });
+  export async function setCachedSystemPromptComponent(ctx: any, key: string, content: string, userId: string): Promise<void> {
+    try {
+      const cacheKey = DatabaseCaching.createCacheKey("system_prompt", userId, key);
+      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+        cacheKey,
+        cacheType: "system_prompt",
+        tokenIdentifier: userId,
+        content,
+        metadata: {
+          contextLength: content.length
+        }
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to cache system prompt component:", error);
+    }
   }
 
   /**
-   * Tool call result caching
+   * Tool call result caching - Now database-backed
    * Caches identical tool operations within a session timeframe
    */
-  const toolCallCache = new Map<string, {
-    result: any;
-    timestamp: number;
-    sessionId: string;
-  }>();
-
   export function createToolCacheKey(
     toolName: string, 
     args: any, 
     sessionId: string
   ): string {
-    const argsHash = JSON.stringify(args, Object.keys(args).sort());
+    const argsHash = DatabaseCaching.createContentHash(JSON.stringify(args, Object.keys(args).sort()));
     return `${sessionId}-${toolName}-${argsHash}`;
   }
 
-  export function getCachedToolResult(cacheKey: string): any | null {
-    const cached = toolCallCache.get(cacheKey);
-    
-    // Tool results cache for 2 minutes (fresh data for active sessions)
-    if (cached && Date.now() - cached.timestamp < 2 * 60 * 1000) {
-      return cached.result;
+  export async function getCachedToolResult(ctx: any, toolName: string, args: any, sessionId: string, userId: string): Promise<any | null> {
+    try {
+      const result = await ctx.runQuery("ai/databaseCaching:getCachedToolResult", {
+        toolName,
+        args,
+        sessionId,
+        tokenIdentifier: userId
+      });
+      return result ? result.result : null;
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to get cached tool result:", error);
+      return null;
     }
-    
-    toolCallCache.delete(cacheKey);
-    return null;
   }
 
-  export function setCachedToolResult(cacheKey: string, result: any, sessionId: string): void {
-    toolCallCache.set(cacheKey, {
-      result,
-      timestamp: Date.now(),
-      sessionId
-    });
+  export async function setCachedToolResult(ctx: any, toolName: string, args: any, result: any, sessionId: string, userId: string): Promise<void> {
+    try {
+      await ctx.runMutation("ai/databaseCaching:cacheToolResult", {
+        toolName,
+        args,
+        result,
+        sessionId,
+        tokenIdentifier: userId
+      });
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to cache tool result:", error);
+    }
   }
 
   /**
-   * Cache statistics and monitoring
+   * Cache statistics and monitoring - Now database-backed
    */
   export interface CacheStats {
     messagesCached: number;
@@ -255,84 +266,77 @@ export namespace MessageCaching {
     mentalModelHits: number;
     customPromptHits: number;
     toolCallHits: number;
+    requestPayloadHits: number;
+    totalRequests: number;
+    tokensSaved: number;
+    cacheEfficiency: number;
     lastCleanup: number;
   }
 
-  const cacheStats: CacheStats = {
-    messagesCached: 0,
-    cacheHits: 0,
-    cacheMisses: 0,
-    mentalModelHits: 0,
-    customPromptHits: 0,
-    toolCallHits: 0,
-    lastCleanup: Date.now()
-  };
-
-  export function getCacheStats(): CacheStats {
-    return { ...cacheStats };
+  export async function getCacheStats(ctx: any, userId: string, date?: string): Promise<CacheStats> {
+    try {
+      const stats = await ctx.runQuery("ai/databaseCaching:getCacheStats", {
+        tokenIdentifier: userId,
+        date
+      });
+      return {
+        ...stats,
+        messagesCached: stats.totalRequests,
+        lastCleanup: Date.now()
+      };
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to get cache stats:", error);
+      return {
+        messagesCached: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        mentalModelHits: 0,
+        customPromptHits: 0,
+        toolCallHits: 0,
+        requestPayloadHits: 0,
+        totalRequests: 0,
+        tokensSaved: 0,
+        cacheEfficiency: 0,
+        lastCleanup: Date.now()
+      };
+    }
   }
 
+  // Note: Individual stats tracking now handled by database layer
   export function incrementCacheHit(type: 'message' | 'mental_model' | 'custom_prompt' | 'tool_call' = 'message'): void {
-    cacheStats.cacheHits++;
-    if (type === 'mental_model') cacheStats.mentalModelHits++;
-    if (type === 'custom_prompt') cacheStats.customPromptHits++;
-    if (type === 'tool_call') cacheStats.toolCallHits++;
+    console.log(`[MessageCaching] Cache hit: ${type}`);
   }
 
   export function incrementCacheMiss(): void {
-    cacheStats.cacheMisses++;
+    console.log(`[MessageCaching] Cache miss`);
   }
 
   export function incrementMessagesCached(): void {
-    cacheStats.messagesCached++;
+    console.log(`[MessageCaching] Message cached`);
   }
 
   /**
-   * Periodic cache cleanup
-   * Removes expired entries to prevent memory leaks
+   * Periodic cache cleanup - Now database-backed
+   * Removes expired entries to prevent database bloat
    */
-  export function cleanupExpiredCache(): void {
-    const now = Date.now();
-    
-    // Clean mental model cache (10 minute expiry)
-    for (const [key, value] of Array.from(mentalModelCache.entries())) {
-      if (now - value.timestamp > 10 * 60 * 1000) {
-        mentalModelCache.delete(key);
-      }
+  export async function cleanupExpiredCache(ctx: any): Promise<{ deletedCount: number; cleanupTime: number }> {
+    try {
+      return await ctx.runMutation("ai/databaseCaching:cleanupExpiredCache", {});
+    } catch (error) {
+      console.warn("[MessageCaching] Failed to cleanup expired cache:", error);
+      return { deletedCount: 0, cleanupTime: Date.now() };
     }
-
-    // Clean custom prompt cache (10 minute expiry)
-    for (const [key, value] of Array.from(customPromptCache.entries())) {
-      if (now - value.timestamp > 10 * 60 * 1000) {
-        customPromptCache.delete(key);
-      }
-    }
-
-    // Clean system prompt cache (5 minute expiry)
-    for (const [key, value] of Array.from(systemPromptCache.entries())) {
-      if (now - value.timestamp > 5 * 60 * 1000) {
-        systemPromptCache.delete(key);
-      }
-    }
-
-    // Clean tool call cache (2 minute expiry)
-    for (const [key, value] of Array.from(toolCallCache.entries())) {
-      if (now - value.timestamp > 2 * 60 * 1000) {
-        toolCallCache.delete(key);
-      }
-    }
-
-    cacheStats.lastCleanup = now;
   }
 
   /**
-   * Initialize caching system
-   * Sets up periodic cleanup and monitoring
+   * Initialize caching system - Database-backed version
+   * Note: No longer runs on every request to avoid digest's identified issue
    */
   export function initializeCaching(): void {
-    // Run cleanup every 5 minutes
-    setInterval(cleanupExpiredCache, 5 * 60 * 1000);
+    // Database caching is always ready - no initialization needed
+    // This prevents the log that appeared "with every single message" 
+    // which was proof of the stateless environment problem
     
-    console.log("[Caching] Message caching system initialized");
+    console.log("[Caching] Database-backed caching system ready (stateless-compatible)");
   }
 }

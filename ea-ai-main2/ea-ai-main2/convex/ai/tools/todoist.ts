@@ -442,8 +442,8 @@ export const createBatchTasks: ToolDefinition = {
         dueDate: task.dueDate,
       }));
 
-      // Build and execute batch commands
-      const { commands } = batchHandler.buildTaskCreateCommands(tasksToCreate);
+      // Build and execute batch commands (with V1/V2 project ID validation)
+      const { commands } = await batchHandler.buildTaskCreateCommandsWithValidation(tasksToCreate);
       const result = await batchHandler.executeBatch(commands);
 
       // Process results

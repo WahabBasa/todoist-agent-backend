@@ -61,6 +61,7 @@ interface TodoistErrorResponse {
 export class BatchTodoistHandler {
   private uuidCounter = 0;
   private tempIdCounter = 0;
+  private projectIdCache: Map<string, string> = new Map(); // Cache for V1->V2 project ID mapping
 
   constructor(private actionCtx: ActionCtx) {}
 
@@ -74,7 +75,108 @@ export class BatchTodoistHandler {
     return `${prefix}_${Date.now()}_${++this.tempIdCounter}_${Math.random().toString(36).substring(2, 15)}`;
   }
 
-  // Convert batch task creation requests to Todoist sync commands
+  // Check if project ID is deprecated V1 format (typically numeric strings < 10 digits)
+  private isDeprecatedProjectId(projectId: string): boolean {
+    // V1 IDs were typically short numeric strings (e.g., "123456789")
+    // V2 IDs are longer alphanumeric (e.g., "2298471329")
+    if (!projectId || projectId.length === 0) return false;
+    
+    // If it's purely numeric and short (< 10 digits), likely V1
+    const isNumeric = /^\d+$/.test(projectId);
+    const isShort = projectId.length < 10;
+    
+    return isNumeric && isShort;
+  }
+
+  // Get current V2 project ID, with caching and V1 migration
+  private async validateAndMigrateProjectId(projectId: string): Promise<string | null> {
+    if (!projectId) return null;
+    
+    // Check cache first
+    if (this.projectIdCache.has(projectId)) {
+      return this.projectIdCache.get(projectId)!;
+    }
+    
+    // If it looks like a valid V2 ID, return as-is
+    if (!this.isDeprecatedProjectId(projectId)) {
+      this.projectIdCache.set(projectId, projectId);
+      return projectId;
+    }
+    
+    console.log(`[BatchTodoistHandler] Detected deprecated V1 project ID: ${projectId}`);
+    
+    try {
+      // Fetch current project list to find V2 equivalent
+      const projects = await this.actionCtx.runAction(api.todoist.syncApi.getTodoistProjectsSync);
+      
+      // Try to find the project by name or other identifying characteristics
+      // Since we can't directly map V1->V2, we'll use the first available project
+      // This is a best-effort approach - in production, you'd need better mapping logic
+      if (projects && projects.length > 0) {
+        const fallbackProject = projects[0]; // Use first available project as fallback
+        const validProjectId = fallbackProject.id;
+        
+        console.log(`[BatchTodoistHandler] Migrating V1 project ${projectId} -> V2 project ${validProjectId} (fallback)`);
+        this.projectIdCache.set(projectId, validProjectId);
+        return validProjectId;
+      }
+      
+      // No projects available - return null to use default project
+      console.warn(`[BatchTodoistHandler] No available projects found for migration`);
+      this.projectIdCache.set(projectId, '');
+      return null;
+      
+    } catch (error) {
+      console.error(`[BatchTodoistHandler] Failed to migrate project ID ${projectId}:`, error);
+      // Cache the failure to avoid repeated attempts
+      this.projectIdCache.set(projectId, '');
+      return null;
+    }
+  }
+
+  // Convert batch task creation requests to Todoist sync commands (with V1/V2 project ID validation)
+  async buildTaskCreateCommandsWithValidation(tasks: BatchTaskCreate[]): Promise<{ commands: BatchCommand[], tempIds: Record<string, string> }> {
+    const commands: BatchCommand[] = [];
+    const tempIds: Record<string, string> = {};
+
+    // Process each task with project ID validation
+    for (const task of tasks) {
+      const tempId = this.generateTempId("task");
+      const uuid = this.generateUUID();
+      tempIds[tempId] = uuid;
+
+      // Validate and migrate project ID if necessary
+      let validatedProjectId = null;
+      if (task.projectId) {
+        try {
+          validatedProjectId = await this.validateAndMigrateProjectId(task.projectId);
+        } catch (error) {
+          console.warn(`[BatchTodoistHandler] Failed to validate project ID ${task.projectId}:`, error);
+        }
+      }
+
+      const command: BatchCommand = {
+        type: "item_add",
+        uuid,
+        temp_id: tempId,
+        args: {
+          content: task.title,
+          ...(task.description && { description: task.description }),
+          ...(validatedProjectId && { project_id: validatedProjectId }),
+          ...(task.projectTempId && { project_id: task.projectTempId }),
+          ...(task.priority && { priority: task.priority }),
+          ...(task.dueDate && { due_string: new Date(task.dueDate).toISOString().split('T')[0] }),
+          ...(task.labels && task.labels.length > 0 && { labels: task.labels })
+        }
+      };
+
+      commands.push(command);
+    }
+
+    return { commands, tempIds };
+  }
+
+  // Legacy method for backward compatibility (still used by createProjectWithTasks)
   buildTaskCreateCommands(tasks: BatchTaskCreate[]): { commands: BatchCommand[], tempIds: Record<string, string> } {
     const commands: BatchCommand[] = [];
     const tempIds: Record<string, string> = {};

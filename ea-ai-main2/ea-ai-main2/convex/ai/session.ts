@@ -53,24 +53,34 @@ export const chatWithAIV2 = action({
 
     console.log(`[SessionV2] Starting streamText interaction for: "${message}"`);
 
-    // Initialize caching system
+    // Initialize database-backed caching system (no longer initializes on every request)
     MessageCaching.initializeCaching();
 
-    // Check for duplicate requests
-    const cacheKey = MessageCaching.createCacheKey(userId, message, history.length, sessionId);
-    const recentCacheKeys = new Set<string>();
+    // Create request hash for deduplication
+    const requestHash = MessageCaching.createCacheKey(userId, message, history.length, sessionId);
     
-    if (MessageCaching.isDuplicateRequest(cacheKey, recentCacheKeys)) {
-      console.log(`[SessionV2] Duplicate request detected: ${cacheKey}`);
-      return { 
-        response: "This request appears identical to a recent one. Please wait a moment before trying again.",
-        fromCache: true 
-      };
+    // Check for duplicate requests using database
+    try {
+      const duplicateCheck = await ctx.runQuery("ai/databaseCaching:getCachedContent", {
+        cacheKey: `dedup-${requestHash}`
+      });
+      
+      if (duplicateCheck) {
+        console.log(`[SessionV2] Duplicate request detected: ${requestHash}`);
+        return { 
+          response: "This request appears identical to a recent one. Please wait a moment before trying again.",
+          fromCache: true 
+        };
+      }
+    } catch (error) {
+      console.warn(`[SessionV2] Duplicate check failed, proceeding:`, error);
     }
-    recentCacheKeys.add(cacheKey);
 
-    // Load user mental model from database with caching
-    const mentalModelContent = await getUserMentalModelFromDB(ctx, userId);
+    // Load user mental model using database-backed caching
+    const mentalModelResult = await MessageCaching.getCachedMentalModel(ctx, userId);
+    const mentalModelContent = mentalModelResult?.content || "";
+    
+    console.log(`[SessionV2] Mental model loaded (fromCache: ${mentalModelResult?.fromCache || false})`);
     
     // Intelligent context optimization (OpenCode pattern)
     const maxContextMessages = parseInt(process.env.MAX_CONTEXT_MESSAGES || "50");
@@ -89,16 +99,49 @@ export const chatWithAIV2 = action({
       modelMessages = MessageV2.ErrorHandler.handleConversionError(error as Error, optimizedHistory);
     }
 
-    // Apply Anthropic prompt caching for 60-80% token reduction
-    console.log(`[SessionV2] Applying Anthropic prompt caching to ${modelMessages.length} messages`);
+    // Create consistent request payload for Anthropic ephemeral caching
+    console.log(`[SessionV2] Building consistent request payload for Anthropic caching`);
     
-    // First optimize messages for caching (intelligent selection)
-    modelMessages = MessageCaching.optimizeForCaching(modelMessages);
-    console.log(`[SessionV2] Messages optimized for caching: maintaining context while maximizing cache efficiency`);
-    
-    // Then apply Anthropic cache control
-    modelMessages = MessageCaching.applyCaching(modelMessages);
-    console.log(`[SessionV2] Anthropic caching applied - expecting significant token usage reduction`);
+    try {
+      const payloadResult = await ctx.runQuery("ai/databaseCaching:createConsistentRequestPayload", {
+        tokenIdentifier: userId,
+        sessionId: sessionId || undefined,
+        messages: modelMessages.map(msg => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+        })),
+        model: modelName,
+        useHaiku
+      });
+      
+      console.log(`[SessionV2] Consistent payload created. Cache stats:`, payloadResult.cacheStats);
+      
+      // Use the consistent request payload
+      const { requestPayload } = payloadResult;
+      modelMessages = requestPayload.messages;
+      
+      console.log(`[SessionV2] Using request hash: ${payloadResult.payloadHash}`);
+      console.log(`[SessionV2] Payload optimized for Anthropic ephemeral caching`);
+      
+      // Mark request as processed for deduplication
+      await ctx.runMutation("ai/databaseCaching:setCachedContent", {
+        cacheKey: `dedup-${requestHash}`,
+        cacheType: "request_payload",
+        tokenIdentifier: userId,
+        sessionId: sessionId || undefined,
+        content: "processed",
+        metadata: { 
+          messageText: message.substring(0, 100),
+          contextLength: modelMessages.length 
+        }
+      });
+      
+    } catch (error) {
+      console.warn(`[SessionV2] Failed to create consistent payload, using original messages:`, error);
+      // Fallback to original approach if database caching fails
+      modelMessages = MessageCaching.optimizeForCaching(modelMessages);
+      modelMessages = MessageCaching.applyCaching(modelMessages);
+    }
 
     // Detect enhanced internal todo prompt usage
     let dynamicInstructions = "";
@@ -306,54 +349,10 @@ Then execute systematically with progress updates.
 });
 
 /**
- * Load user mental model from database with caching
- * Replaces file-based mental model loading
+ * Note: getUserMentalModelFromDB is now replaced by database-backed caching
+ * in MessageCaching.getCachedMentalModel and DatabaseCaching functions
+ * The new approach provides consistent request payloads for Anthropic ephemeral caching
  */
-async function getUserMentalModelFromDB(ctx: any, userId: string): Promise<string> {
-  // Try cache first
-  const cached = MessageCaching.getCachedMentalModel(userId);
-  if (cached) {
-    MessageCaching.incrementCacheHit('mental_model');
-    return cached;
-  }
-  MessageCaching.incrementCacheMiss();
-
-  try {
-    const mentalModelData = await ctx.runQuery(api.mentalModels.getUserMentalModel, {
-      tokenIdentifier: userId,
-    });
-
-    let content: string;
-    
-    if (mentalModelData.exists && mentalModelData.content) {
-      content = `
-<user_mental_model>
-${mentalModelData.content}
-</user_mental_model>`;
-    } else {
-      content = `
-<user_mental_model>
-No user mental model found - AI should create one by observing behavioral patterns in conversation.
-Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
-</user_mental_model>`;
-    }
-
-    // Cache the result
-    MessageCaching.setCachedMentalModel(userId, content);
-
-    return content;
-  } catch (error) {
-    const errorContent = `
-<user_mental_model>
-Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
-AI should use default behavior and attempt to create mental model during conversation.
-</user_mental_model>`;
-
-    MessageCaching.setCachedMentalModel(userId, errorContent);
-
-    return errorContent;
-  }
-}
 
 /**
  * Legacy compatibility wrapper - gradually migrate existing calls to use chatWithAIV2

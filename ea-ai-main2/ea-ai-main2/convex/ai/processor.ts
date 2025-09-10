@@ -84,8 +84,44 @@ export class StreamProcessor {
     cache: { read: 0, write: 0 }
   };
   private totalCost = 0;
+  
+  // Logging optimization - batch similar events
+  private textDeltaCount = 0;
+  private toolInputDeltaCount = 0;
+  private lastLogTime = Date.now();
 
   constructor(private context: ProcessorContext) {}
+
+  // Optimized logging methods to prevent log overflow
+  private logEvent(eventType: string, force = false): void {
+    const now = Date.now();
+    
+    // For verbose events, only log periodically
+    if (eventType === 'text-delta') {
+      this.textDeltaCount++;
+      if (this.textDeltaCount % 20 === 0 || force) {
+        console.log(`[Processor] Processing text stream (${this.textDeltaCount} chunks)`);
+      }
+      return;
+    }
+    
+    if (eventType === 'tool-input-delta') {
+      this.toolInputDeltaCount++;
+      if (this.toolInputDeltaCount % 10 === 0 || force) {
+        console.log(`[Processor] Processing tool input stream (${this.toolInputDeltaCount} chunks)`);
+      }
+      return;
+    }
+    
+    // Always log important events
+    console.log(`[Processor] Processing stream event: ${eventType}`);
+  }
+
+  private logSummary(): void {
+    if (this.textDeltaCount > 0 || this.toolInputDeltaCount > 0) {
+      console.log(`[Processor] Stream summary: ${this.textDeltaCount} text deltas, ${this.toolInputDeltaCount} tool input deltas`);
+    }
+  }
 
   async process(stream: StreamTextResult<Record<string, any>, never>): Promise<ProcessorResult> {
     this.iterationManager.reset();
@@ -95,7 +131,7 @@ export class StreamProcessor {
       console.log('[Processor] ✅ Using event-driven tool execution (no manual tool calls)');
       
       for await (const value of stream.fullStream) {
-        console.log(`[Processor] Processing stream event: ${value.type}`);
+        this.logEvent(value.type);
         
         switch (value.type) {
           case "start":
@@ -132,11 +168,28 @@ export class StreamProcessor {
             this.iterationManager.trackToolCall(value.toolName);
             break;
 
+          case "tool-input-delta":
+            // Handle streaming tool input (accumulate delta text for tool calls)
+            if (value.id && this.toolCalls[value.id]) {
+              if (!this.toolCalls[value.id].inputBuffer) {
+                this.toolCalls[value.id].inputBuffer = "";
+              }
+              this.toolCalls[value.id].inputBuffer += value.delta || "";
+            }
+            break;
+
           case "tool-input-end":
             if (this.toolCalls[value.id]) {
               this.toolCalls[value.id].status = "ready";
-              // Note: AI SDK v5 tool-input-end events don't have 'input' property
-              // The input is provided in the tool-call event instead
+              // Finalize the accumulated input buffer
+              if (this.toolCalls[value.id].inputBuffer) {
+                try {
+                  this.toolCalls[value.id].input = JSON.parse(this.toolCalls[value.id].inputBuffer);
+                } catch (error) {
+                  // If parsing fails, use the buffer as-is
+                  this.toolCalls[value.id].input = this.toolCalls[value.id].inputBuffer;
+                }
+              }
             }
             break;
 
@@ -220,6 +273,7 @@ export class StreamProcessor {
 
           case "finish":
             console.log('[Processor] Stream processing completed');
+            this.logSummary(); // Log summary of batched events
             break;
 
           case "error":
@@ -227,7 +281,8 @@ export class StreamProcessor {
             throw value.error;
 
           default:
-            console.log(`[Processor] Unhandled stream event: ${value.type}`);
+            // Silently handle unknown events to prevent log spam
+            console.debug(`[Processor] Unknown stream event: ${value.type}`);
         }
       }
 
