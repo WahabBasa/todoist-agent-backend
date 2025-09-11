@@ -34,13 +34,13 @@ function SidebarMenuItem({
       <Button
         variant="ghost"
         className={cn(
-          "w-full justify-start gap-3 h-10 sidebar-item",
+          "w-full justify-start gap-3 h-10 sidebar-item hover:bg-accent/50 transition-colors",
           collapsed ? "w-8 px-0 justify-center" : "px-3"
         )}
         onClick={onClick}
       >
         <div className="shrink-0">{icon}</div>
-        {!collapsed && <span className="text-sm font-sans font-medium text-secondary">{label}</span>}
+        {!collapsed && <span className="text-sm font-sans font-medium text-foreground">{label}</span>}
       </Button>
       {children}
     </div>
@@ -114,7 +114,7 @@ export function CollapsibleSidebar() {
       {!collapsed && (
         <div className="flex-1 min-h-0 flex flex-col transition-opacity duration-300 ease-in-out">
           <div className="px-3 py-2 shrink-0">
-            <div className="text-xs font-sans font-medium text-muted-foreground px-3 py-3">
+            <div className="text-xs font-sans font-medium text-secondary px-3 py-3">
               Recent Chats
             </div>
           </div>

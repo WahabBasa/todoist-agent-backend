@@ -42,11 +42,11 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
         onSubmit={onSubmit}
         className="relative"
       >
-        {/* ChatHub-style input container */}
-        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-border ring-offset-2 ring-offset-background bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out">
+        {/* ChatHub-style input container - Original multi-row design */}
+        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-primary/20 ring-offset-2 ring-offset-background bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out shadow-lg">
           
           {/* Main input row */}
-          <div className="flex flex-row items-end pl-2 md:pl-3 pr-2 py-2 w-full gap-0">
+          <div className="flex flex-row items-end pl-3 md:pl-4 pr-2 py-2 w-full gap-0">
             <Textarea
               ref={ref}
               name="input"
@@ -63,7 +63,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 "w-full min-h-8 text-sm md:text-base max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
                 "resize-none border-0 bg-transparent",
                 "text-foreground placeholder:text-muted-foreground",
-                "no-scrollbar leading-6"
+                "no-scrollbar leading-relaxed"
               )}
               onChange={onChange}
               onKeyDown={onKeyDown}
@@ -78,7 +78,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 shrink-0"
+                    className="h-8 w-8 shrink-0 rounded-design-md"
                     onClick={onClear}
                     disabled={disabled || isLoading}
                   >
@@ -98,8 +98,8 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 type="submit"
                 size="icon"
                 className={cn(
-                  'h-8 w-8 shrink-0 rounded-full',
-                  !!value?.trim()
+                  'h-8 w-8 shrink-0 rounded-full shadow-sm',
+                  value?.trim()
                     ? "btn-blue-primary"
                     : "bg-secondary text-secondary-foreground",
                   'disabled:opacity-50 disabled:cursor-not-allowed'
@@ -115,7 +115,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 type="button"
                 size="icon"
                 className={cn(
-                  'h-8 w-8 shrink-0 rounded-full',
+                  'h-8 w-8 shrink-0 rounded-full shadow-sm',
                   'btn-blue-primary',
                   'animate-pulse'
                 )}

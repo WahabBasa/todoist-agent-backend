@@ -69,7 +69,7 @@ export const HistorySidebar = ({
         
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock size={18} />
               Recent History
@@ -85,7 +85,7 @@ export const HistorySidebar = ({
           </div>
 
           {/* Sessions List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {sessions?.sessions?.map((session) => (
               <ChatMenuItem
                 key={session._id}

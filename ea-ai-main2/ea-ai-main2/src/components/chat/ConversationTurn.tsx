@@ -22,11 +22,11 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   // Check for empty responses
   const isEmptyResponse = !aiMessage || aiMessage.trim() === '';
 
-  const handleCopy = async () => {
+  const handleCopy = () => {
     if (!aiMessage || isEmptyResponse) return
     
     try {
-      await navigator.clipboard.writeText(aiMessage)
+      void navigator.clipboard.writeText(aiMessage)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
@@ -35,33 +35,31 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   }
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      {/* User Message */}
+    <div className="flex flex-col gap-6 w-full border-l-2 border-transparent hover:border-muted transition-colors">
+      {/* User Message - Left aligned with avatar + bubble */}
       <div className="flex justify-start">
-        <div className="flex items-start gap-3 max-w-[98%]">
+        <div className="flex items-start gap-3 max-w-[92%]">
           {/* User Avatar */}
-          <div 
-            className="flex-shrink-0 w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center"
+          <div
+            className="flex-shrink-0 w-10 h-10 rounded-full bg-muted border-2 border-border shadow-sm flex items-center justify-center"
             aria-label="User avatar"
           >
             <User size={20} className="text-muted-foreground" />
           </div>
           
-          {/* User Message Card */}
-          <div className="bg-secondary border border-border rounded-design-lg px-4 py-3 shadow-sm">
-            <p className="text-primary whitespace-pre-wrap break-words">
-              {userMessage}
-            </p>
+          {/* User Message Bubble */}
+          <div className="message-bubble-user">
+            {userMessage}
           </div>
         </div>
       </div>
 
-      {/* AI Response Area */}
+      {/* AI Response Area - Left aligned, no bubble (original clean design) */}
       <div className="flex justify-start group">
-        <div className="flex items-start gap-3 max-w-[98%] w-full">
+        <div className="flex items-start gap-3 max-w-[92%] w-full">
           {/* AI Avatar */}
-          <div 
-            className={`flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center ${
+          <div
+            className={`flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground border-2 border-primary shadow-sm flex items-center justify-center ${
               isThinking ? 'animate-pulse' : ''
             }`}
             aria-label="AI assistant avatar"
@@ -69,8 +67,8 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
             <Bot size={20} />
           </div>
           
-          {/* AI Content or Thinking Indicator */}
-          <div className="flex-1">
+          {/* AI Content - Original clean design (no bubble) */}
+          <div className="flex-1 bg-background/50 p-3 rounded-design-lg">
             {isThinking ? (
               /* Thinking Animation - ChatHub Style */
               <div className="flex items-center gap-2">
@@ -95,7 +93,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
               </div>
             ) : (
               /* AI Response */
-              <div className="text-primary whitespace-pre-wrap break-words">
+              <div className="text-primary whitespace-pre-wrap break-words leading-relaxed hyphens-auto space-y-3">
                 {aiMessage}
               </div>
             )}
@@ -103,11 +101,11 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
 
           {/* Copy Button - only show when AI response exists, is not empty, and not thinking */}
           {aiMessage && !isThinking && !isEmptyResponse && (
-            <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+            <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200 mt-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 rounded-design-md"
                 onClick={handleCopy}
                 aria-label={copied ? "Message copied" : "Copy message"}
               >

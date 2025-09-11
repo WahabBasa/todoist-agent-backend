@@ -78,15 +78,15 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
 
   return (
     <div className="flex flex-col flex-1 h-full">
-      <div className="flex items-center justify-between w-full padding-secondary">
+      <div className="flex items-center justify-between w-full padding-secondary mb-4">
         <div className="text-secondary">History</div>
-        <ClearHistoryAction 
+        <ClearHistoryAction
           onClearAll={handleClearAll}
-          empty={isHistoryEmpty} 
+          empty={isHistoryEmpty}
         />
       </div>
       
-      <div className="flex-1 overflow-y-auto mb-2 relative scrollbar-hide">
+      <div className="flex-1 overflow-y-auto mb-4 relative scrollbar-hide">
         {isHistoryEmpty && !isPending ? (
           <div className="padding-secondary text-tertiary text-center">
             No chat history

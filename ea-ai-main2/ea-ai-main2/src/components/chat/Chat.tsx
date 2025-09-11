@@ -88,17 +88,17 @@ export function Chat() {
       {/* Messages Container - ChatHub Pattern */}
       <div
         className={cn(
-          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[280px]",
-          "transition-opacity duration-300 ease-in-out",
+          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar scroll-smooth pt-12 pb-32",
+          "transition-all duration-500 ease-out",
           !isContentVisible && "opacity-0",
           isContentVisible && "opacity-100"
         )}
         ref={messagesAreaRef}
         id="chat-container"
       >
-        <div className="w-full md:w-[735px] lg:w-[756px] pl-8 pr-4 py-2 flex flex-1 flex-col gap-24">
+        <div className="w-full md:w-[768px] lg:w-[800px] px-8 py-2 flex flex-1 flex-col gap-8">
           <div className="flex flex-col gap-8 w-full items-start">
-            {/* Conversation Turns - Single Source of Truth */}
+            {/* Conversation Turns - Original Layout */}
             {conversationTurns.map((turn, index) => (
               <ConversationTurn
                 key={turn.id}
@@ -114,12 +114,12 @@ export function Chat() {
       </div>
 
       {/* Background mask to hide text that scrolls behind input area */}
-      <div className="absolute bottom-0 left-0 h-40 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
+      <div className="absolute bottom-0 left-0 h-32 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
       
       {/* Chat Input - ChatHub Simple Positioning Pattern */}
       <div
         className={cn(
-          "w-full flex flex-col items-center absolute bottom-0 px-2 md:px-4 pb-2 pt-16 right-0 gap-2",
+          "w-full flex flex-col items-center absolute bottom-0 px-3 md:px-4 pb-2 pt-16 right-0 gap-2",
           "transition-all ease-in-out duration-300 left-0 z-10",
           isFreshSession && "top-0 justify-center" // Full height centering like ChatHub
         )}
@@ -128,7 +128,7 @@ export function Chat() {
         {isFreshSession && <ChatGreeting />}
         
         {/* Input Container */}
-        <div className="w-full md:w-[735px] lg:w-[756px] mx-auto flex flex-col gap-3">
+        <div className="w-full md:w-[768px] lg:w-[800px] mx-auto flex flex-col gap-3">
           <ChatInput
             ref={inputRef}
             value={input}

@@ -35,7 +35,7 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: C
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center">
-          <span className="text-sm font-sans font-medium text-utility truncate">{session.title}</span>
+          <span className="text-sm font-sans font-medium text-secondary truncate">{session.title}</span>
         </div>
       </div>
       

@@ -66,15 +66,15 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
     <>
       <div
         className={cn(
-          "group relative flex items-center gap-tertiary rounded-design-md padding-tertiary cursor-pointer hover:bg-muted/50",
-          "transition-all duration-200", // Use design system transition
+          "group relative flex items-center gap-tertiary rounded-design-md padding-secondary cursor-pointer hover:bg-muted/50",
+          "transition-all duration-200 mb-2", // Use design system transition and add margin bottom
           isActive && "bg-muted"
         )}
         onClick={onSelect}
       >
         {/* Chat content */}
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-sans text-utility truncate">
+          <div className="text-base font-semibold font-sans text-utility truncate">
             {chat.title}
           </div>
         </div>
