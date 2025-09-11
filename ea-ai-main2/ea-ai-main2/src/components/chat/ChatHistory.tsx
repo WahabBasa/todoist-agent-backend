@@ -1,4 +1,4 @@
-import { MessageSquare, Clock, Trash2, Loader2 } from "lucide-react";
+import { MessageSquare, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "../ErrorBoundary";
@@ -34,19 +34,8 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: C
       onClick={isLoading ? undefined : onSelect}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          {isLoading ? (
-            <Loader2 size={14} className="text-muted-foreground shrink-0 animate-spin" />
-          ) : (
-            <MessageSquare size={14} className="text-muted-foreground shrink-0" />
-          )}
-          <span className="text-sm font-medium truncate">{session.title}</span>
-        </div>
-        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-          <Clock size={10} />
-          <span>{new Date(session.lastMessageAt).toLocaleDateString()}</span>
-          <span>•</span>
-          <span>{session.messageCount} messages</span>
+        <div className="flex items-center">
+          <span className="text-sm font-sans font-medium text-utility truncate">{session.title}</span>
         </div>
       </div>
       
@@ -96,7 +85,7 @@ export function ChatHistory({ className }: ChatHistoryProps) {
     <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground">Chat history unavailable</div>}>
       <div className={cn("flex flex-col h-full min-h-0", className)}>
         {/* Sessions List */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-1 scrollbar-dark pb-2">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-0 scrollbar-dark pb-2">
           {sessions?.map((session) => (
             <ChatSessionItem
               key={session._id}
@@ -111,8 +100,8 @@ export function ChatHistory({ className }: ChatHistoryProps) {
           {sessions?.length === 0 && (
             <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground">
               <MessageSquare size={32} className="mb-2 opacity-50" />
-              <p className="text-sm">No conversations yet</p>
-              <p className="text-xs">Start a new chat to see your history here</p>
+              <p className="text-sm font-sans">No conversations yet</p>
+              <p className="text-xs font-sans">Start a new chat to see your history here</p>
             </div>
           )}
         </div>

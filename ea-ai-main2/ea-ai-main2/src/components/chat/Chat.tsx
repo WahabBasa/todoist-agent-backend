@@ -88,7 +88,7 @@ export function Chat() {
       {/* Messages Container - ChatHub Pattern */}
       <div
         className={cn(
-          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[200px",
+          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[280px]",
           "transition-opacity duration-300 ease-in-out",
           !isContentVisible && "opacity-0",
           isContentVisible && "opacity-100"
@@ -114,7 +114,7 @@ export function Chat() {
       </div>
 
       {/* Background mask to hide text that scrolls behind input area */}
-      <div className="absolute bottom-0 left-0 h-20 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
+      <div className="absolute bottom-0 left-0 h-40 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
       
       {/* Chat Input - ChatHub Simple Positioning Pattern */}
       <div

@@ -40,7 +40,7 @@ function SidebarMenuItem({
         onClick={onClick}
       >
         <div className="shrink-0">{icon}</div>
-        {!collapsed && <span className="text-sm">{label}</span>}
+        {!collapsed && <span className="text-sm font-sans font-medium text-secondary">{label}</span>}
       </Button>
       {children}
     </div>
@@ -89,7 +89,7 @@ export function CollapsibleSidebar() {
       )}
     >
       {/* Header with Toggle Button */}
-      <div className="p-2">
+      <div className="p-3 border-b border-border/50">
         <Button
           variant="ghost"
           size="icon"
@@ -101,7 +101,7 @@ export function CollapsibleSidebar() {
       </div>
 
       {/* Main Actions */}
-      <div className="flex flex-col p-2 space-y-1">
+      <div className="flex flex-col px-3 py-4 border-b border-border/30">
         <SidebarMenuItem
           icon={<Plus size={20} />}
           label="New Chat"
@@ -113,19 +113,19 @@ export function CollapsibleSidebar() {
       {/* Chat History - Only in expanded state */}
       {!collapsed && (
         <div className="flex-1 min-h-0 flex flex-col transition-opacity duration-300 ease-in-out">
-          <div className="px-2 py-1 shrink-0">
-            <div className="text-xs font-medium text-muted-foreground px-2 py-2">
+          <div className="px-3 py-2 shrink-0">
+            <div className="text-xs font-sans font-medium text-muted-foreground px-3 py-3">
               Recent Chats
             </div>
           </div>
-          <div className="flex-1 min-h-0 px-2">
+          <div className="flex-1 min-h-0 px-3">
             <ChatHistory className="h-full" />
           </div>
         </div>
       )}
 
       {/* Footer with User Profile */}
-      <div className="mt-auto shrink-0 p-2">
+      <div className="mt-auto shrink-0 p-3 border-t border-border/30">
         <UserProfile 
           onOpenSettings={() => setActiveView("settings")} 
           collapsed={collapsed} 

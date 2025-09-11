@@ -47,10 +47,10 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
     )}>
       {!collapsed && (
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground truncate">
+          <span className="text-sm font-sans font-medium text-foreground truncate">
             {user.firstName || user.username || "User"}
           </span>
-          <span className="text-xs text-muted-foreground truncate">
+          <span className="text-xs font-sans text-muted-foreground truncate">
             {user.primaryEmailAddress?.emailAddress}
           </span>
         </div>
@@ -74,22 +74,22 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
           sideOffset={8}
         >
           <div className="px-2 py-1.5">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-sans font-medium text-foreground">
               {user.firstName || user.username || "User"}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs font-sans text-muted-foreground">
               {user.primaryEmailAddress?.emailAddress}
             </p>
           </div>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onOpenSettings?.()}>
             <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
+            <span className="font-sans">Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />
-            <span>Sign out</span>
+            <span className="font-sans">Sign out</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

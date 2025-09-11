@@ -66,7 +66,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
     <>
       <div
         className={cn(
-          "group relative flex items-center gap-secondary rounded-design-md padding-secondary cursor-pointer hover:bg-muted/50",
+          "group relative flex items-center gap-tertiary rounded-design-md padding-tertiary cursor-pointer hover:bg-muted/50",
           "transition-all duration-200", // Use design system transition
           isActive && "bg-muted"
         )}
@@ -74,11 +74,8 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
       >
         {/* Chat content */}
         <div className="flex-1 min-w-0">
-          <div className="text-tertiary truncate">
+          <div className="text-sm font-sans text-utility truncate">
             {chat.title}
-          </div>
-          <div className="text-utility">
-            {formatDate(chat.lastMessageAt)} • {chat.messageCount} messages
           </div>
         </div>
 
