@@ -1,8 +1,9 @@
-import { MessageSquare, Clock, Trash2 } from "lucide-react";
+import { MessageSquare, Clock, Trash2, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useSessions } from "../../context/sessions";
+import { useState } from "react";
 
 interface ChatHistoryProps {
   className?: string;
@@ -20,20 +21,25 @@ interface ChatSessionItemProps {
   onDelete: () => void;
 }
 
-function ChatSessionItem({ session, isActive, onSelect, onDelete }: ChatSessionItemProps) {
+function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: ChatSessionItemProps & { isLoading?: boolean }) {
   return (
     <div
       className={cn(
         "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
-          : "hover:bg-accent/50 text-foreground"
+          : "hover:bg-accent/50 text-foreground",
+        isLoading && "opacity-70"
       )}
-      onClick={onSelect}
+      onClick={isLoading ? undefined : onSelect}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <MessageSquare size={14} className="text-muted-foreground shrink-0" />
+          {isLoading ? (
+            <Loader2 size={14} className="text-muted-foreground shrink-0 animate-spin" />
+          ) : (
+            <MessageSquare size={14} className="text-muted-foreground shrink-0" />
+          )}
           <span className="text-sm font-medium truncate">{session.title}</span>
         </div>
         <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
@@ -44,32 +50,42 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete }: ChatSessionI
         </div>
       </div>
       
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-      >
-        <Trash2 size={12} />
-      </Button>
+      {!isLoading && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 size={12} />
+        </Button>
+      )}
     </div>
   );
 }
 
 export function ChatHistory({ className }: ChatHistoryProps) {
-  // ChatHub pattern: Get everything from centralized SessionsContext  
-  const { 
-    currentSessionId, 
-    sessions, 
-    selectSession, 
-    deleteSession 
+  // ChatHub pattern: Get everything from centralized SessionsContext
+  const {
+    currentSessionId,
+    sessions,
+    selectSession,
+    deleteSession
   } = useSessions();
+  
+  // Track loading state for session switching
+  const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null);
 
-  const handleChatSelect = (sessionId: string) => {
-    selectSession(sessionId as any);
+  const handleChatSelect = async (sessionId: string) => {
+    setSwitchingSessionId(sessionId);
+    try {
+      await selectSession(sessionId as any);
+    } finally {
+      setSwitchingSessionId(null);
+    }
   };
 
   const handleDeleteChat = async (sessionId: string) => {
@@ -88,6 +104,7 @@ export function ChatHistory({ className }: ChatHistoryProps) {
               isActive={currentSessionId === session._id}
               onSelect={() => handleChatSelect(session._id)}
               onDelete={() => handleDeleteChat(session._id)}
+              isLoading={switchingSessionId === session._id}
             />
           ))}
           

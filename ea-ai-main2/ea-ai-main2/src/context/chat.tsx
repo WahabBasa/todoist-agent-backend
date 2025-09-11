@@ -47,26 +47,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Load messages for current session from SessionsContext
   const activeConversation = useQuery(
-    api.conversations.getConversationBySession, 
+    api.conversations.getConversationBySession,
     currentSessionId ? { sessionId: currentSessionId } : "skip"
   );
 
-  // Clear messages when session changes (ChatHub pattern)
+  // Track if we've loaded initial data for the current session
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+
+  // Clear messages and reset loading state when session changes
   useEffect(() => {
-    console.log('🔄 Session changed, clearing conversation turns:', currentSessionId);
+    console.log('🔄 Session changed, resetting conversation state:', currentSessionId);
     setConversationTurns([]);
+    setHasLoadedInitialData(false);
   }, [currentSessionId]);
 
-  // ChatHub pattern: Background database sync (doesn't interfere with UI)
+  // Fixed: Improved database sync logic that properly loads conversation data
   useEffect(() => {
-    if (!activeConversation?.messages) return;
-
-    // Only sync from database if we don't have local state (initial load)
-    if (conversationTurns.length > 0) {
-      console.log('🔄 Skipping database sync - local state exists');
+    // Only proceed if we have an active conversation and haven't loaded data yet
+    if (!activeConversation?.messages) {
+      console.log('🔄 No active conversation messages, skipping sync');
       return;
     }
 
+    // If we've already loaded data for this session, don't reload
+    if (hasLoadedInitialData) {
+      console.log('🔄 Already loaded data for this session, skipping sync');
+      return;
+    }
+
+    // Always load from database when session changes, regardless of local state
+    // This ensures we get the correct conversation data for the new session
+    console.log('📚 Loading conversation data from database for session:', currentSessionId);
+    
     const allMessages = (activeConversation.messages as any[])
       .filter(msg => msg.role === "user" || msg.role === "assistant")
       .map((msg, index) => ({
@@ -108,7 +120,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     console.log('📚 Loaded', turns.length, 'conversation turns from database');
     setConversationTurns(turns);
-  }, [activeConversation?.messages, conversationTurns.length]);
+    setHasLoadedInitialData(true);
+  }, [activeConversation?.messages, currentSessionId, hasLoadedInitialData]);
 
   // ChatHub pattern: Submit message with optimistic updates
   const submitMessage = useCallback(async (content: string) => {
@@ -154,15 +167,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentTimeContext
       });
 
-      // Extract response text (improved fallbacks)
+      // Extract response text (fixed to match actual result structure)
       let responseText = "Response received";
       
       if (typeof result === 'string') {
         responseText = result;
       } else if (result && typeof result === 'object') {
-        responseText = result.response || result.content || result.text || result.message || 
-                     (result.data && result.data.response) ||
-                     JSON.stringify(result);
+        // The result has a 'response' property based on the error messages
+        responseText = result.response || JSON.stringify(result);
       }
 
       console.log('✅ AI response received, updating turn:', turnId, 'length:', responseText.length);

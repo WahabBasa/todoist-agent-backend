@@ -93,13 +93,20 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, [createChatSession]);
 
   // ChatHub pattern: Select session
-  const selectSession = useCallback((sessionId: Id<"chatSessions"> | null) => {
+  const selectSession = useCallback(async (sessionId: Id<"chatSessions"> | null) => {
     console.log('🔄 Switching to session:', sessionId);
-    setCurrentSessionId(sessionId);
     
-    if (sessionId) {
-      setActiveView("chat");
-    }
+    // Return a promise to allow awaiting the session change
+    return new Promise<void>((resolve) => {
+      setCurrentSessionId(sessionId);
+      
+      if (sessionId) {
+        setActiveView("chat");
+      }
+      
+      // Small delay to ensure state updates are processed
+      setTimeout(resolve, 0);
+    });
   }, []);
 
   // ChatHub pattern: Delete session (pure reactive)

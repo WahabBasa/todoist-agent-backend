@@ -112,7 +112,7 @@ export function CollapsibleSidebar() {
 
       {/* Chat History - Only in expanded state */}
       {!collapsed && (
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col transition-opacity duration-300 ease-in-out">
           <div className="px-2 py-1 shrink-0">
             <div className="text-xs font-medium text-muted-foreground px-2 py-2">
               Recent Chats

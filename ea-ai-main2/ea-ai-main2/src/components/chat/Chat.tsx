@@ -11,20 +11,34 @@ export function Chat() {
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   
   // ChatHub pattern: Consumer-only - get everything from context
-  const { 
-    conversationTurns, 
-    isLoading, 
+  const {
+    conversationTurns,
+    isLoading,
     isFreshSession,
-    submitMessage, 
-    clearChat 
+    submitMessage,
+    clearChat
   } = useChat()
   
   // Simple input state (only for UI)
   const [input, setInput] = useState("")
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
+  
+  // Fixed: Simplified transition state management
+  const [isContentVisible, setIsContentVisible] = useState(true)
 
   // No session management needed - handled by SessionsContext
+
+  // Fixed: Simplified transition logic that ensures content becomes visible
+  useEffect(() => {
+    // Always ensure content is visible after a short delay
+    // This prevents the content from being hidden indefinitely
+    const timer = setTimeout(() => {
+      setIsContentVisible(true)
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [conversationTurns, isLoading])
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -39,15 +53,15 @@ export function Chat() {
   }, [conversationTurns, isLoading])
 
   // ChatHub pattern: Simple form submission
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
     const message = input.trim()
     setInput("") // Clear input immediately
     
-    // Let context handle everything
-    await submitMessage(message)
+    // Let context handle everything - don't await to avoid ESLint error
+    submitMessage(message)
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -73,7 +87,12 @@ export function Chat() {
     <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
       {/* Messages Container - ChatHub Pattern */}
       <div
-        className="flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[200px]"
+        className={cn(
+          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar pt-[60px] pb-[200px",
+          "transition-opacity duration-300 ease-in-out",
+          !isContentVisible && "opacity-0",
+          isContentVisible && "opacity-100"
+        )}
         ref={messagesAreaRef}
         id="chat-container"
       >
@@ -101,7 +120,7 @@ export function Chat() {
       <div
         className={cn(
           "w-full flex flex-col items-center absolute bottom-0 px-2 md:px-4 pb-2 pt-16 right-0 gap-2",
-          "transition-all ease-in-out duration-1000 left-0 z-10",
+          "transition-all ease-in-out duration-300 left-0 z-10",
           isFreshSession && "top-0 justify-center" // Full height centering like ChatHub
         )}
       >
