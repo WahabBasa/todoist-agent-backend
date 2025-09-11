@@ -88,34 +88,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         timestamp: msg.timestamp
       }));
 
-    // Convert to conversation turns
+    // FIXED: Robust message pairing algorithm that preserves all AI responses
     const turns: ConversationTurn[] = [];
-    let currentUserMessage: any = null;
-
-    for (const message of allMessages) {
-      if (message.role === 'user') {
-        currentUserMessage = message;
-      } else if (message.role === 'assistant' && currentUserMessage) {
+    
+    // Group messages into logical conversation turns
+    let i = 0;
+    while (i < allMessages.length) {
+      const currentMessage = allMessages[i];
+      
+      if (currentMessage.role === 'user') {
+        // Start a new conversation turn with user message
+        const userMessage = currentMessage;
+        
+        // Collect all consecutive assistant messages that follow
+        const assistantMessages: any[] = [];
+        let j = i + 1;
+        
+        while (j < allMessages.length && allMessages[j].role === 'assistant') {
+          assistantMessages.push(allMessages[j]);
+          j++;
+        }
+        
+        // Create conversation turn
+        let aiMessage: string | undefined;
+        
+        if (assistantMessages.length > 0) {
+          // Merge multiple assistant messages into single response
+          // Join with double newlines to preserve message boundaries
+          aiMessage = assistantMessages
+            .map(msg => msg.content)
+            .filter(content => content && content.trim())
+            .join('\n\n');
+        }
+        
         turns.push({
-          id: currentUserMessage.id,
-          userMessage: currentUserMessage.content,
-          aiMessage: message.content,
+          id: userMessage.id,
+          userMessage: userMessage.content,
+          aiMessage: aiMessage || undefined,
           isThinking: false,
-          timestamp: currentUserMessage.timestamp
+          timestamp: userMessage.timestamp
         });
-        currentUserMessage = null;
+        
+        // Move to next unprocessed message
+        i = j;
+      } else {
+        // Skip orphaned assistant messages (rare edge case)
+        console.warn('⚠️ Found orphaned assistant message, skipping:', currentMessage.content);
+        i++;
       }
-    }
-
-    // Handle incomplete turn (user without AI response)
-    if (currentUserMessage) {
-      turns.push({
-        id: currentUserMessage.id,
-        userMessage: currentUserMessage.content,
-        aiMessage: undefined,
-        isThinking: false,
-        timestamp: currentUserMessage.timestamp
-      });
     }
 
     console.log('📚 Loaded', turns.length, 'conversation turns from database');

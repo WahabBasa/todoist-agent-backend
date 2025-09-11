@@ -1,5 +1,5 @@
 import React from 'react'
-import { User, Bot, Copy, Check } from 'lucide-react'
+import { User, Bot, Copy, Check, AlertCircle } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ConversationTurnProps {
@@ -18,9 +18,12 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   isLast = false
 }) => {
   const [copied, setCopied] = React.useState(false)
+  
+  // Check for empty responses
+  const isEmptyResponse = !aiMessage || aiMessage.trim() === '';
 
   const handleCopy = async () => {
-    if (!aiMessage) return
+    if (!aiMessage || isEmptyResponse) return
     
     try {
       await navigator.clipboard.writeText(aiMessage)
@@ -73,27 +76,33 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce" />
-                  <div 
-                    className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce" 
-                    style={{ animationDelay: '0.2s' }} 
+                  <div
+                    className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce"
+                    style={{ animationDelay: '0.2s' }}
                   />
-                  <div 
-                    className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce" 
-                    style={{ animationDelay: '0.4s' }} 
+                  <div
+                    className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce"
+                    style={{ animationDelay: '0.4s' }}
                   />
                 </div>
                 <span className="text-tertiary text-xs ml-2">Thinking...</span>
               </div>
-            ) : aiMessage ? (
+            ) : isEmptyResponse ? (
+              /* Empty Response State */
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle size={16} />
+                <span className="text-sm">No response was generated. Please try again.</span>
+              </div>
+            ) : (
               /* AI Response */
               <div className="text-primary whitespace-pre-wrap break-words">
                 {aiMessage}
               </div>
-            ) : null}
+            )}
           </div>
 
-          {/* Copy Button - only show when AI response exists and not thinking */}
-          {aiMessage && !isThinking && (
+          {/* Copy Button - only show when AI response exists, is not empty, and not thinking */}
+          {aiMessage && !isThinking && !isEmptyResponse && (
             <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
               <Button
                 variant="ghost"
