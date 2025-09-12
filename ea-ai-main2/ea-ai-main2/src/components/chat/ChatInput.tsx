@@ -99,9 +99,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 size="icon"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full shadow-sm',
-                  value?.trim()
-                    ? "btn-blue-primary"
-                    : "bg-secondary text-secondary-foreground",
+                  "btn-blue-primary",
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
                 disabled={(value.trim().length === 0 && !isLoading) || disabled}
