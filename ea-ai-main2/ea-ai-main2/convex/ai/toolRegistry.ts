@@ -23,7 +23,7 @@ import { TaskTool } from "./tools/taskTool";
 // Simple tool context for essential information
 export interface SimpleToolContext {
   userId: string;
-  sessionId?: string;
+  sessionId?: string | Id<"chatSessions">;
   currentTimeContext?: any;
   metadata: (input: { title?: string; metadata?: any }) => void;
 }
@@ -110,7 +110,8 @@ export async function createSimpleToolRegistry(
   const context: SimpleToolContext = {
     userId,
     sessionId,
-    currentTimeContext
+    currentTimeContext,
+    metadata: () => {} // No-op since metadata is handled by the tool registry bridge
   };
 
   // Collect all tools from existing modules
@@ -137,8 +138,8 @@ export async function createSimpleToolRegistry(
       // Create AI SDK tool with direct execution
       tools[key] = tool({
         description: simpleTool.description,
-        parameters: simpleTool.inputSchema,
-        execute: async (args: any) => {
+        parameters: simpleTool.inputSchema
+      }, async (args: any) => {
           console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
           
           try {
@@ -150,8 +151,7 @@ export async function createSimpleToolRegistry(
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
             throw error; // Let AI SDK handle the error
           }
-        }
-      });
+        });
       
     } catch (error) {
       console.warn(`[SimpleToolRegistry] Failed to convert tool ${key}:`, error);

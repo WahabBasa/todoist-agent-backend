@@ -37,9 +37,9 @@ export const createTask: ToolDefinition = {
       } : result;
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Task Created Successfully",
-        metadata: { taskId: output._id, projectId: args.projectId }
-      });
+      //   title: "Task Created Successfully",
+      //   metadata: { taskId: output._id, projectId: args.projectId }
+      // });
 
       return {
         title: "Task Created",
@@ -106,9 +106,9 @@ export const getTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `Retrieved ${result.length} Tasks`,
-        metadata: { taskCount: result.length, projectId: args.projectId }
-      });
+      //   title: `Retrieved ${result.length} Tasks`,
+      //   metadata: { taskCount: result.length, projectId: args.projectId }
+      // });
 
       return {
         title: "Tasks Retrieved",
@@ -142,15 +142,15 @@ export const updateTask: ToolDefinition = {
       if (isCompleted === true) {
         result = await actionCtx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
         // Metadata handled by tool registry bridge - ctx.metadata({
-          title: "Task Completed",
-          metadata: { taskId, action: "completed" }
-        });
+        //   title: "Task Completed",
+        //   metadata: { taskId, action: "completed" }
+        // });
       } else if (isCompleted === false) {
         result = await actionCtx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
         // Metadata handled by tool registry bridge - ctx.metadata({
-          title: "Task Reopened",
-          metadata: { taskId, action: "reopened" }
-        });
+        //   title: "Task Reopened",
+        //   metadata: { taskId, action: "reopened" }
+        // });
       } else {
         // Update task properties
         const todoistArgs: any = { taskId };
@@ -164,9 +164,9 @@ export const updateTask: ToolDefinition = {
         if (Object.keys(todoistArgs).length > 1) { // More than just taskId
           result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
           // Metadata handled by tool registry bridge - ctx.metadata({
-            title: "Task Updated",
-            metadata: { taskId, fieldsUpdated: Object.keys(todoistArgs).filter(k => k !== 'taskId') }
-          });
+          //   title: "Task Updated",
+          //   metadata: { taskId, fieldsUpdated: Object.keys(todoistArgs).filter(k => k !== 'taskId') }
+          // });
         } else {
           result = { success: true, message: "No changes specified" };
         }
@@ -196,9 +196,9 @@ export const deleteTask: ToolDefinition = {
       });
       
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Task Deleted",
-        metadata: { taskId: args.taskId }
-      });
+      //   title: "Task Deleted",
+      //   metadata: { taskId: args.taskId }
+      // });
 
       return {
         title: "Task Deleted",
@@ -236,9 +236,9 @@ export const createProject: ToolDefinition = {
       } : result;
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Project Created Successfully",
-        metadata: { projectId: output._id, name: args.name }
-      });
+      //   title: "Project Created Successfully",
+      //   metadata: { projectId: output._id, name: args.name }
+      // });
 
       return {
         title: "Project Created",
@@ -269,9 +269,9 @@ export const updateProject: ToolDefinition = {
       });
       
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Project Updated",
-        metadata: { projectId, fieldsUpdated: Object.keys(updateArgs) }
-      });
+      //   title: "Project Updated",
+      //   metadata: { projectId, fieldsUpdated: Object.keys(updateArgs) }
+      // });
 
       return {
         title: "Project Updated", 
@@ -297,9 +297,9 @@ export const deleteProject: ToolDefinition = {
       });
       
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Project Deleted",
-        metadata: { projectId: args.projectId }
-      });
+      //   title: "Project Deleted",
+      //   metadata: { projectId: args.projectId }
+      // });
 
       return {
         title: "Project Deleted",
@@ -336,14 +336,14 @@ export const getProjectAndTaskMap: ToolDefinition = {
       const totalTasks = result?.projects?.reduce((sum: number, p: any) => sum + (p.tasks?.length || 0), 0) || 0;
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Workspace Overview Retrieved",
-        metadata: { 
-          projectCount,
-          unassignedTasks: taskCount,
-          totalTasks: totalTasks + taskCount,
-          includeCompleted: args.includeCompleted || false
-        }
-      });
+      //   title: "Workspace Overview Retrieved",
+      //   metadata: { 
+      //     projectCount,
+      //     unassignedTasks: taskCount,
+      //     totalTasks: totalTasks + taskCount,
+      //     includeCompleted: args.includeCompleted || false
+      //   }
+      // });
 
       return {
         title: "Workspace Map Retrieved",
@@ -369,12 +369,12 @@ export const getProjectDetails: ToolDefinition = {
       });
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Project Details Retrieved",
-        metadata: { 
-          projectId: args.projectId,
-          taskCount: result?.tasks?.length || 0
-        }
-      });
+      //   title: "Project Details Retrieved",
+      //   metadata: { 
+      //     projectId: args.projectId,
+      //     taskCount: result?.tasks?.length || 0
+      //   }
+      // });
 
       return {
         title: "Project Details Retrieved",
@@ -400,9 +400,9 @@ export const getTaskDetails: ToolDefinition = {
       });
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: "Task Details Retrieved",
-        metadata: { taskId: args.taskId }
-      });
+      //   title: "Task Details Retrieved",
+      //   metadata: { taskId: args.taskId }
+      // });
 
       return {
         title: "Task Details Retrieved",
@@ -458,13 +458,13 @@ export const createBatchTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `${successCount}/${args.tasks.length} Tasks Created`,
-        metadata: { 
-          successful: successCount, 
-          failed: failureCount, 
-          total: args.tasks.length 
-        }
-      });
+      //   title: `${successCount}/${args.tasks.length} Tasks Created`,
+      //   metadata: { 
+      //     successful: successCount, 
+      //     failed: failureCount, 
+      //     total: args.tasks.length 
+      //   }
+      // });
 
       return {
         title: "Batch Tasks Created",
@@ -507,13 +507,13 @@ export const deleteBatchTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `${successCount}/${args.taskIds.length} Tasks Deleted`,
-        metadata: { 
-          successful: successCount, 
-          failed: failureCount, 
-          total: args.taskIds.length 
-        }
-      });
+      //   title: `${successCount}/${args.taskIds.length} Tasks Deleted`,
+      //   metadata: { 
+      //     successful: successCount, 
+      //     failed: failureCount, 
+      //     total: args.taskIds.length 
+      //   }
+      // });
 
       return {
         title: "Batch Tasks Deleted",
@@ -555,13 +555,13 @@ export const completeBatchTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `${successCount}/${args.taskIds.length} Tasks Completed`,
-        metadata: { 
-          successful: successCount, 
-          failed: failureCount, 
-          total: args.taskIds.length 
-        }
-      });
+      //   title: `${successCount}/${args.taskIds.length} Tasks Completed`,
+      //   metadata: { 
+      //     successful: successCount, 
+      //     failed: failureCount, 
+      //     total: args.taskIds.length 
+      //   }
+      // });
 
       return {
         title: "Batch Tasks Completed",
@@ -611,13 +611,13 @@ export const updateBatchTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `${successCount}/${args.updates.length} Tasks Updated`,
-        metadata: { 
-          successful: successCount, 
-          failed: failureCount, 
-          total: args.updates.length 
-        }
-      });
+      //   title: `${successCount}/${args.updates.length} Tasks Updated`,
+      //   metadata: { 
+      //     successful: successCount, 
+      //     failed: failureCount, 
+      //     total: args.updates.length 
+      //   }
+      // });
 
       return {
         title: "Batch Tasks Updated",
@@ -683,16 +683,16 @@ export const createProjectWithTasks: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `Project "${args.projectName}" Created`,
-        metadata: { 
-          projectId,
-          projectName: args.projectName,
-          tasksCreated: Math.max(0, successCount - 1), // Subtract project creation
-          totalTasks: args.tasks.length,
-          successful: successCount,
-          failed: failureCount
-        }
-      });
+      //   title: `Project "${args.projectName}" Created`,
+      //   metadata: { 
+      //     projectId,
+      //     projectName: args.projectName,
+      //     tasksCreated: Math.max(0, successCount - 1), // Subtract project creation
+      //     totalTasks: args.tasks.length,
+      //     successful: successCount,
+      //     failed: failureCount
+      //   }
+      // });
 
       return {
         title: "Project with Tasks Created",
@@ -789,14 +789,14 @@ export const reorganizeTasksBatch: ToolDefinition = {
       }
 
       // Metadata handled by tool registry bridge - ctx.metadata({
-        title: `${successCount}/${args.taskIds.length} Tasks Reorganized`,
-        metadata: { 
-          successful: successCount, 
-          failed: failureCount, 
-          total: args.taskIds.length,
-          modifications: args.modifications
-        }
-      });
+      //   title: `${successCount}/${args.taskIds.length} Tasks Reorganized`,
+      //   metadata: { 
+      //     successful: successCount, 
+      //     failed: failureCount, 
+      //     total: args.taskIds.length,
+      //     modifications: args.modifications
+      //   }
+      // });
 
       return {
         title: "Tasks Reorganized",

@@ -132,13 +132,21 @@ The subagent will work autonomously with filtered tool access and return compreh
       ].filter(Boolean).join("\n");
 
       // Return results to primary agent (following OpenCode pattern)
-      return subagentOutput;
+      return {
+        title: `${subagentType} Task Completed`,
+        metadata: { subagentType, taskDescription },
+        output: subagentOutput
+      };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during task delegation";
       console.error(`[TaskTool] Delegation failed:`, error);
 
-      return `Task delegation to ${args.subagentType} agent failed: ${errorMessage}\n\nPlease try again or handle this task directly.`;
+      return {
+        title: `${args.subagentType} Task Failed`,
+        metadata: { error: errorMessage },
+        output: `Task delegation to ${args.subagentType} agent failed: ${errorMessage}\n\nPlease try again or handle this task directly.`
+      };
     }
   }
 };

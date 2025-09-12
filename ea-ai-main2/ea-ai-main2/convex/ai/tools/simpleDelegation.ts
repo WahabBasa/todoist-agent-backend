@@ -47,12 +47,14 @@ export const researchTask: ToolDefinition = {
       ].filter(Boolean).join('\n');
 
       // Store as internal todo instead of creating child session
-      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionId,
-        content: `Research: ${topic}`,
-        description: researchPrompt,
-        priority: 'high',
-        category: 'research'
+      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodoList, {
+        sessionId: ctx.sessionId as Id<"chatSessions"> | undefined,
+        todos: [{
+          id: `research_${Date.now()}`,
+          content: `Research: ${topic}`,
+          status: 'pending',
+          priority: 'high'
+        }]
       });
 
       return {
@@ -135,12 +137,14 @@ export const analyzeCode: ToolDefinition = {
       ].filter(Boolean).join('\n');
 
       // Store as internal todo
-      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionId,
-        content: `Code Analysis: ${analysisType}`,
-        description: analysisPrompt,
-        priority: 'high',
-        category: 'code_analysis'
+      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodoList, {
+        sessionId: ctx.sessionId as Id<"chatSessions"> | undefined,
+        todos: [{
+          id: `code_analysis_${Date.now()}`,
+          content: `Code Analysis: ${analysisType}`,
+          status: 'pending',
+          priority: 'high'
+        }]
       });
 
       return {
@@ -213,12 +217,14 @@ export const planTask: ToolDefinition = {
       ].filter(Boolean).join('\n');
 
       // Store as internal todo
-      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionId,
-        content: `Plan: ${taskDescription.substring(0, 50)}...`,
-        description: planningPrompt,
-        priority: priority,
-        category: 'planning'
+      await actionCtx.runMutation(api.aiInternalTodos.createInternalTodoList, {
+        sessionId: ctx.sessionId as Id<"chatSessions"> | undefined,
+        todos: [{
+          id: `planning_${Date.now()}`,
+          content: `Plan: ${taskDescription.substring(0, 50)}...`,
+          status: 'pending',
+          priority: priority
+        }]
       });
 
       return {
