@@ -90,7 +90,7 @@ export const getSystemStatus: ToolDefinition = {
         },
         features: {
           internalTodos: true,
-          mentalModel: true,
+
           taskManagement: true,
           calendarIntegration: true,
         },

@@ -56,17 +56,6 @@ export const chatWithAIV2 = action({
     // Initialize OpenCode-style caching system
     MessageCaching.initializeCaching();
 
-    // Load user mental model directly from database
-    let mentalModelContent = "";
-    try {
-      const mentalModel = await ctx.runQuery(api.mentalModels.getUserMentalModel, {
-        tokenIdentifier: userId
-      });
-      mentalModelContent = mentalModel?.content || "";
-      console.log(`[SessionV2] Mental model loaded: ${mentalModelContent ? 'found' : 'not found'}`);
-    } catch (error) {
-      console.warn(`[SessionV2] Failed to load mental model:`, error);
-    }
     
     // Intelligent context optimization (OpenCode pattern)
     const maxContextMessages = parseInt(process.env.MAX_CONTEXT_MESSAGES || "50");
@@ -146,7 +135,6 @@ Then execute systematically with progress updates.
         modelName, 
         dynamicInstructions, 
         message, 
-        mentalModelContent,
         userId // User ID for custom prompt loading
       );
       
@@ -339,8 +327,7 @@ Then execute systematically with progress updates.
 });
 
 /**
- * Note: getUserMentalModelFromDB is now replaced by database-backed caching
- * in MessageCaching.getCachedMentalModel and DatabaseCaching functions
+
  * The new approach provides consistent request payloads for Anthropic ephemeral caching
  */
 

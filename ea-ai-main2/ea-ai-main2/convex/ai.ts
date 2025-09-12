@@ -19,128 +19,7 @@ import { join } from "path";
 // Use big-brain authentication pattern
 import { requireUserAuthForAction } from "./todoist/userAccess";
 
-// =================================================================
-// MENTAL MODEL SYSTEM - Node.js Runtime Functions
-// File-based user behavioral learning for personalized AI assistance
-// =================================================================
 
-// Load user mental model for personalized AI behavior
-async function getUserMentalModel(ctx: any, userId?: string): Promise<string> {
-  try {
-    const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-    let content: string;
-    
-    if (existsSync(mentalModelPath)) {
-      const fileContent = readFileSync(mentalModelPath, "utf-8");
-      content = `
-<user_mental_model>
-${fileContent}
-</user_mental_model>`;
-    } else {
-      content = `
-<user_mental_model>
-No user mental model found - AI should create one by observing behavioral patterns in conversation.
-Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
-</user_mental_model>`;
-    }
-
-    return content;
-  } catch (error) {
-    return `
-<user_mental_model>
-Error loading mental model: ${error instanceof Error ? error.message : 'Unknown error'}
-AI should use default behavior and attempt to create mental model during conversation.
-</user_mental_model>`;
-  }
-}
-
-// Read mental model file (for tool execution)
-function readMentalModelFile(): { success: boolean; content?: string; error?: string; message: string; path: string } {
-  const mentalModelPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-  
-  try {
-    if (existsSync(mentalModelPath)) {
-      const mentalModelContent = readFileSync(mentalModelPath, "utf-8");
-      return {
-        success: true,
-        content: mentalModelContent,
-        message: "User mental model loaded successfully",
-        path: mentalModelPath,
-      };
-    } else {
-      return {
-        success: false,
-        content: "",
-        message: "User mental model file not found - needs to be created",
-        path: mentalModelPath,
-      };
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error reading mental model",
-      message: "Failed to read user mental model file",
-      path: mentalModelPath,
-    };
-  }
-}
-
-// Edit mental model file (for tool execution)
-function editMentalModelFile(oldString: string, newString: string, replaceAll: boolean = false): { success: boolean; error?: string; message: string; path: string; operation?: string; oldLength?: number; newLength?: number } {
-  const editPath = join(process.cwd(), "convex", "ai", "user-mental-model.txt");
-  
-  try {
-    let content = "";
-    if (existsSync(editPath)) {
-      content = readFileSync(editPath, "utf-8");
-    } else {
-      // If file doesn't exist and oldString is empty, create new file
-      if (oldString === "") {
-        content = "";
-      } else {
-        throw new Error("Mental model file not found and oldString is not empty");
-      }
-    }
-    
-    // Perform the edit
-    let updatedContent: string;
-    if (oldString === "") {
-      // Creating new file or appending
-      updatedContent = newString;
-    } else if (replaceAll) {
-      updatedContent = content.replace(new RegExp(oldString.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), newString);
-    } else {
-      if (!content.includes(oldString)) {
-        throw new Error(`Old string not found in mental model: "${oldString.slice(0, 50)}..."`);
-      }
-      updatedContent = content.replace(oldString, newString);
-    }
-    
-    // Write the updated content
-    writeFileSync(editPath, updatedContent, "utf-8");
-    
-    // Invalidate all mental model caches since file was modified
-    // Note: This is a global invalidation since we don't have userId context in this function
-    // In a production system, you might want to pass userId or maintain a mapping
-    console.log("[Caching] Mental model file updated, clearing cache");
-    
-    return {
-      success: true,
-      message: "User mental model updated successfully",
-      path: editPath,
-      operation: oldString === "" ? "created" : replaceAll ? "replaced_all" : "replaced_once",
-      oldLength: content.length,
-      newLength: updatedContent.length,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error editing mental model",
-      message: "Failed to update user mental model file",
-      path: editPath,
-    };
-  }
-}
 import { z } from "zod";
 import { ActionCtx } from "./_generated/server";
 
@@ -417,20 +296,7 @@ const plannerTools = {
     inputSchema: z.object({}),
   }),
 
-  // User Mental Model Learning Tools - File-based approach
-  readUserMentalModel: tool({
-    description: "Read the current user mental model to understand learned behavioral patterns, work preferences, and priority frameworks. Use this to inform scheduling and prioritization decisions.",
-    inputSchema: z.object({}),
-  }),
 
-  editUserMentalModel: tool({
-    description: "Update the user mental model file based on behavioral insights discovered during conversation. Use this to continuously learn user patterns for better task management and scheduling.",
-    inputSchema: z.object({
-      oldString: z.string().describe("Exact text section to replace in the mental model file"),
-      newString: z.string().describe("Updated insights or patterns to replace the old text with"),
-      replaceAll: z.boolean().optional().describe("Replace all occurrences of the old string (default: false)"),
-    }),
-  }),
 };
 
 // =================================================================
@@ -772,19 +638,6 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
                 }
                 break;
 
-            case "readUserMentalModel":
-                result = readMentalModelFile();
-                break;
-
-            case "editUserMentalModel":
-                const { oldString, newString, replaceAll = false } = args as { 
-                    oldString: string; 
-                    newString: string; 
-                    replaceAll?: boolean; 
-                };
-                result = editMentalModelFile(oldString, newString, replaceAll);
-                break;
-            
             default:
                 throw new Error(`Unknown tool: ${toolName}`);
         }
@@ -992,9 +845,6 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         try {
-          // Load mental model content using database-backed caching
-          const mentalModelContent = await getUserMentalModel(ctx, userId);
-          
           // Apply OpenCode-style caching optimization
           let optimizedMessages = MessageCaching.optimizeForCaching(modelMessages);
           optimizedMessages = MessageCaching.applyCaching(optimizedMessages, modelName);
@@ -1004,7 +854,7 @@ Do NOT use any other tools until internal todolist is created.
           
           const result = await generateText({
             model: openrouter(modelName),
-            system: SystemPrompt.getSystemPromptSync(modelName, dynamicInstructions, message, mentalModelContent),
+            system: SystemPrompt.getSystemPromptSync(modelName, dynamicInstructions, message),
             messages: optimizedMessages,
             tools: plannerTools,
         });

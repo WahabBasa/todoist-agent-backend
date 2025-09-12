@@ -38,7 +38,6 @@ import type * as debug_sessionMigration from "../debug/sessionMigration.js";
 import type * as debug_todoistDebug from "../debug/todoistDebug.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
 import type * as http from "../http.js";
-import type * as mentalModels from "../mentalModels.js";
 import type * as migrateTokens from "../migrateTokens.js";
 import type * as migrations_backfillSessionTimestamps from "../migrations/backfillSessionTimestamps.js";
 import type * as todoist_BatchTodoistHandler from "../todoist/BatchTodoistHandler.js";
@@ -81,7 +80,6 @@ declare const fullApi: ApiFromModules<{
   "debug/todoistDebug": typeof debug_todoistDebug;
   "googleCalendar/auth": typeof googleCalendar_auth;
   http: typeof http;
-  mentalModels: typeof mentalModels;
   migrateTokens: typeof migrateTokens;
   "migrations/backfillSessionTimestamps": typeof migrations_backfillSessionTimestamps;
   "todoist/BatchTodoistHandler": typeof todoist_BatchTodoistHandler;

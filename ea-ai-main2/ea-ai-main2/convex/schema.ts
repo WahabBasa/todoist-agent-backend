@@ -77,16 +77,7 @@ const applicationTables = {
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"])
     .index("by_tokenIdentifier_session_active", ["tokenIdentifier", "sessionId", "isActive"]),
 
-  // User Mental Models - AI learning about user behavioral patterns and preferences
-  mentalModels: defineTable({
-    tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
-    content: v.string(), // The mental model content (behavioral patterns, preferences, etc.)
-    version: v.number(), // Version number for tracking updates
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    isActive: v.boolean(), // Track if this is the current active mental model
-  }).index("by_tokenIdentifier", ["tokenIdentifier"])
-    .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"]),
+
 
   // Custom System Prompts - User-defined system prompts for AI personalization
   customSystemPrompts: defineTable({

@@ -24,18 +24,7 @@ export namespace SystemPrompt {
 </current_date_context>`;
   }
 
-  // Format mental model content for prompt integration
-  export function formatMentalModel(mentalModelContent?: string): string {
-    if (mentalModelContent) {
-      return mentalModelContent;
-    } else {
-      return `
-<user_mental_model>
-No user mental model found - AI should create one by observing behavioral patterns in conversation.
-Use readUserMentalModel and editUserMentalModel tools to learn and update user preferences.
-</user_mental_model>`;
-    }
-  }
+
 
   // Load prompt from file (sync version for Convex compatibility)
   export function getPrompt(promptName: string): string {
@@ -107,7 +96,6 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     modelID: string, 
     dynamicInstructions: string = "", 
     userMessage: string = "", 
-    mentalModelContent?: string,
     userId?: string
   ): Promise<string> {
     let promptName = provider(modelID);
@@ -119,7 +107,6 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     
     const basePrompt = getPrompt(promptName);
     const envContext = environment();
-    const mentalModel = formatMentalModel(mentalModelContent);
     
     // Load user's custom system prompt if available
     let customPrompt = "";
@@ -128,11 +115,11 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     }
     
     // Integration point: Custom prompt gets injected after base prompt, before environment context
-    return basePrompt + customPrompt + envContext + mentalModel + dynamicInstructions;
+    return basePrompt + customPrompt + envContext + dynamicInstructions;
   }
 
   // Synchronous version for backward compatibility (without custom prompts)
-  export function getSystemPromptSync(modelID: string, dynamicInstructions: string = "", userMessage: string = "", mentalModelContent?: string): string {
+  export function getSystemPromptSync(modelID: string, dynamicInstructions: string = "", userMessage: string = ""): string {
     let promptName = provider(modelID);
     
     // Use enhanced internal todo prompt for complex operations
@@ -142,9 +129,8 @@ Use readUserMentalModel and editUserMentalModel tools to learn and update user p
     
     const basePrompt = getPrompt(promptName);
     const envContext = environment();
-    const mentalModel = formatMentalModel(mentalModelContent);
     
-    return basePrompt + envContext + mentalModel + dynamicInstructions;
+    return basePrompt + envContext + dynamicInstructions;
   }
 
   // Zen prompt content (extracted from ai.ts)
@@ -216,45 +202,7 @@ You are Zen, an AI assistant that manages users' Todoist tasks and Google Calend
 - For bulk operations: Create internal todolist first, then execute in batches
 </error_prevention>
 
-<behavioral_learning>
-**Continuous Learning Directive**: Throughout every conversation, analyze user language for behavioral patterns and mental model insights:
 
-**Time & Energy Patterns** - Listen for:
-- "I'm most productive in the morning/afternoon/evening"
-- "After lunch I feel sluggish" 
-- "I work better in long blocks vs short sessions"
-- "I need breaks between meetings"
-
-**Priority Signals** - Detect:
-- Urgency cues: "ASAP", "deadline", "due today", "urgent", "can't wait"
-- Importance signals: "strategic", "critical", "high-value", "core business"
-- Low priority indicators: "when I have time", "nice to have", "eventually"
-
-**Stress & Overwhelm** - Watch for:
-- "too much on my plate", "overwhelming", "behind schedule", "swamped"
-- Scattered requests suggesting cognitive overload
-- Resistance to additional commitments
-
-**Work Style Cues** - Identify:
-- Planning preference: detailed lists vs flexible approaches
-- Context switching tolerance: comfort with multitasking vs focus preference
-- Decision making: quick decisions vs careful deliberation
-- Delegation patterns: what tasks they prefer to handle vs delegate
-
-**Learning Update Protocol**:
-1. When clear patterns emerge, use editUserMentalModel to update relevant sections
-2. Increase confidence scores as patterns are repeatedly observed  
-3. Use learned patterns immediately for scheduling and priority suggestions
-4. Log significant observations in the Learning Log section
-5. Never ask direct questions - learn through natural conversation flow
-
-**Application**: Use mental model insights to:
-- Suggest optimal scheduling times based on energy patterns
-- Auto-prioritize tasks using learned Eisenhower Matrix preferences  
-- Detect overwhelm and suggest task delegation or elimination
-- Adapt communication style to user preferences
-- Provide personalized productivity recommendations
-</behavioral_learning>
 
 <tool_usage_examples>
 **CRITICAL: When to Use Each Tool**
@@ -455,26 +403,6 @@ Working on step 1 of 4: Getting your high-priority tasks...
 Start every response with internal todolist creation, then provide step-by-step execution with clear progress indicators referencing your internal todo status.
 </output_format>
 
-<behavioral_learning>
-**Continuous Learning Directive**: Even during complex multi-step operations, continue analyzing user behavior:
-
-**Pattern Recognition During Complex Tasks**:
-- Observe how user prioritizes multiple requests
-- Note stress indicators when handling bulk operations  
-- Identify preferred breakdown of complex workflows
-- Watch for task avoidance or delegation preferences
-
-**Update Mental Model Protocol**:
-- Use editUserMentalModel during task execution to log new insights
-- Update confidence scores when patterns are confirmed during complex operations
-- Apply learned preferences immediately to task scheduling and prioritization
-- Log complex workflow preferences for future reference
-
-**Integration with Task Execution**:
-- Use mental model insights to optimize task order and timing
-- Adapt communication style based on learned user preferences
-- Apply stress detection to suggest task prioritization or delegation
-- Leverage energy pattern knowledge for optimal scheduling
-</behavioral_learning>`;
+`;
   }
 }
