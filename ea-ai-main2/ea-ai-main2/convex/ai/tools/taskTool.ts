@@ -74,7 +74,7 @@ The subagent will work autonomously and return comprehensive results.`,
       };
 
       // Create subagent session via Convex action
-      const childSession = await actionCtx.runAction(api.chatSessions.createChildSession, {
+      const childSession = await actionCtx.runMutation(api.chatSessions.createChildSession, {
         tokenIdentifier: ctx.userId,
         parentSessionId,
         title: `${agentConfig.description}: ${task.substring(0, 50)}...`,

@@ -1,242 +1,170 @@
 import { z } from "zod";
 import { tool } from "ai";
 import { ActionCtx } from "../_generated/server";
+import { api } from "../_generated/api";
 import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
-import { TaskTool } from "./tools/taskTool";
-import { ProcessorContext } from "./processor";
-import { AgentRegistry } from "./agents/registry";
+import { SimpleDelegationTools } from "./tools/simpleDelegation";
 
-// OpenCode-inspired tool definition interface
-export interface ToolContext {
-  sessionID: string;
-  messageID: string;
-  callID: string;
-  abort: AbortSignal;
+/**
+ * Simplified tool registry for direct Convex + AI SDK integration
+ * 
+ * Key simplifications:
+ * - Remove complex agent-aware filtering
+ * - Direct tool → Convex action mapping
+ * - No circuit breakers or complex error handling
+ * - Use Convex's built-in patterns
+ * - Remove processor context abstraction
+ */
+
+// Simple tool context for essential information
+interface SimpleToolContext {
   userId: string;
-  metadata: (input: { title?: string; metadata?: any }) => void;
+  sessionId?: string;
+  currentTimeContext?: any;
 }
 
-// Tool definition interface - ActionCtx is guaranteed to be available
-export interface ToolDefinition {
+// Simplified tool definition that maps directly to Convex actions
+interface SimpleToolDefinition {
   id: string;
   description: string;
   inputSchema: z.ZodSchema;
-  execute: (args: any, ctx: ToolContext, actionCtx: ActionCtx) => Promise<{
-    title: string;
-    metadata: any;
-    output: string;
-  }>;
+  execute: (args: any, ctx: SimpleToolContext, actionCtx: ActionCtx) => Promise<string>;
 }
 
-// ProcessorContext is imported from processor.ts (shared interface)
+/**
+ * Convert existing tool definitions to simplified format
+ * This bridges the old complex system with the new simple system
+ */
+function convertToSimpleTool(toolDef: any): SimpleToolDefinition {
+  return {
+    id: toolDef.id,
+    description: toolDef.description,
+    inputSchema: toolDef.inputSchema,
+    async execute(args: any, ctx: SimpleToolContext, actionCtx: ActionCtx): Promise<string> {
+      // Bridge to existing tool format
+      const legacyContext = {
+        sessionID: ctx.sessionId || "default",
+        messageID: `msg-${Date.now()}`,
+        callID: `call-${Date.now()}`,
+        abort: new AbortController().signal,
+        userId: ctx.userId,
+        metadata: () => {}, // Simplified metadata - just log
+        currentTimeContext: ctx.currentTimeContext
+      };
 
-// Circuit breaker for tool failures (similar to OpenCode)
-class CircuitBreaker {
-  private failures = new Map<string, { count: number; lastFailure: number }>();
-  private readonly MAX_FAILURES = 3;
-  private readonly RESET_TIME = 5 * 60 * 1000; // 5 minutes
-
-  canExecute(toolName: string): boolean {
-    const failure = this.failures.get(toolName);
-    if (!failure) return true;
-    
-    // Reset if enough time has passed
-    if (Date.now() - failure.lastFailure > this.RESET_TIME) {
-      this.failures.delete(toolName);
-      return true;
+      try {
+        const result = await toolDef.execute(args, legacyContext, actionCtx);
+        
+        // Return just the output string - AI SDK will handle the rest
+        return result.output || "Task completed successfully.";
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Tool execution failed";
+        console.error(`[SimpleToolRegistry] Tool ${toolDef.id} failed:`, error);
+        
+        // Return error as string - let AI SDK handle error presentation
+        return `Error: ${errorMessage}`;
+      }
     }
-    
-    return failure.count < this.MAX_FAILURES;
-  }
-
-  recordFailure(toolName: string): void {
-    const failure = this.failures.get(toolName) || { count: 0, lastFailure: 0 };
-    failure.count++;
-    failure.lastFailure = Date.now();
-    this.failures.set(toolName, failure);
-  }
-
-  recordSuccess(toolName: string): void {
-    this.failures.delete(toolName);
-  }
+  };
 }
 
-const circuitBreaker = new CircuitBreaker();
+/**
+ * Create simplified tool registry with direct AI SDK integration
+ * No complex filtering, no agent modes, just direct tool access
+ */
+export async function createSimpleToolRegistry(
+  actionCtx: ActionCtx,
+  userId: string,
+  currentTimeContext?: any,
+  sessionId?: string
+): Promise<Record<string, any>> {
+  
+  console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
+  
+  const context: SimpleToolContext = {
+    userId,
+    sessionId,
+    currentTimeContext
+  };
 
-// Consolidated tool registry using modular tools
-export const ToolRegistry = {
-  // Agent delegation tool (primary agents only)
-  ...TaskTool,
-  
-  // Todoist task management tools
-  ...TodoistTools,
-  
-  // Internal AI workflow coordination tools
-  ...InternalTools,
-  
-  // Utility tools (time, validation, system status)
-  ...UtilityTools,
-  
-  // Google Calendar integration tools
-  ...GoogleCalendarTools,
-};
+  // Collect all tools from existing modules
+  const allTools = {
+    ...TodoistTools,
+    ...InternalTools,
+    ...UtilityTools,
+    ...GoogleCalendarTools,
+    ...SimpleDelegationTools,
+  };
 
-// Convex-recommended tool creation pattern (fixes ActionCtx context loss)
-export class ToolRegistryManager {
-  /**
-   * Creates tools with ActionCtx captured in closure (Convex best practice)
-   * This ensures ActionCtx is always available and prevents context loss issues
-   * Now includes agent-aware tool filtering
-   */
-  static async getTools(
-    actionCtx: ActionCtx,
-    processorContext: Omit<ProcessorContext, 'actionCtx'>,
-    providerID: string = "anthropic", 
-    modelID: string = "claude-3-5-haiku-20241022",
-    agentName: string = "primary" // New parameter for agent-aware filtering
-  ) {
-    const tools: Record<string, any> = {};
-    
-    // Get agent configuration and apply tool filtering
-    const agentConfig = AgentRegistry.getAgent(agentName);
-    if (!agentConfig) {
-      console.warn(`[ToolRegistry] Unknown agent: ${agentName}, using primary agent defaults`);
-    }
-    
-    // Get agent-specific tool permissions
-    const agentTools = agentConfig ? agentConfig.tools : {};
-    
-    // Debug: Log available tools from registry
-    const registryKeys = Object.keys(ToolRegistry);
-    console.log(`[ToolRegistry] Agent ${agentName} loading from ${registryKeys.length} total tools:`, registryKeys.join(', '));
-    
-    // Filter tools based on agent permissions
-    const allowedTools = Object.entries(ToolRegistry).filter(([key, toolDef]) => {
-      // Check agent-specific tool permissions
-      if (agentConfig && agentTools.hasOwnProperty(key)) {
-        return agentTools[key] === true;
-      }
+  // Remove the problematic TaskTool (agent delegation) for now
+  // This eliminates the circular dependency issues
+  if ('task' in allTools) {
+    delete allTools.task;
+    console.log(`[SimpleToolRegistry] Removed TaskTool to eliminate circular dependencies`);
+  }
+
+  const tools: Record<string, any> = {};
+  
+  console.log(`[SimpleToolRegistry] Converting ${Object.keys(allTools).length} tools`);
+  
+  // Convert each tool to simple AI SDK format
+  for (const [key, toolDef] of Object.entries(allTools)) {
+    try {
+      const simpleTool = convertToSimpleTool(toolDef);
       
-      // Default permissions for unknown tools
-      // Primary agents get all tools by default, subagents get limited tools
-      if (agentConfig?.mode === "subagent") {
-        // Subagents get basic read-only tools by default
-        const readOnlyTools = ['read', 'glob', 'grep', 'webfetch', 'getCurrentTime', 'getSystemStatus', 'validateInput', 'listTools'];
-        return readOnlyTools.includes(key);
-      }
-      
-      // Primary agents get all tools by default
-      return true;
-    });
-    
-    console.log(`[ToolRegistry] Agent ${agentName} has access to ${allowedTools.length} tools:`, allowedTools.map(([key]) => key).join(', '));
-    
-    // Debug: Check for batch tools specifically
-    const batchTools = allowedTools.filter(([key]) => key.includes('Batch') || key.includes('batch'));
-    console.log(`[ToolRegistry] Agent ${agentName} batch tools:`, batchTools.map(([key]) => key).join(', ') || 'NONE');
-    
-    for (const [key, toolDef] of allowedTools) {
-      // Capture ActionCtx in closure - Convex recommended pattern
+      // Create AI SDK tool with direct execution
       tools[key] = tool({
-        id: toolDef.id as any,
-        description: toolDef.description,
-        inputSchema: toolDef.inputSchema as any,
-        async execute(args, options) {
-          // Circuit breaker check
-          if (!circuitBreaker.canExecute(toolDef.id)) {
-            console.warn(`[ToolRegistry] Circuit breaker active for tool: ${toolDef.id}`);
-            throw new Error(`Tool ${toolDef.id} temporarily unavailable due to repeated failures. Please try again later.`);
-          }
-
-          // Build ToolContext with processor context
-          const context: ToolContext = {
-            sessionID: processorContext.sessionID,
-            messageID: processorContext.messageID,
-            callID: options.toolCallId,
-            abort: options.abortSignal!,
-            userId: processorContext.userId,
-            metadata: (val) => {
-              // Metadata callback for real-time updates
-              console.log(`[ToolRegistry] Tool ${toolDef.id} metadata:`, val);
-            }
-          };
-
-          // Add current time context if available
-          if (processorContext.currentTimeContext) {
-            (context as any).currentTimeContext = processorContext.currentTimeContext;
-          }
-
+        description: simpleTool.description,
+        parameters: simpleTool.inputSchema,
+        execute: async (args) => {
+          console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
+          
           try {
-            // ActionCtx is captured in closure - guaranteed to be available
-            const result = await toolDef.execute(args, context, actionCtx);
-            
-            // Record success for circuit breaker
-            circuitBreaker.recordSuccess(toolDef.id);
-            
-            return {
-              output: result.output,
-              metadata: result.metadata,
-              title: result.title
-            };
+            const result = await simpleTool.execute(args, context, actionCtx);
+            console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
+            return result;
           } catch (error) {
-            // Record failure for circuit breaker
-            circuitBreaker.recordFailure(toolDef.id);
-            console.error(`[ToolRegistry] Tool ${toolDef.id} execution failed:`, error);
-            throw error;
+            console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
+            throw error; // Let AI SDK handle the error
           }
         }
       });
+      
+    } catch (error) {
+      console.warn(`[SimpleToolRegistry] Failed to convert tool ${key}:`, error);
+      // Skip problematic tools instead of failing entire registry
+      continue;
     }
-
-    console.log(`[ToolRegistry] ✅ Created ${Object.keys(tools).length} tools with ActionCtx bound`);
-
-    // Provider-specific adaptations
-    if (providerID === "openai" || providerID === "azure") {
-      // Convert optional to nullable for OpenAI compatibility
-      return this.optionalToNullable(tools);
-    }
-
-    if (providerID === "google") {
-      // Sanitize parameters for Gemini compatibility  
-      return this.sanitizeGeminiParameters(tools);
-    }
-
-    return tools;
   }
 
-  private static optionalToNullable(tools: Record<string, any>): Record<string, any> {
-    // Implementation similar to OpenCode's optionalToNullable
-    return tools; // Simplified for now - would implement full conversion
-  }
+  console.log(`[SimpleToolRegistry] Successfully created ${Object.keys(tools).length} tools`);
+  
+  // Log available tools for debugging
+  const toolNames = Object.keys(tools);
+  const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
+  console.log(`[SimpleToolRegistry] Available tools: ${toolNames.join(', ')}`);
+  console.log(`[SimpleToolRegistry] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
 
-  private static sanitizeGeminiParameters(tools: Record<string, any>): Record<string, any> {
-    // Implementation similar to OpenCode's sanitizeGeminiParameters  
-    return tools; // Simplified for now - would implement full sanitization
-  }
+  return tools;
+}
 
-  // Legacy method for backward compatibility - now requires ActionCtx
-  static async getLegacyTools(providerID: string = "anthropic", modelID: string = "claude-3-5-haiku-20241022") {
-    throw new Error(
-      `Legacy getTools() method is deprecated. Use getTools(actionCtx, processorContext, providerID, modelID) instead. ` +
-      `This ensures ActionCtx is properly bound to tools and prevents context loss issues.`
-    );
-  }
+/**
+ * Simple tool availability check - no complex circuit breakers
+ */
+export function isToolAvailable(toolName: string): boolean {
+  // Simple availability check - can be enhanced later if needed
+  const unavailableTools = new Set(['task']); // Disabled tools
+  return !unavailableTools.has(toolName);
+}
 
-  // Get enabled tools based on provider/model restrictions (OpenCode pattern)
-  static async getEnabledTools(providerID: string, modelID: string): Promise<Record<string, boolean>> {
-    const enabled: Record<string, boolean> = {};
-    
-    // Model-specific restrictions
-    if (modelID.toLowerCase().includes("qwen")) {
-      enabled["internalTodoWrite"] = false;
-      enabled["internalTodoRead"] = false;
-    }
-    
-    // Provider-specific restrictions could be added here
-    
-    return enabled;
-  }
+/**
+ * Get tool list for UI/debugging purposes
+ */
+export async function getAvailableToolList(actionCtx: ActionCtx, userId: string): Promise<string[]> {
+  const tools = await createSimpleToolRegistry(actionCtx, userId);
+  return Object.keys(tools);
 }
