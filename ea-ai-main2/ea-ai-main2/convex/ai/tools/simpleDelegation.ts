@@ -130,7 +130,7 @@ export const analyzeCode: ToolDefinition = {
         `Code Analysis Request: ${analysisType}`,
         `Context: ${codeContext}`,
         '',
-        analysisPrompts[analysisType],
+        analysisPrompts[analysisType as keyof typeof analysisPrompts] || analysisPrompts.review,
         '',
         specificQuestions ? `Specific questions to address: ${specificQuestions}` : '',
         '',

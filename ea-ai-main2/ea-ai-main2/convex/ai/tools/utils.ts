@@ -256,22 +256,24 @@ export const listTools: ToolDefinition = {
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
-      // Import ToolRegistry to get all available tools
-      const { ToolRegistry } = await import("../toolRegistry");
-      
-      const allTools = Object.entries(ToolRegistry).map(([key, tool]) => ({
-        id: tool.id,
-        name: key,
-        description: tool.description,
-        category: key.startsWith('create') || key.startsWith('get') || key.startsWith('update') || key.startsWith('delete') || key.includes('Task') || key.includes('Project') || key.includes('Batch') ? 
-          (key.includes('Calendar') || key.includes('Event') ? 'calendar' : 'todoist') :
-          key.startsWith('internal') ? 'internal' : 'utility'
-      }));
+      // Simple tool listing without complex registry lookup
+      const availableTools = [
+        { id: "addTodoistTask", name: "Add Todoist Task", description: "Create new tasks in Todoist", category: "todoist" },
+        { id: "getTodoistTasks", name: "Get Todoist Tasks", description: "Retrieve tasks from Todoist", category: "todoist" },
+        { id: "updateTodoistTask", name: "Update Todoist Task", description: "Update existing Todoist tasks", category: "todoist" },
+        { id: "deleteTodoistTask", name: "Delete Todoist Task", description: "Remove tasks from Todoist", category: "todoist" },
+        { id: "addGoogleCalendarEvent", name: "Add Calendar Event", description: "Create calendar events", category: "calendar" },
+        { id: "getGoogleCalendarEvents", name: "Get Calendar Events", description: "Retrieve calendar events", category: "calendar" },
+        { id: "internalPlanningAssistant", name: "Planning Assistant", description: "Help with internal planning", category: "internal" },
+        { id: "getCurrentTime", name: "Get Current Time", description: "Get current date and time", category: "utility" },
+        { id: "researchTask", name: "Research Task", description: "Perform research on topics", category: "utility" },
+        { id: "analyzeCode", name: "Code Analysis", description: "Analyze code for issues", category: "utility" }
+      ];
 
       // Filter by category if specified
-      let filteredTools = allTools;
+      let filteredTools = availableTools;
       if (args.category && args.category !== 'all') {
-        filteredTools = allTools.filter(tool => tool.category === args.category);
+        filteredTools = availableTools.filter(tool => tool.category === args.category);
       }
 
       // Group tools by category for better organization

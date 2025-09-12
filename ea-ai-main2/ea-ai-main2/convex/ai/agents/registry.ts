@@ -1,6 +1,6 @@
 import { AgentConfig, AgentRegistry as AgentRegistryType, AgentMode, Permission } from "./types";
 
-// Default permissions for different agent types
+// Simplified permissions following OpenCode's 3-level system
 const PRIMARY_PERMISSIONS = {
   edit: "allow" as Permission,
   webfetch: "allow" as Permission,
@@ -17,19 +17,20 @@ const SUBAGENT_PERMISSIONS = {
   },
 };
 
-// Built-in agent registry - following OpenCode patterns
+// Built-in agent registry - following OpenCode's BUILTIN agents pattern
 export const BUILT_IN_AGENTS: AgentRegistryType = {
-  // Primary agent - handles main user conversation and delegates tasks
+  // Primary agent - equivalent to OpenCode's "build" agent
   primary: {
     name: "primary",
-    description: "Main conversation agent that handles user interactions and delegates complex tasks to specialized subagents",
+    description: "Main conversation agent that handles user interactions and delegates complex tasks to specialized subagents. Has full tool access including TaskTool for delegation.",
     mode: "primary",
     builtIn: true,
     permissions: PRIMARY_PERMISSIONS,
     tools: {
-      // Primary agent gets access to TaskTool for delegation
+      // TaskTool for delegation - key difference from subagents
       task: true,
-      // All standard tools
+      
+      // Full tool access
       read: true,
       write: true,
       edit: true,
@@ -37,25 +38,75 @@ export const BUILT_IN_AGENTS: AgentRegistryType = {
       webfetch: true,
       glob: true,
       grep: true,
-      // Internal tools
-      readUserMentalModel: false, // Removed as per recent architecture changes
-      editUserMentalModel: false, // Removed as per recent architecture changes
-      // Todoist integration
+      
+      // External integrations
       addTodoistTask: true,
       getTodoistTasks: true,
       updateTodoistTask: true,
       deleteTodoistTask: true,
-      // Google Calendar
       addGoogleCalendarEvent: true,
       getGoogleCalendarEvents: true,
       updateGoogleCalendarEvent: true,
       deleteGoogleCalendarEvent: true,
+      
+      // Utility tools
+      getCurrentTime: true,
+      listTools: true,
+      internalPlanningAssistant: true,
     },
     options: {},
-    systemPrompt: "You are a primary AI assistant that can handle complex tasks by delegating to specialized subagents when appropriate. Use the TaskTool to delegate research, code analysis, or other specialized tasks to subagents.",
+    systemPrompt: "You are a primary AI assistant that manages complex tasks by delegating to specialized subagents when appropriate. Use the TaskTool to delegate research, code analysis, or other specialized tasks to subagents while handling direct user interaction and tool execution yourself.",
+    temperature: 0.5,
   },
 
-  // Research subagent - specialized for information gathering and analysis
+  // General subagent - equivalent to OpenCode's "general" agent
+  general: {
+    name: "general",
+    description: "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.",
+    mode: "subagent",
+    builtIn: true,
+    permissions: SUBAGENT_PERMISSIONS,
+    tools: {
+      // No TaskTool - subagents cannot delegate further (prevents infinite recursion)
+      task: false,
+      
+      // Read-only tools for research and analysis
+      read: true,
+      glob: true,
+      grep: true,
+      webfetch: true,
+      
+      // No modification tools
+      write: false,
+      edit: false,
+      bash: false,
+      
+      // Limited external access
+      getTodoistTasks: true, // Read-only access for context
+      getGoogleCalendarEvents: true, // Read-only access for context
+      
+      // No creation/modification of external resources
+      addTodoistTask: false,
+      updateTodoistTask: false,
+      deleteTodoistTask: false,
+      addGoogleCalendarEvent: false,
+      updateGoogleCalendarEvent: false,
+      deleteGoogleCalendarEvent: false,
+      
+      // Utility tools
+      getCurrentTime: true,
+      listTools: true,
+      internalPlanningAssistant: false, // Subagents shouldn't create internal todos
+    },
+    options: {
+      maxSearchDepth: 5,
+      includeContext: true,
+    },
+    systemPrompt: "You are a general-purpose research and analysis specialist. Your role is to thoroughly investigate topics, find relevant information, analyze documentation, and provide comprehensive insights. You have read-only access to systems and excel at multi-step problem solving and information synthesis.",
+    temperature: 0.3,
+  },
+
+  // Research specialist subagent
   research: {
     name: "research",
     description: "Specialized agent for research tasks, information gathering, web searches, and analysis. Excellent for exploring complex topics, finding documentation, and synthesizing information from multiple sources.",
@@ -63,37 +114,45 @@ export const BUILT_IN_AGENTS: AgentRegistryType = {
     builtIn: true,
     permissions: SUBAGENT_PERMISSIONS,
     tools: {
-      // Research-focused tools
+      // Research-focused tools only
+      task: false,
       read: true,
       glob: true,
       grep: true,
       webfetch: true,
-      // No editing capabilities
+      
+      // No modification capabilities
       write: false,
       edit: false,
       bash: false,
-      task: false, // Subagents cannot delegate further
-      // Limited access to external tools
+      
+      // Read-only external access
+      getTodoistTasks: true,
+      getGoogleCalendarEvents: true,
+      
+      // No external modifications
       addTodoistTask: false,
-      getTodoistTasks: true, // Can read existing tasks for context
       updateTodoistTask: false,
       deleteTodoistTask: false,
-      // Calendar read-only access
-      getGoogleCalendarEvents: true,
       addGoogleCalendarEvent: false,
       updateGoogleCalendarEvent: false,
       deleteGoogleCalendarEvent: false,
+      
+      // Utility tools
+      getCurrentTime: true,
+      listTools: true,
+      internalPlanningAssistant: false,
     },
     options: {
-      // Research agent optimized for thorough analysis
-      maxSearchDepth: 5,
+      maxSearchDepth: 10, // Deeper research capability
       includeContext: true,
+      researchMode: "comprehensive"
     },
-    systemPrompt: "You are a research specialist. Your role is to thoroughly investigate topics, find relevant information, analyze documentation, and provide comprehensive insights. You have read-only access to systems and excel at information synthesis.",
-    temperature: 0.3, // Lower temperature for more focused research
+    systemPrompt: "You are a research specialist. Your role is to thoroughly investigate topics, find relevant information, analyze documentation, and provide comprehensive insights. You excel at web searches, documentation analysis, and information synthesis. You work in read-only mode to analyze and explain information.",
+    temperature: 0.2, // More focused for research
   },
 
-  // Code analysis subagent - specialized for codebase understanding and technical analysis  
+  // Code analysis specialist subagent
   codeAnalysis: {
     name: "codeAnalysis",
     description: "Specialized agent for code analysis, architecture review, debugging, and technical investigation. Expert at understanding codebases, finding patterns, and explaining technical concepts.",
@@ -102,56 +161,63 @@ export const BUILT_IN_AGENTS: AgentRegistryType = {
     permissions: SUBAGENT_PERMISSIONS,
     tools: {
       // Code analysis tools
+      task: false,
       read: true,
       glob: true,
       grep: true,
       webfetch: true, // For documentation lookup
+      
       // No modification capabilities
       write: false,
       edit: false,
       bash: false,
-      task: false,
-      // No external integrations needed
-      addTodoistTask: false,
+      
+      // Minimal external access (code analysis usually doesn't need external systems)
       getTodoistTasks: false,
+      getGoogleCalendarEvents: false,
+      addTodoistTask: false,
       updateTodoistTask: false,
       deleteTodoistTask: false,
-      getGoogleCalendarEvents: false,
       addGoogleCalendarEvent: false,
       updateGoogleCalendarEvent: false,
       deleteGoogleCalendarEvent: false,
+      
+      // Utility tools
+      getCurrentTime: true,
+      listTools: true,
+      internalPlanningAssistant: false,
     },
     options: {
-      // Code analysis specific settings
       includeLineNumbers: true,
       showContext: true,
       maxFileSize: 50000, // Limit large file analysis
+      analysisMode: "detailed"
     },
-    systemPrompt: "You are a code analysis specialist. Your expertise is in understanding codebases, analyzing architecture, finding bugs, explaining technical patterns, and providing insights about code quality and structure. You work in read-only mode to analyze and explain code.",
-    temperature: 0.2, // Very focused for technical analysis
+    systemPrompt: "You are a code analysis specialist. Your expertise is in understanding codebases, analyzing architecture, finding bugs, explaining technical patterns, and providing insights about code quality and structure. You work in read-only mode to analyze and explain code without making modifications.",
+    temperature: 0.1, // Very focused for technical analysis
   },
 };
 
-// Agent registry management functions
+// Agent registry management - following OpenCode's Agent namespace pattern
 export class AgentRegistry {
   private static agents: AgentRegistryType = { ...BUILT_IN_AGENTS };
 
   /**
-   * Get agent configuration by name
+   * Get agent configuration by name (like OpenCode's Agent.get())
    */
   static getAgent(name: string): AgentConfig | null {
     return this.agents[name] || null;
   }
 
   /**
-   * Get all available agents
+   * List all agents (like OpenCode's Agent.list())
    */
   static getAllAgents(): AgentRegistryType {
     return { ...this.agents };
   }
 
   /**
-   * Get agents by mode (primary, subagent, or all)
+   * Get agents by mode (like OpenCode's mode filtering)
    */
   static getAgentsByMode(mode: AgentMode): AgentConfig[] {
     return Object.values(this.agents).filter(
@@ -160,7 +226,7 @@ export class AgentRegistry {
   }
 
   /**
-   * Get available subagents for delegation
+   * Get available subagents for delegation (like OpenCode's subagent filtering)
    */
   static getAvailableSubagents(): AgentConfig[] {
     return this.getAgentsByMode("subagent");
@@ -174,14 +240,14 @@ export class AgentRegistry {
   }
 
   /**
-   * Check if agent exists and is valid
+   * Check if agent exists and is valid (like OpenCode's validation)
    */
   static isValidAgent(name: string): boolean {
     return name in this.agents;
   }
 
   /**
-   * Check if agent can be used as subagent
+   * Check if agent can be used as subagent (like OpenCode's agent mode checking)
    */
   static canUseAsSubagent(name: string): boolean {
     const agent = this.getAgent(name);
@@ -198,6 +264,7 @@ export class AgentRegistry {
 
   /**
    * Register a new custom agent (for future extensibility)
+   * Following OpenCode's pattern but adapted for our system
    */
   static registerAgent(name: string, config: AgentConfig): void {
     if (config.builtIn && name in BUILT_IN_AGENTS) {
@@ -207,7 +274,7 @@ export class AgentRegistry {
   }
 
   /**
-   * Get tool permissions for an agent
+   * Get tool permissions for an agent (like OpenCode's tool filtering)
    */
   static getAgentTools(name: string): Record<string, boolean> {
     const agent = this.getAgent(name);
@@ -215,10 +282,18 @@ export class AgentRegistry {
   }
 
   /**
-   * Check if agent has permission for a specific tool
+   * Check if agent has permission for a specific tool (like OpenCode's tool validation)
    */
   static hasToolPermission(agentName: string, toolName: string): boolean {
     const tools = this.getAgentTools(agentName);
     return tools[toolName] === true;
+  }
+
+  /**
+   * Get agents filtered by mode (following OpenCode's agent filtering patterns)
+   * Returns agents that are NOT "primary" (i.e., can be used as subagents)
+   */
+  static getSubagentCandidates(): AgentConfig[] {
+    return Object.values(this.agents).filter(agent => agent.mode !== "primary");
   }
 }

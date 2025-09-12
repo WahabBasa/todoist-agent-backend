@@ -109,28 +109,31 @@ export const chatWithAI = action({
         messages: cachedMessages,
         tools,
         maxRetries: 3,
-        maxSteps: 20, // Reduced complexity - most tasks don't need 100 steps
+        // maxSteps removed - not available in current AI SDK version
       });
 
       // Let AI SDK handle the entire streaming and tool execution process
       // This is much simpler than manual stream processing
       console.log('[SessionSimplified] AI SDK processing completed');
 
-      // Get final result from AI SDK
-      const { text, toolCalls, toolResults, usage, experimental_providerMetadata } = result;
+      // Get final result from AI SDK - properly await promises
+      const finalText = await result.text;
+      const finalToolCalls = await result.toolCalls;
+      const finalToolResults = await result.toolResults;
+      const finalUsage = await result.usage;
 
-      console.log(`[SessionSimplified] Result: text=${!!text}, toolCalls=${toolCalls.length}, toolResults=${toolResults.length}`);
+      console.log(`[SessionSimplified] Result: text=${!!finalText}, toolCalls=${finalToolCalls.length}, toolResults=${finalToolResults.length}`);
 
       // Build final conversation history using simple approach
       const finalHistory = [...cleanHistory];
 
       // Add assistant response
-      if (toolCalls.length > 0) {
+      if (finalToolCalls.length > 0) {
         // Add tool calls message
         finalHistory.push({
           role: "assistant",
-          content: text || "",
-          toolCalls: toolCalls.map(tc => ({
+          content: finalText || "",
+          toolCalls: finalToolCalls.map(tc => ({
             name: tc.toolName,
             args: tc.args,
             toolCallId: tc.toolCallId
@@ -139,10 +142,10 @@ export const chatWithAI = action({
         });
 
         // Add tool results
-        if (toolResults.length > 0) {
+        if (finalToolResults.length > 0) {
           finalHistory.push({
             role: "tool",
-            toolResults: toolResults.map(tr => ({
+            toolResults: finalToolResults.map(tr => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
               result: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result)
@@ -153,10 +156,10 @@ export const chatWithAI = action({
       }
 
       // Add final text response if we have one
-      if (text && text.trim()) {
+      if (finalText && finalText.trim()) {
         finalHistory.push({
           role: "assistant",
-          content: text,
+          content: finalText,
           timestamp: Date.now()
         });
       }
@@ -169,7 +172,7 @@ export const chatWithAI = action({
 
       // Clean up internal todos if conversation is complete
       try {
-        if (sessionId && toolResults.length === 0) {
+        if (sessionId && finalToolResults.length === 0) {
           await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
         }
       } catch (error) {
@@ -178,15 +181,15 @@ export const chatWithAI = action({
 
       // Return simple response
       return {
-        response: text || "I've completed the requested actions.",
+        response: finalText || "I've completed the requested actions.",
         fromCache: false,
         metadata: {
-          toolCalls: toolCalls.length,
-          toolResults: toolResults.length,
-          tokens: usage ? {
-            input: usage.promptTokens,
-            output: usage.completionTokens,
-            total: usage.totalTokens
+          toolCalls: finalToolCalls.length,
+          toolResults: finalToolResults.length,
+          tokens: finalUsage ? {
+            input: finalUsage.promptTokens,
+            output: finalUsage.completionTokens,
+            total: finalUsage.totalTokens
           } : undefined,
           processingTime: Date.now() - Date.now() // Will be calculated properly
         }
@@ -197,7 +200,7 @@ export const chatWithAI = action({
       console.error('[SessionSimplified] Chat failed:', error);
       
       // Simple error handling - save error message to conversation
-      const errorHistory = [...sanitizeMessages((conversation?.messages as ConvexMessage[]) || [])];
+      const errorHistory = [...sanitizeMessages(((conversation as any)?.messages as ConvexMessage[]) || [])];
       errorHistory.push({
         role: "user",
         content: message,
@@ -244,7 +247,7 @@ export const getSessionStats = action({
       conversation = await ctx.runQuery(api.conversations.getConversation);
     }
     
-    const messages = (conversation?.messages as ConvexMessage[]) || [];
+    const messages = ((conversation as any)?.messages as ConvexMessage[]) || [];
     
     return {
       userId: userId.substring(0, 20) + "...",

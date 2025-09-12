@@ -7,6 +7,7 @@ import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
+import { TaskTool } from "./tools/taskTool";
 
 /**
  * Simplified tool registry for direct Convex + AI SDK integration
@@ -20,19 +21,23 @@ import { SimpleDelegationTools } from "./tools/simpleDelegation";
  */
 
 // Simple tool context for essential information
-interface SimpleToolContext {
+export interface SimpleToolContext {
   userId: string;
   sessionId?: string;
   currentTimeContext?: any;
 }
 
 // Simplified tool definition that maps directly to Convex actions
-interface SimpleToolDefinition {
+export interface SimpleToolDefinition {
   id: string;
   description: string;
   inputSchema: z.ZodSchema;
   execute: (args: any, ctx: SimpleToolContext, actionCtx: ActionCtx) => Promise<string>;
 }
+
+// Aliases for backward compatibility with existing tools
+export type ToolContext = SimpleToolContext;
+export type ToolDefinition = SimpleToolDefinition;
 
 /**
  * Convert existing tool definitions to simplified format
@@ -98,14 +103,10 @@ export async function createSimpleToolRegistry(
     ...UtilityTools,
     ...GoogleCalendarTools,
     ...SimpleDelegationTools,
+    ...TaskTool, // Now include TaskTool for agent delegation
   };
 
-  // Remove the problematic TaskTool (agent delegation) for now
-  // This eliminates the circular dependency issues
-  if ('task' in allTools) {
-    delete allTools.task;
-    console.log(`[SimpleToolRegistry] Removed TaskTool to eliminate circular dependencies`);
-  }
+  console.log(`[SimpleToolRegistry] Including TaskTool for agent delegation`);
 
   const tools: Record<string, any> = {};
   
