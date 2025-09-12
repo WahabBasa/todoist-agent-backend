@@ -96,7 +96,7 @@ export function Chat() {
         ref={messagesAreaRef}
         id="chat-container"
       >
-        <div className="w-full md:w-[768px] lg:w-[800px] px-8 py-2 flex flex-1 flex-col gap-8">
+        <div className="w-full md:w-[740px] lg:w-[760px] px-8 py-2 flex flex-1 flex-col gap-8">
           <div className="flex flex-col gap-8 w-full items-start">
             {/* Conversation Turns - Original Layout */}
             {conversationTurns.map((turn, index) => (
@@ -128,7 +128,7 @@ export function Chat() {
         {isFreshSession && <ChatGreeting />}
         
         {/* Input Container */}
-        <div className="w-full md:w-[768px] lg:w-[800px] mx-auto flex flex-col gap-3">
+        <div className="w-full md:w-[740px] lg:w-[760px] mx-auto flex flex-col gap-3">
           <ChatInput
             ref={inputRef}
             value={input}

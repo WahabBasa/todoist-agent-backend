@@ -35,7 +35,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full border-l-2 border-transparent hover:border-muted transition-colors">
+    <div className="flex flex-col gap-8 w-full border-l-2 border-transparent hover:border-muted transition-colors">
       {/* User Message - Left aligned with avatar + bubble */}
       <div className="flex justify-start">
         <div className="flex items-start gap-3 max-w-[92%]">
@@ -67,8 +67,8 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
             <Bot size={20} />
           </div>
           
-          {/* AI Content - Original clean design (no bubble) */}
-          <div className="flex-1 bg-background/50 p-3 rounded-design-lg">
+          {/* AI Content - Clean text design like reference */}
+          <div className="flex-1">
             {isThinking ? (
               /* Thinking Animation - ChatHub Style */
               <div className="flex items-center gap-2">

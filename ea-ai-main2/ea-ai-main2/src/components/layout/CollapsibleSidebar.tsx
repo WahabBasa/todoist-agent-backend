@@ -35,7 +35,7 @@ function SidebarMenuItem({
         variant="ghost"
         className={cn(
           "w-full justify-start gap-3 h-10 sidebar-item hover:bg-accent/50 transition-colors",
-          collapsed ? "w-8 px-0 justify-center" : "px-3"
+          collapsed ? "w-8 px-0 justify-center" : "px-4"
         )}
         onClick={onClick}
       >
@@ -79,7 +79,7 @@ export function CollapsibleSidebar() {
     await createNewSession();
   };
 
-  const sidebarWidth = collapsed ? "w-12" : "w-72";
+  const sidebarWidth = collapsed ? "w-12" : "w-80";
 
   return (
     <div
@@ -89,19 +89,19 @@ export function CollapsibleSidebar() {
       )}
     >
       {/* Header with Toggle Button */}
-      <div className="p-3 border-b border-border/50">
+      <div className="p-4">
         <Button
           variant="ghost"
           size="icon"
           onClick={toggleCollapsed}
-          className={cn("mx-auto", collapsed ? "h-8 w-8" : "h-8 w-8")}
+          className={cn("mx-auto h-8 w-8")}
         >
           {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
         </Button>
       </div>
 
       {/* Main Actions */}
-      <div className="flex flex-col px-3 py-4 border-b border-border/30">
+      <div className="flex flex-col px-4 pb-4">
         <SidebarMenuItem
           icon={<Plus size={20} />}
           label="New Chat"
@@ -113,19 +113,19 @@ export function CollapsibleSidebar() {
       {/* Chat History - Only in expanded state */}
       {!collapsed && (
         <div className="flex-1 min-h-0 flex flex-col transition-opacity duration-300 ease-in-out">
-          <div className="px-3 py-2 shrink-0">
-            <div className="text-xs font-sans font-medium text-secondary px-3 py-3">
-              Recent Chats
+          <div className="px-4 py-2 shrink-0">
+            <div className="text-xs font-sans font-medium text-muted-foreground px-2 py-1">
+              Recents
             </div>
           </div>
-          <div className="flex-1 min-h-0 px-3">
+          <div className="flex-1 min-h-0 px-4">
             <ChatHistory className="h-full" />
           </div>
         </div>
       )}
 
       {/* Footer with User Profile */}
-      <div className="mt-auto shrink-0 p-3 border-t border-border/30">
+      <div className="mt-auto shrink-0 p-4">
         <UserProfile 
           onOpenSettings={() => setActiveView("settings")} 
           collapsed={collapsed} 
