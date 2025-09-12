@@ -78,7 +78,7 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
 
   return (
     <div className="flex flex-col flex-1 h-full">
-      <div className="flex items-center justify-between w-full padding-secondary mb-4">
+      <div className="flex items-center justify-between w-full p-3 mb-3">
         <div className="text-secondary">History</div>
         <ClearHistoryAction
           onClearAll={handleClearAll}
@@ -86,27 +86,27 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
         />
       </div>
       
-      <div className="flex-1 overflow-y-auto mb-4 relative scrollbar-hide">
+      <div className="flex-1 overflow-y-auto mb-3 relative scrollbar-hide">
         {isHistoryEmpty && !isPending ? (
-          <div className="padding-secondary text-tertiary text-center">
+          <div className="p-3 text-tertiary text-center">
             No chat history
           </div>
         ) : (
           <div className="gap-tertiary flex flex-col">
             {chats.map((chat: ChatSession) => (
-              <ChatMenuItem 
-                key={chat._id} 
+              <ChatMenuItem
+                key={chat._id}
                 chat={chat}
                 isActive={currentSessionId === chat._id}
-                onSelect={() => onChatSelect?.(chat._id)}
-                onDelete={() => handleDeleteChat(chat._id)}
+                onSelect={() => void onChatSelect?.(chat._id)}
+                onDelete={() => void handleDeleteChat(chat._id)}
               />
             ))}
           </div>
         )}
         {/* Infinite scroll placeholder - will be implemented when backend pagination is added */}
         {(isLoading || isPending) && (
-          <div className="padding-secondary">
+          <div className="p-3">
             <ChatHistorySkeleton />
           </div>
         )}

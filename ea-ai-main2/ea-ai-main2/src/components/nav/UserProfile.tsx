@@ -29,7 +29,7 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
   }
 
   const handleSignOut = () => {
-    signOut({ redirectUrl: '/' })
+    void signOut({ redirectUrl: '/' })
   }
 
   const userInitials = user.firstName && user.lastName 
@@ -43,7 +43,7 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
   return (
     <div className={cn(
       "flex items-center transition-all",
-      collapsed ? "justify-center" : "justify-between gap-2 px-2"
+      collapsed ? "justify-center" : "justify-between gap-2 px-1"
     )}>
       {!collapsed && (
         <div className="flex flex-col min-w-0 flex-1">
@@ -59,7 +59,7 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-10 w-10 p-0 rounded-full">
-            <Avatar className={cn(collapsed ? "h-8 w-8" : "h-10 w-10")}>
+            <Avatar className={cn("h-8 w-8")}>
               <AvatarImage src={user.imageUrl} alt={user.firstName || "User"} />
               <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                 {userInitials}

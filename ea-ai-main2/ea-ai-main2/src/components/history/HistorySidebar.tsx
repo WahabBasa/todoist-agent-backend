@@ -56,7 +56,7 @@ export const HistorySidebar = ({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button variant="ghost" size="icon" className="h-10 w-10">
           <MessageSquare size={20} />
         </Button>
       </SheetTrigger>
@@ -69,7 +69,7 @@ export const HistorySidebar = ({
         
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-3 border-b">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Clock size={18} />
               Recent History
@@ -77,7 +77,7 @@ export const HistorySidebar = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-10 w-10"
               onClick={() => setOpen(false)}
             >
               <X size={16} />
@@ -85,7 +85,7 @@ export const HistorySidebar = ({
           </div>
 
           {/* Sessions List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
             {sessions?.sessions?.map((session) => (
               <ChatMenuItem
                 key={session._id}

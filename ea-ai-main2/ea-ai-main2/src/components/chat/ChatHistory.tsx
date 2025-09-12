@@ -25,7 +25,7 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: C
   return (
     <div
       className={cn(
-        "group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors",
+        "group flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
           : "hover:bg-accent/50 text-foreground",
@@ -35,7 +35,7 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: C
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center">
-          <span className="text-sm font-sans font-semibold text-foreground truncate">{session.title}</span>
+          <span className="text-base font-sans font-medium text-muted-foreground truncate">{session.title}</span>
         </div>
       </div>
       
@@ -91,8 +91,8 @@ export function ChatHistory({ className }: ChatHistoryProps) {
               key={session._id}
               session={session}
               isActive={currentSessionId === session._id}
-              onSelect={() => handleChatSelect(session._id)}
-              onDelete={() => handleDeleteChat(session._id)}
+              onSelect={() => void handleChatSelect(session._id)}
+              onDelete={() => void handleDeleteChat(session._id)}
               isLoading={switchingSessionId === session._id}
             />
           ))}
