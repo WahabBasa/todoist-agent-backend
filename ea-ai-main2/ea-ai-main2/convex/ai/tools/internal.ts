@@ -33,7 +33,7 @@ export const internalTodoWrite: ToolDefinition = {
       }
 
       const result = await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos, {
-        sessionId: ctx.sessionID as any,
+        sessionId: ctx.sessionId as any,
         todos: args.todos,
       });
       
@@ -47,16 +47,7 @@ export const internalTodoWrite: ToolDefinition = {
         todos: args.todos,
       };
 
-      ctx.metadata({
-        title: "Workflow Coordination Updated",
-        metadata: { 
-          todoCount: args.todos.length, 
-          pendingCount, 
-          inProgressCount, 
-          completedCount,
-          workflowType: "internal_coordination"
-        }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "Internal Workflow Updated",
@@ -76,7 +67,7 @@ export const internalTodoRead: ToolDefinition = {
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
     try {
       const todoData = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, {
-        sessionId: ctx.sessionID as any,
+        sessionId: ctx.sessionId as any,
       });
       
       const result = todoData ? {
@@ -89,10 +80,7 @@ export const internalTodoRead: ToolDefinition = {
         message: "No active internal workflow found",
       };
 
-      ctx.metadata({
-        title: "Workflow Status Retrieved",
-        metadata: todoData?.summary || { total: 0 }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "Internal Workflow Status",

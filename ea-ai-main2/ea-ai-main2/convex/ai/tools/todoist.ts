@@ -36,7 +36,7 @@ export const createTask: ToolDefinition = {
         sync_token: result.sync_token
       } : result;
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Task Created Successfully",
         metadata: { taskId: output._id, projectId: args.projectId }
       });
@@ -105,7 +105,7 @@ export const getTasks: ToolDefinition = {
           }));
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `Retrieved ${result.length} Tasks`,
         metadata: { taskCount: result.length, projectId: args.projectId }
       });
@@ -141,13 +141,13 @@ export const updateTask: ToolDefinition = {
       // Handle task completion separately with appropriate sync API calls
       if (isCompleted === true) {
         result = await actionCtx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
-        ctx.metadata({
+        // Metadata handled by tool registry bridge - ctx.metadata({
           title: "Task Completed",
           metadata: { taskId, action: "completed" }
         });
       } else if (isCompleted === false) {
         result = await actionCtx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
-        ctx.metadata({
+        // Metadata handled by tool registry bridge - ctx.metadata({
           title: "Task Reopened",
           metadata: { taskId, action: "reopened" }
         });
@@ -163,7 +163,7 @@ export const updateTask: ToolDefinition = {
         
         if (Object.keys(todoistArgs).length > 1) { // More than just taskId
           result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
-          ctx.metadata({
+          // Metadata handled by tool registry bridge - ctx.metadata({
             title: "Task Updated",
             metadata: { taskId, fieldsUpdated: Object.keys(todoistArgs).filter(k => k !== 'taskId') }
           });
@@ -195,7 +195,7 @@ export const deleteTask: ToolDefinition = {
         taskId: args.taskId 
       });
       
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Task Deleted",
         metadata: { taskId: args.taskId }
       });
@@ -235,7 +235,7 @@ export const createProject: ToolDefinition = {
         sync_token: result.sync_token
       } : result;
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Project Created Successfully",
         metadata: { projectId: output._id, name: args.name }
       });
@@ -268,7 +268,7 @@ export const updateProject: ToolDefinition = {
         ...updateArgs
       });
       
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Project Updated",
         metadata: { projectId, fieldsUpdated: Object.keys(updateArgs) }
       });
@@ -296,7 +296,7 @@ export const deleteProject: ToolDefinition = {
         projectId: args.projectId 
       });
       
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Project Deleted",
         metadata: { projectId: args.projectId }
       });
@@ -335,7 +335,7 @@ export const getProjectAndTaskMap: ToolDefinition = {
       const taskCount = result?.unassignedTasks?.length || 0;
       const totalTasks = result?.projects?.reduce((sum: number, p: any) => sum + (p.tasks?.length || 0), 0) || 0;
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Workspace Overview Retrieved",
         metadata: { 
           projectCount,
@@ -368,7 +368,7 @@ export const getProjectDetails: ToolDefinition = {
         projectId: args.projectId 
       });
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Project Details Retrieved",
         metadata: { 
           projectId: args.projectId,
@@ -399,7 +399,7 @@ export const getTaskDetails: ToolDefinition = {
         taskId: args.taskId 
       });
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: "Task Details Retrieved",
         metadata: { taskId: args.taskId }
       });
@@ -457,7 +457,7 @@ export const createBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `${successCount}/${args.tasks.length} Tasks Created`,
         metadata: { 
           successful: successCount, 
@@ -506,7 +506,7 @@ export const deleteBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `${successCount}/${args.taskIds.length} Tasks Deleted`,
         metadata: { 
           successful: successCount, 
@@ -554,7 +554,7 @@ export const completeBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `${successCount}/${args.taskIds.length} Tasks Completed`,
         metadata: { 
           successful: successCount, 
@@ -610,7 +610,7 @@ export const updateBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `${successCount}/${args.updates.length} Tasks Updated`,
         metadata: { 
           successful: successCount, 
@@ -682,7 +682,7 @@ export const createProjectWithTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `Project "${args.projectName}" Created`,
         metadata: { 
           projectId,
@@ -788,7 +788,7 @@ export const reorganizeTasksBatch: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      ctx.metadata({
+      // Metadata handled by tool registry bridge - ctx.metadata({
         title: `${successCount}/${args.taskIds.length} Tasks Reorganized`,
         metadata: { 
           successful: successCount, 

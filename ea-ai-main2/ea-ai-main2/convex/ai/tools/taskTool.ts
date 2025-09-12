@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolDefinition, ToolContext } from "../toolRegistry";
+import { ToolDefinition, ToolContext, createSimpleToolRegistry } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { AgentRegistry } from "../agents/registry";
 import { streamText } from "ai";
@@ -63,17 +63,17 @@ The subagent will work autonomously with filtered tool access and return compreh
       }
 
       // Update metadata to show delegation started (following OpenCode pattern)
-      ctx.metadata({
-        title: `Delegating to ${subagentType} agent`,
-        metadata: {
-          subagent: subagentType,
-          taskDescription,
-          promptLength: prompt.length
-        }
-      });
+      // Metadata handled by tool registry bridge - ctx.metadata({
+      //   title: `Delegating to ${subagentType} agent`,
+      //   metadata: {
+      //     subagent: subagentType,
+      //     taskDescription,
+      //     promptLength: prompt.length
+      //   }
+      // });
 
       // Get filtered tools for subagent (following OpenCode's tool filtering)
-      const subagentTools = getToolsForAgent(subagentConfig, actionCtx, ctx);
+      const subagentTools = await getToolsForAgent(subagentConfig, actionCtx, ctx);
       console.log(`[TaskTool] Created ${Object.keys(subagentTools).length} filtered tools for ${subagentType}`);
 
       // Prepare subagent system prompt
@@ -128,34 +128,17 @@ The subagent will work autonomously with filtered tool access and return compreh
         finalText || "Analysis completed successfully.",
         "",
         finalToolResults.length > 0 ? "=== TOOL EXECUTION RESULTS ===" : "",
-        ...finalToolResults.map(tr => `Tool: ${tr.toolName}\nResult: ${tr.result}\n`),
+        ...finalToolResults.map(tr => `Tool: ${tr.toolName}\nResult: ${tr.output}\n`),
       ].filter(Boolean).join("\n");
 
       // Return results to primary agent (following OpenCode pattern)
-      return {
-        title: `${subagentType} Agent Completed`,
-        metadata: {
-          subagent: subagentType,
-          status: "completed",
-          toolsExecuted: finalToolCalls.length,
-          outputLength: subagentOutput.length
-        },
-        output: subagentOutput
-      };
+      return subagentOutput;
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during task delegation";
       console.error(`[TaskTool] Delegation failed:`, error);
 
-      return {
-        title: "Task Delegation Failed",
-        metadata: {
-          subagent: args.subagentType,
-          status: "failed",
-          error: true
-        },
-        output: `Task delegation to ${args.subagentType} agent failed: ${errorMessage}\n\nPlease try again or handle this task directly.`
-      };
+      return `Task delegation to ${args.subagentType} agent failed: ${errorMessage}\n\nPlease try again or handle this task directly.`;
     }
   }
 };
@@ -164,40 +147,36 @@ The subagent will work autonomously with filtered tool access and return compreh
  * Get filtered tools for subagent (following OpenCode's agent-aware tool filtering)
  * Only provides tools that the subagent has permission to use
  */
-function getToolsForAgent(agentConfig: any, actionCtx: ActionCtx, ctx: ToolContext): Record<string, any> {
-  // Import tool creation function
-  const { createSimpleToolRegistry } = require("../toolRegistry");
-  
-  // This is a simplified version - in full implementation, would filter based on agent.tools
-  // For now, provide read-only tools for subagents
-  const readOnlyTools = {
-    // Research tools
-    "getCurrentTime": true,
-    "researchTask": false, // Prevent infinite recursion
-    "listTools": true,
+async function getToolsForAgent(agentConfig: any, actionCtx: ActionCtx, ctx: ToolContext): Promise<Record<string, any>> {
+  try {
+    // Create the full tool registry for this agent
+    const allTools = await createSimpleToolRegistry(actionCtx, ctx.userId, ctx.currentTimeContext, ctx.sessionId);
     
-    // Todoist read-only access
-    "getTodoistTasks": true,
-    "getTodoistProjects": true,
+    // Filter tools based on agent permissions
+    const filteredTools: Record<string, any> = {};
     
-    // Calendar read-only access  
-    "getGoogleCalendarEvents": true,
+    // Get agent's tool permissions
+    const agentTools = AgentRegistry.getAgentTools(agentConfig.name);
     
-    // Internal tools
-    "internalPlanningAssistant": false, // Subagents shouldn't create internal todos
+    // Filter tools based on agent permissions
+    for (const [toolName, tool] of Object.entries(allTools)) {
+      // Special case: subagents should not have access to task tool to prevent recursion
+      if (toolName === "task" && agentConfig.mode === "subagent") {
+        continue; // Skip task tool for subagents
+      }
+      
+      // Check if agent has permission for this tool
+      if (agentTools[toolName] === true) {
+        filteredTools[toolName] = tool;
+      }
+    }
     
-    // Analysis tools
-    "analyzeCode": false, // Prevent recursion
-  };
-
-  // In a full implementation, this would:
-  // 1. Get all available tools from createSimpleToolRegistry
-  // 2. Filter based on agentConfig.tools permissions
-  // 3. Return only allowed tools
-  
-  // For now, return empty tools to prevent errors
-  // This will be enhanced when we implement full tool filtering
-  return {};
+    return filteredTools;
+  } catch (error) {
+    console.error(`[TaskTool] Failed to create filtered tool registry:`, error);
+    // Return empty tools to prevent complete failure
+    return {};
+  }
 }
 
 // Export the TaskTool for registration

@@ -25,6 +25,7 @@ export interface SimpleToolContext {
   userId: string;
   sessionId?: string;
   currentTimeContext?: any;
+  metadata: (input: { title?: string; metadata?: any }) => void;
 }
 
 // Simplified tool definition that maps directly to Convex actions
@@ -32,7 +33,11 @@ export interface SimpleToolDefinition {
   id: string;
   description: string;
   inputSchema: z.ZodSchema;
-  execute: (args: any, ctx: SimpleToolContext, actionCtx: ActionCtx) => Promise<string>;
+  execute: (args: any, ctx: SimpleToolContext, actionCtx: ActionCtx) => Promise<{
+    title: string;
+    metadata: any;
+    output: string;
+  }>;
 }
 
 // Aliases for backward compatibility with existing tools
@@ -48,30 +53,42 @@ function convertToSimpleTool(toolDef: any): SimpleToolDefinition {
     id: toolDef.id,
     description: toolDef.description,
     inputSchema: toolDef.inputSchema,
-    async execute(args: any, ctx: SimpleToolContext, actionCtx: ActionCtx): Promise<string> {
+    async execute(args: any, ctx: SimpleToolContext, actionCtx: ActionCtx): Promise<{
+      title: string;
+      metadata: any;
+      output: string;
+    }> {
       // Bridge to existing tool format
       const legacyContext = {
-        sessionID: ctx.sessionId || "default",
+        sessionId: ctx.sessionId || "default",
         messageID: `msg-${Date.now()}`,
         callID: `call-${Date.now()}`,
         abort: new AbortController().signal,
         userId: ctx.userId,
-        metadata: () => {}, // Simplified metadata - just log
+        metadata: ctx.metadata, // Use the context's metadata function
         currentTimeContext: ctx.currentTimeContext
       };
 
       try {
         const result = await toolDef.execute(args, legacyContext, actionCtx);
         
-        // Return just the output string - AI SDK will handle the rest
-        return result.output || "Task completed successfully.";
+        // Return the full result object
+        return {
+          title: result.title || "Task completed",
+          metadata: result.metadata || {},
+          output: result.output || "Task completed successfully."
+        };
         
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Tool execution failed";
         console.error(`[SimpleToolRegistry] Tool ${toolDef.id} failed:`, error);
         
-        // Return error as string - let AI SDK handle error presentation
-        return `Error: ${errorMessage}`;
+        // Return error in expected format
+        return {
+          title: "Tool Error",
+          metadata: { error: errorMessage },
+          output: `Error: ${errorMessage}`
+        };
       }
     }
   };
@@ -121,13 +138,14 @@ export async function createSimpleToolRegistry(
       tools[key] = tool({
         description: simpleTool.description,
         parameters: simpleTool.inputSchema,
-        execute: async (args) => {
+        execute: async (args: any) => {
           console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
           
           try {
             const result = await simpleTool.execute(args, context, actionCtx);
             console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
-            return result;
+            // AI SDK expects string output, so return just the output string
+            return result.output;
           } catch (error) {
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
             throw error; // Let AI SDK handle the error
@@ -158,7 +176,8 @@ export async function createSimpleToolRegistry(
  */
 export function isToolAvailable(toolName: string): boolean {
   // Simple availability check - can be enhanced later if needed
-  const unavailableTools = new Set(['task']); // Disabled tools
+  // Task tool is now enabled for agent delegation
+  const unavailableTools = new Set<string>(); // No disabled tools
   return !unavailableTools.has(toolName);
 }
 

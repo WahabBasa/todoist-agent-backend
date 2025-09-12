@@ -135,7 +135,7 @@ export const chatWithAI = action({
           content: finalText || "",
           toolCalls: finalToolCalls.map(tc => ({
             name: tc.toolName,
-            args: tc.args,
+            args: tc.input,
             toolCallId: tc.toolCallId
           })),
           timestamp: Date.now()
@@ -148,7 +148,7 @@ export const chatWithAI = action({
             toolResults: finalToolResults.map(tr => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
-              result: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result)
+              result: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
             })),
             timestamp: Date.now()
           });
@@ -187,8 +187,8 @@ export const chatWithAI = action({
           toolCalls: finalToolCalls.length,
           toolResults: finalToolResults.length,
           tokens: finalUsage ? {
-            input: finalUsage.promptTokens,
-            output: finalUsage.completionTokens,
+            input: finalUsage.inputTokens,
+            output: finalUsage.outputTokens,
             total: finalUsage.totalTokens
           } : undefined,
           processingTime: Date.now() - Date.now() // Will be calculated properly
@@ -200,6 +200,7 @@ export const chatWithAI = action({
       console.error('[SessionSimplified] Chat failed:', error);
       
       // Simple error handling - save error message to conversation
+      const conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
       const errorHistory = [...sanitizeMessages(((conversation as any)?.messages as ConvexMessage[]) || [])];
       errorHistory.push({
         role: "user",
@@ -237,7 +238,12 @@ export const getSessionStats = action({
   args: {
     sessionId: v.optional(v.id("chatSessions")),
   },
-  handler: async (ctx, { sessionId }) => {
+  handler: async (ctx, { sessionId }): Promise<{
+    userId: string;
+    sessionId: string;
+    messageCount: number;
+    timestamp: number;
+  }> => {
     const { userId } = await requireUserAuthForAction(ctx);
     
     let conversation;
@@ -247,7 +253,7 @@ export const getSessionStats = action({
       conversation = await ctx.runQuery(api.conversations.getConversation);
     }
     
-    const messages = ((conversation as any)?.messages as ConvexMessage[]) || [];
+    const messages: ConvexMessage[] = ((conversation as any)?.messages as ConvexMessage[]) || [];
     
     return {
       userId: userId.substring(0, 20) + "...",

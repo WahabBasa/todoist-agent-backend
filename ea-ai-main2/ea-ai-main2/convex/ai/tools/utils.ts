@@ -22,14 +22,7 @@ export const getCurrentTime: ToolDefinition = {
         requestedTimezone: args.timeZone || currentTimeContext.userTimezone,
       };
 
-      ctx.metadata({
-        title: "Current Time Retrieved (Browser Context)",
-        metadata: { 
-          source: "user_browser", 
-          timezone: currentTimeContext.userTimezone,
-          localTime: currentTimeContext.localTime
-        }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "Current Time Retrieved",
@@ -53,14 +46,7 @@ export const getCurrentTime: ToolDefinition = {
         requestedTimezone: args.timeZone,
       };
 
-      ctx.metadata({
-        title: "Current Time Retrieved (Server Fallback)",
-        metadata: { 
-          source: "server_fallback", 
-          timezone: fallback.userTimezone,
-          fallbackReason: "No browser context"
-        }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "Current Time Retrieved (Fallback)",
@@ -81,7 +67,7 @@ export const getSystemStatus: ToolDefinition = {
     try {
       const status = {
         timestamp: Date.now(),
-        sessionId: ctx.sessionID,
+        sessionId: ctx.sessionId,
         userId: ctx.userId.substring(0, 20) + "...",
         systemHealth: {
           convex: "operational", // Could be enhanced with actual health checks
@@ -106,13 +92,7 @@ export const getSystemStatus: ToolDefinition = {
         };
       }
 
-      ctx.metadata({
-        title: "System Status Retrieved",
-        metadata: { 
-          health: "operational",
-          includeMetrics: args.includeMetrics || false
-        }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "System Status",
@@ -221,10 +201,7 @@ export const validateInput: ToolDefinition = {
         suggestions: suggestions.length > 0 ? suggestions : undefined,
       };
 
-      ctx.metadata({
-        title: isValid ? "Input Valid" : "Input Invalid",
-        metadata: { type, isValid, hassuggestions: suggestions.length > 0 }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: `Input Validation: ${type}`,
@@ -290,28 +267,20 @@ export const listTools: ToolDefinition = {
       }, {});
 
       // Count batch tools specifically
-      const batchTools = allTools.filter(tool => tool.name.includes('Batch') || tool.name.includes('batch'));
+      const batchTools = availableTools.filter(tool => tool.name.includes('Batch') || tool.name.includes('batch'));
       
       const result = {
-        totalTools: allTools.length,
+        totalTools: availableTools.length,
         filteredTools: filteredTools.length,
         batchTools: batchTools.length,
         batchToolNames: batchTools.map(t => t.name),
         requestedCategory: args.category || 'all',
         toolsByCategory,
-        allToolNames: args.category === 'all' ? allTools.map(t => t.name) : undefined,
+        allToolNames: args.category === 'all' ? availableTools.map(t => t.name) : undefined,
         timestamp: Date.now()
       };
 
-      ctx.metadata({
-        title: `Listed ${filteredTools.length} Tools`,
-        metadata: { 
-          category: args.category || 'all',
-          totalTools: allTools.length,
-          batchTools: batchTools.length,
-          filteredCount: filteredTools.length
-        }
-      });
+      // Metadata handled by tool registry bridge
 
       return {
         title: "Available Tools Listed",

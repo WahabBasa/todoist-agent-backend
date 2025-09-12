@@ -29,11 +29,7 @@ export const researchTask: ToolDefinition = {
     try {
       const { topic, focus, context } = args;
       
-      // Record the research request
-      ctx.metadata({
-        title: "Research Task Started",
-        metadata: { topic, focus }
-      });
+      // Metadata handled by tool registry bridge
 
       // Simple approach: Create an internal todo for the research
       // This keeps the research within the same session instead of creating child sessions
@@ -52,7 +48,7 @@ export const researchTask: ToolDefinition = {
 
       // Store as internal todo instead of creating child session
       await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionID,
+        sessionId: ctx.sessionId,
         content: `Research: ${topic}`,
         description: researchPrompt,
         priority: 'high',
@@ -111,11 +107,7 @@ export const analyzeCode: ToolDefinition = {
     try {
       const { codeContext, analysisType, specificQuestions } = args;
       
-      // Record the analysis request
-      ctx.metadata({
-        title: "Code Analysis Started",
-        metadata: { analysisType, context: codeContext.substring(0, 100) }
-      });
+      // Metadata handled by tool registry bridge
 
       // Create analysis prompt based on type
       const analysisPrompts = {
@@ -144,7 +136,7 @@ export const analyzeCode: ToolDefinition = {
 
       // Store as internal todo
       await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionID,
+        sessionId: ctx.sessionId,
         content: `Code Analysis: ${analysisType}`,
         description: analysisPrompt,
         priority: 'high',
@@ -204,10 +196,7 @@ export const planTask: ToolDefinition = {
     try {
       const { taskDescription, timeframe, constraints, priority } = args;
       
-      ctx.metadata({
-        title: "Task Planning Started",
-        metadata: { task: taskDescription.substring(0, 100), priority }
-      });
+      // Metadata handled by tool registry bridge
 
       const planningPrompt = [
         `Task Planning Request: ${taskDescription}`,
@@ -225,7 +214,7 @@ export const planTask: ToolDefinition = {
 
       // Store as internal todo
       await actionCtx.runMutation(api.aiInternalTodos.createInternalTodo, {
-        sessionId: ctx.sessionID,
+        sessionId: ctx.sessionId,
         content: `Plan: ${taskDescription.substring(0, 50)}...`,
         description: planningPrompt,
         priority: priority,
