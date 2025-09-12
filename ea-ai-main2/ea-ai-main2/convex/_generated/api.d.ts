@@ -13,6 +13,8 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as ai_agents_registry from "../ai/agents/registry.js";
+import type * as ai_agents_types from "../ai/agents/types.js";
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_messageV2 from "../ai/messageV2.js";
 import type * as ai_processor from "../ai/processor.js";
@@ -21,6 +23,7 @@ import type * as ai_system from "../ai/system.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_googleCalendar from "../ai/tools/googleCalendar.js";
 import type * as ai_tools_internal from "../ai/tools/internal.js";
+import type * as ai_tools_taskTool from "../ai/tools/taskTool.js";
 import type * as ai_tools_todoist from "../ai/tools/todoist.js";
 import type * as ai_tools_utils from "../ai/tools/utils.js";
 import type * as ai from "../ai.js";
@@ -55,6 +58,8 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "ai/agents/registry": typeof ai_agents_registry;
+  "ai/agents/types": typeof ai_agents_types;
   "ai/caching": typeof ai_caching;
   "ai/messageV2": typeof ai_messageV2;
   "ai/processor": typeof ai_processor;
@@ -63,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/googleCalendar": typeof ai_tools_googleCalendar;
   "ai/tools/internal": typeof ai_tools_internal;
+  "ai/tools/taskTool": typeof ai_tools_taskTool;
   "ai/tools/todoist": typeof ai_tools_todoist;
   "ai/tools/utils": typeof ai_tools_utils;
   ai: typeof ai;

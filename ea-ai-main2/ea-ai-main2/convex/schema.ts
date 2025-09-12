@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 // Big-brain pattern: Use tokenIdentifier directly, no users table needed
 const applicationTables = {
-  // Chat Sessions - Multiple conversations per user (Morphic-style)
+  // Chat Sessions - Multiple conversations per user (Morphic-style) with Agent Support
   chatSessions: defineTable({
     tokenIdentifier: v.string(),
     title: v.string(),
@@ -11,10 +11,24 @@ const applicationTables = {
     lastMessageAt: v.number(),
     messageCount: v.number(),
     isDefault: v.optional(v.boolean()), // Mark the default chat session
+    // Agent system integration
+    agentMode: v.optional(v.union(v.literal("primary"), v.literal("subagent"), v.literal("all"))), // Which agent mode is handling this session
+    agentName: v.optional(v.string()), // Name of the specific agent
+    // Session hierarchy support
+    parentSessionId: v.optional(v.id("chatSessions")), // Parent session if this is a subagent session
+    delegationContext: v.optional(v.object({
+      delegatedTask: v.string(), // Original task that was delegated
+      createdAt: v.number(), // When delegation was created
+      status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
+      agentName: v.string(), // Agent handling the delegated task
+    })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_time", ["tokenIdentifier", "lastMessageAt"])
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
-    .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"]),
+    .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"])
+    .index("by_parent_session", ["parentSessionId"])
+    .index("by_agent_mode", ["agentMode"])
+    .index("by_tokenIdentifier_and_agent", ["tokenIdentifier", "agentName"]),
 
   conversations: defineTable({
     tokenIdentifier: v.string(),

@@ -24,6 +24,9 @@ export const chatWithAIV2 = action({
     message: v.string(),
     useHaiku: v.optional(v.boolean()),
     sessionId: v.optional(v.id("chatSessions")),
+    // Agent system parameters
+    agentMode: v.optional(v.union(v.literal("primary"), v.literal("subagent"), v.literal("all"))),
+    agentName: v.optional(v.string()),
     currentTimeContext: v.optional(v.object({
       currentTime: v.string(),
       userTimezone: v.string(),
@@ -32,10 +35,11 @@ export const chatWithAIV2 = action({
       source: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }) => {
+  handler: async (ctx, { message, useHaiku = true, sessionId, agentMode = "primary", agentName = "primary", currentTimeContext }) => {
     // Authentication using big-brain pattern
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[SessionV2] Authenticated user: ${userId.substring(0, 20)}...`);
+    console.log(`[SessionV2] Agent mode: ${agentMode}, Agent name: ${agentName}`);
 
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -99,23 +103,25 @@ Then execute systematically with progress updates.
       };
 
       // Get tools using Convex-recommended pattern (ActionCtx captured in closure)
+      // Now includes agent-aware filtering
       const tools = await ToolRegistryManager.getTools(
         ctx, // ActionCtx passed directly - prevents context loss
         processorContext,
         "anthropic", 
-        modelName
+        modelName,
+        agentName // Agent name for tool filtering
       );
       const toolNames = Object.keys(tools);
       const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
       
-      console.log(`[SessionV2] ✅ Created ${toolNames.length} tools with ActionCtx bound`);
-      console.log(`[SessionV2] Available tools: ${toolNames.join(', ')}`);
-      console.log(`[SessionV2] Batch tools available: ${batchTools.length > 0 ? batchTools.join(', ') : 'NONE FOUND'}`);
+      console.log(`[SessionV2] ✅ Agent ${agentName} created ${toolNames.length} tools with ActionCtx bound`);
+      console.log(`[SessionV2] Agent ${agentName} available tools: ${toolNames.join(', ')}`);
+      console.log(`[SessionV2] Agent ${agentName} batch tools: ${batchTools.length > 0 ? batchTools.join(', ') : 'NONE FOUND'}`);
       
       if (batchTools.length === 0) {
-        console.warn(`[SessionV2] ⚠️  No batch tools found! Expected: createBatchTasks, deleteBatchTasks, completeBatchTasks, updateBatchTasks, createProjectWithTasks, reorganizeTasksBatch`);
+        console.warn(`[SessionV2] ⚠️  Agent ${agentName} no batch tools found! Expected: createBatchTasks, deleteBatchTasks, completeBatchTasks, updateBatchTasks, createProjectWithTasks, reorganizeTasksBatch`);
       } else {
-        console.log(`[SessionV2] ✅ Batch tools successfully loaded: ${batchTools.length}/6`);
+        console.log(`[SessionV2] ✅ Agent ${agentName} batch tools successfully loaded: ${batchTools.length}/6`);
       }
 
       // Create full processor context for stream processing

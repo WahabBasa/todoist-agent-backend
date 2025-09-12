@@ -5,7 +5,9 @@ import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
+import { TaskTool } from "./tools/taskTool";
 import { ProcessorContext } from "./processor";
+import { AgentRegistry } from "./agents/registry";
 
 // OpenCode-inspired tool definition interface
 export interface ToolContext {
@@ -66,6 +68,9 @@ const circuitBreaker = new CircuitBreaker();
 
 // Consolidated tool registry using modular tools
 export const ToolRegistry = {
+  // Agent delegation tool (primary agents only)
+  ...TaskTool,
+  
   // Todoist task management tools
   ...TodoistTools,
   
@@ -84,24 +89,56 @@ export class ToolRegistryManager {
   /**
    * Creates tools with ActionCtx captured in closure (Convex best practice)
    * This ensures ActionCtx is always available and prevents context loss issues
+   * Now includes agent-aware tool filtering
    */
   static async getTools(
     actionCtx: ActionCtx,
     processorContext: Omit<ProcessorContext, 'actionCtx'>,
     providerID: string = "anthropic", 
-    modelID: string = "claude-3-5-haiku-20241022"
+    modelID: string = "claude-3-5-haiku-20241022",
+    agentName: string = "primary" // New parameter for agent-aware filtering
   ) {
     const tools: Record<string, any> = {};
     
+    // Get agent configuration and apply tool filtering
+    const agentConfig = AgentRegistry.getAgent(agentName);
+    if (!agentConfig) {
+      console.warn(`[ToolRegistry] Unknown agent: ${agentName}, using primary agent defaults`);
+    }
+    
+    // Get agent-specific tool permissions
+    const agentTools = agentConfig ? agentConfig.tools : {};
+    
     // Debug: Log available tools from registry
     const registryKeys = Object.keys(ToolRegistry);
-    console.log(`[ToolRegistry] Loading ${registryKeys.length} tools:`, registryKeys.join(', '));
+    console.log(`[ToolRegistry] Agent ${agentName} loading from ${registryKeys.length} total tools:`, registryKeys.join(', '));
+    
+    // Filter tools based on agent permissions
+    const allowedTools = Object.entries(ToolRegistry).filter(([key, toolDef]) => {
+      // Check agent-specific tool permissions
+      if (agentConfig && agentTools.hasOwnProperty(key)) {
+        return agentTools[key] === true;
+      }
+      
+      // Default permissions for unknown tools
+      // Primary agents get all tools by default, subagents get limited tools
+      if (agentConfig?.mode === "subagent") {
+        // Subagents get basic read-only tools by default
+        const readOnlyTools = ['read', 'glob', 'grep', 'webfetch', 'getCurrentTime', 'getSystemStatus', 'validateInput', 'listTools'];
+        return readOnlyTools.includes(key);
+      }
+      
+      // Primary agents get all tools by default
+      return true;
+    });
+    
+    console.log(`[ToolRegistry] Agent ${agentName} has access to ${allowedTools.length} tools:`, allowedTools.map(([key]) => key).join(', '));
     
     // Debug: Check for batch tools specifically
-    const batchTools = registryKeys.filter(key => key.includes('Batch') || key.includes('batch'));
-    console.log(`[ToolRegistry] Batch tools found:`, batchTools.join(', ') || 'NONE');
+    const batchTools = allowedTools.filter(([key]) => key.includes('Batch') || key.includes('batch'));
+    console.log(`[ToolRegistry] Agent ${agentName} batch tools:`, batchTools.map(([key]) => key).join(', ') || 'NONE');
     
-    for (const [key, toolDef] of Object.entries(ToolRegistry)) {
+    for (const [key, toolDef] of allowedTools) {
       // Capture ActionCtx in closure - Convex recommended pattern
       tools[key] = tool({
         id: toolDef.id as any,
