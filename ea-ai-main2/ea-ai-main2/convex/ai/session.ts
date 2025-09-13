@@ -98,7 +98,7 @@ export const chatWithAI = action({
       console.log(`[SessionSimplified] Applied caching to ${cachedMessages.length} messages`);
 
       // Create simplified tool registry - direct Convex action mapping
-      const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext);
+      const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext, sessionId);
       console.log(`[SessionSimplified] Created ${Object.keys(tools).length} tools`);
 
       // Initialize tool repetition detector

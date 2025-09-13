@@ -90,6 +90,19 @@ async function todoistSyncRequest(
     
     if (errors.length > 0) {
       logUserAccess(userId, "TODOIST_SYNC_COMMANDS", `FAILED - ${errors.length} errors`);
+      
+      // Check for insufficient token scope error
+      const hasInsufficientScopeError = errors.some(error => 
+        error.includes("Insufficient Token scope") || 
+        error.includes("AUTH_INSUFFICIENT_TOKEN_SCOPE")
+      );
+      
+      if (hasInsufficientScopeError) {
+        throw new Error(
+          "Your Todoist connection needs updated permissions. Please disconnect and reconnect your Todoist account in Settings to enable all features including project deletion."
+        );
+      }
+      
       throw new Error(`Todoist command errors: ${errors.join(', ')}`);
     }
   }
