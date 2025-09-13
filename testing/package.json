@@ -1,0 +1,20 @@
+{
+  "name": "taskai-testing-suite",
+  "version": "1.0.0",
+  "description": "Automated testing suite for TaskAI system",
+  "type": "module",
+  "main": "automated-test-runner.js",
+  "scripts": {
+    "test": "node automated-test-runner.js",
+    "test:localhost": "node automated-test-runner.js http://localhost:5174",
+    "test:browser": "node browser-test-runner.js",
+    "install": "npm install"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "puppeteer": "^21.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

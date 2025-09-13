@@ -12,6 +12,8 @@
 !ea-ai-main/**
 !ea-ai-main2/
 !ea-ai-main2/**
+!testing/
+!testing/**
 
 # Include specific files in root
 !README.md
