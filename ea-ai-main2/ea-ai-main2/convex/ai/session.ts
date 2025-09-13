@@ -2,7 +2,7 @@
 
 import { action } from "../_generated/server";
 import { v } from "convex/values";
-import { streamText } from "ai";
+import { streamText, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
@@ -109,7 +109,8 @@ export const chatWithAI = action({
         messages: cachedMessages,
         tools,
         maxRetries: 3,
-        // maxSteps removed - not available in current AI SDK version
+        // Allow multi-step tool workflows for complex operations
+        stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
       });
 
       // Let AI SDK handle the entire streaming and tool execution process
