@@ -2,6 +2,7 @@ import { z } from "zod";
 import { tool } from "ai";
 import { ActionCtx } from "../_generated/server";
 import { api } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
 import { UtilityTools } from "./tools/utils";
@@ -138,8 +139,8 @@ export async function createSimpleToolRegistry(
       // Create AI SDK tool with direct execution
       tools[key] = tool({
         description: simpleTool.description,
-        parameters: simpleTool.inputSchema
-      }, async (args: any) => {
+        inputSchema: simpleTool.inputSchema,
+        execute: async (args: any) => {
           console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
           
           try {
@@ -151,7 +152,8 @@ export async function createSimpleToolRegistry(
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
             throw error; // Let AI SDK handle the error
           }
-        });
+        }
+      });
       
     } catch (error) {
       console.warn(`[SimpleToolRegistry] Failed to convert tool ${key}:`, error);

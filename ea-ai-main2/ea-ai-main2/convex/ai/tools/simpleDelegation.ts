@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
+import { Id } from "../../_generated/dataModel";
 
 /**
  * Simple delegation system that replaces the complex hierarchical TaskTool
