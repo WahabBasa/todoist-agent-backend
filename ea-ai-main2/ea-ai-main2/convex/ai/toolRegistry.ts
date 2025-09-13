@@ -146,12 +146,19 @@ export async function createSimpleToolRegistry(
           try {
             const result = await simpleTool.execute(args, context, actionCtx);
             console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
-            // AI SDK expects string output, so return just the output string
-            return result.output;
+            // Return the full result object for proper AI SDK tool tracking
+            return result;
           } catch (error) {
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
             throw error; // Let AI SDK handle the error
           }
+        },
+        // Control what the AI model sees while preserving structured tool results
+        toModelOutput(result: any) {
+          return {
+            type: "text",
+            value: result.output,
+          };
         }
       });
       
