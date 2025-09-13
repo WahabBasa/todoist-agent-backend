@@ -16,6 +16,8 @@ import {
   addMessageToConversation 
 } from "./simpleMessages";
 import { createSimpleToolRegistry } from "./toolRegistry";
+import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
+import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
 /**
  * Simplified Convex + AI SDK integration
@@ -78,13 +80,11 @@ export const chatWithAI = action({
       // Initialize caching for performance
       MessageCaching.initializeCaching();
 
-      // Generate system prompt
-      const systemPrompt = await SystemPrompt.getSystemPrompt(
-        ctx, 
+      // Generate system prompt using the new modular system
+      const systemPrompt = await SystemPrompt.getSystemPromptSync(
         modelName, 
         "", // No special instructions needed 
-        message, 
-        userId
+        message
       );
       
       // Add system message to conversation
@@ -100,6 +100,9 @@ export const chatWithAI = action({
       // Create simplified tool registry - direct Convex action mapping
       const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext);
       console.log(`[SessionSimplified] Created ${Object.keys(tools).length} tools`);
+
+      // Initialize tool repetition detector
+      const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
       // Use AI SDK's streamText with native tool handling
       const result = await streamText({

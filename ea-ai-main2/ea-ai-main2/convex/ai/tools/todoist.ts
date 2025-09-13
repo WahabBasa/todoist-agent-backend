@@ -9,7 +9,53 @@ import { BatchTodoistHandler } from "../../todoist/BatchTodoistHandler";
 
 export const createTask: ToolDefinition = {
   id: "createTask",
-  description: "Create a new task in the user's Todoist account. This is the PRIMARY tool for user task requests. Use this for simple task creation, not internalTodoWrite.",
+  description: `## createTask
+Description: Create a new task in the user's Todoist account. This is the PRIMARY tool for user task creation requests. Use this for direct, individual task creation when users explicitly request task creation.
+
+**IMPORTANT: This tool creates actual user tasks in their Todoist account. Do NOT use this for internal AI workflow coordination.**
+
+When to use this tool:
+- When users explicitly ask to create tasks (e.g., "Create a task to call my dentist")
+- For simple, individual task creation requests
+- When adding tasks to specific projects the user mentions
+- For tasks with clear titles that represent real work the user needs to do
+- When the user provides specific task details like due dates or priorities
+
+When NOT to use this tool:
+- **NEVER use for AI workflow coordination** (use internalTodoWrite for internal planning instead)
+- **NEVER use for bulk operations** (use createBatchTasks for multiple tasks at once)
+- **NEVER use for complex multi-system operations** (coordinate with internalTodoWrite first)
+- **NEVER use when you need project IDs** (call getProjectAndTaskMap first to get valid IDs)
+- **NEVER create vague or duplicate tasks** without user explicit request
+
+Parameter Guidance:
+- title: (required) Clear, actionable task description - what the user actually needs to do
+- projectId: (optional) Only use if you have a valid project ID from getProjectAndTaskMap()
+- description: (optional) Additional context or notes about the task
+- priority: (optional) 1=urgent/high priority, 2=normal/medium, 3=low priority, 4=very low
+- dueDate: (optional) Timestamp in milliseconds - be precise about dates
+
+Examples:
+
+1. Simple task creation:
+User: "Create a task to review the quarterly report"
+✅ CORRECT: Use createTask with title="Review quarterly report"
+
+2. Task with project context:
+User: "Add a task to call the contractor to my Home project"  
+✅ CORRECT: First call getProjectAndTaskMap() to find "Home" project ID, then use createTask
+
+3. What NOT to do:
+User: "Help me organize my day"
+❌ INCORRECT: Do not use createTask to create organizing tasks
+✅ CORRECT: Use internalTodoWrite for planning, then ask user what specific tasks they want created
+
+Error Handling:
+- If project not found: Tool will fail with clear error message directing you to use getProjectAndTaskMap()
+- If Todoist API fails: Tool returns error details to help diagnose sync issues
+- Always check the success status in the returned result
+
+**CRITICAL RULE**: Only create tasks that represent real work the user explicitly requested. Never create meta-tasks about organizing, planning, or coordinating unless specifically asked.`,
   inputSchema: z.object({
     title: z.string().describe("The task title or description"),
     projectId: z.string().optional().describe("Optional: The Todoist project ID"),
@@ -36,11 +82,6 @@ export const createTask: ToolDefinition = {
         sync_token: result.sync_token
       } : result;
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Task Created Successfully",
-      //   metadata: { taskId: output._id, projectId: args.projectId }
-      // });
-
       return {
         title: "Task Created",
         metadata: { taskId: output._id, projectId: args.projectId },
@@ -64,7 +105,7 @@ export const createTask: ToolDefinition = {
 
 export const getTasks: ToolDefinition = {
   id: "getTasks",
-  description: "Retrieve the user's Todoist tasks with full details from their account.",
+  description: "Retrieve the user's Todoist tasks with full details from their account.\n\nWhen to use this tool:\n- When you need to see what tasks exist\n- When filtering tasks by project or completion status\n- When you need detailed task information\n\nWhen NOT to use this tool:\n- Do not use for getting a complete workspace overview (use getProjectAndTaskMap instead)\n- Do not use for getting specific task details (use getTaskDetails instead)",
   inputSchema: z.object({
     projectId: z.string().optional().describe("Optional: Filter tasks by project ID"),
     includeCompleted: z.boolean().optional().describe("Include completed tasks (default: false)"),
@@ -105,11 +146,6 @@ export const getTasks: ToolDefinition = {
           }));
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `Retrieved ${result.length} Tasks`,
-      //   metadata: { taskCount: result.length, projectId: args.projectId }
-      // });
-
       return {
         title: "Tasks Retrieved",
         metadata: { taskCount: result.length, projectId: args.projectId },
@@ -123,7 +159,7 @@ export const getTasks: ToolDefinition = {
 
 export const updateTask: ToolDefinition = {
   id: "updateTask",
-  description: "Update an existing task's properties such as completion status, title, priority, due date, or project assignment.",
+  description: "Update an existing task's properties such as completion status, title, priority, due date, or project assignment.\n\nWhen to use this tool:\n- When you need to modify an existing task\n- When marking tasks as completed or uncompleted\n- When changing task properties like title, priority, or due date\n\nWhen NOT to use this tool:\n- Do not use for creating new tasks (use createTask instead)\n- Do not use for deleting tasks (use deleteTask instead)\n- Do not use for bulk updates (use updateBatchTasks instead)",
   inputSchema: z.object({
     taskId: z.string().describe("The task ID from getProjectAndTaskMap"),
     title: z.string().optional().describe("New task title"),
@@ -141,16 +177,8 @@ export const updateTask: ToolDefinition = {
       // Handle task completion separately with appropriate sync API calls
       if (isCompleted === true) {
         result = await actionCtx.runAction(api.todoist.syncApi.completeTodoistTaskSync, { taskId });
-        // Metadata handled by tool registry bridge - ctx.metadata({
-        //   title: "Task Completed",
-        //   metadata: { taskId, action: "completed" }
-        // });
       } else if (isCompleted === false) {
         result = await actionCtx.runAction(api.todoist.syncApi.reopenTodoistTaskSync, { taskId });
-        // Metadata handled by tool registry bridge - ctx.metadata({
-        //   title: "Task Reopened",
-        //   metadata: { taskId, action: "reopened" }
-        // });
       } else {
         // Update task properties
         const todoistArgs: any = { taskId };
@@ -163,10 +191,6 @@ export const updateTask: ToolDefinition = {
         
         if (Object.keys(todoistArgs).length > 1) { // More than just taskId
           result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistTaskSync, todoistArgs);
-          // Metadata handled by tool registry bridge - ctx.metadata({
-          //   title: "Task Updated",
-          //   metadata: { taskId, fieldsUpdated: Object.keys(todoistArgs).filter(k => k !== 'taskId') }
-          // });
         } else {
           result = { success: true, message: "No changes specified" };
         }
@@ -185,7 +209,7 @@ export const updateTask: ToolDefinition = {
 
 export const deleteTask: ToolDefinition = {
   id: "deleteTask",
-  description: "Permanently delete a task from the system.",
+  description: "Permanently delete a task from the system.\n\nWhen to use this tool:\n- When users ask to remove or delete specific tasks\n- When cleaning up outdated or unnecessary tasks\n\nWhen NOT to use this tool:\n- Do not use for marking tasks as completed (use updateTask with isCompleted instead)\n- Do not use for bulk deletions (use deleteBatchTasks instead)\n- Do not use for moving tasks (use updateTask with projectId instead)",
   inputSchema: z.object({
     taskId: z.string().describe("The task ID from getProjectAndTaskMap"),
   }),
@@ -195,11 +219,6 @@ export const deleteTask: ToolDefinition = {
         taskId: args.taskId 
       });
       
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Task Deleted",
-      //   metadata: { taskId: args.taskId }
-      // });
-
       return {
         title: "Task Deleted",
         metadata: { taskId: args.taskId },
@@ -213,7 +232,7 @@ export const deleteTask: ToolDefinition = {
 
 export const createProject: ToolDefinition = {
   id: "createProject",
-  description: "Create a new project in the user's Todoist account to help organize tasks.",
+  description: "Create a new project in the user's Todoist account to help organize tasks.\n\nWhen to use this tool:\n- When users need a new project for organizing tasks\n- When setting up new categories or work areas\n\nWhen NOT to use this tool:\n- Do not use for creating tasks (use createTask instead)\n- Do not use for updating existing projects (use updateProject instead)",
   inputSchema: z.object({
     name: z.string().describe("The project name"),
     color: z.string().optional().describe("Project color as hex code"),
@@ -235,11 +254,6 @@ export const createProject: ToolDefinition = {
         sync_token: result.sync_token
       } : result;
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Project Created Successfully",
-      //   metadata: { projectId: output._id, name: args.name }
-      // });
-
       return {
         title: "Project Created",
         metadata: { projectId: output._id, name: args.name },
@@ -253,7 +267,7 @@ export const createProject: ToolDefinition = {
 
 export const updateProject: ToolDefinition = {
   id: "updateProject",
-  description: "Update an existing project's properties such as name, color, or description.",
+  description: "Update an existing project's properties such as name, color, or description.\n\nWhen to use this tool:\n- When users want to rename a project\n- When changing project properties like color or description\n\nWhen NOT to use this tool:\n- Do not use for creating new projects (use createProject instead)\n- Do not use for deleting projects (use deleteProject instead)",
   inputSchema: z.object({
     projectId: z.string().describe("The project ID from getProjectAndTaskMap"),
     name: z.string().optional().describe("New project name"),
@@ -268,11 +282,6 @@ export const updateProject: ToolDefinition = {
         ...updateArgs
       });
       
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Project Updated",
-      //   metadata: { projectId, fieldsUpdated: Object.keys(updateArgs) }
-      // });
-
       return {
         title: "Project Updated", 
         metadata: { projectId },
@@ -286,7 +295,7 @@ export const updateProject: ToolDefinition = {
 
 export const deleteProject: ToolDefinition = {
   id: "deleteProject",
-  description: "Delete a project from the system. Projects with existing tasks cannot be deleted unless tasks are moved or deleted first.",
+  description: "Delete a project from the system. Projects with existing tasks cannot be deleted unless tasks are moved or deleted first.\n\nWhen to use this tool:\n- When users want to remove an entire project\n- When cleaning up unused project categories\n\nWhen NOT to use this tool:\n- Do not use for deleting individual tasks (use deleteTask instead)\n- Do not use for emptying projects (move or delete tasks first)\n- Do not use for renaming projects (use updateProject instead)",
   inputSchema: z.object({
     projectId: z.string().describe("The project ID from getProjectAndTaskMap"),
   }),
@@ -296,11 +305,6 @@ export const deleteProject: ToolDefinition = {
         projectId: args.projectId 
       });
       
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Project Deleted",
-      //   metadata: { projectId: args.projectId }
-      // });
-
       return {
         title: "Project Deleted",
         metadata: { projectId: args.projectId },
@@ -321,7 +325,52 @@ export const deleteProject: ToolDefinition = {
 
 export const getProjectAndTaskMap: ToolDefinition = {
   id: "getProjectAndTaskMap",
-  description: "Get a complete hierarchical overview of the user's entire Todoist workspace - all projects with their associated tasks.",
+  description: `## getProjectAndTaskMap
+Description: Get a complete hierarchical overview of the user's entire Todoist workspace, including all projects with their associated tasks, task counts, and project structures. This is the ESSENTIAL first step for any operation requiring project or task IDs.
+
+**CRITICAL USAGE RULE: You MUST call this tool first before using createTask, updateTask, deleteTask, or any other operation that requires project/task IDs.**
+
+When to use this tool:
+- **ALWAYS use FIRST** when you need project IDs or task IDs for other operations
+- When users ask for a workspace overview or summary ("show me my tasks", "what projects do I have")
+- When you need to understand the user's complete task organization structure
+- Before bulk operations to understand the scope and get valid IDs
+- When users reference project names and you need to find the corresponding project ID
+- When analyzing task distribution across projects
+
+When NOT to use this tool:
+- Do not use repeatedly in the same conversation (data is relatively static)
+- Do not use if you already have the specific IDs you need from a previous call
+- Do not use for real-time task updates (data may be slightly cached)
+
+Parameter Guidance:
+- includeCompleted: (optional, default: false) Set to true only when you need to see completed tasks for analysis
+
+Expected Output Structure:
+- projects: Array of project objects with { id, name, tasks: [] }
+- unassignedTasks: Array of tasks not assigned to any project
+- Each task contains: { id, content, projectId, isCompleted, priority, dueDate, etc. }
+
+Examples:
+
+1. Getting workspace overview:
+User: "Show me all my projects and tasks"
+✅ CORRECT: Call getProjectAndTaskMap() first to get complete structure
+
+2. Before creating a task in specific project:
+User: "Add a task to my Work project"
+✅ CORRECT: Call getProjectAndTaskMap() first to find "Work" project ID, then use createTask
+
+3. Before bulk operations:
+User: "Update all tasks in my Home project to high priority"
+✅ CORRECT: Call getProjectAndTaskMap() to get project ID and task IDs, then use updateTask for each
+
+Common ID Patterns:
+- Project IDs: Long alphanumeric strings (e.g., "2203306141")
+- Task IDs: Long alphanumeric strings (e.g., "7495061107")
+- Always use exact IDs returned by this tool, never guess or construct IDs
+
+**CRITICAL PERFORMANCE NOTE**: This tool provides a complete workspace snapshot. Use the returned IDs for subsequent operations instead of making additional calls to find specific items.`,
   inputSchema: z.object({
     includeCompleted: z.boolean().optional().describe("Include completed tasks"),
   }),
@@ -334,16 +383,6 @@ export const getProjectAndTaskMap: ToolDefinition = {
       const projectCount = result?.projects?.length || 0;
       const taskCount = result?.unassignedTasks?.length || 0;
       const totalTasks = result?.projects?.reduce((sum: number, p: any) => sum + (p.tasks?.length || 0), 0) || 0;
-
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Workspace Overview Retrieved",
-      //   metadata: { 
-      //     projectCount,
-      //     unassignedTasks: taskCount,
-      //     totalTasks: totalTasks + taskCount,
-      //     includeCompleted: args.includeCompleted || false
-      //   }
-      // });
 
       return {
         title: "Workspace Map Retrieved",
@@ -358,7 +397,7 @@ export const getProjectAndTaskMap: ToolDefinition = {
 
 export const getProjectDetails: ToolDefinition = {
   id: "getProjectDetails",
-  description: "Get detailed information about a specific project including all associated tasks with full details.",
+  description: "Get detailed information about a specific project including all associated tasks with full details.\n\nWhen to use this tool:\n- When you need detailed information about a specific project\n- When analyzing project structure and contents\n\nWhen NOT to use this tool:\n- Do not use for getting a complete workspace overview (use getProjectAndTaskMap instead)\n- Do not use for simple project listing (use getProjectAndTaskMap instead)",
   inputSchema: z.object({
     projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
   }),
@@ -367,14 +406,6 @@ export const getProjectDetails: ToolDefinition = {
       const result = await actionCtx.runAction(api.todoist.integration.getTodoistProjectDetails, { 
         projectId: args.projectId 
       });
-
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Project Details Retrieved",
-      //   metadata: { 
-      //     projectId: args.projectId,
-      //     taskCount: result?.tasks?.length || 0
-      //   }
-      // });
 
       return {
         title: "Project Details Retrieved",
@@ -389,7 +420,7 @@ export const getProjectDetails: ToolDefinition = {
 
 export const getTaskDetails: ToolDefinition = {
   id: "getTaskDetails", 
-  description: "Get detailed information about a specific task including associated project information.",
+  description: "Get detailed information about a specific task including associated project information.\n\nWhen to use this tool:\n- When you need detailed information about a specific task\n- When analyzing task context and relationships\n\nWhen NOT to use this tool:\n- Do not use for getting a complete task list (use getTasks instead)\n- Do not use for simple task operations (use updateTask, deleteTask, etc. instead)",
   inputSchema: z.object({
     taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
   }),
@@ -398,11 +429,6 @@ export const getTaskDetails: ToolDefinition = {
       const result = await actionCtx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
         taskId: args.taskId 
       });
-
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: "Task Details Retrieved",
-      //   metadata: { taskId: args.taskId }
-      // });
 
       return {
         title: "Task Details Retrieved",
@@ -419,7 +445,7 @@ export const getTaskDetails: ToolDefinition = {
 
 export const createBatchTasks: ToolDefinition = {
   id: "createBatchTasks",
-  description: "Create multiple tasks in a single efficient operation. Perfect for daily planning, bulk task import, or setting up multiple related tasks at once.",
+  description: "Create multiple tasks in a single efficient operation. Perfect for daily planning, bulk task import, or setting up multiple related tasks at once.\n\nWhen to use this tool:\n- When creating multiple related tasks at once\n- For daily planning sessions with many tasks\n- When importing task lists from other sources\n\nWhen NOT to use this tool:\n- Do not use for simple, single task creation (use createTask instead)\n- Do not use for complex coordination tasks (use internalTodoWrite instead)",
   inputSchema: z.object({
     tasks: z.array(z.object({
       title: z.string().describe("The task title"),
@@ -457,15 +483,6 @@ export const createBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `${successCount}/${args.tasks.length} Tasks Created`,
-      //   metadata: { 
-      //     successful: successCount, 
-      //     failed: failureCount, 
-      //     total: args.tasks.length 
-      //   }
-      // });
-
       return {
         title: "Batch Tasks Created",
         metadata: { successful: successCount, failed: failureCount, total: args.tasks.length },
@@ -484,7 +501,7 @@ export const createBatchTasks: ToolDefinition = {
 
 export const deleteBatchTasks: ToolDefinition = {
   id: "deleteBatchTasks",
-  description: "Delete multiple tasks in a single efficient operation. Use for bulk cleanup, completing projects, or removing outdated tasks.",
+  description: "Delete multiple tasks in a single efficient operation. Use for bulk cleanup, completing projects, or removing outdated tasks.\n\nWhen to use this tool:\n- When deleting multiple tasks at once\n- For cleaning up completed or outdated tasks\n- When removing entire project task sets\n\nWhen NOT to use this tool:\n- Do not use for single task deletion (use deleteTask instead)\n- Do not use for marking tasks as completed (use completeBatchTasks instead)",
   inputSchema: z.object({
     taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to delete (1-50 tasks per batch)"),
   }),
@@ -506,15 +523,6 @@ export const deleteBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `${successCount}/${args.taskIds.length} Tasks Deleted`,
-      //   metadata: { 
-      //     successful: successCount, 
-      //     failed: failureCount, 
-      //     total: args.taskIds.length 
-      //   }
-      // });
-
       return {
         title: "Batch Tasks Deleted",
         metadata: { successful: successCount, failed: failureCount, total: args.taskIds.length },
@@ -532,7 +540,7 @@ export const deleteBatchTasks: ToolDefinition = {
 
 export const completeBatchTasks: ToolDefinition = {
   id: "completeBatchTasks",
-  description: "Mark multiple tasks as completed in a single efficient operation. Perfect for end-of-day reviews, project completion, or bulk status updates.",
+  description: "Mark multiple tasks as completed in a single efficient operation. Perfect for end-of-day reviews, project completion, or bulk status updates.\n\nWhen to use this tool:\n- When marking multiple tasks as completed at once\n- For end-of-day or end-of-project cleanup\n- When users ask to complete multiple tasks\n\nWhen NOT to use this tool:\n- Do not use for single task completion (use updateTask with isCompleted instead)\n- Do not use for deleting tasks (use deleteBatchTasks instead)",
   inputSchema: z.object({
     taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to mark as completed (1-50 tasks per batch)"),
   }),
@@ -554,15 +562,6 @@ export const completeBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `${successCount}/${args.taskIds.length} Tasks Completed`,
-      //   metadata: { 
-      //     successful: successCount, 
-      //     failed: failureCount, 
-      //     total: args.taskIds.length 
-      //   }
-      // });
-
       return {
         title: "Batch Tasks Completed",
         metadata: { successful: successCount, failed: failureCount, total: args.taskIds.length },
@@ -580,7 +579,7 @@ export const completeBatchTasks: ToolDefinition = {
 
 export const updateBatchTasks: ToolDefinition = {
   id: "updateBatchTasks",
-  description: "Update multiple tasks with bulk modifications in a single operation. Ideal for changing priorities, moving tasks between projects, or updating due dates across multiple tasks.",
+  description: "Update multiple tasks with bulk modifications in a single operation. Ideal for changing priorities, moving tasks between projects, or updating due dates across multiple tasks.\n\nWhen to use this tool:\n- When updating multiple tasks with similar changes\n- For bulk priority changes or due date updates\n- When moving multiple tasks between projects\n\nWhen NOT to use this tool:\n- Do not use for single task updates (use updateTask instead)\n- Do not use for simple task creation (use createTask or createBatchTasks instead)",
   inputSchema: z.object({
     updates: z.array(z.object({
       taskId: z.string().describe("The ID of the task to update"),
@@ -610,15 +609,6 @@ export const updateBatchTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `${successCount}/${args.updates.length} Tasks Updated`,
-      //   metadata: { 
-      //     successful: successCount, 
-      //     failed: failureCount, 
-      //     total: args.updates.length 
-      //   }
-      // });
-
       return {
         title: "Batch Tasks Updated",
         metadata: { successful: successCount, failed: failureCount, total: args.updates.length },
@@ -636,7 +626,7 @@ export const updateBatchTasks: ToolDefinition = {
 
 export const createProjectWithTasks: ToolDefinition = {
   id: "createProjectWithTasks",
-  description: "Create a new project and multiple tasks within it in a single atomic operation. Perfect for project templates, client setup, or deploying standard workflows.",
+  description: "Create a new project and multiple tasks within it in a single atomic operation. Perfect for project templates, client setup, or deploying standard workflows.\n\nWhen to use this tool:\n- When setting up new projects with initial tasks\n- For creating project templates with standard tasks\n- When onboarding new clients or projects\n\nWhen NOT to use this tool:\n- Do not use for creating tasks in existing projects (use createTask or createBatchTasks instead)\n- Do not use for simple project creation (use createProject instead)",
   inputSchema: z.object({
     projectName: z.string().describe("The name of the project to create"),
     projectColor: z.string().optional().describe("Project color (e.g., 'berry_red', 'blue', 'green')"),
@@ -682,18 +672,6 @@ export const createProjectWithTasks: ToolDefinition = {
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
 
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `Project "${args.projectName}" Created`,
-      //   metadata: { 
-      //     projectId,
-      //     projectName: args.projectName,
-      //     tasksCreated: Math.max(0, successCount - 1), // Subtract project creation
-      //     totalTasks: args.tasks.length,
-      //     successful: successCount,
-      //     failed: failureCount
-      //   }
-      // });
-
       return {
         title: "Project with Tasks Created",
         metadata: { 
@@ -719,7 +697,7 @@ export const createProjectWithTasks: ToolDefinition = {
 
 export const reorganizeTasksBatch: ToolDefinition = {
   id: "reorganizeTasksBatch",
-  description: "Reorganize multiple tasks with the same modifications in a single operation. Perfect for context switching (move all tasks to different project), priority changes (make all urgent), or rescheduling (move all to next week).",
+  description: "Reorganize multiple tasks with the same modifications in a single operation. Perfect for context switching (move all tasks to different project), priority changes (make all urgent), or rescheduling (move all to next week).\n\nWhen to use this tool:\n- When applying the same changes to multiple tasks\n- For bulk task reorganization or rescheduling\n- When changing priorities or projects for task groups\n\nWhen NOT to use this tool:\n- Do not use for individual task changes (use updateTask instead)\n- Do not use for creating new tasks (use createTask or createBatchTasks instead)",
   inputSchema: z.object({
     taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to reorganize (1-50 tasks per batch)"),
     modifications: z.object({
@@ -787,16 +765,6 @@ export const reorganizeTasksBatch: ToolDefinition = {
         const failureDetails = result.failed.map(f => `• Task reorganization failed: ${f.error}`).join('\n');
         outputSummary += `\n\nFailures:\n${failureDetails}`;
       }
-
-      // Metadata handled by tool registry bridge - ctx.metadata({
-      //   title: `${successCount}/${args.taskIds.length} Tasks Reorganized`,
-      //   metadata: { 
-      //     successful: successCount, 
-      //     failed: failureCount, 
-      //     total: args.taskIds.length,
-      //     modifications: args.modifications
-      //   }
-      // });
 
       return {
         title: "Tasks Reorganized",

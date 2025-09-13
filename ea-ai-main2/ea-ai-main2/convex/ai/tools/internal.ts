@@ -8,7 +8,76 @@ import { api } from "../../_generated/api";
 
 export const internalTodoWrite: ToolDefinition = {
   id: "internalTodoWrite",
-  description: "AI WORKFLOW COORDINATION ONLY. Use ONLY for complex multi-system operations requiring systematic coordination. NEVER use for simple user task creation. Examples: 'Delete all completed tasks AND reorganize by priority' (coordination needed). NOT for: 'Create these 5 tasks' (use createTask instead).",
+  description: `## internalTodoWrite
+Description: AI WORKFLOW COORDINATION ONLY. Use this tool exclusively for managing complex multi-system operations that require systematic coordination and progress tracking. This is NOT for creating user tasks in Todoist.
+
+**CRITICAL DISTINCTION: This tool is for AI internal planning and coordination, NOT for creating actual user tasks. User tasks go to createTask.**
+
+When to use this tool:
+- Complex multi-system operations (Todoist + Calendar + Analysis coordination)
+- Bulk operations requiring systematic approach (deleting/updating many items with dependencies)
+- Workflow orchestration with multiple interdependent steps
+- Operations requiring error recovery and rollback capabilities
+- When you need to track progress across 3+ distinct phases
+- Cross-system synchronization tasks requiring careful sequencing
+
+When NOT to use this tool:
+- **NEVER use for simple user task creation** (use createTask instead)
+- **NEVER use for straightforward operations** that can be done directly with single tool calls
+- **NEVER use as a substitute for actual user task creation**
+- **NEVER use for organizing existing tasks** without complex coordination needs
+- **NEVER use when user asks to create specific tasks** (they want real Todoist tasks, not internal planning)
+
+Required Todo Format:
+Each todo must have:
+- id: Unique identifier (use descriptive names like "sync-calendar-events" or "bulk-delete-completed")
+- content: Specific, actionable description of coordination step
+- status: "pending" | "in_progress" | "completed" | "cancelled"  
+- priority: "high" (critical/blocking) | "medium" (important) | "low" (optional)
+
+Priority Guidelines:
+- HIGH: Operations that could cause data loss, API failures, or user-visible errors
+- MEDIUM: Core functionality steps that must complete for workflow success
+- LOW: Optional verification, logging, or cleanup tasks
+
+Examples of CORRECT usage:
+
+1. Complex cross-system operation:
+User: "Delete all my completed tasks and create calendar events for all high-priority remaining tasks"
+✅ CORRECT: Use internalTodoWrite for coordination:
+[
+  {"id": "get-workspace-map", "content": "Get complete task and project structure", "status": "pending", "priority": "high"},
+  {"id": "identify-completed", "content": "Filter completed tasks for deletion", "status": "pending", "priority": "high"},
+  {"id": "delete-completed-batch", "content": "Delete completed tasks in batches to avoid API limits", "status": "pending", "priority": "medium"},
+  {"id": "identify-high-priority", "content": "Filter high-priority tasks for calendar events", "status": "pending", "priority": "medium"},
+  {"id": "create-calendar-events", "content": "Create calendar events for high-priority tasks", "status": "pending", "priority": "medium"},
+  {"id": "verify-sync", "content": "Verify all operations completed successfully", "status": "pending", "priority": "low"}
+]
+
+2. Bulk operation with error handling:
+User: "Update all tasks in my Work project to have due dates next week"
+✅ CORRECT: Use internalTodoWrite for systematic approach
+
+Examples of INCORRECT usage:
+
+1. Simple task creation:
+User: "Create tasks for: buy groceries, call dentist, finish report"
+❌ INCORRECT: Do NOT use internalTodoWrite 
+✅ CORRECT: Use createTask three times directly
+
+2. Basic task management:
+User: "Show me my tasks and organize them by priority"
+❌ INCORRECT: Do NOT use internalTodoWrite for simple display
+✅ CORRECT: Use getProjectAndTaskMap directly
+
+**WORKFLOW RULES**:
+1. Create internal todos with clear, specific steps (3-6 todos max)
+2. Mark only ONE todo as "in_progress" at a time
+3. Complete each step fully before moving to next
+4. Use internalTodoUpdate to mark progress
+5. Use internalTodoClear when ALL coordination is complete
+
+**CRITICAL REMINDER**: Internal todos are for AI coordination. They are NOT visible to users and do NOT create actual Todoist tasks. Always use createTask for user-requested task creation.`,
   inputSchema: z.object({
     todos: z.array(z.object({
       id: z.string().describe("Unique identifier for the todo item"),
