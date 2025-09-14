@@ -77,7 +77,7 @@ export const chatWithAI = action({
     console.log(`[SessionSimplified] Starting chat for user: ${userId.substring(0, 20)}...`);
     
 
-    const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
+    const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-5-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
     // Initialize OpenTelemetry tracing
