@@ -17,275 +17,177 @@ const SUBAGENT_PERMISSIONS = {
   },
 };
 
-// Built-in agent registry - following OpenCode's BUILTIN agents pattern
-export const BUILT_IN_AGENTS: AgentRegistryType = {
-  // Primary agent - equivalent to OpenCode's "build" agent
+// Mode-based system following the Roo pattern
+export const MODES = {
+  'primary': {
+    name: 'Primary',
+    systemPromptFile: 'zen.txt',
+    description: 'General-purpose assistant for task and calendar management.'
+  },
+  'planning': {
+    name: 'Planning',
+    systemPromptFile: 'planning-prompt.txt', // A new prompt file you will create
+    description: 'A strategic mode to analyze requests and create detailed plans.'
+  },
+  'execution': {
+    name: 'Execution',
+    systemPromptFile: 'execution-prompt.txt', // A new prompt file you will create
+    description: 'A focused mode to execute a pre-defined plan.'
+  }
+};
+
+// Built-in agent configurations with proper tool filtering
+const BUILT_IN_AGENTS: AgentRegistryType = {
   primary: {
     name: "primary",
-    description: "Main conversation agent that handles user interactions and delegates complex tasks to specialized subagents. Has full tool access including TaskTool for delegation.",
+    description: "Primary orchestrator agent - coordinates with planning and execution subagents",
     mode: "primary",
     builtIn: true,
+    temperature: 0.3,
     permissions: PRIMARY_PERMISSIONS,
     tools: {
-      // TaskTool for delegation - key difference from subagents
+      // READ-ONLY coordination tools
       task: true,
-      
-      // Full tool access
-      read: true,
-      write: true,
-      edit: true,
-      bash: true,
-      webfetch: true,
-      glob: true,
-      grep: true,
-      
-      // External integrations
-      addTodoistTask: true,
-      getTodoistTasks: true,
-      updateTodoistTask: true,
-      deleteTodoistTask: true,
-      addGoogleCalendarEvent: true,
-      getGoogleCalendarEvents: true,
-      updateGoogleCalendarEvent: true,
-      deleteGoogleCalendarEvent: true,
-      
-      // Utility tools
+      internalTodoWrite: true,
+      internalTodoRead: true,
       getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
       listTools: true,
-      internalPlanningAssistant: true,
+      
+      // READ-ONLY data access
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // DISABLED: All execution tools (must delegate)
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: Direct delegation tools (use task tool instead)
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
     },
     options: {},
-    systemPrompt: "You are Zen, an AI secretary and personal assistant created to help manage your user's Todoist tasks and Google Calendar. Your role is to interact with the user, gather their requests, and handle very simple tasks directly. For any task that requires planning or execution, you must delegate to the 'plan' and 'execute' sub-agents. First, delegate to the 'plan' agent to create a plan, confirm it with the user, and then delegate to the 'execute' agent to carry it out.",
-    temperature: 0.5,
   },
-
-  // Disabled existing sub-agents
-  // General subagent - equivalent to OpenCode's "general" agent
-  // general: {
-  //   name: "general",
-  //   description: "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you.",
-  //   mode: "subagent",
-  //   builtIn: true,
-  //   permissions: SUBAGENT_PERMISSIONS,
-  //   tools: {
-  //     // No TaskTool - subagents cannot delegate further (prevents infinite recursion)
-  //     task: false,
-  //     
-  //     // Read-only tools for research and analysis
-  //     read: true,
-  //     glob: true,
-  //     grep: true,
-  //     webfetch: true,
-  //     
-  //     // No modification tools
-  //     write: false,
-  //     edit: false,
-  //     bash: false,
-  //     
-  //     // Limited external access
-  //     getTodoistTasks: true, // Read-only access for context
-  //     getGoogleCalendarEvents: true, // Read-only access for context
-  //     
-  //     // No creation/modification of external resources
-  //     addTodoistTask: false,
-  //     updateTodoistTask: false,
-  //     deleteTodoistTask: false,
-  //     addGoogleCalendarEvent: false,
-  //     updateGoogleCalendarEvent: false,
-  //     deleteGoogleCalendarEvent: false,
-  //     
-  //     // Utility tools
-  //     getCurrentTime: true,
-  //     listTools: true,
-  //     internalPlanningAssistant: false, // Subagents shouldn't create internal todos
-  //   },
-  //   options: {
-  //     maxSearchDepth: 5,
-  //     includeContext: true,
-  //   },
-  //   systemPrompt: "You are a general-purpose research and analysis specialist. Your role is to thoroughly investigate topics, find relevant information, analyze documentation, and provide comprehensive insights. You have read-only access to systems and excel at multi-step problem solving and information synthesis.",
-  //   temperature: 0.3,
-  // },
-
-  // Research specialist subagent
-  // research: {
-  //   name: "research",
-  //   description: "Specialized agent for research tasks, information gathering, web searches, and analysis. Excellent for exploring complex topics, finding documentation, and synthesizing information from multiple sources.",
-  //   mode: "subagent",
-  //   builtIn: true,
-  //   permissions: SUBAGENT_PERMISSIONS,
-  //   tools: {
-  //     // Research-focused tools only
-  //     task: false,
-  //     read: true,
-  //     glob: true,
-  //     grep: true,
-  //     webfetch: true,
-  //     
-  //     // No modification capabilities
-  //     write: false,
-  //     edit: false,
-  //     bash: false,
-  //     
-  //     // Read-only external access
-  //     getTodoistTasks: true,
-  //     getGoogleCalendarEvents: true,
-  //     
-  //     // No external modifications
-  //     addTodoistTask: false,
-  //     updateTodoistTask: false,
-  //     deleteTodoistTask: false,
-  //     addGoogleCalendarEvent: false,
-  //     updateGoogleCalendarEvent: false,
-  //     deleteGoogleCalendarEvent: false,
-  //     
-  //     // Utility tools
-  //     getCurrentTime: true,
-  //     listTools: true,
-  //     internalPlanningAssistant: false,
-  //   },
-  //   options: {
-  //     maxSearchDepth: 10, // Deeper research capability
-  //     includeContext: true,
-  //     researchMode: "comprehensive"
-  //   },
-  //   systemPrompt: "You are a research specialist. Your role is to thoroughly investigate topics, find relevant information, analyze documentation, and provide comprehensive insights. You excel at web searches, documentation analysis, and information synthesis. You work in read-only mode to analyze and explain information.",
-  //   temperature: 0.2, // More focused for research
-  // },
-
-  // Code analysis specialist subagent
-  // codeAnalysis: {
-  //   name: "codeAnalysis",
-  //   description: "Specialized agent for code analysis, architecture review, debugging, and technical investigation. Expert at understanding codebases, finding patterns, and explaining technical concepts.",
-  //   mode: "subagent",
-  //   builtIn: true,
-  //   permissions: SUBAGENT_PERMISSIONS,
-  //   tools: {
-  //     // Code analysis tools
-  //     task: false,
-  //     read: true,
-  //     glob: true,
-  //     grep: true,
-  //     webfetch: true, // For documentation lookup
-  //     
-  //     // No modification capabilities
-  //     write: false,
-  //     edit: false,
-  //     bash: false,
-  //     
-  //     // Minimal external access (code analysis usually doesn't need external systems)
-  //     getTodoistTasks: false,
-  //     getGoogleCalendarEvents: false,
-  //     addTodoistTask: false,
-  //     updateTodoistTask: false,
-  //     deleteTodoistTask: false,
-  //     addGoogleCalendarEvent: false,
-  //     updateGoogleCalendarEvent: false,
-  //     deleteGoogleCalendarEvent: false,
-  //     
-  //     // Utility tools
-  //     getCurrentTime: true,
-  //     listTools: true,
-  //     internalPlanningAssistant: false,
-  //   },
-  //   options: {
-  //     includeLineNumbers: true,
-  //     showContext: true,
-  //     maxFileSize: 50000, // Limit large file analysis
-  //     analysisMode: "detailed"
-  //   },
-  //   systemPrompt: "You are a code analysis specialist. Your expertise is in understanding codebases, analyzing architecture, finding bugs, explaining technical patterns, and providing insights about code quality and structure. You work in read-only mode to analyze and explain code without making modifications.",
-  //   temperature: 0.1, // Very focused for technical analysis
-  // },
-
-  // New plan sub-agent
-  plan: {
-    name: "plan",
-    description: "Analyzes user requests, gathers context from Todoist and Google Calendar, and creates a prioritized plan based on the Eisenhower Matrix. Operates in read-only mode.",
+  
+  planning: {
+    name: "planning",
+    description: "Expert planning subagent specializing in Eisenhower Matrix prioritization and detailed task breakdown",
     mode: "subagent",
     builtIn: true,
+    temperature: 0.4,
     permissions: SUBAGENT_PERMISSIONS,
     tools: {
-      // No TaskTool - subagents cannot delegate further (prevents infinite recursion)
-      task: false,
-      
-      // Read-only tools for research and analysis
-      read: true,
-      glob: true,
-      grep: true,
-      webfetch: true,
-      
-      // No modification tools
-      write: false,
-      edit: false,
-      bash: false,
-      
-      // Read-only external access for context gathering
-      getTodoistTasks: true,
-      getGoogleCalendarEvents: true,
-      
-      // No creation/modification of external resources
-      addTodoistTask: false,
-      updateTodoistTask: false,
-      deleteTodoistTask: false,
-      addGoogleCalendarEvent: false,
-      updateGoogleCalendarEvent: false,
-      deleteGoogleCalendarEvent: false,
-      
-      // Utility tools
+      // Planning and analysis tools
       getCurrentTime: true,
-      listTools: true,
-      internalPlanningAssistant: false, // Subagents shouldn't create internal todos
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // READ-ONLY data access for planning
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // Internal workflow coordination
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No execution tools
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: No recursive delegation
+      task: false,
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
     },
-    options: {
-      maxSearchDepth: 10,
-      includeContext: true,
-    },
-    systemPrompt: "You are Zen, an AI planning specialist and personal assistant. Your role is to analyze user requests, gather context from their Todoist and calendar, and create a prioritized plan using the Eisenhower Matrix. You must operate in a read-only mode and pass the final plan to the primary agent for confirmation.",
-    temperature: 0.3,
+    options: {},
   },
-
-  // New execute sub-agent
-  execute: {
-    name: "execute",
-    description: "Executes an approved plan by creating, updating, or deleting tasks in Todoist and events in Google Calendar. Has full read and write tool access.",
-    mode: "subagent",
+  
+  execution: {
+    name: "execution",
+    description: "Expert execution subagent for accurate task and calendar operations with data validation",
+    mode: "subagent", 
     builtIn: true,
-    permissions: PRIMARY_PERMISSIONS, // Full permissions for execution
+    temperature: 0.2, // Lower temperature for precise execution
+    permissions: SUBAGENT_PERMISSIONS,
     tools: {
-      // No TaskTool - subagents cannot delegate further (prevents infinite recursion)
-      task: false,
-      
-      // Full tool access for execution
-      read: true,
-      write: true,
-      edit: true,
-      bash: true,
-      webfetch: true,
-      glob: true,
-      grep: true,
-      
-      // Full external integration access for execution
-      addTodoistTask: true,
-      getTodoistTasks: true,
-      updateTodoistTask: true,
-      deleteTodoistTask: true,
-      addGoogleCalendarEvent: true,
-      getGoogleCalendarEvents: true,
-      updateGoogleCalendarEvent: true,
-      deleteGoogleCalendarEvent: true,
-      
-      // Utility tools
+      // Data validation tools
       getCurrentTime: true,
-      listTools: true,
-      internalPlanningAssistant: false, // Subagents shouldn't create internal todos
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // READ access for validation
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // EXECUTION TOOLS - The only agent that can modify data
+      createTask: true,
+      updateTask: true,
+      deleteTask: true,
+      createProject: true,
+      updateProject: true,
+      deleteProject: true,
+      createBatchTasks: true,
+      deleteBatchTasks: true,
+      completeBatchTasks: true,
+      updateBatchTasks: true,
+      createProjectWithTasks: true,
+      reorganizeTasksBatch: true,
+      createCalendarEvent: true,
+      updateCalendarEvent: true,
+      deleteCalendarEvent: true,
+      
+      // Internal workflow for execution tracking
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No delegation
+      task: false,
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
     },
-    options: {
-      maxSearchDepth: 5,
-      includeContext: true,
-    },
-    systemPrompt: "You are Zen, an AI execution specialist and personal assistant. Your role is to take an approved plan and execute it precisely by creating, updating, or deleting tasks in Todoist and events in Google Calendar. You have full read and write access to all necessary tools.",
-    temperature: 0.5,
+    options: {},
   },
 };
 

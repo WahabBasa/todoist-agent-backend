@@ -142,7 +142,8 @@ export async function createSimpleToolRegistry(
         description: simpleTool.description,
         inputSchema: simpleTool.inputSchema,
         execute: async (args: any) => {
-          console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
+          const startTime = Date.now();
+          console.log(`[TOOL-TRACE] ${simpleTool.id} CALLED with params:`, JSON.stringify(args, null, 2));
           
           // Create OpenTelemetry span for tool call
           const toolCallSpan = createToolCallSpan({
@@ -154,7 +155,9 @@ export async function createSimpleToolRegistry(
           
           try {
             const result = await simpleTool.execute(args, context, actionCtx);
-            console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
+            const executionTime = Date.now() - startTime;
+            console.log(`[TOOL-TRACE] ${simpleTool.id} RESULT:`, JSON.stringify(result, null, 2));
+            console.log(`[TOOL-TRACE] ${simpleTool.id} EXECUTION-TIME: ${executionTime}ms`);
             
             // Create OpenTelemetry span for successful tool result
             const toolResultSpan = createToolResultSpan({
@@ -170,7 +173,13 @@ export async function createSimpleToolRegistry(
             // Return the full result object for proper AI SDK tool tracking
             return result;
           } catch (error) {
-            console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
+            const executionTime = Date.now() - startTime;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`[TOOL-TRACE] ${simpleTool.id} FAILED:`, JSON.stringify({
+              error: errorMessage,
+              params: args,
+              executionTime: `${executionTime}ms`
+            }, null, 2));
             
             // Create OpenTelemetry span for failed tool result
             const errorResult = error instanceof Error ? error.message : String(error);
