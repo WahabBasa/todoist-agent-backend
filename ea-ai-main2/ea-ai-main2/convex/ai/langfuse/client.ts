@@ -14,6 +14,18 @@ export const langfuse = new Langfuse({
   flushAt: 1, // Flush events immediately in development
 });
 
+// Function to verify connection
+export async function verifyLangfuseConnection(): Promise<boolean> {
+  try {
+    await langfuse.authCheck();
+    console.log("[Langfuse] Successfully connected to Langfuse");
+    return true;
+  } catch (error) {
+    console.error("[Langfuse] Failed to connect to Langfuse:", error);
+    return false;
+  }
+}
+
 // Initialize Langfuse with basic configuration
 export function initializeLangfuse(): void {
   console.log("[Langfuse] Initializing Langfuse client");

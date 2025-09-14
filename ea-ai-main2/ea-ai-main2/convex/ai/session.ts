@@ -18,7 +18,7 @@ import {
 import { createSimpleToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
-import { initializeLangfuse, langfuse } from "./langfuse/client";
+import { initializeLangfuse, langfuse, verifyLangfuseConnection } from "./langfuse/client";
 import { trackAssistantStep, trackAssistantStepResult } from "./langfuse/assistantMonitoring";
 import { trackMessage, trackConversation, trackConversationResult } from "./langfuse/messageMonitoring";
 import { trackToolCall, trackToolResult } from "./langfuse/toolMonitoring";
@@ -53,6 +53,12 @@ export const chatWithAI = action({
     
     // Initialize Langfuse
     initializeLangfuse();
+    
+    // Verify connection
+    const isConnected = await verifyLangfuseConnection();
+    if (!isConnected) {
+      console.warn("[SessionSimplified] Langfuse connection failed, continuing without tracing");
+    }
 
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -264,6 +270,14 @@ export const chatWithAI = action({
         });
       }
 
+      // Ensure proper flushing of Langfuse data
+      try {
+        await langfuse.flushAsync();
+        console.log("[Langfuse] Data flushed successfully");
+      } catch (error) {
+        console.error("[Langfuse] Error flushing data:", error);
+      }
+      
       // Return simple response
       return {
         response: finalText || "I've completed the requested actions.",
@@ -319,6 +333,14 @@ export const chatWithAI = action({
         messages: errorHistory as any
       });
 
+      // Ensure proper flushing of Langfuse data even in error cases
+      try {
+        await langfuse.flushAsync();
+        console.log("[Langfuse] Data flushed successfully (error path)");
+      } catch (flushError) {
+        console.error("[Langfuse] Error flushing data in error path:", flushError);
+      }
+      
       return {
         response: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
         fromCache: false,
