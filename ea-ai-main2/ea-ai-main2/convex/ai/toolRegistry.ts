@@ -9,7 +9,7 @@ import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
-import { trackToolCall, trackToolResult } from "./langfuse/toolMonitoring";
+import { createToolCallSpan, createToolResultSpan, endSpan } from "./tracing";
 
 /**
  * Simplified tool registry for direct Convex + AI SDK integration
@@ -144,11 +144,11 @@ export async function createSimpleToolRegistry(
         execute: async (args: any) => {
           console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
           
-          // Track tool call with Langfuse
-          const traceId = trackToolCall({
+          // Create OpenTelemetry span for tool call
+          const toolCallSpan = createToolCallSpan({
             toolName: simpleTool.id,
             input: args,
-            sessionId: context.sessionId,
+            sessionId: context.sessionId || "default",
             userId: context.userId
           });
           
@@ -156,28 +156,34 @@ export async function createSimpleToolRegistry(
             const result = await simpleTool.execute(args, context, actionCtx);
             console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
             
-            // Track tool result with Langfuse
-            trackToolResult(traceId, {
+            // Create OpenTelemetry span for successful tool result
+            const toolResultSpan = createToolResultSpan({
               toolName: simpleTool.id,
               output: result,
-              sessionId: context.sessionId,
-              userId: context.userId,
-              success: true
+              success: true,
+              sessionId: context.sessionId || "default",
+              userId: context.userId
             });
+            endSpan(toolResultSpan, `TOOL RESULT (${simpleTool.id})`);
+            endSpan(toolCallSpan, `TOOL CALL (${simpleTool.id})`);
             
             // Return the full result object for proper AI SDK tool tracking
             return result;
           } catch (error) {
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
             
-            // Track tool error with Langfuse
-            trackToolResult(traceId, {
+            // Create OpenTelemetry span for failed tool result
+            const errorResult = error instanceof Error ? error.message : String(error);
+            const toolResultSpan = createToolResultSpan({
               toolName: simpleTool.id,
-              output: error instanceof Error ? error.message : String(error),
-              sessionId: context.sessionId,
-              userId: context.userId,
-              success: false
+              output: errorResult,
+              success: false,
+              sessionId: context.sessionId || "default",
+              userId: context.userId
             });
+            const err = error instanceof Error ? error : new Error(errorResult);
+            endSpan(toolResultSpan, `TOOL RESULT (${simpleTool.id})`, err);
+            endSpan(toolCallSpan, `TOOL CALL (${simpleTool.id})`, err);
             
             throw error; // Let AI SDK handle the error
           }

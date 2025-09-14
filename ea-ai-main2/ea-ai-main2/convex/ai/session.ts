@@ -18,10 +18,35 @@ import {
 import { createSimpleToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
-import { initializeLangfuse, langfuse, verifyLangfuseConnection } from "./langfuse/client";
-import { trackAssistantStep, trackAssistantStepResult } from "./langfuse/assistantMonitoring";
-import { trackMessage, trackConversation, trackConversationResult } from "./langfuse/messageMonitoring";
-import { trackToolCall, trackToolResult } from "./langfuse/toolMonitoring";
+
+// OpenTelemetry tracing imports
+import {
+  initializeTracing
+} from "./tracing/tracer";
+import {
+  createConversationSpan,
+  createUserMessageSpan,
+  createAssistantMessageSpan
+} from "./tracing/spans/messageSpans";
+import {
+  createPromptSpan,
+  createEnhancedPromptTracking,
+  updatePromptSpanWithResponse,
+  analyzeAndTrackPromptEffectiveness
+} from "./tracing/spans/promptSpans";
+import {
+  createToolCallSpan,
+  createToolResultSpan
+} from "./tracing/spans/toolCallSpans";
+import {
+  endSpan
+} from "./tracing/utils/spanUtils";
+import type {
+  EnhancedPromptSpanParams
+} from "./tracing/enhanced/spans/enhancedPromptSpans";
+import type {
+  PromptAnalysisParams
+} from "./tracing/enhanced/analysis/promptAnalysis";
 
 /**
  * Simplified Convex + AI SDK integration
@@ -51,21 +76,25 @@ export const chatWithAI = action({
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[SessionSimplified] Starting chat for user: ${userId.substring(0, 20)}...`);
     
-    // Initialize Langfuse
-    initializeLangfuse();
-    
-    // Verify connection
-    const isConnected = await verifyLangfuseConnection();
-    if (!isConnected) {
-      console.warn("[SessionSimplified] Langfuse connection failed, continuing without tracing");
-    }
 
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
-    // Declare variables outside try block to fix TypeScript errors
-    let assistantStepTraceId = "";
-    let conversationTraceId = "";
+    // Initialize OpenTelemetry tracing
+    initializeTracing();
+    
+    // Create conversation span
+    const conversationSpan = createConversationSpan({
+      sessionId: sessionId || "default",
+      userId: userId,
+    });
+    
+    // Declare OpenTelemetry spans outside try block
+    let userMessageSpan: any = null;
+    let promptSpan: any = null;
+    let enhancedPromptSpan: any = null;
+    let effectivenessSpan: any = null;
+    let assistantMessageSpan: any = null;
 
     try {
       // Load conversation history - simple, direct approach
@@ -78,6 +107,13 @@ export const chatWithAI = action({
       
       const history = (conversation?.messages as ConvexMessage[]) || [];
       
+      // Create user message span
+      userMessageSpan = createUserMessageSpan({
+        sessionId: sessionId || "default",
+        userId: userId,
+        message: message
+      });
+
       // Add user message to conversation
       const updatedHistory = addMessageToConversation(history, {
         role: "user",
@@ -89,18 +125,7 @@ export const chatWithAI = action({
       const cleanHistory = sanitizeMessages(optimizedHistory);
       
       console.log(`[SessionSimplified] Message history: ${history.length} → ${optimizedHistory.length} → ${cleanHistory.length}`);
-
-      // Track conversation with Langfuse
-      conversationTraceId = trackConversation(cleanHistory, sessionId, userId);
       
-      // Track user message with Langfuse
-      trackMessage({
-        role: "user",
-        content: message,
-        sessionId,
-        userId,
-        timestamp: Date.now()
-      });
 
       // Direct conversion to AI SDK format - no complex pipeline
       const modelMessages = convertConvexToModelMessages(cleanHistory);
@@ -126,6 +151,28 @@ export const chatWithAI = action({
       const cachedMessages = MessageCaching.applyCaching(messagesWithSystem, modelName);
       console.log(`[SessionSimplified] Applied caching to ${cachedMessages.length} messages`);
 
+      // Create enhanced prompt span for AI generation
+      const enhancedPromptParams: EnhancedPromptSpanParams = {
+        model: modelName,
+        systemPrompt: systemPrompt,
+        history: cleanHistory,
+        userMessage: message,
+        sessionId: sessionId || "default",
+        userId: userId,
+        parentSpan: conversationSpan
+      };
+      
+      enhancedPromptSpan = createEnhancedPromptTracking(enhancedPromptParams);
+      
+      // Also create the legacy prompt span for backward compatibility
+      promptSpan = createPromptSpan({
+        model: modelName,
+        prompt: systemPrompt,
+        messageCount: cachedMessages.length,
+        sessionId: sessionId || "default",
+        userId: userId
+      });
+
       // Create simplified tool registry - direct Convex action mapping
       const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext, sessionId);
       console.log(`[SessionSimplified] Created ${Object.keys(tools).length} tools`);
@@ -145,15 +192,11 @@ export const chatWithAI = action({
         stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
       });
       
-      // Track assistant step with Langfuse
-      assistantStepTraceId = trackAssistantStep({
-        stepName: "AI Generation",
-        input: {
-          model: modelName,
-          messageCount: cachedMessages.length
-        },
-        sessionId,
-        userId,
+      // Create assistant message span for AI generation
+      assistantMessageSpan = createAssistantMessageSpan({
+        sessionId: sessionId || "default",
+        userId: userId,
+        message: "AI Generation in progress...",
         model: modelName
       });
 
@@ -167,19 +210,51 @@ export const chatWithAI = action({
       const finalToolResults = await result.toolResults;
       const finalUsage = await result.usage;
       
-      // Track assistant step result with Langfuse
-      trackAssistantStepResult(assistantStepTraceId, {
-        stepName: "AI Generation",
-        output: finalText,
-        sessionId,
-        userId,
-        success: true,
-        tokens: finalUsage ? {
-          input: finalUsage.inputTokens,
-          output: finalUsage.outputTokens,
-          total: finalUsage.totalTokens
-        } : undefined
-      });
+      // Update enhanced prompt span with response information
+      if (enhancedPromptSpan && finalUsage) {
+        updatePromptSpanWithResponse(
+          enhancedPromptSpan,
+          finalText || "",
+          finalToolCalls,
+          {
+            inputTokens: finalUsage.inputTokens || 0,
+            outputTokens: finalUsage.outputTokens || 0,
+            totalTokens: finalUsage.totalTokens || 0
+          }
+        );
+      }
+      
+      // Analyze prompt effectiveness and create tracking span
+      if (enhancedPromptSpan) {
+        const analysisParams: PromptAnalysisParams = {
+          prompt: {
+            systemPrompt: systemPrompt,
+            history: cleanHistory,
+            userMessage: message
+          },
+          response: finalText || "",
+          toolCalls: finalToolCalls,
+          tokenUsage: {
+            inputTokens: finalUsage.inputTokens || 0,
+            outputTokens: finalUsage.outputTokens || 0,
+            totalTokens: finalUsage.totalTokens || 0
+          }
+        };
+        
+        effectivenessSpan = analyzeAndTrackPromptEffectiveness(analysisParams, enhancedPromptSpan);
+      }
+      
+      // Update assistant message span with final result
+      if (assistantMessageSpan && finalUsage) {
+        assistantMessageSpan.setAttributes({
+          'ai.response.length': finalText?.length || 0,
+          'ai.usage.input_tokens': finalUsage.inputTokens,
+          'ai.usage.output_tokens': finalUsage.outputTokens,
+          'ai.usage.total_tokens': finalUsage.totalTokens,
+          'ai.tool_calls.count': finalToolCalls.length,
+          'ai.tool_results.count': finalToolResults.length
+        });
+      }
 
       console.log(`[SessionSimplified] Result: text=${!!finalText}, toolCalls=${finalToolCalls.length}, toolResults=${finalToolResults.length}`);
 
@@ -238,45 +313,49 @@ export const chatWithAI = action({
         console.warn(`[SessionSimplified] Todo cleanup failed:`, error);
       }
 
-      // Track conversation result with Langfuse
-      trackConversationResult(conversationTraceId, finalText || "I've completed the requested actions.", {
-        toolCalls: finalToolCalls.length,
-        toolResults: finalToolResults.length,
-        tokens: finalUsage ? {
-          input: finalUsage.inputTokens,
-          output: finalUsage.outputTokens,
-          total: finalUsage.totalTokens
-        } : undefined
-      });
+      // Update conversation span with final result
+      if (conversationSpan && finalUsage) {
+        conversationSpan.setAttributes({
+          'conversation.final_response': finalText || "I've completed the requested actions.",
+          'conversation.tool_calls': finalToolCalls.length,
+          'conversation.tool_results': finalToolResults.length,
+          'conversation.tokens.input': finalUsage.inputTokens,
+          'conversation.tokens.output': finalUsage.outputTokens,
+          'conversation.tokens.total': finalUsage.totalTokens
+        });
+      }
       
-      // Track tool calls with Langfuse
+      // Create spans for tool calls and results
       for (const toolCall of finalToolCalls) {
-        trackToolCall({
+        const toolCallSpan = createToolCallSpan({
           toolName: toolCall.toolName,
           input: toolCall.input as Record<string, any>,
-          sessionId,
-          userId
+          sessionId: sessionId || "default",
+          userId: userId
         });
+        endSpan(toolCallSpan);
       }
       
-      // Track tool results with Langfuse
       for (const toolResult of finalToolResults) {
-        trackToolResult(`tool-call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, {
+        const toolResultSpan = createToolResultSpan({
           toolName: toolResult.toolName || "unknown",
           output: toolResult.output,
-          sessionId,
-          userId,
-          success: true
+          success: true,
+          sessionId: sessionId || "default",
+          userId: userId
         });
+        endSpan(toolResultSpan);
       }
 
-      // Ensure proper flushing of Langfuse data
-      try {
-        await langfuse.flushAsync();
-        console.log("[Langfuse] Data flushed successfully");
-      } catch (error) {
-        console.error("[Langfuse] Error flushing data:", error);
-      }
+      // End all spans successfully
+      if (userMessageSpan) endSpan(userMessageSpan, 'USER MESSAGE');
+      if (promptSpan) endSpan(promptSpan, 'AI PROMPT');
+      if (enhancedPromptSpan) endSpan(enhancedPromptSpan, 'ENHANCED AI PROMPT');
+      if (effectivenessSpan) endSpan(effectivenessSpan, 'PROMPT EFFECTIVENESS');
+      if (assistantMessageSpan) endSpan(assistantMessageSpan, 'ASSISTANT MESSAGE');
+      endSpan(conversationSpan, 'CONVERSATION');
+      
+      console.log("[OpenTelemetry] All spans ended successfully");
       
       // Return simple response
       return {
@@ -298,21 +377,14 @@ export const chatWithAI = action({
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       console.error('[SessionSimplified] Chat failed:', error);
       
-      // Track error with Langfuse
-      trackAssistantStepResult(assistantStepTraceId, {
-        stepName: "AI Generation",
-        output: errorMessage,
-        sessionId,
-        userId,
-        success: false
-      });
+      // Record error in spans
+      const err = error instanceof Error ? error : new Error(errorMessage);
+      if (userMessageSpan) endSpan(userMessageSpan, 'USER MESSAGE');
+      if (promptSpan) endSpan(promptSpan, 'AI PROMPT', err);
+      if (assistantMessageSpan) endSpan(assistantMessageSpan, 'ASSISTANT MESSAGE', err);
+      endSpan(conversationSpan, 'CONVERSATION', err);
       
-      // Track conversation result with error
-      trackConversationResult(conversationTraceId, `Error: ${errorMessage}`, {
-        error: errorMessage,
-        toolCalls: 0,
-        toolResults: 0
-      });
+      console.log("[OpenTelemetry] All spans ended with error:", errorMessage);
       
       // Simple error handling - save error message to conversation
       const conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
@@ -333,12 +405,11 @@ export const chatWithAI = action({
         messages: errorHistory as any
       });
 
-      // Ensure proper flushing of Langfuse data even in error cases
+      // OpenTelemetry spans are automatically flushed
       try {
-        await langfuse.flushAsync();
-        console.log("[Langfuse] Data flushed successfully (error path)");
-      } catch (flushError) {
-        console.error("[Langfuse] Error flushing data in error path:", flushError);
+        console.log("[OpenTelemetry] Error traces recorded successfully");
+      } catch (telemetryError) {
+        console.error("[OpenTelemetry] Error recording traces:", telemetryError);
       }
       
       return {
