@@ -5,6 +5,7 @@ import { AgentRegistry } from "../agents/registry";
 import { streamText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "../system";
+import { logSubagentCall, logSubagentResponse } from "../tracing/exporters/consoleExporter";
 
 /**
  * TaskTool - OpenCode-Style Stateless Agent Delegation
@@ -102,6 +103,17 @@ The subagent will work autonomously with filtered tool access and return compreh
 
       console.log(`[TaskTool] Executing ${subagentType} subagent with filtered tools`);
 
+      // Log subagent call with full context
+      logSubagentCall({
+        subagentType,
+        systemPrompt: subagentSystemPrompt,
+        userMessage: prompt,
+        conversationHistory: [], // TODO: Add conversation history if available
+        timestamp: new Date().toLocaleTimeString()
+      });
+
+      const executionStartTime = Date.now();
+
       // Execute subagent within same action (following OpenCode pattern)
       const result = await streamText({
         model: model,
@@ -119,7 +131,15 @@ The subagent will work autonomously with filtered tool access and return compreh
       const finalToolCalls = await result.toolCalls;
       const finalToolResults = await result.toolResults;
       
+      const executionTime = Date.now() - executionStartTime;
       console.log(`[TaskTool] ${subagentType} completed: text=${!!finalText}, tools=${finalToolCalls.length}`);
+
+      // Log subagent response
+      logSubagentResponse({
+        subagentType,
+        response: finalText || "(No text response)",
+        executionTime
+      });
 
       // Prepare comprehensive result for primary agent (following OpenCode pattern)
       const subagentOutput = [

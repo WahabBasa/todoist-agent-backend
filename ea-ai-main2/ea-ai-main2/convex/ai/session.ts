@@ -74,7 +74,6 @@ export const chatWithAI = action({
   handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }) => {
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
-    console.log(`[SessionSimplified] Starting chat for user: ${userId.substring(0, 20)}...`);
     
 
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-5-haiku";
@@ -124,12 +123,10 @@ export const chatWithAI = action({
       const optimizedHistory = optimizeConversation(updatedHistory, 50);
       const cleanHistory = sanitizeMessages(optimizedHistory);
       
-      console.log(`[SessionSimplified] Message history: ${history.length} → ${optimizedHistory.length} → ${cleanHistory.length}`);
       
 
       // Direct conversion to AI SDK format - no complex pipeline
       const modelMessages = convertConvexToModelMessages(cleanHistory);
-      console.log(`[SessionSimplified] Converted to ${modelMessages.length} model messages`);
 
       // Initialize caching for performance
       MessageCaching.initializeCaching();
@@ -149,7 +146,6 @@ export const chatWithAI = action({
 
       // Apply caching optimization
       const cachedMessages = MessageCaching.applyCaching(messagesWithSystem, modelName);
-      console.log(`[SessionSimplified] Applied caching to ${cachedMessages.length} messages`);
 
       // Create enhanced prompt span for AI generation
       const enhancedPromptParams: EnhancedPromptSpanParams = {
@@ -175,7 +171,6 @@ export const chatWithAI = action({
 
       // Create simplified tool registry - direct Convex action mapping
       const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext, sessionId);
-      console.log(`[SessionSimplified] Created ${Object.keys(tools).length} tools`);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -202,7 +197,6 @@ export const chatWithAI = action({
 
       // Let AI SDK handle the entire streaming and tool execution process
       // This is much simpler than manual stream processing
-      console.log('[SessionSimplified] AI SDK processing completed');
 
       // Get final result from AI SDK - properly await promises
       const finalText = await result.text;
@@ -256,7 +250,6 @@ export const chatWithAI = action({
         });
       }
 
-      console.log(`[SessionSimplified] Result: text=${!!finalText}, toolCalls=${finalToolCalls.length}, toolResults=${finalToolResults.length}`);
 
       // Build final conversation history using simple approach
       const finalHistory = [...cleanHistory];
