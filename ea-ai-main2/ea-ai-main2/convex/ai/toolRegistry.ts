@@ -9,6 +9,7 @@ import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
+import { trackToolCall, trackToolResult } from "./langfuse/toolMonitoring";
 
 /**
  * Simplified tool registry for direct Convex + AI SDK integration
@@ -143,13 +144,41 @@ export async function createSimpleToolRegistry(
         execute: async (args: any) => {
           console.log(`[SimpleToolRegistry] Executing tool: ${simpleTool.id}`);
           
+          // Track tool call with Langfuse
+          const traceId = trackToolCall({
+            toolName: simpleTool.id,
+            input: args,
+            sessionId: context.sessionId,
+            userId: context.userId
+          });
+          
           try {
             const result = await simpleTool.execute(args, context, actionCtx);
             console.log(`[SimpleToolRegistry] Tool ${simpleTool.id} completed successfully`);
+            
+            // Track tool result with Langfuse
+            trackToolResult(traceId, {
+              toolName: simpleTool.id,
+              output: result,
+              sessionId: context.sessionId,
+              userId: context.userId,
+              success: true
+            });
+            
             // Return the full result object for proper AI SDK tool tracking
             return result;
           } catch (error) {
             console.error(`[SimpleToolRegistry] Tool ${simpleTool.id} failed:`, error);
+            
+            // Track tool error with Langfuse
+            trackToolResult(traceId, {
+              toolName: simpleTool.id,
+              output: error instanceof Error ? error.message : String(error),
+              sessionId: context.sessionId,
+              userId: context.userId,
+              success: false
+            });
+            
             throw error; // Let AI SDK handle the error
           }
         },

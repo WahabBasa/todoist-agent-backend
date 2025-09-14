@@ -8,16 +8,20 @@ import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { MessageCaching } from "./caching";
 import { requireUserAuthForAction } from "../todoist/userAccess";
-import { 
-  ConvexMessage, 
-  convertConvexToModelMessages, 
-  optimizeConversation, 
+import {
+  ConvexMessage,
+  convertConvexToModelMessages,
+  optimizeConversation,
   sanitizeMessages,
-  addMessageToConversation 
+  addMessageToConversation
 } from "./simpleMessages";
 import { createSimpleToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
+import { initializeLangfuse, langfuse } from "./langfuse/client";
+import { trackAssistantStep, trackAssistantStepResult } from "./langfuse/assistantMonitoring";
+import { trackMessage, trackConversation, trackConversationResult } from "./langfuse/messageMonitoring";
+import { trackToolCall, trackToolResult } from "./langfuse/toolMonitoring";
 
 /**
  * Simplified Convex + AI SDK integration
@@ -46,9 +50,16 @@ export const chatWithAI = action({
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[SessionSimplified] Starting chat for user: ${userId.substring(0, 20)}...`);
+    
+    // Initialize Langfuse
+    initializeLangfuse();
 
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    
+    // Declare variables outside try block to fix TypeScript errors
+    let assistantStepTraceId = "";
+    let conversationTraceId = "";
 
     try {
       // Load conversation history - simple, direct approach
@@ -72,6 +83,18 @@ export const chatWithAI = action({
       const cleanHistory = sanitizeMessages(optimizedHistory);
       
       console.log(`[SessionSimplified] Message history: ${history.length} → ${optimizedHistory.length} → ${cleanHistory.length}`);
+
+      // Track conversation with Langfuse
+      conversationTraceId = trackConversation(cleanHistory, sessionId, userId);
+      
+      // Track user message with Langfuse
+      trackMessage({
+        role: "user",
+        content: message,
+        sessionId,
+        userId,
+        timestamp: Date.now()
+      });
 
       // Direct conversion to AI SDK format - no complex pipeline
       const modelMessages = convertConvexToModelMessages(cleanHistory);
@@ -115,6 +138,18 @@ export const chatWithAI = action({
         // Allow multi-step tool workflows for complex operations
         stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
       });
+      
+      // Track assistant step with Langfuse
+      assistantStepTraceId = trackAssistantStep({
+        stepName: "AI Generation",
+        input: {
+          model: modelName,
+          messageCount: cachedMessages.length
+        },
+        sessionId,
+        userId,
+        model: modelName
+      });
 
       // Let AI SDK handle the entire streaming and tool execution process
       // This is much simpler than manual stream processing
@@ -125,6 +160,20 @@ export const chatWithAI = action({
       const finalToolCalls = await result.toolCalls;
       const finalToolResults = await result.toolResults;
       const finalUsage = await result.usage;
+      
+      // Track assistant step result with Langfuse
+      trackAssistantStepResult(assistantStepTraceId, {
+        stepName: "AI Generation",
+        output: finalText,
+        sessionId,
+        userId,
+        success: true,
+        tokens: finalUsage ? {
+          input: finalUsage.inputTokens,
+          output: finalUsage.outputTokens,
+          total: finalUsage.totalTokens
+        } : undefined
+      });
 
       console.log(`[SessionSimplified] Result: text=${!!finalText}, toolCalls=${finalToolCalls.length}, toolResults=${finalToolResults.length}`);
 
@@ -183,6 +232,38 @@ export const chatWithAI = action({
         console.warn(`[SessionSimplified] Todo cleanup failed:`, error);
       }
 
+      // Track conversation result with Langfuse
+      trackConversationResult(conversationTraceId, finalText || "I've completed the requested actions.", {
+        toolCalls: finalToolCalls.length,
+        toolResults: finalToolResults.length,
+        tokens: finalUsage ? {
+          input: finalUsage.inputTokens,
+          output: finalUsage.outputTokens,
+          total: finalUsage.totalTokens
+        } : undefined
+      });
+      
+      // Track tool calls with Langfuse
+      for (const toolCall of finalToolCalls) {
+        trackToolCall({
+          toolName: toolCall.toolName,
+          input: toolCall.input as Record<string, any>,
+          sessionId,
+          userId
+        });
+      }
+      
+      // Track tool results with Langfuse
+      for (const toolResult of finalToolResults) {
+        trackToolResult(`tool-call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, {
+          toolName: toolResult.toolName || "unknown",
+          output: toolResult.output,
+          sessionId,
+          userId,
+          success: true
+        });
+      }
+
       // Return simple response
       return {
         response: finalText || "I've completed the requested actions.",
@@ -203,6 +284,22 @@ export const chatWithAI = action({
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       console.error('[SessionSimplified] Chat failed:', error);
       
+      // Track error with Langfuse
+      trackAssistantStepResult(assistantStepTraceId, {
+        stepName: "AI Generation",
+        output: errorMessage,
+        sessionId,
+        userId,
+        success: false
+      });
+      
+      // Track conversation result with error
+      trackConversationResult(conversationTraceId, `Error: ${errorMessage}`, {
+        error: errorMessage,
+        toolCalls: 0,
+        toolResults: 0
+      });
+      
       // Simple error handling - save error message to conversation
       const conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
       const errorHistory = [...sanitizeMessages(((conversation as any)?.messages as ConvexMessage[]) || [])];
@@ -217,9 +314,9 @@ export const chatWithAI = action({
         timestamp: Date.now()
       });
 
-      await ctx.runMutation(api.conversations.upsertConversation, { 
+      await ctx.runMutation(api.conversations.upsertConversation, {
         sessionId,
-        messages: errorHistory as any 
+        messages: errorHistory as any
       });
 
       return {
