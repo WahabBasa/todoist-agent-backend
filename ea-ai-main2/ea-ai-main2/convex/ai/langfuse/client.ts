@@ -17,7 +17,19 @@ export const langfuse = new Langfuse({
 // Function to verify connection
 export async function verifyLangfuseConnection(): Promise<boolean> {
   try {
-    await langfuse.authCheck();
+    // Create a simple test trace to verify connectivity
+    // This is the correct approach for JS/TS SDK (authCheck doesn't exist)
+    const testTrace = langfuse.trace({
+      id: `connection-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: "Connection Verification Test",
+      metadata: {
+        purpose: "connectivity_check",
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    // Flush to ensure the trace is sent
+    await langfuse.flushAsync();
     console.log("[Langfuse] Successfully connected to Langfuse");
     return true;
   } catch (error) {
