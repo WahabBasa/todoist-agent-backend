@@ -23,13 +23,13 @@ export const taskTool: ToolDefinition = {
   description: `Launch a specialized subagent to handle complex, multi-step tasks autonomously.
 
 Available subagents and their specializations:
-- general: General-purpose research, analysis, and multi-step problem solving
-- research: Information gathering, documentation analysis, and topic exploration  
-- codeAnalysis: Code review, architecture analysis, and technical investigation
+- general: General-purpose task management, analysis, and coordination
+- planning: Strategic planning and task organization with Eisenhower Matrix prioritization  
+- execution: Direct task and calendar operations with data validation
 
 When to use this tool:
 - Complex tasks requiring specialized expertise
-- Multi-step research or analysis
+- Multi-step task management operations
 - Tasks that benefit from focused, specialized processing
 - Read-only analysis and investigation tasks
 
@@ -41,7 +41,7 @@ When NOT to use this tool:
 The subagent will work autonomously with filtered tool access and return comprehensive results.`,
   
   inputSchema: z.object({
-    subagentType: z.enum(["general", "research", "codeAnalysis"]).describe("Which specialized subagent to use for this task"),
+    subagentType: z.enum(["general", "planning", "execution"]).describe("Which specialized subagent to use for this task"),
     prompt: z.string().describe("Clear, detailed description of the task to delegate. Be specific about what analysis or research is needed."),
     description: z.string().optional().describe("Short 3-5 word description of the task for progress tracking"),
   }),
@@ -93,7 +93,7 @@ The subagent will work autonomously with filtered tool access and return compreh
         `You are a specialized ${subagentType} agent.`,
         `Your role: ${subagentConfig.description}`,
         "",
-        "IMPORTANT: You are working as a subagent with read-only access. Focus on analysis and provide comprehensive insights.",
+        "IMPORTANT: You are working as a subagent. Focus on your specific expertise and provide comprehensive results.",
         ""
       ].join("\n");
 
@@ -141,22 +141,7 @@ The subagent will work autonomously with filtered tool access and return compreh
         executionTime
       });
 
-      // Prepare comprehensive result for primary agent (following OpenCode pattern)
-      const subagentOutput = [
-        `=== ${subagentType.toUpperCase()} AGENT RESULTS ===`,
-        "",
-        finalText || "Analysis completed successfully.",
-        "",
-        finalToolResults.length > 0 ? "=== TOOL EXECUTION RESULTS ===" : "",
-        ...finalToolResults.map(tr => `Tool: ${tr.toolName}\nResult: ${tr.output}\n`),
-      ].filter(Boolean).join("\n");
-
-      // Return results to primary agent (following OpenCode pattern)
-      return {
-        title: `${subagentType} Task Completed`,
-        metadata: { subagentType, taskDescription },
-        output: subagentOutput
-      };
+      // Prepare comprehensive result for primary agent (following OpenCode pattern)\n      const subagentOutput = [\n        `=== ${subagentType.toUpperCase()} AGENT RESULTS ===`,\n        \"\",\n        finalText || \"Analysis completed successfully.\",\n        \"\",\n        finalToolResults.length > 0 ? \"=== TOOL EXECUTION RESULTS ===\" : \"\",\n        ...finalToolResults.map(tr => `Tool: ${tr.toolName}\\nResult: ${tr.output}\\n`),\n      ].filter(Boolean).join(\"\\n\");\n\n      // Return results to primary agent (following OpenCode pattern)\n      return {\n        title: `${subagentType} Task Completed`,\n        metadata: { subagentType, taskDescription },\n        output: subagentOutput\n      };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error during task delegation";

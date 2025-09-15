@@ -104,7 +104,8 @@ export async function createSimpleToolRegistry(
   actionCtx: ActionCtx,
   userId: string,
   currentTimeContext?: any,
-  sessionId?: string
+  sessionId?: string,
+  agentName: string = "primary" // New parameter for agent-aware filtering
 ): Promise<Record<string, any>> {
   
   console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
@@ -209,6 +210,72 @@ export async function createSimpleToolRegistry(
   console.log(`[SimpleToolRegistry] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
 
   return tools;
+}
+
+/**
+ * Create tool registry filtered for a specific agent
+ * Only provides tools that the agent has permission to use
+ */
+export async function createAgentToolRegistry(
+  actionCtx: ActionCtx,
+  userId: string,
+  agentName: string = "primary",
+  currentTimeContext?: any,
+  sessionId?: string
+): Promise<Record<string, any>> {
+  try {
+    // Create the full tool registry
+    const allTools = await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, agentName);
+    
+    // Import the AgentRegistry
+    const { AgentRegistry } = await import("./agents/registry");
+    
+    // Get agent configuration
+    const agentConfig = AgentRegistry.getAgent(agentName);
+    if (!agentConfig) {
+      console.error(`[AgentToolRegistry] Agent ${agentName} not found, using all tools`);
+      return allTools; // Fallback to all tools if agent not found
+    }
+    
+    // Get agent's tool permissions
+    const agentTools = AgentRegistry.getAgentTools(agentName);
+    
+    // Filter tools based on agent permissions
+    const filteredTools: Record<string, any> = {};
+    
+    for (const [toolName, tool] of Object.entries(allTools)) {
+      // Special case: subagents should not have access to task tool to prevent recursion
+      if (toolName === "task" && agentConfig.mode === "subagent") {
+        continue; // Skip task tool for subagents
+      }
+      
+      // Check if agent has permission for this tool
+      if (agentTools[toolName] === true) {
+        filteredTools[toolName] = tool;
+      }
+    }
+    
+    console.log(`[AgentToolRegistry] Filtered tools for agent ${agentName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    
+    return filteredTools;
+  } catch (error) {
+    console.error(`[AgentToolRegistry] Failed to create filtered tool registry:`, error);
+    // Return all tools as fallback
+    return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, agentName);
+  }
+}
+
+/**
+ * Create tool registry filtered for the primary agent
+ * Only provides tools that the primary agent has permission to use
+ */
+export async function createPrimaryAgentToolRegistry(
+  actionCtx: ActionCtx,
+  userId: string,
+  currentTimeContext?: any,
+  sessionId?: string
+): Promise<Record<string, any>> {
+  return await createAgentToolRegistry(actionCtx, userId, "primary", currentTimeContext, sessionId);
 }
 
 /**

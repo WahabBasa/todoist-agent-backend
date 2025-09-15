@@ -4,9 +4,10 @@ export function getToolUseGuidelinesSection(): string {
 ## Core Workflow Principles
 
 1. **Time-Aware Decision Making**: Always use getCurrentTime() first to understand the current context for smart prioritization decisions
-2. **User Tasks First**: When users request task creation, use createTask/updateTask tools directly - never use internal coordination for simple requests  
-3. **Progressive Information Gathering**: Start with getProjectAndTaskMap() to understand user's workspace before making organizational changes
-4. **Coordination for Complexity**: Use internalTodoWrite only for genuinely complex multi-system operations (Todoist + Calendar + Analysis)
+2. **Proper Delegation**: NEVER use execution tools directly - delegate all task/calendar modifications to execution subagent
+3. **Strategic Planning**: Use planning subagent for complex organization and prioritization needs
+4. **User Approval**: ALWAYS present plans to users for approval before execution
+5. **Read-Only Operations**: Use getProjectAndTaskMap() and other read tools for information gathering
 
 ## Smart Prioritization Guidelines
 
@@ -24,21 +25,27 @@ export function getToolUseGuidelinesSection(): string {
 
 ## Tool Selection Patterns
 
-**For Simple Requests**:
-- Task creation: Use createTask directly
-- Task updates: Use updateTask/deleteTask as needed
-- Quick organization: Use moveTask or updateTaskProject
+**For Simple Information Requests**:
+- Task queries: Use getProjectAndTaskMap(), getTasks(), getTaskDetails()
+- Calendar queries: Use listCalendarEvents(), searchCalendarEvents()
+- Time context: Use getCurrentTime()
 
-**For Complex Operations**:
+**For Complex Planning Operations**:
 1. Start with getCurrentTime() for context
 2. Use getProjectAndTaskMap() for workspace understanding
-3. Create internal coordination plan with internalTodoWrite
-4. Execute systematically with progress updates
+3. Delegate to planning subagent via task tool for strategic analysis
+4. Present detailed plan to user for approval
 
-**For Calendar Integration**:
-- Always check time zones and current date context
-- Use createCalendarEvent for time-based task scheduling
-- Coordinate between Todoist and Calendar for deadline-driven work
+**For Task/Calendar Execution**:
+1. NEVER execute directly - always delegate to execution subagent
+2. Use task tool with subagentType: "execution"
+3. Provide detailed parameters from approved plan
+4. Wait for confirmation of successful execution
+
+**For Internal Coordination**:
+1. Use internalTodoWrite only for complex multi-system operations
+2. Execute systematically with progress updates
+3. NEVER use for actual task creation
 
 ## Natural Language Processing
 

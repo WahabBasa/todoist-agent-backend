@@ -15,7 +15,7 @@ import {
   sanitizeMessages,
   addMessageToConversation
 } from "./simpleMessages";
-import { createSimpleToolRegistry } from "./toolRegistry";
+import { createSimpleToolRegistry, createPrimaryAgentToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
@@ -137,7 +137,7 @@ export const chatWithAI = action({
       });
 
       // Create simplified tool registry - direct Convex action mapping
-      const tools = await createSimpleToolRegistry(ctx, userId, currentTimeContext, sessionId);
+      const tools = await createPrimaryAgentToolRegistry(ctx, userId, currentTimeContext, sessionId);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);

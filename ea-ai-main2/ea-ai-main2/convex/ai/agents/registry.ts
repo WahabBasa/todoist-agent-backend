@@ -26,13 +26,18 @@ export const MODES = {
   },
   'planning': {
     name: 'Planning',
-    systemPromptFile: 'planning-prompt.txt', // A new prompt file you will create
+    systemPromptFile: 'planning-prompt.txt',
     description: 'A strategic mode to analyze requests and create detailed plans.'
   },
   'execution': {
     name: 'Execution',
-    systemPromptFile: 'execution-prompt.txt', // A new prompt file you will create
+    systemPromptFile: 'execution-prompt.txt',
     description: 'A focused mode to execute a pre-defined plan.'
+  },
+  'general': {
+    name: 'General',
+    systemPromptFile: 'general-prompt.txt',
+    description: 'General-purpose assistant for task management operations, analysis, and coordination.'
   }
 };
 
@@ -189,6 +194,57 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
     },
     options: {},
   },
+  
+  general: {
+    name: "general",
+    description: "General-purpose assistant for task management operations, analysis, and coordination",
+    mode: "subagent",
+    builtIn: true,
+    temperature: 0.3,
+    permissions: SUBAGENT_PERMISSIONS,
+    tools: {
+      // General task management tools
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // READ-ONLY data access for analysis
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // Internal workflow coordination
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // EXECUTION TOOLS - General agent can also execute tasks when needed
+      createTask: true,
+      updateTask: true,
+      deleteTask: true,
+      createProject: true,
+      updateProject: true,
+      deleteProject: true,
+      createBatchTasks: true,
+      deleteBatchTasks: true,
+      completeBatchTasks: true,
+      updateBatchTasks: true,
+      createProjectWithTasks: true,
+      reorganizeTasksBatch: true,
+      createCalendarEvent: true,
+      updateCalendarEvent: true,
+      deleteCalendarEvent: true,
+      
+      // DISABLED: No recursive delegation
+      task: false,
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
+    },
+    options: {},
+  },
 };
 
 // Agent registry management - following OpenCode's Agent namespace pattern
@@ -199,7 +255,9 @@ export class AgentRegistry {
    * Get agent configuration by name (like OpenCode's Agent.get())
    */
   static getAgent(name: string): AgentConfig | null {
-    return this.agents[name] || null;
+    const agent = this.agents[name] || null;
+    console.log(`[AgentRegistry] Getting agent ${name}:`, agent ? 'found' : 'not found');
+    return agent;
   }
 
   /**
