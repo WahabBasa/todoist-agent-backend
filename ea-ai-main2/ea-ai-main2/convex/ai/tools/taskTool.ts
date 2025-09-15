@@ -103,7 +103,7 @@ The subagent will work autonomously with filtered tool access and return compreh
 
     // Create OpenRouter client for subagent execution
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
-    const model = openrouter.chat("anthropic/claude-3-5-haiku");
+    const model = openrouter.chat("anthropic/claude-3.5-haiku-20241022");
 
     console.log(`[TaskTool] Executing ${subagentType} subagent with filtered tools`);
 

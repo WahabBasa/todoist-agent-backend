@@ -60,7 +60,7 @@ export const chatWithAI = action({
     const { userId } = await requireUserAuthForAction(ctx);
     
 
-    const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-5-haiku";
+    const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : "anthropic/claude-3.5-haiku-20241022";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
     // Initialize Langfuse tracing

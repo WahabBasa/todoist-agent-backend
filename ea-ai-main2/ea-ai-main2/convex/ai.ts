@@ -703,7 +703,7 @@ export const chatWithAILegacy = action({
     const { userId } = await requireUserAuthForAction(ctx);
     console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
 
-    const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-5-haiku";
+    const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : "anthropic/claude-3.5-haiku-20241022";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
 
     // Get conversation history - session-aware or default
