@@ -26,17 +26,17 @@ export const MODES = {
   },
   'planning': {
     name: 'Planning',
-    systemPromptFile: 'planning-prompt.ts',
+    systemPromptFile: 'planning_prompt.ts',
     description: 'A strategic mode to analyze requests and create detailed plans.'
   },
   'execution': {
     name: 'Execution',
-    systemPromptFile: 'execution-prompt.ts',
+    systemPromptFile: 'execution_prompt.ts',
     description: 'A focused mode to execute a pre-defined plan.'
   },
   'general': {
     name: 'General',
-    systemPromptFile: 'general-prompt.ts',
+    systemPromptFile: 'general_prompt.ts',
     description: 'General-purpose assistant for task management operations, analysis, and coordination.'
   }
 };
