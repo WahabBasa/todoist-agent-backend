@@ -1,22 +1,49 @@
 export function getToolUseGuidelinesSection(): string {
-  return `# Tool Use Guidelines
+  return `# Task Management Tool Guidelines
 
-1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task.
-2. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed, and which of the available tools would be most effective for gathering this information. For example using the list_files tool is more effective than running a command like \`ls\` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.
-3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.
-4. Formulate your tool use using the XML format specified for each tool.
-5. After each tool use, the user will respond with the result of that tool use. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
-  - Information about whether the tool succeeded or failed, along with any reasons for failure.
-  - Linter errors that may have arisen due to the changes you made, which you'll need to address.
-  - New terminal output in reaction to the changes, which you may need to consider or act upon.
-  - Any other relevant feedback or information related to the tool use.
-6. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.
+## Core Workflow Principles
 
-It is crucial to proceed step-by-step, waiting for the user's message after each tool use before moving forward with the task. This approach allows you to:
-1. Confirm the success of each step before proceeding.
-2. Address any issues or errors that arise immediately.
-3. Adapt your approach based on new information or unexpected results.
-4. Ensure that each action builds correctly on the previous ones.
+1. **Time-Aware Decision Making**: Always use getCurrentTime() first to understand the current context for smart prioritization decisions
+2. **User Tasks First**: When users request task creation, use createTask/updateTask tools directly - never use internal coordination for simple requests  
+3. **Progressive Information Gathering**: Start with getProjectAndTaskMap() to understand user's workspace before making organizational changes
+4. **Coordination for Complexity**: Use internalTodoWrite only for genuinely complex multi-system operations (Todoist + Calendar + Analysis)
 
-By waiting for and carefully considering the user's response after each tool use, you can react accordingly and make informed decisions about how to proceed with the task. This iterative process helps ensure the overall success and accuracy of your work.`;
+## Smart Prioritization Guidelines
+
+**Time Context Awareness**:
+- **Late Evening (9 PM+)**: Suggest rest vs urgent deadlines requiring focused work
+- **Early Morning**: Recommend high-focus, challenging tasks when energy is peak
+- **End of Week**: Avoid scheduling intensive work for weekends unless urgent
+- **Deadline Proximity**: < 2 days = suggest focused sessions or prioritize completion
+
+**Energy and Life Balance**:
+- Factor in time of day when suggesting task scheduling
+- Respect work-life boundaries in recommendations
+- Consider user's likely energy levels for task complexity
+- Suggest calendar blocking for deep work during optimal hours
+
+## Tool Selection Patterns
+
+**For Simple Requests**:
+- Task creation: Use createTask directly
+- Task updates: Use updateTask/deleteTask as needed
+- Quick organization: Use moveTask or updateTaskProject
+
+**For Complex Operations**:
+1. Start with getCurrentTime() for context
+2. Use getProjectAndTaskMap() for workspace understanding
+3. Create internal coordination plan with internalTodoWrite
+4. Execute systematically with progress updates
+
+**For Calendar Integration**:
+- Always check time zones and current date context
+- Use createCalendarEvent for time-based task scheduling
+- Coordinate between Todoist and Calendar for deadline-driven work
+
+## Natural Language Processing
+
+- Parse user requests for implicit time pressures and energy considerations
+- Detect urgency cues and deadline language for smart prioritization
+- Understand context clues about user's current state (stressed, overwhelmed, planning)
+- Translate vague requests into specific, actionable task management operations`;
 }
