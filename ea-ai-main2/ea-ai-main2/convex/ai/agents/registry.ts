@@ -21,22 +21,22 @@ const SUBAGENT_PERMISSIONS = {
 export const MODES = {
   'primary': {
     name: 'Primary',
-    systemPromptFile: 'zen.txt',
+    systemPromptFile: 'zen.ts',
     description: 'General-purpose assistant for task and calendar management.'
   },
   'planning': {
     name: 'Planning',
-    systemPromptFile: 'planning-prompt.txt',
+    systemPromptFile: 'planning-prompt.ts',
     description: 'A strategic mode to analyze requests and create detailed plans.'
   },
   'execution': {
     name: 'Execution',
-    systemPromptFile: 'execution-prompt.txt',
+    systemPromptFile: 'execution-prompt.ts',
     description: 'A focused mode to execute a pre-defined plan.'
   },
   'general': {
     name: 'General',
-    systemPromptFile: 'general-prompt.txt',
+    systemPromptFile: 'general-prompt.ts',
     description: 'General-purpose assistant for task management operations, analysis, and coordination.'
   }
 };

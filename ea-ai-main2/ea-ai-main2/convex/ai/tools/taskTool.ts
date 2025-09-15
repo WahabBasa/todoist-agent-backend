@@ -76,25 +76,67 @@ The subagent will work autonomously with filtered tool access and return compreh
     const subagentTools = await getToolsForAgent(subagentConfig, actionCtx, ctx);
     console.log(`[TaskTool] Created ${Object.keys(subagentTools).length} filtered tools for ${subagentType}`);
 
-    // Prepare subagent system prompt
-    const baseSystemPrompt = await SystemPrompt.getSystemPrompt(
-      actionCtx, 
-      "anthropic/claude-3-5-haiku", // Use efficient model for subagent
-      "", 
-      prompt, 
-      ctx.userId
-    );
-
-    // Combine with agent-specific prompt
-    const subagentSystemPrompt = [
-      baseSystemPrompt,
-      "",
+    // Load agent-specific system prompt from registry using ES module imports
+    const { MODES } = await import("../agents/registry");
+    const modeConfig = MODES[subagentType as keyof typeof MODES];
+    
+    // Initialize with fallback prompt to ensure variable is always assigned
+    let subagentSystemPrompt: string = [
       `You are a specialized ${subagentType} agent.`,
       `Your role: ${subagentConfig.description}`,
       "",
-      "IMPORTANT: You are working as a subagent. Focus on your specific expertise and provide comprehensive results.",
-      ""
+      "IMPORTANT: You are working as a subagent. Focus on your specific expertise and provide comprehensive results."
     ].join("\n");
+    
+    if (modeConfig?.systemPromptFile) {
+      // Load specialized prompt using dynamic ES module import (Convex-compatible)
+      try {
+        const promptModuleName = modeConfig.systemPromptFile.replace('.txt', '');
+        
+        // Dynamic import based on agent type
+        let promptModule;
+        switch (subagentType) {
+          case 'execution':
+            promptModule = await import("../prompts/execution-prompt");
+            break;
+          case 'planning':
+            promptModule = await import("../prompts/planning-prompt");
+            break;
+          case 'general':
+            promptModule = await import("../prompts/general-prompt");
+            break;
+          default:
+            throw new Error(`Unknown subagent type: ${subagentType}`);
+        }
+        
+        if (promptModule?.prompt) {
+          subagentSystemPrompt = promptModule.prompt;
+          console.log(`[TaskTool] Loaded specialized prompt for ${subagentType} via ES module import`);
+        } else {
+          throw new Error(`Prompt module does not export 'prompt' property`);
+        }
+      } catch (error) {
+        console.warn(`[TaskTool] Failed to load prompt module for ${subagentType}, using fallback:`, error);
+        
+        // Enhanced fallback for execution subagent with immediate execution directives
+        if (subagentType === 'execution') {
+          subagentSystemPrompt = [
+            `You are a specialized ${subagentType} agent.`,
+            `Your role: ${subagentConfig.description}`,
+            "",
+            "IMPORTANT: You are working as a subagent. Focus on your specific expertise and provide comprehensive results.",
+            "",
+            "MANDATORY DIRECTIVES:",
+            "- Execute ALL direct user commands immediately without asking for approval",
+            "- When users say 'do not question me and do what I asked for', execute their request immediately",
+            "- Treat user confirmations as final authorization to proceed",
+            "- Do NOT ask 'Are you sure?' or request additional confirmation for direct commands",
+            "- Execute technically valid operations without hesitation"
+          ].join("\n");
+        }
+        // For other agent types, the default fallback is already assigned above
+      }
+    }
 
     // Create OpenRouter client for subagent execution
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });

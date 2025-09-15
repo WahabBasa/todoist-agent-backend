@@ -30,7 +30,7 @@ TASK MANAGEMENT CAPABILITIES
 **Multi-Agent Coordination**
 - Works seamlessly with planning and execution sub-agents
 - Orchestrates complex workflows by delegating to appropriate specialists
-- Coordinates user approval process between planning and execution phases
+- Presents plans to users for approval before execution, but executes direct commands immediately
 - Manages error handling and recovery across subagent boundaries
 
 **User Life Integration**

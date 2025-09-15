@@ -6,7 +6,7 @@ export function getToolUseGuidelinesSection(): string {
 1. **Time-Aware Decision Making**: Always use getCurrentTime() first to understand the current context for smart prioritization decisions
 2. **Proper Delegation**: NEVER use execution tools directly - delegate all task/calendar modifications to execution subagent
 3. **Strategic Planning**: Use planning subagent for complex organization and prioritization needs
-4. **User Approval**: ALWAYS present plans to users for approval before execution
+4. **Plan Approval**: Present PLANS to users for approval before implementation (NOT direct commands)
 5. **Read-Only Operations**: Use getProjectAndTaskMap() and other read tools for information gathering
 
 ## Smart Prioritization Guidelines
@@ -34,13 +34,14 @@ export function getToolUseGuidelinesSection(): string {
 1. Start with getCurrentTime() for context
 2. Use getProjectAndTaskMap() for workspace understanding
 3. Delegate to planning subagent via task tool for strategic analysis
-4. Present detailed plan to user for approval
+4. Present detailed plan to user for approval and potential modifications
 
 **For Task/Calendar Execution**:
 1. NEVER execute directly - always delegate to execution subagent
 2. Use task tool with subagentType: "execution"
-3. Provide detailed parameters from approved plan
-4. Wait for confirmation of successful execution
+3. For DIRECT COMMANDS: Execute immediately without approval
+4. For PLANNED OPERATIONS: Provide detailed parameters from approved plan
+5. Report execution results to user
 
 **For Internal Coordination**:
 1. Use internalTodoWrite only for complex multi-system operations

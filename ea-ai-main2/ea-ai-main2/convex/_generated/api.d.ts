@@ -19,6 +19,9 @@ import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistant
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_langfuse_client from "../ai/langfuse/client.js";
 import type * as ai_langfuse_logger from "../ai/langfuse/logger.js";
+import type * as ai_prompts_execution_prompt from "../ai/prompts/execution-prompt.js";
+import type * as ai_prompts_general_prompt from "../ai/prompts/general-prompt.js";
+import type * as ai_prompts_planning_prompt from "../ai/prompts/planning-prompt.js";
 import type * as ai_prompts_sections_capabilities from "../ai/prompts/sections/capabilities.js";
 import type * as ai_prompts_sections_customSystemPrompt from "../ai/prompts/sections/customSystemPrompt.js";
 import type * as ai_prompts_sections_index from "../ai/prompts/sections/index.js";
@@ -28,6 +31,7 @@ import type * as ai_prompts_sections_rules from "../ai/prompts/sections/rules.js
 import type * as ai_prompts_sections_systemInfo from "../ai/prompts/sections/systemInfo.js";
 import type * as ai_prompts_sections_toolUseGuidelines from "../ai/prompts/sections/toolUseGuidelines.js";
 import type * as ai_prompts_system from "../ai/prompts/system.js";
+import type * as ai_prompts_zen from "../ai/prompts/zen.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_simpleMessages from "../ai/simpleMessages.js";
 import type * as ai_state_ConversationState from "../ai/state/ConversationState.js";
@@ -88,6 +92,9 @@ declare const fullApi: ApiFromModules<{
   "ai/caching": typeof ai_caching;
   "ai/langfuse/client": typeof ai_langfuse_client;
   "ai/langfuse/logger": typeof ai_langfuse_logger;
+  "ai/prompts/execution-prompt": typeof ai_prompts_execution_prompt;
+  "ai/prompts/general-prompt": typeof ai_prompts_general_prompt;
+  "ai/prompts/planning-prompt": typeof ai_prompts_planning_prompt;
   "ai/prompts/sections/capabilities": typeof ai_prompts_sections_capabilities;
   "ai/prompts/sections/customSystemPrompt": typeof ai_prompts_sections_customSystemPrompt;
   "ai/prompts/sections/index": typeof ai_prompts_sections_index;
@@ -97,6 +104,7 @@ declare const fullApi: ApiFromModules<{
   "ai/prompts/sections/systemInfo": typeof ai_prompts_sections_systemInfo;
   "ai/prompts/sections/toolUseGuidelines": typeof ai_prompts_sections_toolUseGuidelines;
   "ai/prompts/system": typeof ai_prompts_system;
+  "ai/prompts/zen": typeof ai_prompts_zen;
   "ai/session": typeof ai_session;
   "ai/simpleMessages": typeof ai_simpleMessages;
   "ai/state/ConversationState": typeof ai_state_ConversationState;
