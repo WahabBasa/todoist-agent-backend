@@ -21,23 +21,18 @@ const SUBAGENT_PERMISSIONS = {
 export const MODES = {
   'primary': {
     name: 'Primary',
-    systemPromptFile: 'zen.ts',
-    description: 'General-purpose assistant for task and calendar management.'
+    systemPromptFile: 'zen_new',
+    description: 'Executive assistant for task and calendar management.'
   },
   'planning': {
     name: 'Planning',
-    systemPromptFile: 'planning_prompt.ts',
-    description: 'A strategic mode to analyze requests and create detailed plans.'
+    systemPromptFile: 'planning_new',
+    description: 'Strategic planning specialist using Eisenhower Matrix.'
   },
   'execution': {
     name: 'Execution',
-    systemPromptFile: 'execution_prompt.ts',
-    description: 'A focused mode to execute a pre-defined plan.'
-  },
-  'general': {
-    name: 'General',
-    systemPromptFile: 'general_prompt.ts',
-    description: 'General-purpose assistant for task management operations, analysis, and coordination.'
+    systemPromptFile: 'execution_new',
+    description: 'Execution specialist for direct task operations.'
   }
 };
 
@@ -45,7 +40,7 @@ export const MODES = {
 const BUILT_IN_AGENTS: AgentRegistryType = {
   primary: {
     name: "primary",
-    description: "Primary orchestrator agent - coordinates with planning and execution subagents",
+    description: "Executive assistant orchestrator - coordinates with planning and execution subagents",
     mode: "primary",
     builtIn: true,
     temperature: 0.3,
@@ -98,7 +93,7 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
   
   planning: {
     name: "planning",
-    description: "Expert planning subagent specializing in Eisenhower Matrix prioritization and detailed task breakdown",
+    description: "Strategic planning specialist using Eisenhower Matrix for task prioritization",
     mode: "subagent",
     builtIn: true,
     temperature: 0.4,
@@ -152,7 +147,7 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
   
   execution: {
     name: "execution",
-    description: "Expert execution subagent for accurate task and calendar operations with data validation",
+    description: "Execution specialist for direct task and calendar operations",
     mode: "subagent", 
     builtIn: true,
     temperature: 0.2, // Lower temperature for precise execution
@@ -193,57 +188,6 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       internalTodoRead: true,
       
       // DISABLED: No delegation
-      task: false,
-      researchTask: false,
-      analyzeCode: false,
-      planTask: false,
-    },
-    options: {},
-  },
-  
-  general: {
-    name: "general",
-    description: "General-purpose assistant for task management operations, analysis, and coordination",
-    mode: "subagent",
-    builtIn: true,
-    temperature: 0.3,
-    permissions: SUBAGENT_PERMISSIONS,
-    tools: {
-      // General task management tools
-      getCurrentTime: true,
-      getSystemStatus: true,
-      validateInput: true,
-      
-      // READ-ONLY data access for analysis
-      getProjectAndTaskMap: true,
-      getProjectDetails: true,
-      getTaskDetails: true,
-      getTasks: true,
-      listCalendarEvents: true,
-      searchCalendarEvents: true,
-      
-      // Internal workflow coordination
-      internalTodoWrite: true,
-      internalTodoRead: true,
-      
-      // EXECUTION TOOLS - General agent can also execute tasks when needed
-      createTask: true,
-      updateTask: true,
-      deleteTask: true,
-      createProject: true,
-      updateProject: true,
-      deleteProject: true,
-      createBatchTasks: true,
-      deleteBatchTasks: true,
-      completeBatchTasks: true,
-      updateBatchTasks: true,
-      createProjectWithTasks: true,
-      reorganizeTasksBatch: true,
-      createCalendarEvent: true,
-      updateCalendarEvent: true,
-      deleteCalendarEvent: true,
-      
-      // DISABLED: No recursive delegation
       task: false,
       researchTask: false,
       analyzeCode: false,
@@ -351,6 +295,6 @@ export class AgentRegistry {
    * Returns agents that are NOT "primary" (i.e., can be used as subagents)
    */
   static getSubagentCandidates(): AgentConfig[] {
-    return Object.values(this.agents).filter(agent => agent.mode !== "primary");
+    return Object.values(this.agents).filter(agent => agent.mode === "subagent");
   }
 }

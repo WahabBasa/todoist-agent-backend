@@ -2,15 +2,14 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext, createSimpleToolRegistry } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 import { AgentRegistry } from "../agents/registry";
-import { streamText } from "ai";
+import { streamText, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "../system";
 import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
 
 // Static imports following OpenCode pattern - guaranteed assignment at compile time
-import { prompt as executionPrompt } from "../prompts/execution_prompt";
-import { prompt as planningPrompt } from "../prompts/planning_prompt";
-import { prompt as generalPrompt } from "../prompts/general_prompt";
+import { prompt as executionPrompt } from "../prompts/execution_new";
+import { prompt as planningPrompt } from "../prompts/planning_new";
 
 /**
  * TaskTool - OpenCode-Style Stateless Agent Delegation
@@ -28,7 +27,6 @@ export const taskTool: ToolDefinition = {
   description: `Launch a specialized subagent to handle complex, multi-step tasks autonomously.
 
 Available subagents and their specializations:
-- general: General-purpose task management, analysis, and coordination
 - planning: Strategic planning and task organization with Eisenhower Matrix prioritization  
 - execution: Direct task and calendar operations with data validation
 
@@ -46,7 +44,7 @@ When NOT to use this tool:
 The subagent will work autonomously with filtered tool access and return comprehensive results.`,
   
   inputSchema: z.object({
-    subagentType: z.enum(["general", "planning", "execution"]).describe("Which specialized subagent to use for this task"),
+    subagentType: z.enum(["planning", "execution"]).describe("Which specialized subagent to use for this task"),
     prompt: z.string().describe("Clear, detailed description of the task to delegate. Be specific about what analysis or research is needed."),
     description: z.string().optional().describe("Short 3-5 word description of the task for progress tracking"),
   }),
@@ -84,8 +82,7 @@ The subagent will work autonomously with filtered tool access and return compreh
     // Static prompt mapping following OpenCode pattern - guaranteed assignment
     const promptMap = {
       'execution': executionPrompt,
-      'planning': planningPrompt,
-      'general': generalPrompt
+      'planning': planningPrompt
     } as const;
     
     // Default fallback prompt
@@ -128,6 +125,8 @@ The subagent will work autonomously with filtered tool access and return compreh
       tools: subagentTools,
       maxRetries: 3,
       temperature: subagentConfig.temperature || 0.3,
+      // Allow multi-step tool workflows for complex operations
+      stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
     });
 
     // Get final results from subagent execution
