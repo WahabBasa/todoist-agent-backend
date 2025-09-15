@@ -5,7 +5,7 @@ import { AgentRegistry } from "../agents/registry";
 import { streamText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "../system";
-import { logSubagentCall, logSubagentResponse } from "../tracing/exporters/consoleExporter";
+import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
 
 /**
  * TaskTool - OpenCode-Style Stateless Agent Delegation

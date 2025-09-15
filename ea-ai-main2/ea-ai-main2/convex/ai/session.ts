@@ -19,34 +19,18 @@ import { createSimpleToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
-// OpenTelemetry tracing imports
+// Langfuse Cloud tracing imports
 import {
-  initializeTracing
-} from "./tracing/tracer";
-import {
-  createConversationSpan,
+  createConversationTrace,
   createUserMessageSpan,
-  createAssistantMessageSpan
-} from "./tracing/spans/messageSpans";
-import {
-  createPromptSpan,
-  createEnhancedPromptTracking,
-  updatePromptSpanWithResponse,
-  analyzeAndTrackPromptEffectiveness
-} from "./tracing/spans/promptSpans";
-import {
+  createPromptGeneration,
+  updatePromptGeneration,
   createToolCallSpan,
-  createToolResultSpan
-} from "./tracing/spans/toolCallSpans";
-import {
+  createToolResultSpan,
+  createAssistantMessageSpan,
+  endConversation,
   endSpan
-} from "./tracing/utils/spanUtils";
-import type {
-  EnhancedPromptSpanParams
-} from "./tracing/enhanced/spans/enhancedPromptSpans";
-import type {
-  PromptAnalysisParams
-} from "./tracing/enhanced/analysis/promptAnalysis";
+} from "./langfuse/logger";
 
 /**
  * Simplified Convex + AI SDK integration
@@ -79,20 +63,15 @@ export const chatWithAI = action({
     const modelName = useHaiku ? "anthropic/claude-3-5-haiku" : "anthropic/claude-3-5-haiku";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
-    // Initialize OpenTelemetry tracing
-    initializeTracing();
-    
-    // Create conversation span
-    const conversationSpan = createConversationSpan({
+    // Initialize Langfuse tracing
+    const conversationTrace = createConversationTrace({
       sessionId: sessionId || "default",
       userId: userId,
     });
     
-    // Declare OpenTelemetry spans outside try block
+    // Declare Langfuse spans outside try block
     let userMessageSpan: any = null;
-    let promptSpan: any = null;
-    let enhancedPromptSpan: any = null;
-    let effectivenessSpan: any = null;
+    let promptGeneration: any = null;
     let assistantMessageSpan: any = null;
 
     try {
@@ -147,26 +126,14 @@ export const chatWithAI = action({
       // Apply caching optimization
       const cachedMessages = MessageCaching.applyCaching(messagesWithSystem, modelName);
 
-      // Create enhanced prompt span for AI generation
-      const enhancedPromptParams: EnhancedPromptSpanParams = {
+      // Create Langfuse prompt generation for AI execution
+      promptGeneration = createPromptGeneration({
         model: modelName,
         systemPrompt: systemPrompt,
-        history: cleanHistory,
-        userMessage: message,
-        sessionId: sessionId || "default",
-        userId: userId,
-        parentSpan: conversationSpan
-      };
-      
-      enhancedPromptSpan = createEnhancedPromptTracking(enhancedPromptParams);
-      
-      // Also create the legacy prompt span for backward compatibility
-      promptSpan = createPromptSpan({
-        model: modelName,
-        prompt: systemPrompt,
         messageCount: cachedMessages.length,
         sessionId: sessionId || "default",
-        userId: userId
+        userId: userId,
+        messages: cachedMessages
       });
 
       // Create simplified tool registry - direct Convex action mapping
@@ -187,13 +154,6 @@ export const chatWithAI = action({
         stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
       });
       
-      // Create assistant message span for AI generation
-      assistantMessageSpan = createAssistantMessageSpan({
-        sessionId: sessionId || "default",
-        userId: userId,
-        message: "AI Generation in progress...",
-        model: modelName
-      });
 
       // Let AI SDK handle the entire streaming and tool execution process
       // This is much simpler than manual stream processing
@@ -204,10 +164,9 @@ export const chatWithAI = action({
       const finalToolResults = await result.toolResults;
       const finalUsage = await result.usage;
       
-      // Update enhanced prompt span with response information
-      if (enhancedPromptSpan && finalUsage) {
-        updatePromptSpanWithResponse(
-          enhancedPromptSpan,
+      // Update Langfuse prompt generation with response information
+      if (promptGeneration && finalUsage) {
+        updatePromptGeneration(
           finalText || "",
           finalToolCalls,
           {
@@ -218,35 +177,13 @@ export const chatWithAI = action({
         );
       }
       
-      // Analyze prompt effectiveness and create tracking span
-      if (enhancedPromptSpan) {
-        const analysisParams: PromptAnalysisParams = {
-          prompt: {
-            systemPrompt: systemPrompt,
-            history: cleanHistory,
-            userMessage: message
-          },
-          response: finalText || "",
-          toolCalls: finalToolCalls,
-          tokenUsage: {
-            inputTokens: finalUsage.inputTokens || 0,
-            outputTokens: finalUsage.outputTokens || 0,
-            totalTokens: finalUsage.totalTokens || 0
-          }
-        };
-        
-        effectivenessSpan = analyzeAndTrackPromptEffectiveness(analysisParams, enhancedPromptSpan);
-      }
-      
-      // Update assistant message span with final result
-      if (assistantMessageSpan && finalUsage) {
-        assistantMessageSpan.setAttributes({
-          'ai.response.length': finalText?.length || 0,
-          'ai.usage.input_tokens': finalUsage.inputTokens,
-          'ai.usage.output_tokens': finalUsage.outputTokens,
-          'ai.usage.total_tokens': finalUsage.totalTokens,
-          'ai.tool_calls.count': finalToolCalls.length,
-          'ai.tool_results.count': finalToolResults.length
+      // Create assistant message span with final result
+      if (finalText && finalUsage) {
+        assistantMessageSpan = createAssistantMessageSpan({
+          sessionId: sessionId || "default",
+          userId: userId,
+          message: finalText,
+          model: modelName
         });
       }
 
@@ -306,49 +243,39 @@ export const chatWithAI = action({
         console.warn(`[SessionSimplified] Todo cleanup failed:`, error);
       }
 
-      // Update conversation span with final result
-      if (conversationSpan && finalUsage) {
-        conversationSpan.setAttributes({
-          'conversation.final_response': finalText || "I've completed the requested actions.",
-          'conversation.tool_calls': finalToolCalls.length,
-          'conversation.tool_results': finalToolResults.length,
-          'conversation.tokens.input': finalUsage.inputTokens,
-          'conversation.tokens.output': finalUsage.outputTokens,
-          'conversation.tokens.total': finalUsage.totalTokens
-        });
-      }
+      // Tool calls and results are automatically tracked in createToolCallSpan/createToolResultSpan
       
       // Create spans for tool calls and results
       for (const toolCall of finalToolCalls) {
-        const toolCallSpan = createToolCallSpan({
+        createToolCallSpan({
           toolName: toolCall.toolName,
           input: toolCall.input as Record<string, any>,
           sessionId: sessionId || "default",
           userId: userId
         });
-        endSpan(toolCallSpan);
       }
       
       for (const toolResult of finalToolResults) {
-        const toolResultSpan = createToolResultSpan({
+        createToolResultSpan({
           toolName: toolResult.toolName || "unknown",
           output: toolResult.output,
           success: true,
           sessionId: sessionId || "default",
           userId: userId
         });
-        endSpan(toolResultSpan);
       }
 
-      // End all spans successfully
-      if (userMessageSpan) endSpan(userMessageSpan, 'USER MESSAGE');
-      if (promptSpan) endSpan(promptSpan, 'AI PROMPT');
-      if (enhancedPromptSpan) endSpan(enhancedPromptSpan, 'ENHANCED AI PROMPT');
-      if (effectivenessSpan) endSpan(effectivenessSpan, 'PROMPT EFFECTIVENESS');
-      if (assistantMessageSpan) endSpan(assistantMessageSpan, 'ASSISTANT MESSAGE');
-      endSpan(conversationSpan, 'CONVERSATION');
-      
-      console.log("[OpenTelemetry] All spans ended successfully");
+      // End conversation and flush to Langfuse Cloud
+      await endConversation({
+        response: finalText || "I've completed the requested actions.",
+        toolCalls: finalToolCalls.length,
+        toolResults: finalToolResults.length,
+        tokens: finalUsage ? {
+          input: finalUsage.inputTokens || 0,
+          output: finalUsage.outputTokens || 0,
+          total: finalUsage.totalTokens || 0
+        } : undefined
+      });
       
       // Return simple response
       return {
@@ -370,14 +297,12 @@ export const chatWithAI = action({
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       console.error('[SessionSimplified] Chat failed:', error);
       
-      // Record error in spans
-      const err = error instanceof Error ? error : new Error(errorMessage);
-      if (userMessageSpan) endSpan(userMessageSpan, 'USER MESSAGE');
-      if (promptSpan) endSpan(promptSpan, 'AI PROMPT', err);
-      if (assistantMessageSpan) endSpan(assistantMessageSpan, 'ASSISTANT MESSAGE', err);
-      endSpan(conversationSpan, 'CONVERSATION', err);
-      
-      console.log("[OpenTelemetry] All spans ended with error:", errorMessage);
+      // End conversation with error
+      await endConversation({
+        response: `Error: ${errorMessage}`,
+        toolCalls: 0,
+        toolResults: 0
+      });
       
       // Simple error handling - save error message to conversation
       const conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });

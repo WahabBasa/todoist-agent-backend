@@ -17,6 +17,8 @@ import type * as ai_agents_registry from "../ai/agents/registry.js";
 import type * as ai_agents_types from "../ai/agents/types.js";
 import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistantMessage/parseAssistantMessage.js";
 import type * as ai_caching from "../ai/caching.js";
+import type * as ai_langfuse_client from "../ai/langfuse/client.js";
+import type * as ai_langfuse_logger from "../ai/langfuse/logger.js";
 import type * as ai_prompts_sections_capabilities from "../ai/prompts/sections/capabilities.js";
 import type * as ai_prompts_sections_customSystemPrompt from "../ai/prompts/sections/customSystemPrompt.js";
 import type * as ai_prompts_sections_index from "../ai/prompts/sections/index.js";
@@ -84,6 +86,8 @@ declare const fullApi: ApiFromModules<{
   "ai/agents/types": typeof ai_agents_types;
   "ai/assistantMessage/parseAssistantMessage": typeof ai_assistantMessage_parseAssistantMessage;
   "ai/caching": typeof ai_caching;
+  "ai/langfuse/client": typeof ai_langfuse_client;
+  "ai/langfuse/logger": typeof ai_langfuse_logger;
   "ai/prompts/sections/capabilities": typeof ai_prompts_sections_capabilities;
   "ai/prompts/sections/customSystemPrompt": typeof ai_prompts_sections_customSystemPrompt;
   "ai/prompts/sections/index": typeof ai_prompts_sections_index;

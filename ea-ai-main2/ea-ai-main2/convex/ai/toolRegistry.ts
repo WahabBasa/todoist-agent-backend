@@ -9,7 +9,7 @@ import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
-import { createToolCallSpan, createToolResultSpan, endSpan } from "./tracing";
+import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
 
 /**
  * Simplified tool registry for direct Convex + AI SDK integration
@@ -164,8 +164,6 @@ export async function createSimpleToolRegistry(
               sessionId: context.sessionId || "default",
               userId: context.userId
             });
-            endSpan(toolResultSpan, `TOOL RESULT (${simpleTool.id})`);
-            endSpan(toolCallSpan, `TOOL CALL (${simpleTool.id})`);
             
             // Return the full result object for proper AI SDK tool tracking
             return result;
@@ -182,9 +180,6 @@ export async function createSimpleToolRegistry(
               sessionId: context.sessionId || "default",
               userId: context.userId
             });
-            const err = error instanceof Error ? error : new Error(errorResult);
-            endSpan(toolResultSpan, `TOOL RESULT (${simpleTool.id})`, err);
-            endSpan(toolCallSpan, `TOOL CALL (${simpleTool.id})`, err);
             
             throw error; // Let AI SDK handle the error
           }
