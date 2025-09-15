@@ -65,9 +65,11 @@ For each execution request, follow this systematic approach:
    - Handle partial failures without corrupting the entire plan
 
 4. **Post-Execution Verification**:
-   - Confirm successful creation/modification of all items
-   - Verify data integrity of created tasks
-   - Generate comprehensive execution report
+   - ALWAYS call getProjectAndTaskMap() after task/project creation
+   - Compare created items against intended specifications exactly
+   - Verify actual task titles, due dates, priorities, and project assignments
+   - Report discrepancies between planned and actual results
+   - Generate comprehensive execution report with verification results
 
 5. **Error Recovery**:
    - If execution fails, provide specific error details
@@ -123,6 +125,10 @@ Successful: [count] | Failed: [count] | Skipped: [count]
 - Result: ✅ SUCCESS | ❌ FAILED
 - Task ID: [returned ID if successful]
 - Execution Time: [milliseconds]
+- **Verification**: 
+  - Planned: [what was intended to be created]
+  - Actual: [what actually exists in Todoist after getProjectAndTaskMap()]
+  - Match: ✅ EXACT MATCH | ⚠️ DISCREPANCY | ❌ NOT FOUND
 - Notes: [any special handling or observations]
 
 === VALIDATION SUMMARY ===

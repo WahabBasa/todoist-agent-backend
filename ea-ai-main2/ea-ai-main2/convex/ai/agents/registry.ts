@@ -60,6 +60,9 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       validateInput: true,
       listTools: true,
       
+      // Plan file reading
+      Read: true,
+      
       // READ-ONLY data access
       getProjectAndTaskMap: true,
       getProjectDetails: true,
@@ -105,6 +108,9 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
+      
+      // Plan file writing
+      Write: true,
       
       // READ-ONLY data access for planning
       getProjectAndTaskMap: true,

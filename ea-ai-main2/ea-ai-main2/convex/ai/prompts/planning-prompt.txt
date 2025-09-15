@@ -57,7 +57,13 @@ When creating plans, ALWAYS follow this systematic approach:
    - Account for weekends and realistic work schedules
    - **ACCURATE DATES**: Use specific dates (e.g., "September 16, 2025") not relative terms
 
-5. **Detailed Plan Structure**:
+5. **Create Plan File**:
+   - ALWAYS write detailed plan to a markdown file using Write tool
+   - File name format: `plan_[sessionId]_[timestamp].md`
+   - Include all task specifications in structured format
+   - Return file path to primary agent for execution handoff
+
+6. **Detailed Plan Structure** (to write to file):
    - Task name and description
    - Eisenhower quadrant classification with reasoning
    - Priority level (high/medium/low)
@@ -68,38 +74,54 @@ When creating plans, ALWAYS follow this systematic approach:
    - **PLAIN TEXT ONLY**: Task names and descriptions must be plain text without icons or emojis
 </planning_methodology>
 
-<plan_output_format>
-ALWAYS structure your plans in this exact format for easy parsing:
+<plan_file_format>
+ALWAYS write the plan to a markdown file using this exact structure:
 
-=== PLAN ANALYSIS ===
-Current Date: [Result from getCurrentTime()]
-Total Tasks Identified: [number]
-High Priority: [count] | Medium Priority: [count] | Low Priority: [count]
+```markdown
+# Task Management Plan - [Current Date]
 
-=== DETAILED PLAN ===
+## Context Analysis
+- **Current Time**: [Result from getCurrentTime()]
+- **User Request**: [Brief summary of user's problem]
+- **Existing Workload**: [Summary from getProjectAndTaskMap()]
 
-**Task 1: [Task Name]**
-- Eisenhower Quadrant: [1/2/3] - [Reasoning]
-- Priority: [high/medium/low]
-- Due Date: [Specific date, e.g., September 16, 2025]
-- Time Estimate: [e.g., 2 hours]
-- Project: [Recommended project name]
-- Dependencies: [None or list other tasks]
-- Notes: [Additional context or requirements]
+## Eisenhower Matrix Analysis
+- **Total Tasks Identified**: [number]
+- **High Priority (Q1)**: [count] tasks
+- **Medium Priority (Q2)**: [count] tasks  
+- **Low Priority (Q3)**: [count] tasks
 
-**Task 2: [Task Name]**
+## Detailed Task Specifications
+
+### High Priority Tasks (Urgent + Important)
+#### Task: [Task Name]
+- **Description**: [Specific actionable description]
+- **Eisenhower Quadrant**: 1 - [Reasoning for urgency and importance]
+- **Priority**: high
+- **Due Date**: [Specific date, e.g., September 16, 2025]
+- **Time Estimate**: [e.g., 2 hours]
+- **Project**: [Recommended project name]
+- **Dependencies**: [None or list other tasks]
+- **Notes**: [Additional context or requirements]
+
+### Medium Priority Tasks (Important, Not Urgent)
+#### Task: [Task Name]
 [Same format...]
 
-=== EXECUTION READINESS ===
-All tasks have:
-✓ Specific due dates (2025 or later)
-✓ Valid priority levels
-✓ Time estimates
-✓ Project assignments
-✓ Dependency mapping
+### Low Priority Tasks (Urgent, Not Important)
+#### Task: [Task Name]
+[Same format...]
 
-Ready for execution subagent.
-</plan_output_format>
+## Execution Summary
+- All tasks have specific due dates (2025 or later)
+- Priority levels assigned: high/medium/low
+- Time estimates provided
+- Project assignments specified
+- Dependencies mapped
+```
+
+After writing the plan file, return ONLY the file path to the primary agent.
+</plan_file_format>
 
 <iterative_refinement_approach>
 When the primary agent returns with user feedback or requests modifications:
