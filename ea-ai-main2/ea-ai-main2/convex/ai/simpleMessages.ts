@@ -71,10 +71,10 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
         if (message.toolCalls && message.toolCalls.length > 0) {
           for (const toolCall of message.toolCalls) {
             parts.push({
-              type: "tool-call",
+              type: `tool-${toolCall.name}` as `tool-${string}`,
               toolCallId: toolCall.toolCallId,
-              toolName: toolCall.name,
-              args: toolCall.args
+              state: "input-available",
+              input: toolCall.args
             });
           }
         }
