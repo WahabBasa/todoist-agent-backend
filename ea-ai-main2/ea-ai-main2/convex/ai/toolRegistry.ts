@@ -172,11 +172,10 @@ export async function createSimpleToolRegistry(
             const executionTime = Date.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
             
-            // Create OpenTelemetry span for failed tool result
-            const errorResult = error instanceof Error ? error.message : String(error);
+            // Create tool result span for failed execution
             const toolResultSpan = createToolResultSpan({
               toolName: simpleTool.id,
-              output: errorResult,
+              output: errorMessage,
               success: false,
               sessionId: context.sessionId || "default",
               userId: context.userId
@@ -187,9 +186,18 @@ export async function createSimpleToolRegistry(
         },
         // Control what the AI model sees while preserving structured tool results
         toModelOutput(result: any) {
+          // Preserve structured data for better AI understanding
+          const structuredOutput = [
+            result.title ? `Title: ${result.title}` : null,
+            result.output ? `Result: ${result.output}` : null,
+            result.metadata && Object.keys(result.metadata).length > 0 
+              ? `Metadata: ${JSON.stringify(result.metadata)}` 
+              : null
+          ].filter(Boolean).join('\n');
+
           return {
             type: "text",
-            value: result.output,
+            value: structuredOutput || result.output || "Operation completed",
           };
         }
       });

@@ -115,18 +115,23 @@ The subagent will work autonomously with filtered tool access and return compreh
 
     const executionStartTime = Date.now();
 
+    // Enhanced continuation prompt for execution agents to prevent planning-only behavior
+    const continuationPrompt = subagentType === "execution" 
+      ? `${prompt}\n\nIMPORTANT: You MUST actually execute the requested operations using the available tools. Do not just describe what you would do - make the actual tool calls to complete the task. Continue making tool calls until the task is fully executed.`
+      : prompt;
+
     // Execute subagent within same action (following OpenCode pattern)
     const result = await streamText({
       model: model,
       messages: [
         { role: "system", content: subagentSystemPrompt },
-        { role: "user", content: prompt }
+        { role: "user", content: continuationPrompt }
       ],
       tools: subagentTools,
       maxRetries: 3,
-      temperature: subagentConfig.temperature || 0.3,
-      // Allow multi-step tool workflows for complex operations
-      stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
+      temperature: subagentConfig.temperature || 0.2, // Lower temperature for execution agents
+      // Enhanced multi-step execution for complex operations
+      stopWhen: stepCountIs(12), // Increased from 8 to 12 for complex multi-tool operations
     });
 
     // Get final results from subagent execution
@@ -136,6 +141,24 @@ The subagent will work autonomously with filtered tool access and return compreh
     
     const executionTime = Date.now() - executionStartTime;
     console.log(`[TaskTool] ${subagentType} completed: text=${!!finalText}, tools=${finalToolCalls.length}`);
+
+    // Validate execution agent actually performed execution operations (not just planning)
+    if (subagentType === "execution") {
+      const executionTools = ["createTask", "updateTask", "deleteTask", "createProject", "updateProject", "deleteProject", 
+                              "createBatchTasks", "deleteBatchTasks", "completeBatchTasks", "updateBatchTasks", 
+                              "createProjectWithTasks", "reorganizeTasksBatch", "createCalendarEvent", 
+                              "updateCalendarEvent", "deleteCalendarEvent"];
+      
+      const executionToolCalls = finalToolCalls.filter(tc => executionTools.includes(tc.toolName));
+      const infoGatheringCalls = finalToolCalls.filter(tc => tc.toolName === "getProjectAndTaskMap" || tc.toolName === "getTasks");
+      
+      console.log(`[TaskTool] Execution validation: ${executionToolCalls.length} execution calls, ${infoGatheringCalls.length} info calls`);
+      
+      // Warning if execution agent only gathered information without executing
+      if (executionToolCalls.length === 0 && infoGatheringCalls.length > 0) {
+        console.warn(`[TaskTool] WARNING: Execution agent performed information gathering but no actual execution operations`);
+      }
+    }
 
     // Log subagent response
     logSubagentResponse({

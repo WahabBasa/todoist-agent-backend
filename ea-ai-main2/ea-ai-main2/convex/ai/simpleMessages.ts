@@ -1,4 +1,4 @@
-import { ModelMessage } from "ai";
+import { ModelMessage, convertToModelMessages, type UIMessage } from "ai";
 
 /**
  * Simplified message conversion for Vercel AI SDK + Convex integration
@@ -23,66 +23,86 @@ export interface ConvexMessage {
   toolResults?: {
     toolCallId: string;
     toolName?: string;
-    result: string;
+    output: string;
   }[];
   timestamp?: number;
 }
 
 /**
- * Direct, single-step conversion from Convex messages to AI SDK ModelMessages
- * No complex transformations, no data loss, no type mismatches
+ * Convert Convex messages to AI SDK ModelMessages using the recommended approach
+ * Uses convertToModelMessages utility for robust and future-proof conversion
  */
 export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): ModelMessage[] {
-  const modelMessages: ModelMessage[] = [];
-  
   console.log(`[SimpleMessages] Converting ${convexMessages.length} Convex messages to ModelMessages`);
+  
+  // First convert to UIMessage format, then use AI SDK's convertToModelMessages
+  const uiMessages: UIMessage[] = [];
   
   for (let i = 0; i < convexMessages.length; i++) {
     const message = convexMessages[i];
     
     try {
-      // Handle user messages - direct mapping
+      // Handle user messages
       if (message.role === "user" && message.content?.trim()) {
-        modelMessages.push({
+        uiMessages.push({
+          id: `${i}`,
           role: "user",
-          content: message.content.trim()
+          parts: [{
+            type: "text",
+            text: message.content.trim()
+          }]
         });
         continue;
       }
       
-      // Handle assistant messages - direct mapping
+      // Handle assistant messages
       if (message.role === "assistant") {
-        // Assistant message with text content
+        const parts: UIMessage["parts"] = [];
+        
+        // Add text content if present
         if (message.content?.trim()) {
-          modelMessages.push({
-            role: "assistant",
-            content: message.content.trim()
+          parts.push({
+            type: "text",
+            text: message.content.trim()
           });
         }
         
-        // Assistant message with tool calls
+        // Add tool calls if present
         if (message.toolCalls && message.toolCalls.length > 0) {
-          modelMessages.push({
+          for (const toolCall of message.toolCalls) {
+            parts.push({
+              type: "tool-call",
+              toolCallId: toolCall.toolCallId,
+              toolName: toolCall.name,
+              args: toolCall.args
+            });
+          }
+        }
+        
+        if (parts.length > 0) {
+          uiMessages.push({
+            id: `${i}`,
             role: "assistant",
-            content: message.content || "",
-            // Note: AI SDK handles tool calls differently - this may need adjustment
-            // For now, just include the content, tool calls handled separately
+            parts
           });
         }
         continue;
       }
       
-      // Handle tool results - simplified approach
+      // Handle tool results
       if (message.role === "tool" && message.toolResults && message.toolResults.length > 0) {
-        // Convert tool results to simple text content for now
-        const toolResultsText = message.toolResults.map(tr => 
-          `Tool ${tr.toolName || 'unknown'} (${tr.toolCallId}): ${tr.result}`
-        ).join("\n");
-        
-        modelMessages.push({
-          role: "assistant",
-          content: `Tool Results:\n${toolResultsText}`
-        });
+        for (const toolResult of message.toolResults) {
+          uiMessages.push({
+            id: `${i}-${toolResult.toolCallId}`,
+            role: "tool",
+            parts: [{
+              type: "tool-result",
+              toolCallId: toolResult.toolCallId,
+              toolName: toolResult.toolName || "unknown",
+              output: [{ type: "text", text: toolResult.output }]
+            }]
+          });
+        }
         continue;
       }
       
@@ -96,15 +116,20 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
     }
   }
   
-  console.log(`[SimpleMessages] Successfully converted ${modelMessages.length}/${convexMessages.length} messages`);
+  console.log(`[SimpleMessages] Built ${uiMessages.length} UIMessages from ${convexMessages.length} Convex messages`);
+  
+  // Use AI SDK's convertToModelMessages for robust conversion
+  const modelMessages = convertToModelMessages(uiMessages);
+  
+  console.log(`[SimpleMessages] Converted to ${modelMessages.length} ModelMessages`);
   
   // Ensure we have at least one message for the AI SDK
   if (modelMessages.length === 0) {
     console.log(`[SimpleMessages] No valid messages found, creating fallback user message`);
-    modelMessages.push({
+    return [{
       role: "user",
       content: "Please help me with my tasks."
-    });
+    }];
   }
   
   return modelMessages;
@@ -134,7 +159,7 @@ export function sanitizeMessages(messages: ConvexMessage[]): ConvexMessage[] {
     ...msg,
     content: msg.content?.trim() || undefined,
     toolCalls: msg.toolCalls?.filter(tc => tc.toolCallId && tc.name),
-    toolResults: msg.toolResults?.filter(tr => tr.toolCallId && tr.result)
+    toolResults: msg.toolResults?.filter(tr => tr.toolCallId && tr.output)
   })).filter(msg => 
     msg.content || 
     (msg.toolCalls && msg.toolCalls.length > 0) || 

@@ -191,41 +191,38 @@ export const chatWithAI = action({
       // Build final conversation history using simple approach
       const finalHistory = [...cleanHistory];
 
-      // Add assistant response
-      if (finalToolCalls.length > 0) {
-        // Add tool calls message
-        finalHistory.push({
+      // Add consolidated assistant response (fix double response issue)
+      if (finalToolCalls.length > 0 || (finalText && finalText.trim())) {
+        // Single assistant message with both tool calls and text content
+        const assistantMessage: any = {
           role: "assistant",
           content: finalText || "",
-          toolCalls: finalToolCalls.map(tc => ({
+          timestamp: Date.now()
+        };
+
+        // Add tool calls if present
+        if (finalToolCalls.length > 0) {
+          assistantMessage.toolCalls = finalToolCalls.map(tc => ({
             name: tc.toolName,
             args: tc.input,
             toolCallId: tc.toolCallId
-          })),
-          timestamp: Date.now()
-        });
+          }));
+        }
 
-        // Add tool results
+        finalHistory.push(assistantMessage);
+
+        // Add tool results as separate message (required for conversation flow)
         if (finalToolResults.length > 0) {
           finalHistory.push({
             role: "tool",
             toolResults: finalToolResults.map(tr => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
-              result: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
+              output: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
             })),
             timestamp: Date.now()
           });
         }
-      }
-
-      // Add final text response if we have one
-      if (finalText && finalText.trim()) {
-        finalHistory.push({
-          role: "assistant",
-          content: finalText,
-          timestamp: Date.now()
-        });
       }
 
       // Save conversation - simple, direct approach
