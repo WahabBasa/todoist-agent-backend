@@ -40,7 +40,7 @@ export const MODES = {
 const BUILT_IN_AGENTS: AgentRegistryType = {
   primary: {
     name: "primary",
-    description: "Executive assistant orchestrator - coordinates with planning and execution subagents",
+    description: "Executive assistant orchestrator - coordinates with planning and execution subagents as internal tools",
     mode: "primary",
     builtIn: true,
     temperature: 0.3,
@@ -66,22 +66,22 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       listCalendarEvents: true,
       searchCalendarEvents: true,
       
-      // DISABLED: All execution tools (must delegate)
-      createTask: false,
-      updateTask: false,
-      deleteTask: false,
-      createProject: false,
-      updateProject: false,
-      deleteProject: false,
-      createBatchTasks: false,
-      deleteBatchTasks: false,
-      completeBatchTasks: false,
-      updateBatchTasks: false,
-      createProjectWithTasks: false,
-      reorganizeTasksBatch: false,
-      createCalendarEvent: false,
-      updateCalendarEvent: false,
-      deleteCalendarEvent: false,
+      // EXECUTION TOOLS - Primary agent can also execute directly for simple operations
+      createTask: true,
+      updateTask: true,
+      deleteTask: true,
+      createProject: true,
+      updateProject: true,
+      deleteProject: true,
+      createBatchTasks: true,
+      deleteBatchTasks: true,
+      completeBatchTasks: true,
+      updateBatchTasks: true,
+      createProjectWithTasks: true,
+      reorganizeTasksBatch: true,
+      createCalendarEvent: true,
+      updateCalendarEvent: true,
+      deleteCalendarEvent: true,
       
       // DISABLED: Direct delegation tools (use task tool instead)
       researchTask: false,

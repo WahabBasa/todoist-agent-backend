@@ -186,18 +186,11 @@ export async function createSimpleToolRegistry(
         },
         // Control what the AI model sees while preserving structured tool results
         toModelOutput(result: any) {
-          // Preserve structured data for better AI understanding
-          const structuredOutput = [
-            result.title ? `Title: ${result.title}` : null,
-            result.output ? `Result: ${result.output}` : null,
-            result.metadata && Object.keys(result.metadata).length > 0 
-              ? `Metadata: ${JSON.stringify(result.metadata)}` 
-              : null
-          ].filter(Boolean).join('\n');
-
+          // For the primary agent, keep responses extremely concise
+          // Only return the output, not the title or metadata
           return {
             type: "text",
-            value: structuredOutput || result.output || "Operation completed",
+            value: result.output || "Operation completed",
           };
         }
       });

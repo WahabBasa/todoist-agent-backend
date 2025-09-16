@@ -41,7 +41,7 @@ When NOT to use this tool:
 - Tasks requiring file modifications (primary agent handles these)
 - Quick lookups that don't need deep analysis
 
-The subagent will work autonomously with filtered tool access and return comprehensive results.`,
+The subagent will work autonomously as your specialized tool and return concise results for integration into your response.`,
   
   inputSchema: z.object({
     subagentType: z.enum(["planning", "execution"]).describe("Which specialized subagent to use for this task"),
@@ -115,10 +115,8 @@ The subagent will work autonomously with filtered tool access and return compreh
 
     const executionStartTime = Date.now();
 
-    // Enhanced continuation prompt for execution agents to prevent planning-only behavior
-    const continuationPrompt = subagentType === "execution" 
-      ? `${prompt}\n\nIMPORTANT: You MUST actually execute the requested operations using the available tools. Do not just describe what you would do - make the actual tool calls to complete the task. Continue making tool calls until the task is fully executed.`
-      : prompt;
+    // Enhanced continuation prompt that reinforces the subagent's role as a tool
+    const continuationPrompt = `${prompt}\n\nIMPORTANT: You are a specialized tool for Zen, the primary executive assistant. You work behind the scenes to support Zen's conversational approach with the user. Execute the requested analysis and return concise insights to support Zen's next conversation step. Remember to make intelligent assumptions rather than providing exhaustive analysis. Keep all responses extremely brief.`;
 
     // Execute subagent within same action (following OpenCode pattern)
     const result = await streamText({
@@ -167,21 +165,12 @@ The subagent will work autonomously with filtered tool access and return compreh
       executionTime
     });
 
-    // Prepare comprehensive result for primary agent (following OpenCode pattern)
-    const subagentOutput = [
-      `=== ${subagentType.toUpperCase()} AGENT RESULTS ===`,
-      "",
-      finalText || "Analysis completed successfully.",
-      "",
-      finalToolResults.length > 0 ? "=== TOOL EXECUTION RESULTS ===" : "",
-      ...finalToolResults.map(tr => `Tool: ${tr.toolName}\nResult: ${tr.output}\n`),
-    ].filter(Boolean).join("\n");
-
+    // Prepare concise result for primary agent
     // Return results to primary agent (following OpenCode pattern)
     return {
       title: `${subagentType} Task Completed`,
       metadata: { subagentType, taskDescription },
-      output: subagentOutput
+      output: finalText || "Analysis completed successfully."
     };
   }
 };
