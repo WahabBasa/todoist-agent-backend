@@ -89,20 +89,11 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
         continue;
       }
       
-      // Handle tool results
+      // Handle tool results - skip separate tool messages as they should be integrated into conversation flow
+      // Tool results are handled by the AI SDK's convertToModelMessages function
       if (message.role === "tool" && message.toolResults && message.toolResults.length > 0) {
-        for (const toolResult of message.toolResults) {
-          uiMessages.push({
-            id: `${i}-${toolResult.toolCallId}`,
-            role: "tool",
-            parts: [{
-              type: "tool-result",
-              toolCallId: toolResult.toolCallId,
-              toolName: toolResult.toolName || "unknown",
-              output: [{ type: "text", text: toolResult.output }]
-            }]
-          });
-        }
+        // Skip tool result messages - these will be handled by the conversion process
+        console.debug(`[SimpleMessages] Skipping tool result message ${i}: will be handled by convertToModelMessages`);
         continue;
       }
       
