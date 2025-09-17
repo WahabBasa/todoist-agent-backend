@@ -261,6 +261,19 @@ export function createToolCallSpan(params: ToolCallParams): LangfuseSpan {
   });
 
   console.log(`📈 Summary: ${filledParams.length} filled, ${emptyParams.length} empty`);
+  
+  // Special handling for internalTodoWrite to show todo list contents
+  if (params.toolName === "internalTodoWrite") {
+    try {
+      const todos = params.input.todos || [];
+      console.log(`📝 [INTERNAL TODO LIST CONTENTS] (${todos.length} todos):`);
+      todos.forEach((todo: any, index: number) => {
+        console.log(`  ${index + 1}. [${todo.status}] ${todo.content} (${todo.priority})`);
+      });
+    } catch (error) {
+      console.log(`⚠️ [INTERNAL TODO LIST] Failed to parse todo list: ${error}`);
+    }
+  }
   return span;
 }
 
@@ -295,6 +308,24 @@ export function createToolResultSpan(params: ToolResultParams): LangfuseSpan {
   console.log(`📤 Output: ${typeof params.output === 'string' 
     ? params.output.substring(0, 100) + "..." 
     : JSON.stringify(params.output).substring(0, 100) + "..."}`);
+
+  // Special handling for internalTodoRead to show todo list contents
+  if (params.toolName === "internalTodoRead" && params.success) {
+    try {
+      const output = typeof params.output === 'string' ? JSON.parse(params.output) : params.output;
+      const todos = output.todos || [];
+      const summary = output.summary || {};
+      console.log(`📋 [INTERNAL TODO STATUS] ${summary.remaining || 0} remaining (${summary.pending || 0} pending, ${summary.inProgress || 0} in progress)`);
+      if (todos.length > 0) {
+        console.log(`📝 [CURRENT TODO LIST]:`);
+        todos.forEach((todo: any, index: number) => {
+          console.log(`  ${index + 1}. [${todo.status}] ${todo.content} (${todo.priority})`);
+        });
+      }
+    } catch (error) {
+      console.log(`⚠️ [INTERNAL TODO STATUS] Failed to parse todo status: ${error}`);
+    }
+  }
 
   return span;
 }

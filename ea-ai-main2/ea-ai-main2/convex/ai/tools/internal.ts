@@ -21,6 +21,37 @@ When to use this tool:
 - When you need to track progress across 3+ distinct phases
 - Cross-system synchronization tasks requiring careful sequencing
 
+**Enhanced Structured Workflow Support (State Machine):**
+The internal todo list acts as a state machine to track progress through these specific states:
+1. **TASK_LIST_CREATED**: Initial task list created from user input
+2. **INFO_COLLECTION**: Gathering information for each task (one at a time)
+3. **CALENDAR_CONTEXT**: Collecting calendar context for better planning
+4. **PRIORITY_ANALYSIS**: Updating Eisenhower Matrix categorization using all collected info
+5. **PLAN_GENERATION**: Creating detailed recommendations using all collected info
+6. **USER_APPROVAL**: Getting explicit confirmation before implementation
+7. **PLAN_IMPLEMENTATION**: Executing the approved plan
+
+Each todo item should represent a specific state transition or work item:
+- id: Unique identifier following pattern "[state]-[task-name]" or "[work-item-id]"
+- content: Specific, actionable description indicating state or work to be done
+- status: "pending" | "in_progress" | "completed" | "cancelled"  
+- priority: "high" (critical/blocking) | "medium" (important) | "low" (optional)
+
+**Critical Principle: Information Collection Only**
+During the planning phase, the agent MUST ONLY collect information and NEVER:
+❌ Provide solutions or recommendations for individual tasks
+❌ Give advice on how to handle specific items
+❌ Dive deep into solving one item before collecting info for all items
+❌ Suggest actions for individual tasks during info collection
+
+All solutions and recommendations come ONLY in the final comprehensive plan after collecting information for ALL tasks.
+
+When to use structured workflow:
+- When users brain dump multiple tasks and need systematic information collection
+- When you need to collect information for multiple tasks one at a time
+- When you want to ensure all tasks are addressed systematically
+- When you need to get user approval before implementation
+
 When NOT to use this tool:
 - **NEVER use for simple user task creation** (use createTask instead)
 - **NEVER use for straightforward operations** that can be done directly with single tool calls
@@ -58,6 +89,20 @@ User: "Delete all my completed tasks and create calendar events for all high-pri
 User: "Update all tasks in my Work project to have due dates next week"
 ✅ CORRECT: Use internalTodoWrite for systematic approach
 
+3. Structured information collection with state machine:
+User: "I have taxes, work deadlines, and apartment organization tasks"
+✅ CORRECT: Use internalTodoWrite with state machine workflow:
+[
+  {"id": "state-task-list", "content": "STATE: Task list created from user input", "status": "in_progress", "priority": "high"},
+  {"id": "taxes-info", "content": "COLLECT_INFO: taxes - Deadline, Worry, Effort", "status": "pending", "priority": "high"},
+  {"id": "work-info", "content": "COLLECT_INFO: work deadlines - Deadline, Worry, Effort", "status": "pending", "priority": "high"},
+  {"id": "apt-info", "content": "COLLECT_INFO: apartment organization - Deadline, Worry, Effort", "status": "pending", "priority": "medium"},
+  {"id": "calendar-context", "content": "STATE: Collect calendar context for better planning", "status": "pending", "priority": "high"},
+  {"id": "priority-analysis", "content": "STATE: Update Eisenhower Matrix priorities using all info", "status": "pending", "priority": "high"},
+  {"id": "plan-generation", "content": "STATE: Create detailed plan using Eisenhower Matrix", "status": "pending", "priority": "high"},
+  {"id": "user-approval", "content": "STATE: Confirm plan with user before implementation", "status": "pending", "priority": "high"}
+]
+
 Examples of INCORRECT usage:
 
 1. Simple task creation:
@@ -71,7 +116,7 @@ User: "Show me my tasks and organize them by priority"
 ✅ CORRECT: Use getProjectAndTaskMap directly
 
 **WORKFLOW RULES**:
-1. Create internal todos with clear, specific steps (3-6 todos max)
+1. Create internal todos with clear, specific steps (3-10 todos for structured workflow)
 2. Mark only ONE todo as "in_progress" at a time
 3. Complete each step fully before moving to next
 4. Use internalTodoUpdate to mark progress
@@ -127,7 +172,7 @@ User: "Show me my tasks and organize them by priority"
       throw new Error(error instanceof Error ? error.message : "Failed to update internal workflow");
     }
   }
-};
+};;
 
 export const internalTodoRead: ToolDefinition = {
   id: "internalTodoRead",
