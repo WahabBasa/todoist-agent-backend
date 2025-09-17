@@ -13,12 +13,16 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as ai_agents_enhancedPlanningTest from "../ai/agents/enhancedPlanningTest.js";
+import type * as ai_agents_planningTest from "../ai/agents/planningTest.js";
 import type * as ai_agents_registry from "../ai/agents/registry.js";
+import type * as ai_agents_testPlanning from "../ai/agents/testPlanning.js";
 import type * as ai_agents_types from "../ai/agents/types.js";
 import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistantMessage/parseAssistantMessage.js";
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_langfuse_client from "../ai/langfuse/client.js";
 import type * as ai_langfuse_logger from "../ai/langfuse/logger.js";
+import type * as ai_prompts_enhancedPlanning from "../ai/prompts/enhancedPlanning.js";
 import type * as ai_prompts_execution_new from "../ai/prompts/execution_new.js";
 import type * as ai_prompts_execution_prompt from "../ai/prompts/execution_prompt.js";
 import type * as ai_prompts_general_prompt from "../ai/prompts/general_prompt.js";
@@ -89,12 +93,16 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  "ai/agents/enhancedPlanningTest": typeof ai_agents_enhancedPlanningTest;
+  "ai/agents/planningTest": typeof ai_agents_planningTest;
   "ai/agents/registry": typeof ai_agents_registry;
+  "ai/agents/testPlanning": typeof ai_agents_testPlanning;
   "ai/agents/types": typeof ai_agents_types;
   "ai/assistantMessage/parseAssistantMessage": typeof ai_assistantMessage_parseAssistantMessage;
   "ai/caching": typeof ai_caching;
   "ai/langfuse/client": typeof ai_langfuse_client;
   "ai/langfuse/logger": typeof ai_langfuse_logger;
+  "ai/prompts/enhancedPlanning": typeof ai_prompts_enhancedPlanning;
   "ai/prompts/execution_new": typeof ai_prompts_execution_new;
   "ai/prompts/execution_prompt": typeof ai_prompts_execution_prompt;
   "ai/prompts/general_prompt": typeof ai_prompts_general_prompt;

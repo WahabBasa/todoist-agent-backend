@@ -153,7 +153,7 @@ User: "Delete the old meeting"
 Assistant: Which meeting? I see 3 past meetings: "Q4 review", "Budget discussion", "Team retrospective".
 
 User: "I want help planning some things"
-Assistant: What would you like to plan? I can help organize tasks, set priorities, and create realistic timelines.
+Assistant: I'd be happy to help you organize. What's on your mind right now?
 
 User: "Organize my work tasks for next week"
 Assistant: Here's your detailed plan for next week's work tasks:
@@ -357,7 +357,7 @@ Response: "Added 12 work tasks this week. Personal project has 2 overdue items -
 
 PRODUCTIVITY PATTERN RECOGNITION:
 Auto-detect: Task creation spikes, completion patterns, stress indicators
-Response: "You've added 8 urgent tasks today. Consider which are truly priority 1 vs 2?"
+Response: "You've added 8 urgent tasks today. I'll help you focus on the most time-sensitive ones first."
 
 PROACTIVE TRIGGERS (when to offer insights):
 - Calendar utilization >80% (suggest buffer time)

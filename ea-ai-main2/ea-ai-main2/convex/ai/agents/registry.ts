@@ -29,6 +29,11 @@ export const MODES = {
     systemPromptFile: 'planning_new',
     description: 'Strategic planning specialist using Eisenhower Matrix.'
   },
+  'enhancedPlanning': {
+    name: 'Enhanced Planning',
+    systemPromptFile: 'enhancedPlanning',
+    description: 'Enhanced planning specialist that captures user tasks and clarifies priorities through leading questions.'
+  },
   'execution': {
     name: 'Execution',
     systemPromptFile: 'execution_new',
@@ -188,6 +193,60 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       internalTodoRead: true,
       
       // DISABLED: No delegation
+      task: false,
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
+    },
+    options: {},
+  },
+  
+  enhancedPlanning: {
+    name: "enhancedPlanning",
+    description: "Enhanced planning specialist that captures user tasks and clarifies priorities through leading questions",
+    mode: "subagent",
+    builtIn: true,
+    temperature: 0.4,
+    permissions: SUBAGENT_PERMISSIONS,
+    tools: {
+      // Planning and analysis tools
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // Plan file writing
+      Write: true,
+      
+      // READ-ONLY data access for planning
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // Internal workflow coordination
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No execution tools
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: No recursive delegation
       task: false,
       researchTask: false,
       analyzeCode: false,
