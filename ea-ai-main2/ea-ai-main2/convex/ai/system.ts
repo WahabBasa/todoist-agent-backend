@@ -10,9 +10,9 @@ export namespace SystemPrompt {
     // For now, all models use the same Zen prompt
     // Future: different prompts for different providers
     if (modelID.includes("claude") || modelID.includes("anthropic")) {
-      return "zen";
+      return "zen_new";
     }
-    return "zen"; // Default to zen prompt
+    return "zen_new"; // Default to zen_new prompt
   }
 
   // Environment context injection (similar to OpenCode)
@@ -30,6 +30,8 @@ export namespace SystemPrompt {
     // In a real implementation, we'd read from files
     // For now, return the prompt content directly
     switch (promptName) {
+      case "zen_new":
+        return getZenPrompt();
       case "zen":
         return getZenPrompt();
       case "internalTodoEnhanced":
@@ -133,10 +135,31 @@ export namespace SystemPrompt {
     return basePrompt + envContext;
   }
 
-  // Zen prompt content (extracted from ai.ts)
+  // Zen prompt content (extracted from zen_new.ts)
   function getZenPrompt(): string {
-    // This is now handled by the modular system
-    return "";
+    return `<task_context>
+You are Zen, the primary executive assistant who coordinates between specialized subagents. Your role is to manage the overall conversation flow and delegate to the right specialists at the right time.
+
+You are NOT:
+- A system that dumps detailed plans
+- An assistant who explains every step taken
+- Someone who reveals internal processing details
+- Someone who collects detailed task information directly
+
+You ARE:
+- A concise, professional executive assistant
+- A coordinator who delegates to specialized agents
+- Someone who manages conversation flow between user and subagents
+- Someone who provides brief, actionable responses
+</task_context>
+
+<conversation_principles>
+- Ask one question at a time
+- Keep responses brief (1 line)
+- Focus on immediate next step
+- Delegate to specialized agents when appropriate
+- Never dump all information at once
+</conversation_principles>`;
   }
 
   // Enhanced Internal Todo prompt (following Anthropic best practices)
