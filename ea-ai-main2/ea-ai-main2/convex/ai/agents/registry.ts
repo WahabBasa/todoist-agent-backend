@@ -17,22 +17,27 @@ const SUBAGENT_PERMISSIONS = {
   },
 };
 
-// Mode-based system following the Roo pattern
+// 4-Mode Architecture System with Automatic Switching
 export const MODES = {
   'primary': {
     name: 'Primary',
-    systemPromptFile: 'zen_new',
-    description: 'Executive assistant for task and calendar management.'
+    systemPromptFile: 'orchestrator_new',
+    description: 'Workflow orchestrator - analyzes requests and delegates to appropriate specialists.'
+  },
+  'information-collector': {
+    name: 'Information Collector', 
+    systemPromptFile: 'information_collector_new',
+    description: 'Systematic information gathering and user questioning specialist.'
   },
   'planning': {
     name: 'Planning',
     systemPromptFile: 'planning_new',
-    description: 'Strategic planning specialist using Eisenhower Matrix.'
+    description: 'Strategic planning specialist - works from complete information to create plans.'
   },
   'execution': {
     name: 'Execution',
     systemPromptFile: 'execution_new',
-    description: 'Execution specialist for direct task operations.'
+    description: 'Execution specialist for direct task and calendar operations.'
   }
 };
 
@@ -40,25 +45,21 @@ export const MODES = {
 const BUILT_IN_AGENTS: AgentRegistryType = {
   primary: {
     name: "primary",
-    description: "Executive assistant orchestrator - coordinates with planning and execution subagents",
+    description: "Workflow orchestrator - analyzes requests and automatically delegates to appropriate specialists",
     mode: "primary",
     builtIn: true,
     temperature: 0.3,
     permissions: PRIMARY_PERMISSIONS,
     tools: {
-      // READ-ONLY coordination tools
+      // ORCHESTRATION TOOLS ONLY
       task: true,
       internalTodoWrite: true,
       internalTodoRead: true,
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
-      listTools: true,
       
-      // Plan file reading
-      Read: true,
-      
-      // READ-ONLY data access
+      // READ-ONLY data access for decision making
       getProjectAndTaskMap: true,
       getProjectDetails: true,
       getTaskDetails: true,
@@ -66,7 +67,7 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       listCalendarEvents: true,
       searchCalendarEvents: true,
       
-      // DISABLED: All execution tools (must delegate)
+      // DISABLED: All direct execution tools (must delegate)
       createTask: false,
       updateTask: false,
       deleteTask: false,
@@ -83,7 +84,9 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       updateCalendarEvent: false,
       deleteCalendarEvent: false,
       
-      // DISABLED: Direct delegation tools (use task tool instead)
+      // DISABLED: No direct planning or information gathering
+      Write: false,
+      Read: false,
       researchTask: false,
       analyzeCode: false,
       planTask: false,
@@ -91,33 +94,29 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
     options: {},
   },
   
-  planning: {
-    name: "planning",
-    description: "Strategic planning specialist using Eisenhower Matrix for task prioritization",
+  "information-collector": {
+    name: "information-collector",
+    description: "Systematic information gathering and user questioning specialist",
     mode: "subagent",
     builtIn: true,
     temperature: 0.4,
     permissions: SUBAGENT_PERMISSIONS,
     tools: {
-      // Planning and analysis tools
+      // INFORMATION GATHERING TOOLS
+      internalTodoWrite: true,
+      internalTodoRead: true,
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
       
-      // Plan file writing
-      Write: true,
-      
-      // READ-ONLY data access for planning
+      // READ access for information gathering
+      Read: true,
       getProjectAndTaskMap: true,
       getProjectDetails: true,
       getTaskDetails: true,
       getTasks: true,
       listCalendarEvents: true,
       searchCalendarEvents: true,
-      
-      // Internal workflow coordination
-      internalTodoWrite: true,
-      internalTodoRead: true,
       
       // DISABLED: No execution tools
       createTask: false,
@@ -136,7 +135,63 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       updateCalendarEvent: false,
       deleteCalendarEvent: false,
       
-      // DISABLED: No recursive delegation
+      // DISABLED: No planning or delegation
+      Write: false,
+      task: false,
+      researchTask: false,
+      analyzeCode: false,
+      planTask: false,
+    },
+    options: {},
+  },
+  
+  planning: {
+    name: "planning",
+    description: "Pure strategic planning specialist - creates plans from complete information packages",
+    mode: "subagent",
+    builtIn: true,
+    temperature: 0.4,
+    permissions: SUBAGENT_PERMISSIONS,
+    tools: {
+      // PURE PLANNING TOOLS
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // Plan file writing
+      Write: true,
+      
+      // READ access for planning (information already collected)
+      Read: true,
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // DISABLED: No information gathering workflow (done by information-collector)
+      internalTodoWrite: false,
+      internalTodoRead: false,
+      
+      // DISABLED: No execution tools
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: No delegation
       task: false,
       researchTask: false,
       analyzeCode: false,

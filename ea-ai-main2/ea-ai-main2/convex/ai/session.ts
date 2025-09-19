@@ -15,7 +15,7 @@ import {
   sanitizeMessages,
   addMessageToConversation
 } from "./simpleMessages";
-import { createSimpleToolRegistry, createPrimaryAgentToolRegistry } from "./toolRegistry";
+import { createSimpleToolRegistry, createPrimaryAgentToolRegistry, createAgentToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
@@ -75,15 +75,30 @@ export const chatWithAI = action({
     let assistantMessageSpan: any = null;
 
     try {
-      // Load conversation history - simple, direct approach
+      // Load conversation history and session state - simple, direct approach
       let conversation;
+      let session;
       if (sessionId) {
         conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
+        session = await ctx.runQuery(api.chatSessions.getChatSession, { sessionId });
       } else {
         conversation = await ctx.runQuery(api.conversations.getConversation);
       }
       
       const history = (conversation?.messages as ConvexMessage[]) || [];
+      
+      // Determine active agent from session or use intelligent routing
+      const currentAgentName = session?.agentName || await determineOptimalAgent(message, history);
+      
+      console.log(`[Session] Using agent: ${currentAgentName} for request: "${message.substring(0, 50)}..."`);
+      
+      // Update session with determined agent if different
+      if (session && session.agentName !== currentAgentName) {
+        await ctx.runMutation(api.chatSessions.updateChatSession, {
+          sessionId: session._id,
+          agentName: currentAgentName,
+        });
+      }
       
       // Create user message span
       userMessageSpan = createUserMessageSpan({
@@ -110,11 +125,14 @@ export const chatWithAI = action({
       // Initialize caching for performance
       MessageCaching.initializeCaching();
 
-      // Generate system prompt using the new modular system
-      const systemPrompt = await SystemPrompt.getSystemPromptSync(
+      // Generate system prompt using agent-specific system
+      const systemPrompt = await SystemPrompt.getSystemPrompt(
+        ctx,
         modelName, 
         "", // No special instructions needed 
-        message
+        message,
+        userId,
+        currentAgentName
       );
       
       // Add system message to conversation
@@ -136,8 +154,8 @@ export const chatWithAI = action({
         messages: cachedMessages
       });
 
-      // Create simplified tool registry - direct Convex action mapping
-      const tools = await createPrimaryAgentToolRegistry(ctx, userId, currentTimeContext, sessionId);
+      // Create agent-specific tool registry 
+      const tools = await createAgentToolRegistry(ctx, userId, currentAgentName, currentTimeContext, sessionId);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -372,3 +390,105 @@ export const getSessionStats = action({
     };
   }
 });
+
+/**
+ * Intelligent agent determination based on request analysis
+ * Implements automatic mode switching for 4-mode architecture
+ */
+async function determineOptimalAgent(message: string, history: any[]): Promise<string> {
+  const msg = message.toLowerCase().trim();
+  
+  // Direct execution patterns - simple operations
+  const directExecutionPatterns = [
+    /^(create|add|make)\s+(task|project|event)/,
+    /^(update|edit|modify|change)\s+(task|project|event)/,
+    /^(delete|remove|complete)\s+(task|project|event)/,
+    /^(schedule|set)\s+/,
+    /^mark\s+.+as\s+(complete|done)/,
+  ];
+  
+  if (directExecutionPatterns.some(pattern => pattern.test(msg))) {
+    console.log(`[AgentRouter] Direct execution detected: ${message.substring(0, 50)}...`);
+    return "execution";
+  }
+  
+  // Information gathering patterns - questions and clarifications needed
+  const informationGatheringPatterns = [
+    /what\s+(are|is)\s+my/,
+    /show\s+me\s+my/,
+    /list\s+my/,
+    /how\s+many/,
+    /when\s+(is|are)/,
+    /which\s+/,
+    /where\s+/,
+    /tell\s+me\s+about/,
+    /need\s+to\s+know/,
+    /want\s+to\s+understand/,
+    /clarify/,
+    /explain/,
+  ];
+  
+  if (informationGatheringPatterns.some(pattern => pattern.test(msg))) {
+    console.log(`[AgentRouter] Information gathering detected: ${message.substring(0, 50)}...`);
+    return "information-collector";
+  }
+  
+  // Strategic planning patterns - complex analysis and planning
+  const planningPatterns = [
+    /plan\s+my\s+(week|day|month)/,
+    /organize\s+my\s+(tasks|projects|schedule)/,
+    /prioritize/,
+    /strategy/,
+    /optimize/,
+    /restructure/,
+    /analyze\s+my/,
+    /recommend/,
+    /suggest\s+how/,
+    /help\s+me\s+plan/,
+    /roadmap/,
+    /workflow/,
+  ];
+  
+  if (planningPatterns.some(pattern => pattern.test(msg))) {
+    console.log(`[AgentRouter] Planning detected: ${message.substring(0, 50)}...`);
+    return "planning";
+  }
+  
+  // Complex operations that require orchestration
+  const complexPatterns = [
+    /delete\s+all/,
+    /update\s+all/,
+    /move\s+all/,
+    /sync\s+with/,
+    /integrate/,
+    /migrate/,
+    /bulk\s+/,
+    /batch\s+/,
+    /multiple\s+/,
+    /everything/,
+    /across\s+/,
+  ];
+  
+  if (complexPatterns.some(pattern => pattern.test(msg))) {
+    console.log(`[AgentRouter] Complex operation detected, using orchestrator: ${message.substring(0, 50)}...`);
+    return "primary";
+  }
+  
+  // Check conversation context - if we're in middle of information gathering
+  const recentAssistantMessages = history
+    .filter(m => m.role === "assistant")
+    .slice(-2);
+  
+  const hasQuestions = recentAssistantMessages.some(m => 
+    typeof m.content === 'string' && m.content.includes('?')
+  );
+  
+  if (hasQuestions) {
+    console.log(`[AgentRouter] Continuing information gathering context: ${message.substring(0, 50)}...`);
+    return "information-collector";
+  }
+  
+  // Default to primary orchestrator for routing
+  console.log(`[AgentRouter] Defaulting to primary orchestrator: ${message.substring(0, 50)}...`);
+  return "primary";
+}

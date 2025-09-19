@@ -95,14 +95,10 @@ export namespace SystemPrompt {
     modelID: string, 
     dynamicInstructions: string = "", 
     userMessage: string = "", 
-    userId?: string
+    userId?: string,
+    agentName: string = "primary"
   ): Promise<string> {
-    let promptName = provider(modelID);
-    
-    // Use enhanced internal todo prompt for complex operations
-    if (shouldUseEnhancedTodoPrompt(userMessage)) {
-      promptName = "internalTodoEnhanced";
-    }
+    let promptName = getAgentSpecificPrompt(agentName, userMessage);
     
     // Load user's custom system prompt if available
     let customPrompt = "";
@@ -111,12 +107,30 @@ export namespace SystemPrompt {
     }
     
     // Generate the modular system prompt
-    const basePrompt = generateSystemPrompt(customPrompt, dynamicInstructions);
+    const basePrompt = generateSystemPrompt(customPrompt, dynamicInstructions, promptName);
     
     const envContext = environment();
     
     // Integration point: Custom prompt gets injected after base prompt, before environment context
     return basePrompt + envContext;
+  }
+  
+  // Agent-specific prompt selection with intelligent fallback
+  function getAgentSpecificPrompt(agentName: string, userMessage: string): string {
+    // Use enhanced internal todo prompt for complex operations (any agent)
+    if (shouldUseEnhancedTodoPrompt(userMessage)) {
+      return "internalTodoEnhanced";
+    }
+    
+    // Map agents to their specific prompts
+    const agentPromptMap: Record<string, string> = {
+      "primary": "orchestrator_new",
+      "information-collector": "information_collector_new", 
+      "planning": "planning_new",
+      "execution": "execution_new"
+    };
+    
+    return agentPromptMap[agentName] || "orchestrator_new";
   }
 
   // Synchronous version for backward compatibility (without custom prompts)

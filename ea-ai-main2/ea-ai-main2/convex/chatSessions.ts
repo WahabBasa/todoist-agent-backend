@@ -171,6 +171,7 @@ export const updateChatSession = mutation({
     title: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
     messageCount: v.optional(v.number()),
+    agentName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -192,6 +193,7 @@ export const updateChatSession = mutation({
     if (args.title !== undefined) updates.title = args.title;
     if (args.lastMessageAt !== undefined) updates.lastMessageAt = args.lastMessageAt;
     if (args.messageCount !== undefined) updates.messageCount = args.messageCount;
+    if (args.agentName !== undefined) updates.agentName = args.agentName;
 
     await ctx.db.patch(args.sessionId, updates);
     return true;
