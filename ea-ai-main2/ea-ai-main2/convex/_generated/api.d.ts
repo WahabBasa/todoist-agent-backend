@@ -13,7 +13,6 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as ai_agents_enhancedPlanningTest from "../ai/agents/enhancedPlanningTest.js";
 import type * as ai_agents_planningTest from "../ai/agents/planningTest.js";
 import type * as ai_agents_registry from "../ai/agents/registry.js";
 import type * as ai_agents_testPlanning from "../ai/agents/testPlanning.js";
@@ -88,7 +87,6 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "ai/agents/enhancedPlanningTest": typeof ai_agents_enhancedPlanningTest;
   "ai/agents/planningTest": typeof ai_agents_planningTest;
   "ai/agents/registry": typeof ai_agents_registry;
   "ai/agents/testPlanning": typeof ai_agents_testPlanning;

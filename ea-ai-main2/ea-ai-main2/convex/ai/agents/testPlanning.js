@@ -1,8 +1,8 @@
-// Test script for enhanced planning agent
+// Test script for planning agent
 // This script demonstrates how to invoke the planning agent with the new functionality
 
-async function testEnhancedPlanning() {
-  console.log("Testing enhanced planning agent...");
+async function testPlanning() {
+  console.log("Testing planning agent...");
   
   // Example 1: User feeling overwhelmed
   const task1 = {
@@ -40,9 +40,9 @@ async function testEnhancedPlanning() {
   console.log("Expected agent response: INTERNAL_TODO_UPDATE identifying presentation as high priority, then RECOMMENDATIONS_READY");
   console.log("");
   
-  console.log("The enhanced planning agent is now ready to use with the existing task tool.");
+  console.log("The planning agent is now ready to use with the existing task tool.");
   console.log("It will automatically use leading questions and intelligent priority detection.");
 }
 
 // Run the test
-testEnhancedPlanning();
+testPlanning();
