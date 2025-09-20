@@ -21,7 +21,7 @@ const SUBAGENT_PERMISSIONS = {
 export const MODES = {
   'primary': {
     name: 'Primary',
-    systemPromptFile: 'orchestrator_new',
+    systemPromptFile: 'zen_new',
     description: 'Workflow orchestrator - analyzes requests and delegates to appropriate specialists.'
   },
   'information-collector': {

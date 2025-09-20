@@ -22,6 +22,7 @@ import type * as ai_caching from "../ai/caching.js";
 import type * as ai_langfuse_client from "../ai/langfuse/client.js";
 import type * as ai_langfuse_logger from "../ai/langfuse/logger.js";
 import type * as ai_prompts_execution_new from "../ai/prompts/execution_new.js";
+import type * as ai_prompts_information_collector_new from "../ai/prompts/information_collector_new.js";
 import type * as ai_prompts_planning_new from "../ai/prompts/planning_new.js";
 import type * as ai_prompts_sections_capabilities from "../ai/prompts/sections/capabilities.js";
 import type * as ai_prompts_sections_customSystemPrompt from "../ai/prompts/sections/customSystemPrompt.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   "ai/langfuse/client": typeof ai_langfuse_client;
   "ai/langfuse/logger": typeof ai_langfuse_logger;
   "ai/prompts/execution_new": typeof ai_prompts_execution_new;
+  "ai/prompts/information_collector_new": typeof ai_prompts_information_collector_new;
   "ai/prompts/planning_new": typeof ai_prompts_planning_new;
   "ai/prompts/sections/capabilities": typeof ai_prompts_sections_capabilities;
   "ai/prompts/sections/customSystemPrompt": typeof ai_prompts_sections_customSystemPrompt;
