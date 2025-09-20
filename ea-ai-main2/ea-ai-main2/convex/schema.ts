@@ -19,6 +19,10 @@ const applicationTables = {
       v.literal("execution")
     )), // Which mode type is handling this session
     modeName: v.optional(v.string()), // Name of the specific mode
+    // --- Temporary migration fields - REMOVE after migration complete ---
+    agentMode: v.optional(v.string()), // Legacy agent mode field
+    agentName: v.optional(v.string()), // Legacy agent name field
+    // ---------------------------------------------------------------------
     // Session hierarchy support
     parentSessionId: v.optional(v.id("chatSessions")), // Parent session if this is a submode session
     delegationContext: v.optional(v.object({

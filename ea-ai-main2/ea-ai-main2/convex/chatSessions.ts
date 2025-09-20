@@ -528,18 +528,20 @@ export const updateDelegationStatus = mutation({
 export const getChatSessionsWithAgentFields = query({
   args: {},
   handler: async (ctx) => {
-    // This is a temporary query for migration - we'll access all sessions directly
-    // In a real migration, you might need to use internal queries or direct database access
-    // For now, we'll return an empty array since Convex doesn't easily allow querying
-    // documents with specific field presence
+    // Query for sessions that have the old agentMode field but not the new modeType field
+    // This identifies sessions that need to be migrated from agent-based to mode-based schema
+    const sessionsToMigrate = await ctx.db
+      .query("chatSessions")
+      .filter(q => 
+        q.and(
+          q.neq(q.field("agentMode"), undefined), // Has old agentMode field
+          q.eq(q.field("modeType"), undefined)    // Missing new modeType field
+        )
+      )
+      .collect();
     
-    // Note: This is a limitation of Convex - you can't easily query for documents
-    // that have specific fields. In practice, you might need to:
-    // 1. Use a separate migration tool
-    // 2. Manually identify sessions with agent fields
-    // 3. Run a one-time script to update all sessions
-    
-    return [];
+    console.log(`[Migration Query] Found ${sessionsToMigrate.length} sessions with agent fields to migrate`);
+    return sessionsToMigrate;
   },
 });
 
