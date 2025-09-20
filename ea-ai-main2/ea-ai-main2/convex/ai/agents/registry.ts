@@ -105,6 +105,8 @@ const BUILT_IN_AGENTS: AgentRegistryType = {
       // INFORMATION GATHERING TOOLS
       internalTodoWrite: true,
       internalTodoRead: true,
+      internalTodoUpdate: true,
+      internalTodoClear: true,
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,

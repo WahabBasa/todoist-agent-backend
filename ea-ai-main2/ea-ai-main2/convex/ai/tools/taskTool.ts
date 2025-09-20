@@ -10,6 +10,7 @@ import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
 // Static imports following OpenCode pattern - guaranteed assignment at compile time
 import { prompt as executionPrompt } from "../prompts/execution_new";
 import { prompt as planningPrompt } from "../prompts/planning_new";
+// Note: information-collector prompt is in system.ts
 
 /**
  * TaskTool - OpenCode-Style Stateless Agent Delegation
@@ -27,6 +28,7 @@ export const taskTool: ToolDefinition = {
   description: `Launch a specialized subagent to handle complex, multi-step tasks autonomously.
 
 Available subagents and their specializations:
+- information-collector: Systematic information gathering and user questioning
 - planning: Strategic planning and task organization with Eisenhower Matrix prioritization  
 - execution: Direct task and calendar operations with data validation
 
@@ -44,7 +46,7 @@ When NOT to use this tool:
 The subagent will work autonomously as your specialized tool and return concise results for integration into your response.`,
   
   inputSchema: z.object({
-    subagentType: z.enum(["planning", "execution"]).describe("Which specialized subagent to use for this task"),
+    subagentType: z.enum(["information-collector", "planning", "execution"]).describe("Which specialized subagent to use for this task"),
     prompt: z.string().describe("Clear, detailed description of the task to delegate. Be specific about what analysis or research is needed."),
     description: z.string().optional().describe("Short 3-5 word description of the task for progress tracking"),
   }),
@@ -79,24 +81,25 @@ The subagent will work autonomously as your specialized tool and return concise 
     const subagentTools = await getToolsForAgent(subagentConfig, actionCtx, ctx);
     console.log(`[TaskTool] Created ${Object.keys(subagentTools).length} filtered tools for ${subagentType}`);
 
-    // Static prompt mapping following OpenCode pattern - guaranteed assignment
-    const promptMap = {
-      'execution': executionPrompt,
-      'planning': planningPrompt
-    } as const;
+    // Get the appropriate system prompt for the subagent
+    let subagentSystemPrompt = "";
+    if (subagentType === "execution") {
+      subagentSystemPrompt = executionPrompt;
+    } else if (subagentType === "planning") {
+      subagentSystemPrompt = planningPrompt;
+    } else {
+      // For information-collector and other agents, get from SystemPrompt
+      subagentSystemPrompt = await SystemPrompt.getSystemPrompt(
+        actionCtx,
+        "anthropic/claude-3.5-haiku-20241022",
+        "",
+        prompt,
+        ctx.userId,
+        subagentType
+      );
+    }
     
-    // Default fallback prompt
-    const fallbackPrompt = [
-      `You are a specialized ${subagentType} agent.`,
-      `Your role: ${subagentConfig.description}`,
-      "",
-      "IMPORTANT: You are working as a subagent. Focus on your specific expertise and provide comprehensive results."
-    ].join("\n");
-    
-    // Guaranteed assignment - TypeScript can verify this at compile time
-    const subagentSystemPrompt = promptMap[subagentType as keyof typeof promptMap] || fallbackPrompt;
-    
-    console.log(`[TaskTool] Loaded specialized prompt for ${subagentType} via static import`);
+    console.log(`[TaskTool] Loaded specialized prompt for ${subagentType}`);
 
     // Create OpenRouter client for subagent execution
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -116,7 +119,9 @@ The subagent will work autonomously as your specialized tool and return concise 
     const executionStartTime = Date.now();
 
     // Enhanced continuation prompt that reinforces the subagent's role as a tool
-    const continuationPrompt = `${prompt}\n\nIMPORTANT: You are a specialized tool for Zen, the primary executive assistant. You work behind the scenes to support Zen's conversational approach with the user. Execute the requested analysis and return concise insights to support Zen's next conversation step. Remember to make intelligent assumptions rather than providing exhaustive analysis. Keep all responses extremely brief.`;
+    const continuationPrompt = `${prompt}
+
+IMPORTANT: You are a specialized tool for Zen, the primary executive assistant. You work behind the scenes to support Zen's conversational approach with the user. Execute the requested analysis and return concise insights to support Zen's next conversation step. Remember to make intelligent assumptions rather than providing exhaustive analysis. Keep all responses extremely brief.`;
 
     // Execute subagent within same action (following OpenCode pattern)
     const result = await streamText({
@@ -166,11 +171,67 @@ The subagent will work autonomously as your specialized tool and return concise 
     });
 
     // Prepare concise result for primary agent
+    // Extract only the essential information from subagent responses
+    let formattedOutput = finalText || "Task completed successfully.";
+    
+    // Extract specific communication formats from subagents
+    if (subagentType === "information-collector") {
+      // Look for QUESTION_FOR_USER, INFORMATION_READY, or PROGRESS_UPDATE formats
+      const questionMatch = formattedOutput.match(/QUESTION_FOR_USER:\s*["']?([^"'\n]+)/i);
+      const readyMatch = formattedOutput.match(/INFORMATION_READY:\s*["']?([^"'\n]+)/i);
+      const progressMatch = formattedOutput.match(/PROGRESS_UPDATE:\s*["']?([^"'\n]+)/i);
+      
+      if (questionMatch) {
+        formattedOutput = questionMatch[1].trim();
+      } else if (readyMatch) {
+        formattedOutput = readyMatch[1].trim();
+      } else if (progressMatch) {
+        formattedOutput = progressMatch[1].trim();
+      }
+      
+      // For information collector, if we still have a long response, just take the first sentence
+      if (formattedOutput.length > 100) {
+        const firstSentence = formattedOutput.split(/[.!?]+/)[0];
+        if (firstSentence && firstSentence.length <= 100) {
+          formattedOutput = firstSentence + (firstSentence.endsWith('?') ? '' : '.');
+        } else {
+          formattedOutput = formattedOutput.substring(0, 97) + "...";
+        }
+      }
+    } else if (subagentType === "planning") {
+      // Look for ANALYSIS_COMPLETE format
+      const analysisMatch = formattedOutput.match(/ANALYSIS_COMPLETE:\s*["']?([^"'\n]+)/i);
+      if (analysisMatch) {
+        formattedOutput = analysisMatch[1].trim();
+      }
+      
+      // For planning, limit to 150 characters
+      if (formattedOutput.length > 150) {
+        formattedOutput = formattedOutput.substring(0, 147) + "...";
+      }
+    } else if (subagentType === "execution") {
+      // Look for EXECUTION_COMPLETE format
+      const executionMatch = formattedOutput.match(/EXECUTION_COMPLETE:\s*["']?([^"'\n]+)/i);
+      if (executionMatch) {
+        formattedOutput = executionMatch[1].trim();
+      }
+      
+      // For execution, limit to 100 characters
+      if (formattedOutput.length > 100) {
+        formattedOutput = formattedOutput.substring(0, 97) + "...";
+      }
+    } else {
+      // For any other subagent, limit to 100 characters
+      if (formattedOutput.length > 100) {
+        formattedOutput = formattedOutput.substring(0, 97) + "...";
+      }
+    }
+
     // Return results to primary agent (following OpenCode pattern)
     return {
       title: `${subagentType} Task Completed`,
       metadata: { subagentType, taskDescription },
-      output: finalText || "Analysis completed successfully."
+      output: formattedOutput
     };
   }
 };
