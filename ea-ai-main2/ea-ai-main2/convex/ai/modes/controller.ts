@@ -60,7 +60,8 @@ export namespace ModeController {
       state.modeHistory = state.modeHistory.slice(-10);
     }
 
-    console.log(`[ModeController] Session ${sessionId} switched from ${state.previousMode} to ${modeName}`);
+    // Only log mode switches
+    console.log(`[MODE_SWITCH] Session ${sessionId} switched from ${state.previousMode} to ${modeName}`);
     return true;
   }
 

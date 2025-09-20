@@ -22,7 +22,7 @@ export function initializeLangfuse(): Langfuse {
       baseUrl: process.env.LANGFUSE_HOST,
     });
 
-    console.log("✅ Langfuse Cloud client initialized successfully");
+    // console.log("✅ Langfuse Cloud client initialized successfully");
     return langfuseClient;
   } catch (error) {
     console.error("❌ Failed to initialize Langfuse client:", error);

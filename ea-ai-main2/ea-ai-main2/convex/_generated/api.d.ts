@@ -13,10 +13,6 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as ai_agents_planningTest from "../ai/agents/planningTest.js";
-import type * as ai_agents_registry from "../ai/agents/registry.js";
-import type * as ai_agents_testPlanning from "../ai/agents/testPlanning.js";
-import type * as ai_agents_types from "../ai/agents/types.js";
 import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistantMessage/parseAssistantMessage.js";
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_langfuse_client from "../ai/langfuse/client.js";
@@ -92,10 +88,6 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  "ai/agents/planningTest": typeof ai_agents_planningTest;
-  "ai/agents/registry": typeof ai_agents_registry;
-  "ai/agents/testPlanning": typeof ai_agents_testPlanning;
-  "ai/agents/types": typeof ai_agents_types;
   "ai/assistantMessage/parseAssistantMessage": typeof ai_assistantMessage_parseAssistantMessage;
   "ai/caching": typeof ai_caching;
   "ai/langfuse/client": typeof ai_langfuse_client;

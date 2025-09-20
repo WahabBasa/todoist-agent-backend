@@ -55,8 +55,9 @@ The mode will work autonomously as your specialized tool and return concise resu
     const { modeType, prompt, description } = args;
     const taskDescription = description || `${modeType} task`;
     
-    console.log(`[TaskTool] Starting ${modeType} mode delegation`);
-    
+    // Log mode delegation
+    console.log(`[MODE_DELEGATION] Starting ${modeType} mode delegation for task: ${taskDescription}`);
+
     // Validate mode exists (following OpenCode pattern)
     if (!ModeRegistry.canUseAsInformationCollector(modeType) && 
         !ModeRegistry.canUseAsPlanning(modeType) && 
@@ -81,7 +82,7 @@ The mode will work autonomously as your specialized tool and return concise resu
 
     // Get filtered tools for mode (following OpenCode's tool filtering)
     const modeTools = await getToolsForMode(modeConfig, actionCtx, ctx);
-    console.log(`[TaskTool] Created ${Object.keys(modeTools).length} filtered tools for ${modeType}`);
+    console.log(`[MODE_TOOLS] Created ${Object.keys(modeTools).length} filtered tools for ${modeType}`);
 
     // Get the appropriate system prompt for the mode
     let modeSystemPrompt = "";
@@ -101,13 +102,13 @@ The mode will work autonomously as your specialized tool and return concise resu
       );
     }
     
-    console.log(`[TaskTool] Loaded specialized prompt for ${modeType}`);
+    console.log(`[MODE_PROMPT] Loaded specialized prompt for ${modeType}`);
 
     // Create OpenRouter client for mode execution
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     const model = openrouter.chat("anthropic/claude-3.5-haiku-20241022");
 
-    console.log(`[TaskTool] Executing ${modeType} mode with filtered tools`);
+    console.log(`[MODE_EXECUTION] Executing ${modeType} mode with filtered tools`);
 
     // Log mode call with full context
     logSubagentCall({
@@ -145,7 +146,7 @@ IMPORTANT: You are a specialized tool for Zen, the primary executive assistant. 
     const finalToolResults = await result.toolResults;
     
     const executionTime = Date.now() - executionStartTime;
-    console.log(`[TaskTool] ${modeType} completed: text=${!!finalText}, tools=${finalToolCalls.length}`);
+    console.log(`[MODE_COMPLETED] ${modeType} completed in ${executionTime}ms`);
 
     // Validate execution mode actually performed execution operations (not just planning)
     if (modeType === "execution") {
@@ -157,11 +158,9 @@ IMPORTANT: You are a specialized tool for Zen, the primary executive assistant. 
       const executionToolCalls = finalToolCalls.filter(tc => executionTools.includes(tc.toolName));
       const infoGatheringCalls = finalToolCalls.filter(tc => tc.toolName === "getProjectAndTaskMap" || tc.toolName === "getTasks");
       
-      console.log(`[TaskTool] Execution validation: ${executionToolCalls.length} execution calls, ${infoGatheringCalls.length} info calls`);
-      
       // Warning if execution mode only gathered information without executing
       if (executionToolCalls.length === 0 && infoGatheringCalls.length > 0) {
-        console.warn(`[TaskTool] WARNING: Execution mode performed information gathering but no actual execution operations`);
+        console.warn(`[MODE_WARNING] Execution mode performed information gathering but no actual execution operations`);
       }
     }
 
@@ -172,9 +171,25 @@ IMPORTANT: You are a specialized tool for Zen, the primary executive assistant. 
       executionTime
     });
 
+    // Log internal todo content if present
+    if (finalText && finalText.includes('"todos":')) {
+      try {
+        const todoMatch = finalText.match(/"todos":\s*(\[[^\]]*\])/);
+        if (todoMatch) {
+          const todos = JSON.parse(todoMatch[1]);
+          console.log(`[INTERNAL_TODOS] Mode ${modeType} created ${todos.length} todos:`, todos);
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    }
+
     // Prepare concise result for primary mode
     // Extract only the essential information from mode responses
     let formattedOutput = finalText || "Task completed successfully.";
+    
+    // Remove any XML tags from the output to prevent them from being returned to the user
+    formattedOutput = formattedOutput.replace(/<[^>]*>/g, '');
     
     // Extract specific communication formats from modes
     if (modeType === "information-collector") {
@@ -228,6 +243,9 @@ IMPORTANT: You are a specialized tool for Zen, the primary executive assistant. 
         formattedOutput = formattedOutput.substring(0, 97) + "...";
       }
     }
+    
+    // Final cleanup to ensure no XML tags remain
+    formattedOutput = formattedOutput.replace(/<[^>]*>/g, '').trim();
 
     // Return results to primary mode (following OpenCode pattern)
     return {

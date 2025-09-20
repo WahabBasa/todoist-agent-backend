@@ -16,7 +16,7 @@ export namespace MessageCaching {
       return messages;
     }
 
-    console.log(`[CACHING] Analyzing ${messages.length} messages for caching opportunities`);
+    // console.log(`[CACHING] Analyzing ${messages.length} messages for caching opportunities`);
 
     // Priority 1: ALL system messages (these are expensive and static)
     const systemMessages = messages.filter((msg) => msg.role === "system");
@@ -28,7 +28,7 @@ export namespace MessageCaching {
     // Combine for caching (prioritize system messages)
     const messagesToCache = [...systemMessages, ...recentMessages];
 
-    console.log(`[CACHING] Selected ${messagesToCache.length} messages for caching (${systemMessages.length} system + ${recentMessages.length} recent)`);
+    // console.log(`[CACHING] Selected ${messagesToCache.length} messages for caching (${systemMessages.length} system + ${recentMessages.length} recent)`);
 
     // OpenRouter's cache_control syntax for Anthropic ephemeral caching
     const providerOptions = {
@@ -46,7 +46,7 @@ export namespace MessageCaching {
         ? msg.content.length 
         : JSON.stringify(msg.content || '').length;
 
-      console.log(`[CACHING] Applying cache control to ${msg.role} message (${contentLength} chars)`);
+      // console.log(`[CACHING] Applying cache control to ${msg.role} message (${contentLength} chars)`);
 
       const shouldUseContentOptions = Array.isArray(msg.content) && msg.content.length > 0;
 
@@ -69,7 +69,7 @@ export namespace MessageCaching {
       };
     }
 
-    console.log(`[CACHING] Applied cache control to ${messagesToCache.length} messages`);
+    // console.log(`[CACHING] Applied cache control to ${messagesToCache.length} messages`);
     return messages;
   }
 
@@ -120,6 +120,6 @@ export namespace MessageCaching {
    * Simple initialization - no complex setup needed
    */
   export function initializeCaching(): void {
-    console.log("[Cache] OpenRouter + Anthropic ephemeral caching ready");
+    // console.log(`[Cache] OpenRouter + Anthropic ephemeral caching ready`);
   }
 }

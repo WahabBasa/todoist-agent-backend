@@ -29,7 +29,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
       }).optional(),
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
-      console.log(`[GoogleCalendar] Creating calendar event: ${args.summary}`);
+      // console.log(`[GoogleCalendar] Creating calendar event: ${args.summary}`);
       
       try {
         // Calculate duration from start and end dates

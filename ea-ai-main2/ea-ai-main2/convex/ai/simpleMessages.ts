@@ -33,7 +33,7 @@ export interface ConvexMessage {
  * Uses convertToModelMessages utility for robust and future-proof conversion
  */
 export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): ModelMessage[] {
-  console.log(`[SimpleMessages] Converting ${convexMessages.length} Convex messages to ModelMessages`);
+  // console.log(`[SimpleMessages] Converting ${convexMessages.length} Convex messages to ModelMessages`);
   
   // First convert to UIMessage format, then use AI SDK's convertToModelMessages
   const uiMessages: UIMessage[] = [];
@@ -107,16 +107,16 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
     }
   }
   
-  console.log(`[SimpleMessages] Built ${uiMessages.length} UIMessages from ${convexMessages.length} Convex messages`);
+  // console.log(`[SimpleMessages] Built ${uiMessages.length} UIMessages from ${convexMessages.length} Convex messages`);
   
   // Use AI SDK's convertToModelMessages for robust conversion
   const modelMessages = convertToModelMessages(uiMessages);
   
-  console.log(`[SimpleMessages] Converted to ${modelMessages.length} ModelMessages`);
+  // console.log(`[SimpleMessages] Converted to ${modelMessages.length} ModelMessages`);
   
   // Ensure we have at least one message for the AI SDK
   if (modelMessages.length === 0) {
-    console.log(`[SimpleMessages] No valid messages found, creating fallback user message`);
+    // console.log(`[SimpleMessages] No valid messages found, creating fallback user message`);
     return [{
       role: "user",
       content: "Please help me with my tasks."
@@ -135,16 +135,14 @@ export function optimizeConversation(messages: ConvexMessage[], maxMessages = 50
     return messages;
   }
   
-  console.log(`[SimpleMessages] Truncating conversation: ${messages.length} → ${maxMessages} messages`);
+  // console.log(`[SimpleMessages] Truncating conversation: ${messages.length} → ${maxMessages} messages`);
   
   // Simple strategy: keep recent messages
   // More sophisticated strategies can be added later if needed
   return messages.slice(-maxMessages);
 }
 
-/**
- * Clean up message content to prevent AI SDK issues
- */
+/**\n * Clean up message content to prevent AI SDK issues\n */
 export function sanitizeMessages(messages: ConvexMessage[]): ConvexMessage[] {
   return messages.map(msg => ({
     ...msg,
@@ -155,7 +153,10 @@ export function sanitizeMessages(messages: ConvexMessage[]): ConvexMessage[] {
     msg.content || 
     (msg.toolCalls && msg.toolCalls.length > 0) || 
     (msg.toolResults && msg.toolResults.length > 0)
-  );
+  ).map(msg => ({
+    ...msg,
+    content: msg.content ? msg.content.replace(/<[^>]*>/g, '').trim() : undefined
+  }));
 }
 
 /**

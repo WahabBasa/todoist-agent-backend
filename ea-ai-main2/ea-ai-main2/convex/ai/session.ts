@@ -105,7 +105,7 @@ export const chatWithAI = action({
       // Determine active mode from session or use intelligent routing
       const currentModeName = session?.modeName || await determineOptimalMode(message, history);
       
-      console.log(`[Session] Using mode: ${currentModeName} for request: "${message.substring(0, 50)}..."`);
+      // console.log(`[Session] Using mode: ${currentModeName} for request: "${message.substring(0, 50)}..."`);
       
       // Update session with determined mode if different
       if (session && session.modeName !== currentModeName) {
@@ -309,15 +309,19 @@ export const chatWithAI = action({
       });
       
       // Return simple response
+      // Remove any XML tags from the response to prevent them from being returned to the user
+      let cleanResponse = finalText || "I've completed the requested actions.";
+      cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
+      
       return {
-        response: finalText || "I've completed the requested actions.",
+        response: cleanResponse,
         fromCache: false,
         metadata: {
           toolCalls: finalToolCalls.length,
           toolResults: finalToolResults.length,
           tokens: finalUsage ? {
-            input: finalUsage.inputTokens,
-            output: finalUsage.outputTokens,
+            input: finalUsage.inputTokens || 0,
+            output: finalUsage.outputTokens || 0,
             total: finalUsage.totalTokens
           } : undefined,
           processingTime: Date.now() - Date.now() // Will be calculated properly

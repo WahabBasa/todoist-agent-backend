@@ -94,7 +94,7 @@ export function createConversationTrace(params: ConversationParams): LangfuseTra
     tags: ["conversation", "taskai"]
   });
 
-  console.log(`🚀 [LANGFUSE] Started conversation trace: ${currentTrace.id}`);
+  // console.log(`🚀 [LANGFUSE] Started conversation trace: ${currentTrace.id}`);
   return currentTrace;
 }
 
@@ -121,7 +121,7 @@ export function createUserMessageSpan(params: UserMessageParams): LangfuseSpan {
   });
 
   currentSpans.set("user-message", span);
-  console.log(`💬 [LANGFUSE] User message: "${params.message.substring(0, 50)}..."`);
+  // console.log(`💬 [LANGFUSE] User message: "${params.message.substring(0, 50)}..."`);
   return span;
 }
 
@@ -150,12 +150,14 @@ export function createPromptGeneration(params: PromptParams): LangfuseGeneration
   });
 
   // Log the complete system prompt for visibility
+  /*
   console.log(`🧠 [LANGFUSE] AI Generation Started`);
   console.log(`📋 [LANGFUSE] System Prompt (${params.systemPrompt.length} chars):`);
   console.log(`─`.repeat(60));
   console.log(params.systemPrompt.substring(0, 500) + (params.systemPrompt.length > 500 ? "..." : ""));
   console.log(`─`.repeat(60));
   console.log(`🔢 [LANGFUSE] Model: ${params.model} | Messages: ${params.messageCount}`);
+  */
 
   return currentGeneration;
 }
@@ -187,6 +189,7 @@ export function updatePromptGeneration(
     }
   });
 
+  /*
   console.log(`✅ [LANGFUSE] AI Generation Complete - ${usage.totalTokens} tokens used`);
   console.log(`📄 [LANGFUSE] Response (${response.length} chars): "${response.substring(0, 100)}..."`);
   
@@ -196,6 +199,7 @@ export function updatePromptGeneration(
       console.log(`  ${index + 1}. ${call.toolName}: ${JSON.stringify(call.input).substring(0, 100)}...`);
     });
   }
+  */
 }
 
 /**
@@ -243,6 +247,7 @@ export function createToolCallSpan(params: ToolCallParams): LangfuseSpan {
   currentSpans.set(`tool-${params.toolName}`, span);
 
   // Detailed console logging for immediate visibility
+  /*
   console.log(`
 
 🔧 [LANGFUSE] Tool Call: ${params.toolName}`);
@@ -260,7 +265,12 @@ export function createToolCallSpan(params: ToolCallParams): LangfuseSpan {
     console.log(`  ${status} ${key}: ${displayValue}`);
   });
 
+  const filledParams = Object.entries(parameterAnalysis).filter(([, analysis]) => analysis.filled);
+  const emptyParams = Object.entries(parameterAnalysis).filter(([, analysis]) => !analysis.filled);
   console.log(`📈 Summary: ${filledParams.length} filled, ${emptyParams.length} empty`);
+  */
+
+  return span;
   
   // Special handling for internalTodoWrite to show todo list contents
   if (params.toolName === "internalTodoWrite") {
@@ -351,7 +361,7 @@ export function createAssistantMessageSpan(params: AssistantMessageParams): Lang
   });
 
   currentSpans.set("assistant-message", span);
-  console.log(`🤖 [LANGFUSE] Assistant response: "${params.message.substring(0, 100)}..."`);
+  // console.log(`🤖 [LANGFUSE] Assistant response: "${params.message.substring(0, 100)}..."`);
   return span;
 }
 
@@ -456,6 +466,7 @@ export async function endConversation(finalData?: {
       });
     }
 
+    /*
     console.log(`🏁 [LANGFUSE] Conversation completed - flushing to cloud...`);
     
     // Flush to Langfuse Cloud
@@ -463,6 +474,7 @@ export async function endConversation(finalData?: {
     await langfuse.flushAsync();
     
     console.log(`☁️ [LANGFUSE] Data successfully sent to Langfuse Cloud`);
+    */
   }
 
   // Clean up state

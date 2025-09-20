@@ -29,9 +29,25 @@ export function parseAssistantMessage(assistantMessage: string): ParsedAssistant
     return result;
   }
 
-  // Simple regex-based parsing for XML-style tool calls
+  // More specific regex-based parsing for XML-style tool calls
   // This looks for patterns like <tool_name><param>value</param></tool_name>
-  const toolCallRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+  // But only for known tool names to avoid false positives
+  const knownTools = [
+    'createTask', 'getTasks', 'updateTask', 'deleteTask',
+    'createProject', 'updateProject', 'deleteProject',
+    'getProjectAndTaskMap', 'getProjectDetails', 'getTaskDetails',
+    'createBatchTasks', 'deleteBatchTasks', 'completeBatchTasks', 'updateBatchTasks',
+    'createProjectWithTasks', 'reorganizeTasksBatch',
+    'internalTodoWrite', 'internalTodoRead', 'internalTodoUpdate', 'internalTodoClear',
+    'getCurrentTime', 'getSystemStatus', 'validateInput', 'listTools',
+    'createCalendarEvent', 'updateCalendarEvent', 'deleteCalendarEvent',
+    'listCalendarEvents', 'searchCalendarEvents', 'planTask', 'task'
+  ];
+  
+  // Create a regex that only matches known tool names
+  const toolNamesPattern = knownTools.join('|');
+  const toolCallRegex = new RegExp(`<(${toolNamesPattern})>([\\s\\S]*?)<\\/\\1>`, 'g');
+  
   let lastIndex = 0;
   let match;
 
@@ -53,7 +69,7 @@ export function parseAssistantMessage(assistantMessage: string): ParsedAssistant
     const input: Record<string, any> = {};
     
     // Simple parameter extraction - looks for <param_name>value</param_name> patterns
-    const paramRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+    const paramRegex = /<(\w+)>([^<]*)<\/\1>/g;
     let paramMatch;
     let remainingContent = content;
     

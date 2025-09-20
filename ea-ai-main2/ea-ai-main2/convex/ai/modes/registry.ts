@@ -285,7 +285,10 @@ export class ModeRegistryClass {
    */
   static getMode(name: string): ModeConfig | null {
     const mode = this.modes[name] || null;
-    console.log(`[ModeRegistry] Getting mode ${name}:`, mode ? 'found' : 'not found');
+    // Only log when mode is not found
+    if (!mode) {
+      console.log(`[MODE_NOT_FOUND] Mode ${name} not found`);
+    }
     return mode;
   }
 

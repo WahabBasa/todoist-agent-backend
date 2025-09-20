@@ -192,9 +192,13 @@ export async function createSimpleToolRegistry(
         toModelOutput(result: any) {
           // For the primary mode, keep responses extremely concise
           // Only return the output, not the title or metadata
+          // Remove any XML tags from the output to prevent them from being returned to the user
+          let output = result.output || "Operation completed";
+          output = output.replace(/<[^>]*>/g, '').trim();
+          
           return {
             type: "text",
-            value: result.output || "Operation completed",
+            value: output,
           };
         }
       });
@@ -206,13 +210,13 @@ export async function createSimpleToolRegistry(
     }
   }
 
-  console.log(`[SimpleToolRegistry] Successfully created ${Object.keys(tools).length} tools`);
+  console.log(`[TOOL_REGISTRY] Successfully created ${Object.keys(tools).length} tools`);
   
   // Log available tools for debugging
   const toolNames = Object.keys(tools);
   const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
-  console.log(`[SimpleToolRegistry] Available tools: ${toolNames.join(', ')}`);
-  console.log(`[SimpleToolRegistry] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
+  console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
+  console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
 
   return tools;
 }
@@ -257,7 +261,7 @@ export async function createModeToolRegistry(
       }
     }
     
-    console.log(`[ModeToolRegistry] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
     
     return filteredTools;
   } catch (error) {
