@@ -96,9 +96,9 @@ export namespace SystemPrompt {
     dynamicInstructions: string = "", 
     userMessage: string = "", 
     userId?: string,
-    agentName: string = "primary"
+    modeName: string = "primary"
   ): Promise<string> {
-    let promptName = getAgentSpecificPrompt(agentName, userMessage);
+    let promptName = getModeSpecificPrompt(modeName, userMessage);
     
     // Load user's custom system prompt if available
     let customPrompt = "";
@@ -115,22 +115,22 @@ export namespace SystemPrompt {
     return basePrompt + envContext;
   }
   
-  // Agent-specific prompt selection with intelligent fallback
-  function getAgentSpecificPrompt(agentName: string, userMessage: string): string {
-    // Use enhanced internal todo prompt for complex operations (any agent)
+  // Mode-specific prompt selection with intelligent fallback
+  function getModeSpecificPrompt(modeName: string, userMessage: string): string {
+    // Use enhanced internal todo prompt for complex operations (any mode)
     if (shouldUseEnhancedTodoPrompt(userMessage)) {
       return "internalTodoEnhanced";
     }
     
-    // Map agents to their specific prompts
-    const agentPromptMap: Record<string, string> = {
+    // Map modes to their specific prompts
+    const modePromptMap: Record<string, string> = {
       "primary": "zen_new",
       "information-collector": "information_collector_new", 
       "planning": "planning_new",
       "execution": "execution_new"
     };
     
-    return agentPromptMap[agentName] || "zen_new";
+    return modePromptMap[modeName] || "zen_new";
   }
 
   // Synchronous version for backward compatibility (without custom prompts)
@@ -169,10 +169,10 @@ You ARE:
 
 <response_triggers>
 **For complex requests requiring systematic handling:**
-- Overwhelmed, drowning, stressed, anxious → Use task tool with information-collector subagent
-- Multiple tasks, complex planning, organization → Use task tool with appropriate subagent
-- Creating, updating, deleting tasks/events → Use task tool with execution subagent
-- Any complex request with more than one task → Use task tool with information-collector subagent
+- Overwhelmed, drowning, stressed, anxious → Use task tool with information-collector mode
+- Multiple tasks, complex planning, organization → Use task tool with appropriate mode
+- Creating, updating, deleting tasks/events → Use task tool with execution mode
+- Any complex request with more than one task → Use task tool with information-collector mode
 
 **Always use internal tools for complex operations**
 </response_triggers>
@@ -180,7 +180,7 @@ You ARE:
 <response_format>
 **For complex requests:**
 1. Brief acknowledgment with warmth (under 50 characters)
-2. Immediately use task tool with appropriate subagent
+2. Immediately use task tool with appropriate mode
 3. NO explanations, NO multiple questions
 
 **Examples:**
@@ -192,8 +192,8 @@ You ARE:
 - ❌ "I understand how you're feeling..."
 - ❌ "Let me ask you a few questions..."
 - ❌ "We'll approach this step-by-step..."
-- ❌ "Our information-collector agent..."
-- ❌ Any reference to separate agents or specialists
+- ❌ "Our information-collector mode..."
+- ❌ Any reference to separate modes or specialists
 - ❌ Any response over 50 characters before using tools
 </response_format>
 

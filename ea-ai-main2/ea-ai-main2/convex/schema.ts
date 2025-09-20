@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 // Big-brain pattern: Use tokenIdentifier directly, no users table needed
 const applicationTables = {
-  // Chat Sessions - Multiple conversations per user (Morphic-style) with Agent Support
+  // Chat Sessions - Multiple conversations per user (Morphic-style) with Mode Support
   chatSessions: defineTable({
     tokenIdentifier: v.string(),
     title: v.string(),
@@ -11,24 +11,29 @@ const applicationTables = {
     lastMessageAt: v.number(),
     messageCount: v.number(),
     isDefault: v.optional(v.boolean()), // Mark the default chat session
-    // Agent system integration
-    agentMode: v.optional(v.union(v.literal("primary"), v.literal("subagent"), v.literal("all"))), // Which agent mode is handling this session
-    agentName: v.optional(v.string()), // Name of the specific agent
+    // Mode system integration
+    modeType: v.optional(v.union(
+      v.literal("primary"), 
+      v.literal("information-collector"), 
+      v.literal("planning"), 
+      v.literal("execution")
+    )), // Which mode type is handling this session
+    modeName: v.optional(v.string()), // Name of the specific mode
     // Session hierarchy support
-    parentSessionId: v.optional(v.id("chatSessions")), // Parent session if this is a subagent session
+    parentSessionId: v.optional(v.id("chatSessions")), // Parent session if this is a submode session
     delegationContext: v.optional(v.object({
       delegatedTask: v.string(), // Original task that was delegated
       createdAt: v.number(), // When delegation was created
       status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
-      agentName: v.string(), // Agent handling the delegated task
+      modeName: v.string(), // Mode handling the delegated task
     })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_time", ["tokenIdentifier", "lastMessageAt"])
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
     .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"])
     .index("by_parent_session", ["parentSessionId"])
-    .index("by_agent_mode", ["agentMode"])
-    .index("by_tokenIdentifier_and_agent", ["tokenIdentifier", "agentName"]),
+    .index("by_mode_type", ["modeType"])
+    .index("by_tokenIdentifier_and_mode", ["tokenIdentifier", "modeName"]),
 
   conversations: defineTable({
     tokenIdentifier: v.string(),
@@ -71,7 +76,7 @@ const applicationTables = {
   // Google Calendar integration now uses Clerk OAuth tokens directly
   // No database storage needed - Clerk manages all token lifecycle
 
-  // AI Agent Internal Todos - Session-scoped task management for complex workflows
+  // AI Mode Internal Todos - Session-scoped task management for complex workflows
   aiInternalTodos: defineTable({
     tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
     sessionId: v.optional(v.id("chatSessions")), // Link to chat session

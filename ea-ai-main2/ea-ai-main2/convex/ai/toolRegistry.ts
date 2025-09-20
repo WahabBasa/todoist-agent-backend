@@ -11,6 +11,9 @@ import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
 import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
 
+// Import mode registry
+import { ModeRegistry } from "./modes/registry";
+
 /**
  * Simplified tool registry for direct Convex + AI SDK integration
  * 
@@ -20,6 +23,7 @@ import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
  * - No circuit breakers or complex error handling
  * - Use Convex's built-in patterns
  * - Remove processor context abstraction
+ * - Use mode-based filtering instead of agent-based filtering
  */
 
 // Simple tool context for essential information
@@ -105,7 +109,7 @@ export async function createSimpleToolRegistry(
   userId: string,
   currentTimeContext?: any,
   sessionId?: string,
-  agentName: string = "primary" // New parameter for agent-aware filtering
+  modeName: string = "primary" // New parameter for mode-aware filtering
 ): Promise<Record<string, any>> {
   
   console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
@@ -124,10 +128,10 @@ export async function createSimpleToolRegistry(
     ...UtilityTools,
     ...GoogleCalendarTools,
     ...SimpleDelegationTools,
-    ...TaskTool, // Now include TaskTool for agent delegation
+    ...TaskTool, // Now include TaskTool for mode delegation
   };
 
-  console.log(`[SimpleToolRegistry] Including TaskTool for agent delegation`);
+  console.log(`[SimpleToolRegistry] Including TaskTool for mode delegation`);
 
   const tools: Record<string, any> = {};
   
@@ -186,7 +190,7 @@ export async function createSimpleToolRegistry(
         },
         // Control what the AI model sees while preserving structured tool results
         toModelOutput(result: any) {
-          // For the primary agent, keep responses extremely concise
+          // For the primary mode, keep responses extremely concise
           // Only return the output, not the title or metadata
           return {
             type: "text",
@@ -214,69 +218,66 @@ export async function createSimpleToolRegistry(
 }
 
 /**
- * Create tool registry filtered for a specific agent
- * Only provides tools that the agent has permission to use
+ * Create tool registry filtered for a specific mode
+ * Only provides tools that the mode has permission to use
  */
-export async function createAgentToolRegistry(
+export async function createModeToolRegistry(
   actionCtx: ActionCtx,
   userId: string,
-  agentName: string = "primary",
+  modeName: string = "primary",
   currentTimeContext?: any,
   sessionId?: string
 ): Promise<Record<string, any>> {
   try {
     // Create the full tool registry
-    const allTools = await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, agentName);
+    const allTools = await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
     
-    // Import the AgentRegistry
-    const { AgentRegistry } = await import("./agents/registry");
-    
-    // Get agent configuration
-    const agentConfig = AgentRegistry.getAgent(agentName);
-    if (!agentConfig) {
-      console.error(`[AgentToolRegistry] Agent ${agentName} not found, using all tools`);
-      return allTools; // Fallback to all tools if agent not found
+    // Get mode configuration
+    const modeConfig = ModeRegistry.getMode(modeName);
+    if (!modeConfig) {
+      console.error(`[ModeToolRegistry] Mode ${modeName} not found, using all tools`);
+      return allTools; // Fallback to all tools if mode not found
     }
     
-    // Get agent's tool permissions
-    const agentTools = AgentRegistry.getAgentTools(agentName);
+    // Get mode's tool permissions
+    const modeTools = ModeRegistry.getModeTools(modeName);
     
-    // Filter tools based on agent permissions
+    // Filter tools based on mode permissions
     const filteredTools: Record<string, any> = {};
     
     for (const [toolName, tool] of Object.entries(allTools)) {
-      // Special case: subagents should not have access to task tool to prevent recursion
-      if (toolName === "task" && agentConfig.mode === "subagent") {
-        continue; // Skip task tool for subagents
+      // Special case: submodes should not have access to task tool to prevent recursion
+      if (toolName === "task" && modeConfig.type !== "primary") {
+        continue; // Skip task tool for submodes
       }
       
-      // Check if agent has permission for this tool
-      if (agentTools[toolName] === true) {
+      // Check if mode has permission for this tool
+      if (modeTools[toolName] === true) {
         filteredTools[toolName] = tool;
       }
     }
     
-    console.log(`[AgentToolRegistry] Filtered tools for agent ${agentName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    console.log(`[ModeToolRegistry] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
     
     return filteredTools;
   } catch (error) {
-    console.error(`[AgentToolRegistry] Failed to create filtered tool registry:`, error);
+    console.error(`[ModeToolRegistry] Failed to create filtered tool registry:`, error);
     // Return all tools as fallback
-    return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, agentName);
+    return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
   }
 }
 
 /**
- * Create tool registry filtered for the primary agent
- * Only provides tools that the primary agent has permission to use
+ * Create tool registry filtered for the primary mode
+ * Only provides tools that the primary mode has permission to use
  */
-export async function createPrimaryAgentToolRegistry(
+export async function createPrimaryModeToolRegistry(
   actionCtx: ActionCtx,
   userId: string,
   currentTimeContext?: any,
   sessionId?: string
 ): Promise<Record<string, any>> {
-  return await createAgentToolRegistry(actionCtx, userId, "primary", currentTimeContext, sessionId);
+  return await createModeToolRegistry(actionCtx, userId, "primary", currentTimeContext, sessionId);
 }
 
 /**
@@ -284,7 +285,7 @@ export async function createPrimaryAgentToolRegistry(
  */
 export function isToolAvailable(toolName: string): boolean {
   // Simple availability check - can be enhanced later if needed
-  // Task tool is now enabled for agent delegation
+  // Task tool is now enabled for mode delegation
   const unavailableTools = new Set<string>(); // No disabled tools
   return !unavailableTools.has(toolName);
 }

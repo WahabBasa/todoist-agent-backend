@@ -15,8 +15,13 @@ export const createChatSession = mutation({
   args: {
     title: v.optional(v.string()),
     isDefault: v.optional(v.boolean()),
-    agentMode: v.optional(v.union(v.literal("primary"), v.literal("subagent"), v.literal("all"))),
-    agentName: v.optional(v.string()),
+    modeType: v.optional(v.union(
+      v.literal("primary"), 
+      v.literal("information-collector"), 
+      v.literal("planning"), 
+      v.literal("execution")
+    )),
+    modeName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -37,9 +42,9 @@ export const createChatSession = mutation({
       lastMessageAt: now,
       messageCount: 0,
       isDefault: args.isDefault || false,
-      // Agent system fields
-      agentMode: args.agentMode || "primary",
-      agentName: args.agentName || "primary",
+      // Mode system fields
+      modeType: args.modeType || "primary",
+      modeName: args.modeName || "primary",
     });
 
     return sessionId;
@@ -171,7 +176,7 @@ export const updateChatSession = mutation({
     title: v.optional(v.string()),
     lastMessageAt: v.optional(v.number()),
     messageCount: v.optional(v.number()),
-    agentName: v.optional(v.string()),
+    modeName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -193,7 +198,7 @@ export const updateChatSession = mutation({
     if (args.title !== undefined) updates.title = args.title;
     if (args.lastMessageAt !== undefined) updates.lastMessageAt = args.lastMessageAt;
     if (args.messageCount !== undefined) updates.messageCount = args.messageCount;
-    if (args.agentName !== undefined) updates.agentName = args.agentName;
+    if (args.modeName !== undefined) updates.modeName = args.modeName;
 
     await ctx.db.patch(args.sessionId, updates);
     return true;
@@ -431,19 +436,24 @@ export const cleanupTodaysNewChats = mutation({
   },
 });
 
-// Create child session for agent delegation
+// Create child session for mode delegation
 export const createChildSession = mutation({
   args: {
     tokenIdentifier: v.string(),
     parentSessionId: v.id("chatSessions"),
     title: v.string(),
-    agentMode: v.union(v.literal("primary"), v.literal("subagent"), v.literal("all")),
-    agentName: v.string(),
+    modeType: v.union(
+      v.literal("primary"), 
+      v.literal("information-collector"), 
+      v.literal("planning"), 
+      v.literal("execution")
+    ),
+    modeName: v.string(),
     delegationContext: v.object({
       delegatedTask: v.string(),
       createdAt: v.number(),
       status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
-      agentName: v.string(),
+      modeName: v.string(),
     }),
   },
   handler: async (ctx, args) => {
@@ -461,9 +471,9 @@ export const createChildSession = mutation({
       lastMessageAt: now,
       messageCount: 0,
       isDefault: false,
-      // Agent system fields
-      agentMode: args.agentMode,
-      agentName: args.agentName,
+      // Mode system fields
+      modeType: args.modeType,
+      modeName: args.modeName,
       // Session hierarchy
       parentSessionId: args.parentSessionId,
       delegationContext: args.delegationContext,
@@ -514,28 +524,48 @@ export const updateDelegationStatus = mutation({
   },
 });
 
-// Get child sessions for a parent session
-export const getChildSessions = query({
+// Get chat sessions that still have agent fields (for migration)
+export const getChatSessionsWithAgentFields = query({
+  args: {},
+  handler: async (ctx) => {
+    // This is a temporary query for migration - we'll access all sessions directly
+    // In a real migration, you might need to use internal queries or direct database access
+    // For now, we'll return an empty array since Convex doesn't easily allow querying
+    // documents with specific field presence
+    
+    // Note: This is a limitation of Convex - you can't easily query for documents
+    // that have specific fields. In practice, you might need to:
+    // 1. Use a separate migration tool
+    // 2. Manually identify sessions with agent fields
+    // 3. Run a one-time script to update all sessions
+    
+    return [];
+  },
+});
+
+// Update multiple fields in a chat session (for migration)
+export const updateChatSessionFields = mutation({
   args: {
-    parentSessionId: v.id("chatSessions"),
+    sessionId: v.id("chatSessions"),
+    updates: v.any(),
   },
   handler: async (ctx, args) => {
-    const tokenIdentifier = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
     if (!tokenIdentifier) {
-      return [];
+      throw new ConvexError("Token identifier not found");
     }
 
-    // Verify parent session exists and belongs to user
-    const parentSession = await ctx.db.get(args.parentSessionId);
-    if (!parentSession || parentSession.tokenIdentifier !== tokenIdentifier) {
-      return [];
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
     }
 
-    const childSessions = await ctx.db
-      .query("chatSessions")
-      .withIndex("by_parent_session", (q) => q.eq("parentSessionId", args.parentSessionId))
-      .collect();
-
-    return childSessions;
+    await ctx.db.patch(args.sessionId, args.updates);
+    return true;
   },
 });

@@ -15,9 +15,18 @@ import {
   sanitizeMessages,
   addMessageToConversation
 } from "./simpleMessages";
-import { createSimpleToolRegistry, createPrimaryAgentToolRegistry, createAgentToolRegistry } from "./toolRegistry";
+import { createSimpleToolRegistry, createPrimaryModeToolRegistry } from "./toolRegistry";
+import { createModeToolRegistry as createSessionModeToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
+
+// Import mode components
+import { ModeController } from "./modes/controller";
+import { ModeRegistry } from "./modes/registry";
+
+// Read mode-specific prompt files
+import fs from "fs/promises";
+import path from "path";
 
 // Langfuse Cloud tracing imports
 import {
@@ -41,6 +50,7 @@ import {
  * - Remove manual stream processing complexity
  * - Use Convex patterns instead of fighting them
  * - Simple, direct approach that works reliably
+ * - Uses mode-based system instead of agent-based system
  */
 export const chatWithAI = action({
   args: {
@@ -87,16 +97,21 @@ export const chatWithAI = action({
       
       const history = (conversation?.messages as ConvexMessage[]) || [];
       
-      // Determine active agent from session or use intelligent routing
-      const currentAgentName = session?.agentName || await determineOptimalAgent(message, history);
+      // Initialize mode controller for session
+      if (sessionId) {
+        ModeController.initializeSession(sessionId);
+      }
       
-      console.log(`[Session] Using agent: ${currentAgentName} for request: "${message.substring(0, 50)}..."`);
+      // Determine active mode from session or use intelligent routing
+      const currentModeName = session?.modeName || await determineOptimalMode(message, history);
       
-      // Update session with determined agent if different
-      if (session && session.agentName !== currentAgentName) {
+      console.log(`[Session] Using mode: ${currentModeName} for request: "${message.substring(0, 50)}..."`);
+      
+      // Update session with determined mode if different
+      if (session && session.modeName !== currentModeName) {
         await ctx.runMutation(api.chatSessions.updateChatSession, {
           sessionId: session._id,
-          agentName: currentAgentName,
+          modeName: currentModeName,
         });
       }
       
@@ -117,22 +132,23 @@ export const chatWithAI = action({
       const optimizedHistory = optimizeConversation(updatedHistory, 50);
       const cleanHistory = sanitizeMessages(optimizedHistory);
       
-      
+      // Inject mode-specific prompts if needed
+      const historyWithModePrompts = await injectModePrompts(cleanHistory, sessionId, currentModeName);
 
       // Direct conversion to AI SDK format - no complex pipeline
-      const modelMessages = convertConvexToModelMessages(cleanHistory);
+      const modelMessages = convertConvexToModelMessages(historyWithModePrompts);
 
       // Initialize caching for performance
       MessageCaching.initializeCaching();
 
-      // Generate system prompt using agent-specific system
+      // Generate system prompt using mode-specific system
       const systemPrompt = await SystemPrompt.getSystemPrompt(
         ctx,
         modelName, 
         "", // No special instructions needed 
         message,
         userId,
-        currentAgentName
+        currentModeName
       );
       
       // Add system message to conversation
@@ -154,8 +170,8 @@ export const chatWithAI = action({
         messages: cachedMessages
       });
 
-      // Create agent-specific tool registry 
-      const tools = await createAgentToolRegistry(ctx, userId, currentAgentName, currentTimeContext, sessionId);
+      // Create mode-specific tool registry 
+      const tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -392,12 +408,138 @@ export const getSessionStats = action({
 });
 
 /**
- * Intelligent agent determination based on request analysis
- * Implements automatic mode switching for 4-mode architecture
+ * Intelligent mode determination based on request analysis
+ * Implements automatic mode switching for mode-based architecture
  */
-async function determineOptimalAgent(message: string, history: any[]): Promise<string> {
-  // Primary agent should handle all requests by default
-  // Specialized agents are called via task delegation when needed
-  console.log(`[AgentRouter] Defaulting to primary agent: ${message.substring(0, 50)}...`);
+async function determineOptimalMode(message: string, history: any[]): Promise<string> {
+  // Primary mode should handle all requests by default
+  // Specialized modes are called via task delegation when needed
+  console.log(`[ModeRouter] Defaulting to primary mode: ${message.substring(0, 50)}...`);
   return "primary";
+}
+
+/**
+ * Inject mode-specific prompts into the conversation history
+ * Similar to how OpenCode injects plan.txt and build-switch.txt
+ */
+async function injectModePrompts(history: any[], sessionId: string | undefined, currentMode: string): Promise<any[]> {
+  if (!sessionId) {
+    return history;
+  }
+
+  // Get the previous mode to determine if we need to inject a switch prompt
+  const modeHistory = ModeController.getModeHistory(sessionId);
+  const previousMode = modeHistory.length > 1 ? modeHistory[modeHistory.length - 2] : null;
+
+  // Clone the history to avoid modifying the original
+  const updatedHistory = [...history];
+
+  // Inject mode switch prompt if switching between modes
+  if (previousMode && previousMode !== currentMode) {
+    let switchPrompt = "";
+    
+    // Determine the appropriate switch prompt based on the mode transition
+    if (previousMode === "information-collector" && currentMode === "planning") {
+      try {
+        switchPrompt = await fs.readFile(
+          path.join(__dirname, "modes", "prompts", "information-to-planning-switch.txt"),
+          "utf-8"
+        );
+      } catch (error) {
+        switchPrompt = "Your operational mode has changed from information collection to planning.";
+      }
+    } else if (previousMode === "planning" && currentMode === "execution") {
+      try {
+        switchPrompt = await fs.readFile(
+          path.join(__dirname, "modes", "prompts", "planning-to-execution-switch.txt"),
+          "utf-8"
+        );
+      } catch (error) {
+        switchPrompt = "Your operational mode has changed from planning to execution.";
+      }
+    } else if (previousMode === "execution" && currentMode === "primary") {
+      try {
+        switchPrompt = await fs.readFile(
+          path.join(__dirname, "modes", "prompts", "execution-to-primary-switch.txt"),
+          "utf-8"
+        );
+      } catch (error) {
+        switchPrompt = "Your operational mode has changed from execution to primary.";
+      }
+    }
+
+    // Add the switch prompt to the last user message
+    if (switchPrompt && updatedHistory.length > 0) {
+      const lastMessage = updatedHistory[updatedHistory.length - 1];
+      if (lastMessage.role === "user") {
+        lastMessage.content += "\n" + switchPrompt;
+      }
+    }
+  }
+
+  // Inject mode-specific prompt for the current mode
+  let modePrompt = "";
+  try {
+    const promptPath = path.join(__dirname, "modes", "prompts", `${currentMode}.txt`);
+    modePrompt = await fs.readFile(promptPath, "utf-8");
+  } catch (error) {
+    // If no specific prompt file exists, use a generic mode prompt
+    modePrompt = `<system-reminder>
+CRITICAL: ${currentMode} mode ACTIVE. You are operating in ${currentMode} mode with specific permissions and responsibilities.
+</system-reminder>`;
+  }
+
+  // Add the mode prompt to the last user message\n  if (modePrompt && updatedHistory.length > 0) {\n    const lastMessage = updatedHistory[updatedHistory.length - 1];\n    if (lastMessage.role === \"user\") {\n      lastMessage.content += \"\\n\" + modePrompt;\n    }\n  }
+
+  return updatedHistory;
+}
+
+/**
+ * Create tool registry filtered for a specific mode
+ * Only provides tools that the mode has permission to use
+ */
+async function createModeToolRegistry(
+  actionCtx: any,
+  userId: string,
+  modeName: string = "primary",
+  currentTimeContext?: any,
+  sessionId?: string
+): Promise<Record<string, any>> {
+  try {
+    // Create the full tool registry
+    const allTools = await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
+    
+    // Get mode configuration
+    const modeConfig = ModeRegistry.getMode(modeName);
+    if (!modeConfig) {
+      console.error(`[ModeToolRegistry] Mode ${modeName} not found, using all tools`);
+      return allTools; // Fallback to all tools if mode not found
+    }
+    
+    // Get mode's tool permissions
+    const modeTools = ModeRegistry.getModeTools(modeName);
+    
+    // Filter tools based on mode permissions
+    const filteredTools: Record<string, any> = {};
+    
+    for (const [toolName, tool] of Object.entries(allTools)) {
+      // Special case: submodes should not have access to task tool to prevent recursion
+      if (toolName === "task" && modeConfig.type !== "primary") {
+        continue; // Skip task tool for submodes
+      }
+      
+      // Check if mode has permission for this tool
+      if (modeTools[toolName] === true) {
+        filteredTools[toolName] = tool;
+      }
+    }
+    
+    console.log(`[ModeToolRegistry] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    
+    return filteredTools;
+  } catch (error) {
+    console.error(`[ModeToolRegistry] Failed to create filtered tool registry:`, error);
+    // Return all tools as fallback
+    return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
+  }
 }
