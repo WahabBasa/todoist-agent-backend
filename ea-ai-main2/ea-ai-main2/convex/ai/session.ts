@@ -105,7 +105,7 @@ export const chatWithAI = action({
       
       // Log mode information but don't update session mode in database
       // Primary modes share context in same session (like OpenCode)
-      const tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
+      tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
       logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode");
       console.log(`[ModeTools] Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
       
