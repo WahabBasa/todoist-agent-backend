@@ -6,6 +6,19 @@ import { PrimaryModeRegistry } from "../modes/registry";
 import { SubagentRegistry } from "../subagents/registry";
 import { executeSubagent } from "../subagents/executor";
 import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
+import { Id } from "../../_generated/dataModel";
+
+/**
+ * Type guard to ensure sessionId is a valid Convex ID
+ */
+function validateSessionId(sessionId: string | Id<"chatSessions"> | undefined): Id<"chatSessions"> {
+  if (!sessionId) {
+    throw new Error("Session ID is required for task delegation");
+  }
+  
+  // Since Id<"chatSessions"> is just a string at runtime, cast it directly
+  return sessionId as Id<"chatSessions">;
+}
 
 /**
  * Enhanced TaskTool - Unified Primary Mode + Subagent System
@@ -94,10 +107,13 @@ async function executePrimaryMode(
   // For primary modes, we inject the mode prompt into the current conversation
   // This preserves context like OpenCode's plan/build mode switching
   
+  // Validate and get proper sessionId
+  const validSessionId = validateSessionId(ctx.sessionId);
+
   if (modeConfig.promptInjection) {
     // Add synthetic message part with mode prompt (like OpenCode)
     await actionCtx.runMutation(api.conversations.addSyntheticMessage, {
-      sessionId: ctx.sessionId,
+      sessionId: validSessionId,
       content: modeConfig.promptInjection,
       timestamp: Date.now(),
     });
@@ -105,7 +121,7 @@ async function executePrimaryMode(
 
   // Update session to track primary mode
   await actionCtx.runMutation(api.chatSessions.updateChatSession, {
-    sessionId: ctx.sessionId,
+    sessionId: validSessionId,
     modeName: modeName,
   });
 
@@ -154,6 +170,9 @@ async function executeSubagentMode(
     timestamp: new Date().toLocaleTimeString()
   });
 
+  // Validate and get proper sessionId
+  const validSessionId = validateSessionId(ctx.sessionId);
+
   const executionStartTime = Date.now();
 
   try {
@@ -161,7 +180,7 @@ async function executeSubagentMode(
     const result = await executeSubagent(actionCtx, {
       subagentName,
       prompt,
-      parentSessionId: ctx.sessionId,
+      parentSessionId: validSessionId,
       userId: ctx.userId,
       currentTimeContext: ctx.currentTimeContext,
     });

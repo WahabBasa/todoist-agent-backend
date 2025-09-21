@@ -506,6 +506,8 @@ export const createChildSession = mutation({
     modeName: v.string(),
     delegationContext: v.object({
       delegatedTask: v.string(),
+      delegationType: v.union(v.literal("primary-mode"), v.literal("subagent")),
+      targetName: v.string(),
       createdAt: v.number(),
       status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
       modeName: v.string(),
@@ -538,44 +540,6 @@ export const createChildSession = mutation({
       sessionId,
       parentSessionId: args.parentSessionId,
     };
-  },
-});
-
-// Update delegation status for a child session
-export const updateDelegationStatus = mutation({
-  args: {
-    sessionId: v.id("chatSessions"),
-    status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new ConvexError("Authentication required");
-    }
-    
-    const tokenIdentifier = identity.tokenIdentifier;
-    if (!tokenIdentifier) {
-      throw new ConvexError("Token identifier not found");
-    }
-
-    const session = await ctx.db.get(args.sessionId);
-    if (!session || session.tokenIdentifier !== tokenIdentifier) {
-      throw new ConvexError("Session not found or unauthorized");
-    }
-
-    if (!session.delegationContext) {
-      throw new ConvexError("Session is not a delegated task session");
-    }
-
-    await ctx.db.patch(args.sessionId, {
-      delegationContext: {
-        ...session.delegationContext,
-        status: args.status,
-      },
-      lastMessageAt: Date.now(),
-    });
-
-    return true;
   },
 });
 
