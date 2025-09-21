@@ -2,6 +2,9 @@ import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
+// Import clean logging system
+import { logTodosState } from "./ai/logger";
+
 // Helper function for consistent authentication (tokenIdentifier pattern)
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
@@ -51,7 +54,7 @@ export const createInternalTodoList = mutation({
 
     // Create new todolist
     const now = Date.now();
-    return await ctx.db.insert("aiInternalTodos", {
+    const result = await ctx.db.insert("aiInternalTodos", {
       tokenIdentifier,
       sessionId: args.sessionId,
       todos: args.todos,
@@ -59,6 +62,11 @@ export const createInternalTodoList = mutation({
       updatedAt: now,
       isActive: true,
     });
+    
+    // Log the new todos state
+    logTodosState(args.todos, "created");
+    
+    return result;
   },
 });
 
@@ -83,7 +91,7 @@ export const updateInternalTodos = mutation({
     if (!existingTodoList) {
       // Create new todolist if none exists
       const now = Date.now();
-      return await ctx.db.insert("aiInternalTodos", {
+      const result = await ctx.db.insert("aiInternalTodos", {
         tokenIdentifier,
         sessionId: args.sessionId,
         todos: args.todos,
@@ -91,6 +99,11 @@ export const updateInternalTodos = mutation({
         updatedAt: now,
         isActive: true,
       });
+      
+      // Log the new todos state
+      logTodosState(args.todos, "created");
+      
+      return result;
     }
 
     // Update existing todolist
@@ -98,6 +111,9 @@ export const updateInternalTodos = mutation({
       todos: args.todos,
       updatedAt: Date.now(),
     });
+    
+    // Log the updated todos state
+    logTodosState(args.todos, "updated");
 
     return existingTodoList._id;
   },
@@ -134,6 +150,9 @@ export const getInternalTodos = query({
     const inProgressCount = todos.filter(t => t.status === "in_progress").length;
     const completedCount = todos.filter(t => t.status === "completed").length;
     const totalCount = todos.length;
+
+    // Log todos state when read (for tracking current state)
+    logTodosState(todos, "read");
 
     return {
       _id: todoList._id,

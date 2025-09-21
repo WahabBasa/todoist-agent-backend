@@ -112,7 +112,7 @@ export async function createSimpleToolRegistry(
   modeName: string = "primary" // New parameter for mode-aware filtering
 ): Promise<Record<string, any>> {
   
-  console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
+  // console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
   
   const context: SimpleToolContext = {
     userId,
@@ -131,11 +131,11 @@ export async function createSimpleToolRegistry(
     ...TaskTool, // Now include TaskTool for mode delegation
   };
 
-  console.log(`[SimpleToolRegistry] Including TaskTool for mode delegation`);
+  // console.log(`[SimpleToolRegistry] Including TaskTool for mode delegation`);
 
   const tools: Record<string, any> = {};
   
-  console.log(`[SimpleToolRegistry] Converting ${Object.keys(allTools).length} tools`);
+  // console.log(`[SimpleToolRegistry] Converting ${Object.keys(allTools).length} tools`);
   
   // Convert each tool to simple AI SDK format
   for (const [key, toolDef] of Object.entries(allTools)) {
@@ -210,13 +210,13 @@ export async function createSimpleToolRegistry(
     }
   }
 
-  console.log(`[TOOL_REGISTRY] Successfully created ${Object.keys(tools).length} tools`);
+  // console.log(`[TOOL_REGISTRY] Successfully created ${Object.keys(tools).length} tools`);
   
   // Log available tools for debugging
   const toolNames = Object.keys(tools);
   const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
-  console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
-  console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
+  // console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
+  // console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
 
   return tools;
 }
@@ -261,7 +261,7 @@ export async function createModeToolRegistry(
       }
     }
     
-    console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    // console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
     
     return filteredTools;
   } catch (error) {

@@ -10,7 +10,59 @@ function generateChatTitle(firstMessage: string): string {
   return title || "New Chat";
 }
 
-// Create a new chat session
+// Create a new chat session (updated for primary mode + subagent support)
+export const create = mutation({
+  args: {
+    tokenIdentifier: v.string(),
+    title: v.optional(v.string()),
+    isDefault: v.optional(v.boolean()),
+    // NEW: Session type system
+    sessionType: v.optional(v.union(v.literal("primary"), v.literal("subagent"))),
+    primaryMode: v.optional(v.union(v.literal("primary"), v.literal("information-collector"))),
+    subagentType: v.optional(v.string()),
+    parentSessionId: v.optional(v.id("chatSessions")),
+    delegationContext: v.optional(v.object({
+      delegatedTask: v.string(),
+      delegationType: v.union(v.literal("primary-mode"), v.literal("subagent")),
+      targetName: v.string(),
+      createdAt: v.number(),
+      status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
+      result: v.optional(v.string()),
+    })),
+    // Legacy fields for migration
+    modeType: v.optional(v.union(
+      v.literal("primary"), 
+      v.literal("information-collector"), 
+      v.literal("planning"), 
+      v.literal("execution")
+    )),
+    modeName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const sessionId = await ctx.db.insert("chatSessions", {
+      tokenIdentifier: args.tokenIdentifier,
+      title: args.title || "New Chat",
+      createdAt: now,
+      lastMessageAt: now,
+      messageCount: 0,
+      isDefault: args.isDefault || false,
+      // NEW: Session type system
+      sessionType: args.sessionType || "primary",
+      primaryMode: args.primaryMode,
+      subagentType: args.subagentType,
+      parentSessionId: args.parentSessionId,
+      delegationContext: args.delegationContext,
+      // Legacy fields for migration
+      modeType: args.modeType || "primary",
+      modeName: args.modeName || "primary",
+    });
+
+    return sessionId;
+  },
+});
+
+// Legacy function name for backward compatibility
 export const createChatSession = mutation({
   args: {
     title: v.optional(v.string()),
@@ -42,9 +94,12 @@ export const createChatSession = mutation({
       lastMessageAt: now,
       messageCount: 0,
       isDefault: args.isDefault || false,
-      // Mode system fields
+      // Legacy mode system fields
       modeType: args.modeType || "primary",
       modeName: args.modeName || "primary",
+      // Default to primary session type
+      sessionType: "primary",
+      primaryMode: "primary",
     });
 
     return sessionId;
@@ -75,7 +130,7 @@ export const getChatSessions = query({
       .collect();
 
     // Debug: Log session count to understand missing history issue
-    console.log(`[getChatSessions] Found ${sessions.length} sessions for user ${tokenIdentifier.slice(0, 10)}...`);
+    // console.log(`[getChatSessions] Found ${sessions.length} sessions for user ${tokenIdentifier.slice(0, 10)}...`);
     
     // For now, return all sessions to match ChatHub behavior (no artificial limits)
     // TODO: Add proper database-level pagination later if needed
@@ -569,5 +624,102 @@ export const updateChatSessionFields = mutation({
 
     await ctx.db.patch(args.sessionId, args.updates);
     return true;
+  },
+});
+
+// NEW: Subagent System Functions
+
+// Update delegation status for subagent sessions
+export const updateDelegationStatus = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
+    result: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      throw new ConvexError("Session not found");
+    }
+
+    if (!session.delegationContext) {
+      throw new ConvexError("Session is not a delegation session");
+    }
+
+    const updatedContext = {
+      ...session.delegationContext,
+      status: args.status,
+      result: args.result,
+    };
+
+    await ctx.db.patch(args.sessionId, {
+      delegationContext: updatedContext,
+      lastMessageAt: Date.now(),
+    });
+
+    return true;
+  },
+});
+
+// Get subagent sessions for a parent session
+export const getSubagentSessions = query({
+  args: {
+    parentSessionId: v.id("chatSessions"),
+  },
+  handler: async (ctx, args) => {
+    const subagentSessions = await ctx.db
+      .query("chatSessions")
+      .withIndex("by_parent_session", (q) => q.eq("parentSessionId", args.parentSessionId))
+      .filter((q) => q.eq(q.field("sessionType"), "subagent"))
+      .collect();
+
+    return subagentSessions;
+  },
+});
+
+// Get completed subagent sessions older than timestamp (for cleanup)
+export const getCompletedSubagentSessions = query({
+  args: {
+    parentSessionId: v.id("chatSessions"),
+    beforeTimestamp: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const completedSessions = await ctx.db
+      .query("chatSessions")
+      .withIndex("by_parent_session", (q) => q.eq("parentSessionId", args.parentSessionId))
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("sessionType"), "subagent"),
+          q.eq(q.field("delegationContext.status"), "completed"),
+          q.lt(q.field("createdAt"), args.beforeTimestamp)
+        )
+      )
+      .collect();
+
+    return completedSessions;
+  },
+});
+
+// Delete a session (used by cleanup)
+export const deleteSession = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+  },
+  handler: async (ctx, args) => {
+    // Note: This should also clean up associated conversations
+    // For now, just delete the session
+    await ctx.db.delete(args.sessionId);
+    return true;
+  },
+});
+
+// Get session by ID (for subagent context)
+export const getById = query({
+  args: {
+    sessionId: v.id("chatSessions"),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    return session;
   },
 });

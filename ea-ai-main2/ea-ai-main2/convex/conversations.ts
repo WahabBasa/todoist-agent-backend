@@ -392,3 +392,55 @@ export const clearConversationsBySession = mutation({
     return { deletedConversations: conversations.length };
   },
 });
+
+// Add synthetic message for primary mode switching (like OpenCode prompt injection)
+export const addSyntheticMessage = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    content: v.string(),
+    timestamp: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    // Verify session belongs to user
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    // Find or create conversation for this session
+    let conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) => 
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
+      .first();
+
+    if (!conversation) {
+      // Create new conversation
+      const conversationId = await ctx.db.insert("conversations", {
+        tokenIdentifier,
+        sessionId: args.sessionId,
+        messages: [],
+        schemaVersion: 2,
+      });
+      conversation = await ctx.db.get(conversationId);
+    }
+
+    // Add synthetic system message (like OpenCode's prompt injection)
+    const syntheticMessage = {
+      role: "system" as const,
+      content: args.content,
+      timestamp: args.timestamp,
+    };
+
+    const currentMessages = conversation?.messages || [];
+    const updatedMessages = [...currentMessages, syntheticMessage];
+
+    await ctx.db.patch(conversation!._id, {
+      messages: updatedMessages,
+    });
+
+    return { success: true, messageAdded: syntheticMessage };
+  },
+});

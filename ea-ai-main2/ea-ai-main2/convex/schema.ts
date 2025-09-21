@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 // Big-brain pattern: Use tokenIdentifier directly, no users table needed
 const applicationTables = {
-  // Chat Sessions - Multiple conversations per user (Morphic-style) with Mode Support
+  // Chat Sessions - Multiple conversations per user (Morphic-style) with Primary Mode + Subagent Support
   chatSessions: defineTable({
     tokenIdentifier: v.string(),
     title: v.string(),
@@ -11,31 +11,55 @@ const applicationTables = {
     lastMessageAt: v.number(),
     messageCount: v.number(),
     isDefault: v.optional(v.boolean()), // Mark the default chat session
-    // Mode system integration
+    
+    // NEW: Session type - primary conversation or subagent execution
+    sessionType: v.optional(v.union(
+      v.literal("primary"),    // Primary conversation (preserves context)
+      v.literal("subagent")    // Subagent execution (isolated)
+    )),
+    
+    // Primary mode system (for sessions that preserve context)
+    primaryMode: v.optional(v.union(
+      v.literal("primary"), 
+      v.literal("information-collector")
+    )), // Which primary mode is active (context-preserving)
+    
+    // Subagent system (for isolated executions)
+    subagentType: v.optional(v.string()), // Name of subagent (planning, execution, general, custom)
+    
+    // Session hierarchy support (for subagent isolation)
+    parentSessionId: v.optional(v.id("chatSessions")), // Parent session for subagent executions
+    delegationContext: v.optional(v.object({
+      delegatedTask: v.string(), // Original task that was delegated
+      delegationType: v.union(v.literal("primary-mode"), v.literal("subagent")), // Type of delegation
+      targetName: v.string(), // Target mode or subagent name
+      createdAt: v.number(), // When delegation was created
+      status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
+      result: v.optional(v.string()), // Final result from delegation
+    })),
+    
+    // --- Legacy fields for migration ---
     modeType: v.optional(v.union(
       v.literal("primary"), 
       v.literal("information-collector"), 
       v.literal("planning"), 
       v.literal("execution")
-    )), // Which mode type is handling this session
-    modeName: v.optional(v.string()), // Name of the specific mode
-    // --- Temporary migration fields - REMOVE after migration complete ---
+    )), // Old mode type field
+    modeName: v.optional(v.string()), // Old mode name field
     agentMode: v.optional(v.string()), // Legacy agent mode field
     agentName: v.optional(v.string()), // Legacy agent name field
-    // ---------------------------------------------------------------------
-    // Session hierarchy support
-    parentSessionId: v.optional(v.id("chatSessions")), // Parent session if this is a submode session
-    delegationContext: v.optional(v.object({
-      delegatedTask: v.string(), // Original task that was delegated
-      createdAt: v.number(), // When delegation was created
-      status: v.union(v.literal("running"), v.literal("completed"), v.literal("failed"), v.literal("cancelled")),
-      modeName: v.string(), // Mode handling the delegated task
-    })),
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
     .index("by_tokenIdentifier_and_time", ["tokenIdentifier", "lastMessageAt"])
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
     .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"])
     .index("by_parent_session", ["parentSessionId"])
+    .index("by_session_type", ["sessionType"])
+    .index("by_tokenIdentifier_and_session_type", ["tokenIdentifier", "sessionType"])
+    .index("by_primary_mode", ["primaryMode"])
+    .index("by_subagent_type", ["subagentType"])
+    .index("by_tokenIdentifier_and_primary_mode", ["tokenIdentifier", "primaryMode"])
+    .index("by_tokenIdentifier_and_subagent", ["tokenIdentifier", "subagentType"])
+    // Legacy indexes for migration
     .index("by_mode_type", ["modeType"])
     .index("by_tokenIdentifier_and_mode", ["tokenIdentifier", "modeName"]),
 

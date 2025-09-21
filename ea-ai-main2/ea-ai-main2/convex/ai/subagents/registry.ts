@@ -1,0 +1,375 @@
+import { z } from "zod";
+
+// Subagent configuration (similar to OpenCode's Agent.Info but for isolated execution)
+export const SubagentConfigSchema = z.object({
+  // Unique identifier for the subagent
+  name: z.string(),
+  // Human-readable description of what this subagent does
+  description: z.string(),
+  // Complete system prompt for the subagent (isolated execution)
+  systemPrompt: z.string(),
+  // Which tools this subagent can access
+  tools: z.record(z.string(), z.boolean()),
+  // Whether this is a built-in system subagent
+  builtIn: z.boolean(),
+  // Temperature override for this subagent
+  temperature: z.number().optional(),
+  // Model configuration override
+  model: z.object({
+    providerId: z.string(),
+    modelId: z.string(),
+  }).optional(),
+  // Subagent-specific options/parameters
+  options: z.record(z.string(), z.any()).optional(),
+});
+export type SubagentConfig = z.infer<typeof SubagentConfigSchema>;
+
+// Built-in subagent configurations - converted from former modes
+const BUILT_IN_SUBAGENTS: Record<string, SubagentConfig> = {
+  planning: {
+    name: "planning",
+    description: "Strategic planning and task organization with Eisenhower Matrix prioritization",
+    systemPrompt: `You are a strategic planning specialist. Your role is to analyze information and create comprehensive, actionable plans using the Eisenhower Matrix for prioritization.
+
+Key responsibilities:
+- Analyze complex situations and break them down into manageable components
+- Apply Eisenhower Matrix principles (Important/Urgent quadrants)
+- Create structured, prioritized action plans
+- Focus on strategic thinking and long-term planning
+- Return clear, actionable recommendations
+
+You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
+
+When finished, format your response as: ANALYSIS_COMPLETE: [brief summary of your planning recommendations]`,
+    tools: {
+      // READ access for planning context
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // Internal planning workflow
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No execution tools (planning only)
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: No delegation (prevents recursion)
+      task: false,
+    },
+    builtIn: true,
+    temperature: 0.4,
+    options: {},
+  },
+
+  execution: {
+    name: "execution",
+    description: "Direct task and calendar operations with data validation",
+    systemPrompt: `You are an execution specialist. Your role is to take clear instructions and execute them precisely using the available task and calendar management tools.
+
+Key responsibilities:
+- Execute specific task and calendar operations
+- Validate data before making changes
+- Handle batch operations efficiently
+- Ensure data consistency and accuracy
+- Provide clear confirmation of completed actions
+
+You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
+
+When finished, format your response as: EXECUTION_COMPLETE: [brief summary of what was executed]`,
+    tools: {
+      // Data validation tools
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // READ access for validation and context
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      
+      // EXECUTION TOOLS - The primary tools for this subagent
+      createTask: true,
+      updateTask: true,
+      deleteTask: true,
+      createProject: true,
+      updateProject: true,
+      deleteProject: true,
+      createBatchTasks: true,
+      deleteBatchTasks: true,
+      completeBatchTasks: true,
+      updateBatchTasks: true,
+      createProjectWithTasks: true,
+      reorganizeTasksBatch: true,
+      createCalendarEvent: true,
+      updateCalendarEvent: true,
+      deleteCalendarEvent: true,
+      
+      // Internal workflow for execution tracking
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No delegation (prevents recursion)
+      task: false,
+    },
+    builtIn: true,
+    temperature: 0.2, // Lower temperature for precise execution
+    options: {},
+  },
+
+  general: {
+    name: "general",
+    description: "General-purpose research and multi-step task analysis",
+    systemPrompt: `You are a general-purpose research and analysis assistant. Your role is to handle complex, multi-step tasks that require research, analysis, and systematic problem-solving.
+
+Key responsibilities:
+- Research and analyze complex questions
+- Break down multi-step tasks into manageable components
+- Provide comprehensive analysis and recommendations
+- Handle tasks that don't fit into specialized categories
+- Think systematically and methodically
+
+You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
+
+Keep your responses focused and actionable. Return your final analysis concisely.`,
+    tools: {
+      // Research and analysis tools
+      getProjectAndTaskMap: true,
+      getProjectDetails: true,
+      getTaskDetails: true,
+      getTasks: true,
+      listCalendarEvents: true,
+      searchCalendarEvents: true,
+      getCurrentTime: true,
+      getSystemStatus: true,
+      validateInput: true,
+      
+      // Internal workflow for complex analysis
+      internalTodoWrite: true,
+      internalTodoRead: true,
+      
+      // DISABLED: No execution tools (analysis only)
+      createTask: false,
+      updateTask: false,
+      deleteTask: false,
+      createProject: false,
+      updateProject: false,
+      deleteProject: false,
+      createBatchTasks: false,
+      deleteBatchTasks: false,
+      completeBatchTasks: false,
+      updateBatchTasks: false,
+      createProjectWithTasks: false,
+      reorganizeTasksBatch: false,
+      createCalendarEvent: false,
+      updateCalendarEvent: false,
+      deleteCalendarEvent: false,
+      
+      // DISABLED: No delegation (prevents recursion)
+      task: false,
+    },
+    builtIn: true,
+    temperature: 0.3,
+    options: {},
+  },
+};
+
+// Subagent registry management - following OpenCode's Agent namespace pattern
+export class SubagentRegistryClass {
+  private static subagents: Record<string, SubagentConfig> = { ...BUILT_IN_SUBAGENTS };
+
+  /**
+   * Get subagent configuration by name (like OpenCode's Agent.get())
+   */
+  static getSubagent(name: string): SubagentConfig | null {
+    const subagent = this.subagents[name] || null;
+    if (!subagent) {
+      console.log(`[SUBAGENT_NOT_FOUND] Subagent ${name} not found`);
+    }
+    return subagent;
+  }
+
+  /**
+   * List all subagents (like OpenCode's Agent.list())
+   */
+  static getAllSubagents(): Record<string, SubagentConfig> {
+    return { ...this.subagents };
+  }
+
+  /**
+   * List subagents as array for easy iteration
+   */
+  static listSubagents(): SubagentConfig[] {
+    return Object.values(this.subagents);
+  }
+
+  /**
+   * Check if subagent exists and is valid (like OpenCode's validation)
+   */
+  static isValidSubagent(name: string): boolean {
+    return name in this.subagents;
+  }
+
+  /**
+   * Register a new custom subagent (like OpenCode's user-defined agents)
+   * This makes it easy to add new subagents without code changes
+   */
+  static registerSubagent(config: SubagentConfig): void {
+    // Validate required fields
+    if (!config.name || !config.description || !config.systemPrompt) {
+      throw new Error("Invalid subagent configuration: name, description, and systemPrompt are required");
+    }
+
+    // Prevent overriding built-in subagents
+    if (config.builtIn && config.name in BUILT_IN_SUBAGENTS) {
+      throw new Error(`Cannot override built-in subagent: ${config.name}`);
+    }
+
+    // Prevent recursive task tool access
+    if (config.tools.task === true) {
+      console.warn(`[SUBAGENT_REGISTER] Removing task tool from subagent ${config.name} to prevent recursion`);
+      config.tools.task = false;
+    }
+
+    this.subagents[config.name] = config;
+    console.log(`[SUBAGENT_REGISTERED] Successfully registered subagent: ${config.name}`);
+  }
+
+  /**
+   * Get tool permissions for a subagent (like OpenCode's tool filtering)
+   */
+  static getSubagentTools(name: string): Record<string, boolean> {
+    const subagent = this.getSubagent(name);
+    return subagent ? subagent.tools : {};
+  }
+
+  /**
+   * Check if subagent has permission for a specific tool (like OpenCode's tool validation)
+   */
+  static hasSubagentToolPermission(subagentName: string, toolName: string): boolean {
+    const tools = this.getSubagentTools(subagentName);
+    return tools[toolName] === true;
+  }
+
+  /**
+   * Get subagents by built-in status
+   */
+  static getBuiltInSubagents(): SubagentConfig[] {
+    return Object.values(this.subagents).filter(subagent => subagent.builtIn);
+  }
+
+  /**
+   * Get custom (non-built-in) subagents
+   */
+  static getCustomSubagents(): SubagentConfig[] {
+    return Object.values(this.subagents).filter(subagent => !subagent.builtIn);
+  }
+
+  /**
+   * Remove a custom subagent (built-in subagents cannot be removed)
+   */
+  static removeSubagent(name: string): boolean {
+    const subagent = this.getSubagent(name);
+    if (!subagent) {
+      return false;
+    }
+
+    if (subagent.builtIn) {
+      throw new Error(`Cannot remove built-in subagent: ${name}`);
+    }
+
+    delete this.subagents[name];
+    console.log(`[SUBAGENT_REMOVED] Successfully removed subagent: ${name}`);
+    return true;
+  }
+
+  /**
+   * Generate subagent list for task tool description (dynamic discovery)
+   */
+  static generateSubagentListDescription(): string {
+    const subagents = this.listSubagents();
+    return subagents
+      .map(s => `- ${s.name}: ${s.description}`)
+      .join("\n");
+  }
+
+  /**
+   * Easy subagent creation helper (like OpenCode's simple configuration)
+   */
+  static createSubagent({
+    name,
+    description,
+    systemPrompt,
+    tools = {},
+    temperature = 0.3,
+    options = {}
+  }: {
+    name: string;
+    description: string;
+    systemPrompt: string;
+    tools?: Record<string, boolean>;
+    temperature?: number;
+    options?: Record<string, any>;
+  }): void {
+    const config: SubagentConfig = {
+      name,
+      description,
+      systemPrompt,
+      tools: {
+        // Default safe tools for all subagents
+        getCurrentTime: true,
+        getSystemStatus: true,
+        validateInput: true,
+        // Prevent task tool by default to avoid recursion
+        task: false,
+        // Merge with provided tools
+        ...tools
+      },
+      builtIn: false,
+      temperature,
+      options,
+    };
+
+    this.registerSubagent(config);
+  }
+}
+
+// Export singleton instance
+export const SubagentRegistry = SubagentRegistryClass;
+
+// Helper function for easy subagent creation (like OpenCode's simple interface)
+export function createSubagent(config: {
+  name: string;
+  description: string;
+  systemPrompt: string;
+  tools?: Record<string, boolean>;
+  temperature?: number;
+  options?: Record<string, any>;
+}): void {
+  SubagentRegistry.createSubagent(config);
+}
+
+// Export types for external use (SubagentConfig already exported above)

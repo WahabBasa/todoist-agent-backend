@@ -24,6 +24,9 @@ import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage"
 import { ModeController } from "./modes/controller";
 import { ModeRegistry } from "./modes/registry";
 
+// Import clean logging system
+import { logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled } from "./logger";
+
 // Read mode-specific prompt files
 import fs from "fs/promises";
 import path from "path";
@@ -105,15 +108,22 @@ export const chatWithAI = action({
       // Determine active mode from session or use intelligent routing
       const currentModeName = session?.modeName || await determineOptimalMode(message, history);
       
-      // console.log(`[Session] Using mode: ${currentModeName} for request: "${message.substring(0, 50)}..."`);
-      
-      // Update session with determined mode if different
+      // Log mode switch if needed (only when not primary)
       if (session && session.modeName !== currentModeName) {
+        logModeSwitch(session.modeName || "primary", currentModeName, "intelligent routing");
         await ctx.runMutation(api.chatSessions.updateChatSession, {
           sessionId: session._id,
           modeName: currentModeName,
         });
       }
+      
+      // Create mode-specific tool registry and log current mode with tool count
+      const tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
+      const toolCount = Object.keys(tools).length;
+      logCurrentMode(currentModeName, toolCount, "orchestration mode");
+      
+      // Log user message
+      logUserMessage(message, sessionId);
       
       // Create user message span
       userMessageSpan = createUserMessageSpan({
@@ -170,8 +180,7 @@ export const chatWithAI = action({
         messages: cachedMessages
       });
 
-      // Create mode-specific tool registry 
-      const tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
+      // Tool registry already created above for logging
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -197,6 +206,19 @@ export const chatWithAI = action({
       const finalToolCalls = await result.toolCalls;
       const finalToolResults = await result.toolResults;
       const finalUsage = await result.usage;
+      
+      // Log tool calls if any were made, or log why none were called
+      if (finalToolCalls && finalToolCalls.length > 0) {
+        const toolCallsForLogging = finalToolCalls.map(call => ({
+          name: call.toolName,
+          args: call.input
+        }));
+        logToolCalls(toolCallsForLogging);
+      } else {
+        // Log when no tools are called to help debug AI behavior
+        const availableToolNames = Object.keys(tools);
+        logNoToolsCalled(availableToolNames, message);
+      }
       
       // Update Langfuse prompt generation with response information
       if (promptGeneration && finalUsage) {
@@ -416,9 +438,45 @@ export const getSessionStats = action({
  * Implements automatic mode switching for mode-based architecture
  */
 async function determineOptimalMode(message: string, history: any[]): Promise<string> {
-  // Primary mode should handle all requests by default
-  // Specialized modes are called via task delegation when needed
-  console.log(`[ModeRouter] Defaulting to primary mode: ${message.substring(0, 50)}...`);
+  const lowerMessage = message.toLowerCase();
+  
+  // Check for overwhelm/stress indicators → information-collector mode
+  const overwhelmKeywords = [
+    "drowning", "overwhelmed", "stressed", "too much", "can't handle", 
+    "falling behind", "deadlines", "pressure", "urgent", "emergency",
+    "help me organize", "don't know where to start", "chaos", "mess"
+  ];
+  
+  if (overwhelmKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    console.log(`[ModeRouter] Detected overwhelm scenario → information-collector: "${message.substring(0, 50)}..."`);
+    return "information-collector";
+  }
+  
+  // Check for complex planning needs → planning mode
+  const planningKeywords = [
+    "plan my", "organize my", "schedule", "timeline", "roadmap",
+    "strategy", "approach", "break down", "structure", "workflow",
+    "multiple projects", "long term", "quarterly", "weekly planning"
+  ];
+  
+  if (planningKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    console.log(`[ModeRouter] Detected planning needs → planning: "${message.substring(0, 50)}..."`);
+    return "planning";
+  }
+  
+  // Check for simple execution tasks → execution mode
+  const executionKeywords = [
+    "create task", "add task", "new task", "mark complete", "update task",
+    "delete task", "create project", "add to project", "quick add"
+  ];
+  
+  if (executionKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    console.log(`[ModeRouter] Detected execution task → execution: "${message.substring(0, 50)}..."`);
+    return "execution";
+  }
+  
+  // Default to primary mode for orchestration and delegation
+  console.log(`[ModeRouter] Using primary mode for orchestration: "${message.substring(0, 50)}..."`);
   return "primary";
 }
 
