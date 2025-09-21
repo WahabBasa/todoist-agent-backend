@@ -683,7 +683,7 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
 }
 
 // =================================================================
-// 3. THE ORCHESTRATOR: Manages the agentic workflow.
+// 3. THE MAIN AGENT: Manages the agentic workflow.
 // =================================================================
 export const chatWithAILegacy = action({
   args: {
@@ -718,7 +718,7 @@ export const chatWithAILegacy = action({
     const history = (conversation?.messages as any[]) || [];
     history.push({ role: "user", content: message, timestamp: Date.now() });
 
-    console.log(`[Orchestrator] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
+    console.log(`[Main Agent] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
 
     // Initialize OpenRouter + Anthropic caching
     MessageCaching.initializeCaching();
@@ -741,7 +741,7 @@ export const chatWithAILegacy = action({
                                 hasBulkOperations || hasQuantifiedTasks || hasMultiEntityWork;
 
     if (shouldCreateTodolist) {
-      console.log(`[Orchestrator] Complex/bulk request detected - REQUIRES internal todolist for: "${message.slice(0, 50)}..."`);
+      console.log(`[Main Agent] Complex/bulk request detected - REQUIRES internal todolist for: "${message.slice(0, 50)}..."`);
     }
 
     // Enhanced conversation state deduplication to prevent infinite loops
@@ -751,7 +751,7 @@ export const chatWithAILegacy = action({
     
     const MAX_ITERATIONS = 6; // Reduced from 15 to prevent rate limits
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-        console.log(`[Orchestrator] -> Planning iteration ${i + 1}...`);
+        console.log(`[Main Agent] -> Planning iteration ${i + 1}...`);
         
         // Advanced state tracking: user + message content + history length + last 3 message types
         const userPrefix = userId.substring(0, 20);
@@ -814,7 +814,7 @@ export const chatWithAILegacy = action({
           }];
         }
         
-        console.log(`[Orchestrator] Messages count before AI call: ${modelMessages.length}`);
+        console.log(`[Main Agent] Messages count before AI call: ${modelMessages.length}`);
         console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
         
         // Ensure we have at least the current user message
@@ -901,15 +901,15 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         if (!toolCalls || toolCalls.length === 0) {
-            console.log(`[Orchestrator] Planning complete. Final response: "${text}"`);
+            console.log(`[Main Agent] Planning complete. Final response: "${text}"`);
             history.push({ role: "assistant", content: text, timestamp: Date.now() });
             
             // Clean up internal todolist if conversation is complete
             try {
               await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
-              console.log(`[Orchestrator] Deactivated internal todolist for completed conversation`);
+              console.log(`[Main Agent] Deactivated internal todolist for completed conversation`);
             } catch (error) {
-              console.warn(`[Orchestrator] Failed to deactivate todolist:`, error);
+              console.warn(`[Main Agent] Failed to deactivate todolist:`, error);
               // Non-blocking error - continue with response
             }
             
@@ -932,7 +932,7 @@ Do NOT use any other tools until internal todolist is created.
           timestamp: Date.now(),
         });
 
-        console.log(`[Orchestrator] Executing ${toolCalls.length} tool(s)...`);
+        console.log(`[Main Agent] Executing ${toolCalls.length} tool(s)...`);
         const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, {
             toolName: call.toolName,
             args: call.input,

@@ -5,9 +5,9 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 
 ## Changes Made
 
-### 1. Primary Agent (Orchestrator)
+### 1. Primary Agent (Main Agent)
 **Files Updated:**
-- `convex/ai/prompts/system.ts` (getOrchestratorPrompt function)
+- `convex/ai/prompts/system.ts` (getMainAgentPrompt function)
 - `convex/ai/prompts/zen_new.ts`
 
 **Key Changes:**

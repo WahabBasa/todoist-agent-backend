@@ -46,13 +46,57 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const createDefaultSession = useMutation(api.chatSessions.createDefaultSession);
   const deleteChatSession = useMutation(api.chatSessions.deleteChatSession);
 
-  // Session state - single source of truth
-  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(null);
+  // Session persistence helpers
+  const STORAGE_KEY = 'taskai_current_session_id';
+  
+  const loadPersistedSession = (): Id<"chatSessions"> | null => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? stored as Id<"chatSessions"> : null;
+    } catch (error) {
+      console.warn('Failed to load persisted session:', error);
+      return null;
+    }
+  };
+  
+  const persistSession = (sessionId: Id<"chatSessions"> | null) => {
+    try {
+      if (sessionId) {
+        localStorage.setItem(STORAGE_KEY, sessionId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    } catch (error) {
+      console.warn('Failed to persist session:', error);
+    }
+  };
+
+  // Session state - single source of truth with persistence
+  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(() => {
+    // Initialize from localStorage if available
+    return loadPersistedSession();
+  });
   const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
 
   // Extract sessions array safely
   const sessions = sessionsQuery?.sessions || [];
   const isLoadingSessions = sessionsQuery === undefined;
+
+  // Validate persisted session on app startup
+  useEffect(() => {
+    if (isLoadingSessions || !currentSessionId) return;
+    
+    // Check if the persisted session still exists in the database
+    const sessionExists = sessions.some(session => session._id === currentSessionId);
+    
+    if (!sessionExists) {
+      console.warn('🗑️ Persisted session no longer exists, clearing:', currentSessionId);
+      setCurrentSessionId(null);
+      persistSession(null);
+    } else {
+      console.log('✅ Persisted session validated:', currentSessionId);
+    }
+  }, [isLoadingSessions, currentSessionId, sessions]);
 
   // Fixed: Proper default session management
   // Users start with a default session, and can create new sessions as needed
@@ -92,13 +136,14 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     }
   }, [createChatSession]);
 
-  // ChatHub pattern: Select session
+  // ChatHub pattern: Select session with persistence
   const selectSession = useCallback(async (sessionId: Id<"chatSessions"> | null) => {
     console.log('🔄 Switching to session:', sessionId);
     
     // Return a promise to allow awaiting the session change
     return new Promise<void>((resolve) => {
       setCurrentSessionId(sessionId);
+      persistSession(sessionId); // Persist to localStorage
       
       if (sessionId) {
         setActiveView("chat");
@@ -120,6 +165,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       // Clear current session if it was the deleted one
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
+        persistSession(null); // Clear from localStorage
       }
     } catch (error) {
       console.error("Failed to delete chat session:", error);

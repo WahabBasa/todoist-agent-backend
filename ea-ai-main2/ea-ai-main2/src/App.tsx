@@ -46,73 +46,59 @@ export default function App() {
 }
 
 function MainApp() {
-  // Fixed: Simplified session initialization to avoid race conditions
+  // Simplified session management - remove race conditions
   const { currentSessionId, selectSession, ensureDefaultSession, sessions, isLoadingSessions } = useSessions();
   
   // Get default session for this user
   const defaultSession = useQuery(api.chatSessions.getDefaultSession, {});
   
-  // Simplified loading state - just track if data is loaded
-  const isDataLoaded = !isLoadingSessions && defaultSession !== undefined;
+  // Simple, stable loading state
+  const isDataReady = !isLoadingSessions && defaultSession !== undefined;
+  const [hasInitialized, setHasInitialized] = useState(false);
   
-  // Single state for initialization - no complex interdependent states
-  const [isInitializing, setIsInitializing] = useState(true);
-  
+  // Simplified session initialization - runs only once when data is ready
   useEffect(() => {
+    if (!isDataReady || hasInitialized) return;
+    
     const initializeSession = async () => {
-      console.log('🔄 Session initialization check:', {
+      console.log('🔄 Initializing session...', {
         currentSessionId,
         sessionsCount: sessions.length,
-        isLoadingSessions,
-        isDataLoaded,
         defaultSessionExists: !!defaultSession
       });
       
-      // If a session is already selected, we're done
-      if (currentSessionId) {
-        console.log('✅ Session already selected, skipping initialization');
-        setIsInitializing(false);
-        return;
-      }
-      
-      // Wait until data is loaded
-      if (!isDataLoaded) {
-        console.log('⏳ Waiting for data to load...');
-        return;
-      }
-      
       try {
-        // Check if we have any sessions
-        if (sessions.length > 0) {
-          // Find the session with the most recent lastMessageAt
-          // Sessions are already ordered by lastMessageAt DESC from the API
-          const mostRecentSession = sessions[0];
-          console.log('📋 Using most recent session:', mostRecentSession._id, 'last message at:', new Date(mostRecentSession.lastMessageAt).toISOString());
-          await selectSession(mostRecentSession._id);
-        } else if (defaultSession) {
-          // Only use default session if no other sessions exist
-          console.log('📋 Using existing default session:', defaultSession._id);
-          await selectSession(defaultSession._id);
-        } else {
-          // No default session exists, create one
-          console.log('🚀 No default session found, creating one...');
-          const newDefaultId = await ensureDefaultSession();
-          await selectSession(newDefaultId);
+        // If no current session, select the best available one
+        if (!currentSessionId) {
+          if (sessions.length > 0) {
+            // Use most recent session
+            const mostRecentSession = sessions[0];
+            console.log('📋 Using most recent session:', mostRecentSession._id);
+            await selectSession(mostRecentSession._id);
+          } else if (defaultSession) {
+            // Use default session
+            console.log('📋 Using default session:', defaultSession._id);
+            await selectSession(defaultSession._id);
+          } else {
+            // Create and use new default session
+            console.log('🚀 Creating new default session...');
+            const newDefaultId = await ensureDefaultSession();
+            await selectSession(newDefaultId);
+          }
         }
       } catch (error) {
-        console.error('Failed to initialize session:', error);
-        // Even if there's an error, we should stop initializing to avoid perpetual loading
+        console.error('Session initialization failed:', error);
+        // Continue anyway to avoid perpetual loading
       } finally {
-        setIsInitializing(false);
+        setHasInitialized(true);
       }
     };
     
     initializeSession();
-  }, [defaultSession, currentSessionId, selectSession, ensureDefaultSession, sessions, isLoadingSessions, isDataLoaded]);
+  }, [isDataReady, hasInitialized, currentSessionId, selectSession, ensureDefaultSession, sessions, defaultSession]);
 
-  // Show loading state only during initialization
-  // Once initialization is complete, always show the content
-  if (isInitializing) {
+  // Show loading only while waiting for data or during initialization
+  if (!isDataReady || !hasInitialized) {
     return (
       <MainLayout>
         <AppLoading message="Initializing chat..." />
@@ -120,15 +106,10 @@ function MainApp() {
     );
   }
 
-  // Always render the chat view after initialization
-  // The chat components will handle their own loading states
-  const renderActiveView = () => {
-    return <ChatView />;
-  };
-
+  // Render chat view once everything is ready
   return (
     <MainLayout>
-      {renderActiveView()}
+      <ChatView />
     </MainLayout>
   );
 }

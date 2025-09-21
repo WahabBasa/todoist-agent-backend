@@ -51,32 +51,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     currentSessionId ? { sessionId: currentSessionId } : "skip"
   );
 
-  // Track if we've loaded initial data for the current session
-  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  // Track loaded data per session to prevent unnecessary reloads
+  const [loadedSessionData, setLoadedSessionData] = useState<{
+    sessionId: string | null;
+    hasLoaded: boolean;
+  }>({ sessionId: null, hasLoaded: false });
 
-  // Clear messages and reset loading state when session changes
+  // Stable session change detection
+  const previousSessionId = React.useRef<string | null>(currentSessionId);
+  
+  // Clear messages and reset loading state when session actually changes
   useEffect(() => {
-    console.log('🔄 Session changed, resetting conversation state:', currentSessionId);
-    setConversationTurns([]);
-    setHasLoadedInitialData(false);
+    // Only reset if session actually changed
+    if (previousSessionId.current !== currentSessionId) {
+      console.log('🔄 Session changed, resetting conversation state:', { 
+        from: previousSessionId.current, 
+        to: currentSessionId 
+      });
+      
+      setConversationTurns([]);
+      setLoadedSessionData({ sessionId: currentSessionId, hasLoaded: false });
+      previousSessionId.current = currentSessionId;
+    }
   }, [currentSessionId]);
 
-  // Fixed: Improved database sync logic that properly loads conversation data
+  // Stable database sync logic with session-specific tracking
   useEffect(() => {
-    // Only proceed if we have an active conversation and haven't loaded data yet
-    if (!activeConversation?.messages) {
-      console.log('🔄 No active conversation messages, skipping sync');
+    // Skip if no session or already loaded for this session
+    if (!currentSessionId || !activeConversation?.messages) {
       return;
     }
 
-    // If we've already loaded data for this session, don't reload
-    if (hasLoadedInitialData) {
-      console.log('🔄 Already loaded data for this session, skipping sync');
+    // Skip if we've already loaded data for this specific session
+    if (loadedSessionData.sessionId === currentSessionId && loadedSessionData.hasLoaded) {
+      console.log('🔄 Already loaded data for session, skipping sync:', currentSessionId);
       return;
     }
 
-    // Always load from database when session changes, regardless of local state
-    // This ensures we get the correct conversation data for the new session
     console.log('📚 Loading conversation data from database for session:', currentSessionId);
     
     const allMessages = (activeConversation.messages as any[])
@@ -140,17 +151,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     console.log('📚 Loaded', turns.length, 'conversation turns from database');
     setConversationTurns(turns);
-    setHasLoadedInitialData(true);
-  }, [activeConversation?.messages, currentSessionId, hasLoadedInitialData]);
+    setLoadedSessionData({ sessionId: currentSessionId, hasLoaded: true });
+  }, [activeConversation?.messages, currentSessionId, loadedSessionData.sessionId, loadedSessionData.hasLoaded]);
 
-  // ChatHub pattern: Submit message with optimistic updates
+  // Stable submit message with improved error handling
   const submitMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
+    // Validate session before starting
+    if (!currentSessionId) {
+      console.error('❌ No active session available');
+      toast.error('No active session. Please refresh the page.');
+      return;
+    }
+
     setIsLoading(true);
 
-    // ChatHub pattern: Add conversation turn immediately (optimistic update)
-    const turnId = `turn-${Date.now()}`;
+    // Create optimistic conversation turn
+    const turnId = `turn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newTurn: ConversationTurn = {
       id: turnId,
       userMessage: content.trim(),
@@ -159,15 +177,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       timestamp: Date.now()
     };
 
-    // Add to UI state immediately - this is the single source of truth
     console.log('➕ Adding conversation turn optimistically:', turnId);
     setConversationTurns(prev => [...prev, newTurn]);
 
     try {
-      // Session must exist (managed by SessionsContext)
-      if (!currentSessionId) {
-        throw new Error('No active session - cannot send message');
-      }
 
       // Create time context (preserve existing logic)
       const currentTimeContext = {
@@ -238,26 +251,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       window.dispatchEvent(new CustomEvent('chat-history-updated'));
 
     } catch (error) {
-      console.error("Chat error:", error);
+      console.error("❌ Chat submission error:", error);
       
-      // Enhanced error handling (preserve existing logic)
+      // Enhanced error handling with session validation
       let errorMessage = "Failed to send message";
+      let shouldRetry = true;
       
       if (error instanceof Error) {
-        if (error.message.includes('network') || error.message.includes('fetch')) {
+        const errorText = error.message.toLowerCase();
+        
+        if (errorText.includes('network') || errorText.includes('fetch') || errorText.includes('connection')) {
           errorMessage = "Network error. Please check your connection and try again.";
-        } else if (error.message.includes('rate limit')) {
+        } else if (errorText.includes('rate limit') || errorText.includes('too many')) {
           errorMessage = "Too many requests. Please wait a moment before trying again.";
-        } else if (error.message.includes('authentication') || error.message.includes('unauthorized')) {
+          shouldRetry = false;
+        } else if (errorText.includes('authentication') || errorText.includes('unauthorized') || errorText.includes('token')) {
           errorMessage = "Authentication error. Please refresh the page and try again.";
-        } else if (error.message.includes('timeout')) {
+          shouldRetry = false;
+        } else if (errorText.includes('timeout')) {
           errorMessage = "Request timed out. The AI may be busy, please try again.";
+        } else if (errorText.includes('session')) {
+          errorMessage = "Session error. Your session may have expired.";
+          shouldRetry = false;
+          // Clear session state if it seems corrupted
+          setLoadedSessionData({ sessionId: null, hasLoaded: false });
         }
       }
       
       toast.error(errorMessage);
       
-      // Remove failed turn on error
+      // Remove failed turn from UI
       console.log('❌ Removing failed turn:', turnId);
       setConversationTurns(prev => prev.filter(turn => turn.id !== turnId));
 
