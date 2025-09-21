@@ -21,15 +21,10 @@ import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
 // Import mode components
-import { ModeController } from "./modes/controller";
 import { ModeRegistry } from "./modes/registry";
 
 // Import clean logging system
 import { logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled } from "./logger";
-
-// Read mode-specific prompt files
-import fs from "fs/promises";
-import path from "path";
 
 // Langfuse Cloud tracing imports
 import {
@@ -86,6 +81,7 @@ export const chatWithAI = action({
     let userMessageSpan: any = null;
     let promptGeneration: any = null;
     let assistantMessageSpan: any = null;
+    let tools: Record<string, any> = {}; // Declare tools here so it's available in catch block
 
     try {
       // Load conversation history and session state - simple, direct approach
@@ -100,27 +96,18 @@ export const chatWithAI = action({
       
       const history = (conversation?.messages as ConvexMessage[]) || [];
       
-      // Initialize mode controller for session
-      if (sessionId) {
-        ModeController.initializeSession(sessionId);
-      }
-      
       // Determine active mode from session or use intelligent routing
-      const currentModeName = session?.modeName || await determineOptimalMode(message, history);
+      // Always use primary mode - let the LLM determine when to switch via task tool
+      // This follows the OpenCode pattern where primary agents share context in same session
+      const currentModeName = "primary";
       
-      // Log mode switch if needed (only when not primary)
-      if (session && session.modeName !== currentModeName) {
-        logModeSwitch(session.modeName || "primary", currentModeName, "intelligent routing");
-        await ctx.runMutation(api.chatSessions.updateChatSession, {
-          sessionId: session._id,
-          modeName: currentModeName,
-        });
-      }
+      console.log(`[ModeAnalysis] Using primary mode - LLM will determine delegation via task tool`);
       
-      // Create mode-specific tool registry and log current mode with tool count
+      // Log mode information but don't update session mode in database
+      // Primary modes share context in same session (like OpenCode)
       const tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
-      const toolCount = Object.keys(tools).length;
-      logCurrentMode(currentModeName, toolCount, "orchestration mode");
+      logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode");
+      console.log(`[ModeTools] Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
       
       // Log user message
       logUserMessage(message, sessionId);
@@ -161,6 +148,8 @@ export const chatWithAI = action({
         currentModeName
       );
       
+      console.log(`[SystemPrompt] Generated system prompt for mode: ${currentModeName}`);
+      
       // Add system message to conversation
       const messagesWithSystem = [
         { role: "system" as const, content: systemPrompt },
@@ -180,7 +169,11 @@ export const chatWithAI = action({
         messages: cachedMessages
       });
 
-      // Tool registry already created above for logging
+      // Create mode-specific tool registry and log current mode with tool count
+      tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
+      const toolCount = Object.keys(tools).length;
+      logCurrentMode(currentModeName, toolCount, "orchestration mode");
+      console.log(`[ModeTools] Created tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -214,10 +207,12 @@ export const chatWithAI = action({
           args: call.input
         }));
         logToolCalls(toolCallsForLogging);
+        console.log(`[ToolExecution] Successfully executed ${finalToolCalls.length} tool(s)`);
       } else {
         // Log when no tools are called to help debug AI behavior
         const availableToolNames = Object.keys(tools);
         logNoToolsCalled(availableToolNames, message);
+        console.log(`[ToolExecution] No tools were called. Available tools: ${availableToolNames.join(", ")}`);
       }
       
       // Update Langfuse prompt generation with response information
@@ -434,126 +429,27 @@ export const getSessionStats = action({
 });
 
 /**
- * Intelligent mode determination based on request analysis
- * Implements automatic mode switching for mode-based architecture
+ * Mode determination - always returns primary mode
+ * The LLM itself should determine when to use the task tool for delegation
+ * This follows the OpenCode pattern where the AI decides when to switch modes
  */
 async function determineOptimalMode(message: string, history: any[]): Promise<string> {
-  const lowerMessage = message.toLowerCase();
+  console.log(`[ModeRouter] LLM will determine optimal mode via task tool: "${message.substring(0, 50)}..."`);
   
-  // Check for overwhelm/stress indicators → information-collector mode
-  const overwhelmKeywords = [
-    "drowning", "overwhelmed", "stressed", "too much", "can't handle", 
-    "falling behind", "deadlines", "pressure", "urgent", "emergency",
-    "help me organize", "don't know where to start", "chaos", "mess"
-  ];
-  
-  if (overwhelmKeywords.some(keyword => lowerMessage.includes(keyword))) {
-    console.log(`[ModeRouter] Detected overwhelm scenario → information-collector: "${message.substring(0, 50)}..."`);
-    return "information-collector";
-  }
-  
-  // Check for complex planning needs → planning mode
-  const planningKeywords = [
-    "plan my", "organize my", "schedule", "timeline", "roadmap",
-    "strategy", "approach", "break down", "structure", "workflow",
-    "multiple projects", "long term", "quarterly", "weekly planning"
-  ];
-  
-  if (planningKeywords.some(keyword => lowerMessage.includes(keyword))) {
-    console.log(`[ModeRouter] Detected planning needs → planning: "${message.substring(0, 50)}..."`);
-    return "planning";
-  }
-  
-  // Check for simple execution tasks → execution mode
-  const executionKeywords = [
-    "create task", "add task", "new task", "mark complete", "update task",
-    "delete task", "create project", "add to project", "quick add"
-  ];
-  
-  if (executionKeywords.some(keyword => lowerMessage.includes(keyword))) {
-    console.log(`[ModeRouter] Detected execution task → execution: "${message.substring(0, 50)}..."`);
-    return "execution";
-  }
-  
-  // Default to primary mode for orchestration and delegation
-  console.log(`[ModeRouter] Using primary mode for orchestration: "${message.substring(0, 50)}..."`);
+  // Always return primary mode - let the LLM decide when to delegate
   return "primary";
 }
 
 /**
  * Inject mode-specific prompts into the conversation history
- * Similar to how OpenCode injects plan.txt and build-switch.txt
+ * This function is kept for compatibility but should not interfere with primary mode switching
+ * Primary modes should use task tool delegation instead of automatic prompt injection
  */
 async function injectModePrompts(history: any[], sessionId: string | undefined, currentMode: string): Promise<any[]> {
-  if (!sessionId) {
-    return history;
-  }
-
-  // Get the previous mode to determine if we need to inject a switch prompt
-  const modeHistory = ModeController.getModeHistory(sessionId);
-  const previousMode = modeHistory.length > 1 ? modeHistory[modeHistory.length - 2] : null;
-
-  // Clone the history to avoid modifying the original
-  const updatedHistory = [...history];
-
-  // Inject mode switch prompt if switching between modes
-  if (previousMode && previousMode !== currentMode) {
-    let switchPrompt = "";
-    
-    // Determine the appropriate switch prompt based on the mode transition
-    if (previousMode === "information-collector" && currentMode === "planning") {
-      try {
-        switchPrompt = await fs.readFile(
-          path.join(__dirname, "modes", "prompts", "information-to-planning-switch.txt"),
-          "utf-8"
-        );
-      } catch (error) {
-        switchPrompt = "Your operational mode has changed from information collection to planning.";
-      }
-    } else if (previousMode === "planning" && currentMode === "execution") {
-      try {
-        switchPrompt = await fs.readFile(
-          path.join(__dirname, "modes", "prompts", "planning-to-execution-switch.txt"),
-          "utf-8"
-        );
-      } catch (error) {
-        switchPrompt = "Your operational mode has changed from planning to execution.";
-      }
-    } else if (previousMode === "execution" && currentMode === "primary") {
-      try {
-        switchPrompt = await fs.readFile(
-          path.join(__dirname, "modes", "prompts", "execution-to-primary-switch.txt"),
-          "utf-8"
-        );
-      } catch (error) {
-        switchPrompt = "Your operational mode has changed from execution to primary.";
-      }
-    }
-
-    // Add the switch prompt to the last user message
-    if (switchPrompt && updatedHistory.length > 0) {
-      const lastMessage = updatedHistory[updatedHistory.length - 1];
-      if (lastMessage.role === "user") {
-        lastMessage.content += "\n" + switchPrompt;
-      }
-    }
-  }
-
-  // Inject mode-specific prompt for the current mode
-  let modePrompt = "";
-  try {
-    const promptPath = path.join(__dirname, "modes", "prompts", `${currentMode}.txt`);
-    modePrompt = await fs.readFile(promptPath, "utf-8");
-  } catch (error) {
-    // If no specific prompt file exists, use a generic mode prompt
-    modePrompt = `<system-reminder>
-CRITICAL: ${currentMode} mode ACTIVE. You are operating in ${currentMode} mode with specific permissions and responsibilities.
-</system-reminder>`;
-  }
-
-  // Add the mode prompt to the last user message\n  if (modePrompt && updatedHistory.length > 0) {\n    const lastMessage = updatedHistory[updatedHistory.length - 1];\n    if (lastMessage.role === \"user\") {\n      lastMessage.content += \"\\n\" + modePrompt;\n    }\n  }
-
-  return updatedHistory;
+  // Don't inject mode prompts automatically - let task tool handle delegation
+  // This prevents contamination and follows OpenCode's pattern
+  console.log(`[ModePrompts] Skipping automatic mode prompt injection for mode: ${currentMode}`);
+  return history;
 }
 
 /**

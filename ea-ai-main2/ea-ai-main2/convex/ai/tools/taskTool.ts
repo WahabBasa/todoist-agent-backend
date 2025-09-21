@@ -119,14 +119,9 @@ async function executePrimaryMode(
     });
   }
 
-  // Update session to track primary mode
-  await actionCtx.runMutation(api.chatSessions.updateChatSession, {
-    sessionId: validSessionId,
-    modeName: modeName,
-  });
-
   // Return indication that mode switch occurred
   // The actual mode execution happens in the continuing conversation
+  // DO NOT update the session mode in the database to prevent UI refresh
   return {
     title: `Switched to ${modeName} mode`,
     metadata: { 
