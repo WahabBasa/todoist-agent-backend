@@ -35,11 +35,14 @@ export const fetchModels = action({
   args: {},
   handler: async (ctx) => {
     const { userId } = await requireUserAuthForAction(ctx);
-    const tokenIdentifier = userId;
-    const isAdmin = await ctx.runQuery(api.auth.admin.isAdminUser, { tokenIdentifier });
+    
+    // Use new secure admin check (no tokenIdentifier needed)
+    const isAdmin = await ctx.runQuery(api.auth.admin.isCurrentUserAdmin, {});
     if (!isAdmin) {
       throw new Error("Admin access required");
     }
+
+    console.log(`📥 [Models] Starting OpenRouter API fetch for admin: ${userId.slice(0, 20)}...`);
 
     const response = await fetch("https://openrouter.ai/api/v1/models", {
       headers: {
@@ -48,6 +51,7 @@ export const fetchModels = action({
     });
 
     if (!response.ok) {
+      console.error(`❌ [Models] OpenRouter API failed: ${response.status} ${response.statusText}`);
       throw new Error(`Failed to fetch models: ${response.statusText}`);
     }
 
@@ -63,9 +67,13 @@ export const fetchModels = action({
       category: deriveCategory(m.name)
     }));
 
+    console.log(`✅ [Models] Successfully fetched ${models.length} models from OpenRouter API`);
+
     // Cache the models
     const now = Date.now();
     await ctx.runMutation(api.ai.models.internalCacheModels, { models, lastFetched: now });
+    
+    console.log(`💾 [Models] Successfully cached ${models.length} models at ${new Date(now).toISOString()}`);
 
     return models;
   }

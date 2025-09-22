@@ -1,5 +1,3 @@
-"use node";
-
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
@@ -75,18 +73,31 @@ export const getUserConfig = query({
 export const getModels = query({
   args: {},
   handler: async (ctx) => {
-    const tokenIdentifier = await getTokenIdentifier(ctx);
-    const isAdmin = await ctx.runQuery(api.auth.admin.isAdminUser, { tokenIdentifier });
+    // Use new secure admin check (no tokenIdentifier needed)
+    const isAdmin = await ctx.runQuery(api.auth.admin.isCurrentUserAdmin, {});
+    
+    // Get current user info for logging
+    const identity = await ctx.auth.getUserIdentity();
+    const userInfo = identity ? `${identity.subject?.slice(0, 20)}... (${identity.email})` : "unknown";
+    
+    console.log(`🔐 [Admin] Admin panel access attempt: ${userInfo} (isAdmin: ${isAdmin})`);
+    
     if (!isAdmin) {
+      console.log(`❌ [Admin] Access denied for non-admin user: ${userInfo}`);
       throw new Error("Admin access required");
     }
 
     const results = await ctx.db.query("cachedModels").collect();
     const cached = results[0];
+    const cacheAge = cached ? Math.floor((Date.now() - cached.lastFetched) / (1000 * 60)) : null;
+    
     if (cached && Date.now() - cached.lastFetched < CACHE_TTL) {
+      console.log(`💾 [Models] Cache HIT: ${cached.models.length} models, ${cacheAge} minutes old`);
       return cached.models;
+    } else {
+      console.log(`💾 [Models] Cache MISS: ${cacheAge ? `${cacheAge} minutes old (expired)` : 'no cache found'}`);
+      return [];
     }
-    return [];
   }
 });
 

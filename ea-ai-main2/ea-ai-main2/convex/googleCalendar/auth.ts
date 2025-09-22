@@ -1,11 +1,11 @@
 "use node";
 
 import { v } from "convex/values";
-import { action, mutation } from "../_generated/server";
+import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { requireUserAuthForAction, requireUserAuth } from "../todoist/userAccess";
 import { logUserAccess } from "../todoist/userAccess";
-import { ActionCtx, MutationCtx } from "../_generated/server";
+import { ActionCtx } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
 import { google } from "googleapis";
 

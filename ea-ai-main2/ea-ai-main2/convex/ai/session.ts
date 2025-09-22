@@ -72,7 +72,10 @@ export const chatWithAI = action({
     const config = await ctx.runQuery(api.ai.models.getUserConfig, { tokenIdentifier });
     const activeModelId: string = config?.activeModelId || process.env.DEFAULT_MODEL_ID || "anthropic/claude-3.5-haiku-20241022";
     const modelName: string = activeModelId;
-    console.log(`Using model: ${modelName}`);
+    
+    // 🤖 Strategic logging for OpenRouter integration
+    console.log(`🤖 [OpenRouter] Using model: ${modelName} (from ${config?.activeModelId ? 'user config' : 'default'})`);
+    console.log(`🌐 [OpenRouter] Client initialized with API key: ${process.env.OPENROUTER_API_KEY ? '***' + process.env.OPENROUTER_API_KEY.slice(-4) : 'MISSING'}`);
     
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
