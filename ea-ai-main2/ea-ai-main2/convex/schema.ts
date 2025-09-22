@@ -11,6 +11,7 @@ const applicationTables = {
     lastMessageAt: v.number(),
     messageCount: v.number(),
     isDefault: v.optional(v.boolean()), // Mark the default chat session
+    activeMode: v.optional(v.string()), // Current active mode for the session
     
     // NEW: Session type - primary conversation or subagent execution
     sessionType: v.optional(v.union(
@@ -20,7 +21,7 @@ const applicationTables = {
     
     // Primary mode system (for sessions that preserve context)
     primaryMode: v.optional(v.union(
-      v.literal("primary"), 
+      v.literal("primary"),
       v.literal("information-collector")
     )), // Which primary mode is active (context-preserving)
     
@@ -40,15 +41,16 @@ const applicationTables = {
     
     // --- Legacy fields for migration ---
     modeType: v.optional(v.union(
-      v.literal("primary"), 
-      v.literal("information-collector"), 
-      v.literal("planning"), 
+      v.literal("primary"),
+      v.literal("information-collector"),
+      v.literal("planning"),
       v.literal("execution")
     )), // Old mode type field
     modeName: v.optional(v.string()), // Old mode name field
     agentMode: v.optional(v.string()), // Legacy agent mode field
     agentName: v.optional(v.string()), // Legacy agent name field
   }).index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_tokenIdentifier_and_activeMode", ["tokenIdentifier", "activeMode"])
     .index("by_tokenIdentifier_and_time", ["tokenIdentifier", "lastMessageAt"])
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
     .index("by_tokenIdentifier_default_time", ["tokenIdentifier", "isDefault", "lastMessageAt"])

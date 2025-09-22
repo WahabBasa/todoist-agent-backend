@@ -215,8 +215,8 @@ export async function createSimpleToolRegistry(
   // Log available tools for debugging
   const toolNames = Object.keys(tools);
   const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
-  // console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
-  // console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
+  console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
+  console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
 
   return tools;
 }
@@ -262,6 +262,8 @@ export async function createModeToolRegistry(
     }
     
     // console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    console.log(`[MODE_TOOLS] Available tools in ${modeName}: ${Object.keys(filteredTools).join(', ')}`);
     
     return filteredTools;
   } catch (error) {

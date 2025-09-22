@@ -74,11 +74,18 @@ export const taskTool: ToolDefinition = {
     const taskDescription = description || `${targetName} task`;
     
     console.log(`[TASK_DELEGATION] Starting ${targetType} delegation to ${targetName}: ${taskDescription}`);
+    
+    let refinedPrompt = prompt;
+    if (targetType === "primary-mode" && targetName === "information-collector") {
+      refinedPrompt = `FOCUS ONLY on the FIRST task mentioned (work deadlines). Ask EXACTLY ONE question about its DEADLINE using the format "QUESTION_FOR_USER: When is your work deadline due?". Do NOT ask about time, dependencies, or other tasks. Do NOT list questions. Do NOT provide explanations or multiple questions. Wait for user answer.`;
+      console.log(`[TASK_DELEGATION] Refined sequential prompt for information-collector: ${refinedPrompt}`);
+    }
+    console.log(`[TASK_DELEGATION] Prompt: ${refinedPrompt}`);
 
     if (targetType === "primary-mode") {
-      return await executePrimaryMode(targetName, prompt, ctx, actionCtx);
+      return await executePrimaryMode(targetName, refinedPrompt, ctx, actionCtx);
     } else {
-      return await executeSubagentMode(targetName, prompt, ctx, actionCtx);
+      return await executeSubagentMode(targetName, refinedPrompt, ctx, actionCtx);
     }
   }
 };
@@ -119,18 +126,24 @@ async function executePrimaryMode(
     });
   }
 
+  // Persist the active mode in the session for continuity
+  await actionCtx.runMutation(api.chatSessions.updateActiveMode, {
+    sessionId: validSessionId,
+    activeMode: modeName
+  });
+
   // Return indication that mode switch occurred
   // The actual mode execution happens in the continuing conversation
   // DO NOT update the session mode in the database to prevent UI refresh
   return {
     title: `Switched to ${modeName} mode`,
-    metadata: { 
+    metadata: {
       modeType: "primary-mode",
       modeName,
       contextPreserved: true,
       promptInjected: !!modeConfig.promptInjection
     },
-    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved.`
+    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved. I'll now ask you some questions to help organize your tasks.`
   };
 }
 

@@ -224,6 +224,35 @@ export const createDefaultSession = mutation({
   },
 });
 
+export const updateActiveMode = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    activeMode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new ConvexError("Authentication required");
+    }
+    
+    const tokenIdentifier = identity.tokenIdentifier;
+    if (!tokenIdentifier) {
+      throw new ConvexError("Token identifier not found");
+    }
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      activeMode: args.activeMode,
+      lastMessageAt: Date.now()
+    });
+    return true;
+  },
+});
+
 // Update chat session metadata
 export const updateChatSession = mutation({
   args: {

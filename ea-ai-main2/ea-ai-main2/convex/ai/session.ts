@@ -99,7 +99,8 @@ export const chatWithAI = action({
       // Determine active mode from session or use intelligent routing
       // Always use primary mode - let the LLM determine when to switch via task tool
       // This follows the OpenCode pattern where primary agents share context in same session
-      const currentModeName = "primary";
+      const activeMode = session?.activeMode || "primary";
+      const currentModeName = activeMode;
       
       console.log(`[ModeAnalysis] Using primary mode - LLM will determine delegation via task tool`);
       
@@ -213,6 +214,22 @@ export const chatWithAI = action({
         const availableToolNames = Object.keys(tools);
         logNoToolsCalled(availableToolNames, message);
         console.log(`[ToolExecution] No tools were called. Available tools: ${availableToolNames.join(", ")}`);
+        
+        // Special handling for information-collector mode
+        // Check if we just switched to information-collector mode
+        // Using cleanHistory instead of finalHistory since finalHistory isn't declared yet
+        const lastAssistantMessageInNoTools = cleanHistory.filter(msg => msg.role === "assistant").pop();
+        if (lastAssistantMessageInNoTools && lastAssistantMessageInNoTools.toolCalls) {
+          const modeSwitchCall = lastAssistantMessageInNoTools.toolCalls.find((tc: any) =>
+            tc.name === "task" &&
+            tc.args?.targetType === "primary-mode" &&
+            tc.args?.targetName === "information-collector"
+          );
+          
+          if (modeSwitchCall) {
+            console.log(`[ModeSwitch] Detected switch to information-collector mode. Preparing to collect information.`);
+          }
+        }
       }
       
       // Update Langfuse prompt generation with response information
@@ -240,7 +257,24 @@ export const chatWithAI = action({
 
 
       // Build final conversation history using simple approach
-      const finalHistory = [...cleanHistory];
+     const finalHistory = [...cleanHistory];
+
+     // Debug: Log the current conversation state
+     console.log(`[ConversationState] Building final history with ${finalHistory.length} messages`);
+     
+     // Check if we have a mode switch that should trigger information collection
+     const lastAssistantMessageBeforeResponse = finalHistory.filter(msg => msg.role === "assistant").pop();
+     if (lastAssistantMessageBeforeResponse && lastAssistantMessageBeforeResponse.toolCalls) {
+       const modeSwitchCall = lastAssistantMessageBeforeResponse.toolCalls.find((tc: any) =>
+         tc.name === "task" &&
+         tc.args?.targetType === "primary-mode" &&
+         tc.args?.targetName === "information-collector"
+       );
+       
+       if (modeSwitchCall) {
+         console.log(`[ModeSwitch] Detected information-collector mode switch. Adding follow-up message.`);
+       }
+     }
 
       // Add consolidated assistant response (fix double response issue)
       if (finalToolCalls.length > 0 || (finalText && finalText.trim())) {
@@ -271,6 +305,27 @@ export const chatWithAI = action({
               toolName: tr.toolName,
               output: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
             })),
+            timestamp: Date.now()
+          });
+        }
+      } else if (finalToolCalls.length === 0 && finalToolResults.length === 0) {
+        // If no tools were called and no results, check if we switched to information-collector mode
+        // In this case, we should continue the conversation with the information collector
+        const modeSwitchToolCall = finalHistory.find(msg => 
+          msg.role === "assistant" && 
+          msg.toolCalls && 
+          msg.toolCalls.some((tc: any) => 
+            tc.name === "task" && 
+            tc.args?.targetType === "primary-mode" && 
+            tc.args?.targetName === "information-collector"
+          )
+        );
+
+        if (modeSwitchToolCall) {
+          // Add a message indicating that the information collector should take over
+          finalHistory.push({
+            role: "assistant",
+            content: "I'm now collecting information to help organize your tasks. Please answer the following questions:",
             timestamp: Date.now()
           });
         }
@@ -328,6 +383,21 @@ export const chatWithAI = action({
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
       let cleanResponse = finalText || "I've completed the requested actions.";
+      
+      // Special handling for information-collector mode switch
+      const lastAssistantMessageFinal = finalHistory.filter(msg => msg.role === "assistant").pop();
+      if (lastAssistantMessageFinal && lastAssistantMessageFinal.toolCalls) {
+        const modeSwitchCall = lastAssistantMessageFinal.toolCalls.find((tc: any) =>
+          tc.name === "task" &&
+          tc.args?.targetType === "primary-mode" &&
+          tc.args?.targetName === "information-collector"
+        );
+        
+        if (modeSwitchCall && finalToolResults.length === 0 && finalToolCalls.length > 0) {
+          cleanResponse = "I'm now collecting information to help organize your tasks. I'll ask you some questions to better understand your situation.";
+        }
+      }
+      
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
       
       return {

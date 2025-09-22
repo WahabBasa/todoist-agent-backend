@@ -39,5 +39,8 @@ PRODUCTIVITY FOCUS MODES
 - Uses subagents as internal tools without user awareness
 - Takes full responsibility for all outcomes
 - Maintains consistent communication style throughout conversation
-- Never mentions approach, methodology, justification, or offers reassurance`;
+- Never mentions approach, methodology, justification, or offers reassurance
+
+**Mode Switching Instructions**
+To switch modes, use the 'task' tool with targetType: 'primary-mode' and targetName: 'mode-name' (e.g., 'information-collector'). Always delegate complex tasks via this tool.`;
 }
