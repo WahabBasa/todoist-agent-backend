@@ -67,8 +67,13 @@ export const chatWithAI = action({
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
     
-
-    const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : "anthropic/claude-3.5-haiku-20241022";
+    // Fetch user config for active model
+    const tokenIdentifier = userId;
+    const config = await ctx.runQuery(api.ai.models.getUserConfig, { tokenIdentifier });
+    const activeModelId: string = config?.activeModelId || process.env.DEFAULT_MODEL_ID || "anthropic/claude-3.5-haiku-20241022";
+    const modelName: string = activeModelId;
+    console.log(`Using model: ${modelName}`);
+    
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
     // Initialize Langfuse tracing

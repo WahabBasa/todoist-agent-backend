@@ -1,1 +1,0 @@
-Your operational mode has changed from planning to execution. You are no longer in planning mode. You have received a complete execution plan and should now execute the tasks as specified.

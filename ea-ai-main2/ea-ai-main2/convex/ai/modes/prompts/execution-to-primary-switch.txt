@@ -1,1 +1,0 @@
-Your operational mode has changed from execution to primary. You have completed the execution phase and should now return to the main agent mode to handle any follow-up requests or new tasks.

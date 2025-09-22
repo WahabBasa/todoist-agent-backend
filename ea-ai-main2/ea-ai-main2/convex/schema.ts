@@ -142,8 +142,31 @@ const applicationTables = {
     .index("by_tokenIdentifier_and_active", ["tokenIdentifier", "isActive"])
     .index("by_tokenIdentifier_and_default", ["tokenIdentifier", "isDefault"])
     .index("by_tokenIdentifier_and_name", ["tokenIdentifier", "name"]),
-
-
+ 
+    systemConfig: defineTable({
+      tokenIdentifier: v.string(),
+      activeModelId: v.string(),
+      updatedAt: v.number(),
+      isAdmin: v.boolean(),
+    }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+ 
+    cachedModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string())
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
+ 
+   
 };
 
 // Export schema with tokenIdentifier-based tables (big-brain pattern)

@@ -1,0 +1,72 @@
+"use node";
+
+import { action } from "../_generated/server";
+import { v } from "convex/values";
+import { api } from "../_generated/api";
+import { requireUserAuthForAction } from "../todoist/userAccess";
+
+const CACHE_TTL = 3600000; // 1 hour in ms
+
+// Helper to derive category from model name
+export function deriveCategory(name: string): string {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes("claude") || lowerName.includes("anthropic")) {
+    return "Anthropic";
+  }
+  if (lowerName.includes("gpt") || lowerName.includes("openai")) {
+    return "OpenAI";
+  }
+  if (lowerName.includes("llama") || lowerName.includes("meta")) {
+    return "Meta";
+  }
+  if (lowerName.includes("gemini") || lowerName.includes("google")) {
+    return "Google";
+  }
+  if (lowerName.includes("mistral")) {
+    return "Mistral";
+  }
+  if (lowerName.includes("command") || lowerName.includes("cohere")) {
+    return "Cohere";
+  }
+  return "Other";
+}
+
+export const fetchModels = action({
+  args: {},
+  handler: async (ctx) => {
+    const { userId } = await requireUserAuthForAction(ctx);
+    const tokenIdentifier = userId;
+    const isAdmin = await ctx.runQuery(api.auth.admin.isAdminUser, { tokenIdentifier });
+    if (!isAdmin) {
+      throw new Error("Admin access required");
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch models: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const models = data.data.map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      provider: { id: m.provider?.id || "unknown" },
+      context_window: m.context_window || 128000, // default fallback
+      max_input_tokens: m.max_input_tokens || 128000,
+      max_output_tokens: m.max_output_tokens || 4096,
+      pricing: m.pricing,
+      category: deriveCategory(m.name)
+    }));
+
+    // Cache the models
+    const now = Date.now();
+    await ctx.runMutation(api.ai.models.internalCacheModels, { models, lastFetched: now });
+
+    return models;
+  }
+});
