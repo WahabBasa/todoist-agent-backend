@@ -724,8 +724,16 @@ export const chatWithAILegacy = action({
       console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
     }
 
-    const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : "anthropic/claude-3.5-haiku-20241022";
-    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    // Get user's provider configuration
+    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
+    }
+
+    const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : (userConfig?.openRouterModelId || "anthropic/claude-3.5-haiku-20241022");
+    const openrouter = createOpenRouter({ apiKey });
 
     // Get conversation history - session-aware or default
     let conversation;

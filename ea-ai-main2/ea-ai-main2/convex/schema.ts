@@ -148,6 +148,22 @@ const applicationTables = {
       activeModelId: v.string(),
       updatedAt: v.number(),
       isAdmin: v.boolean(),
+      // Unified provider configuration
+      apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"))),
+      // OpenRouter configuration
+      openRouterApiKey: v.optional(v.string()),
+      openRouterModelId: v.optional(v.string()),
+      openRouterBaseUrl: v.optional(v.string()),
+      openRouterSpecificProvider: v.optional(v.string()),
+      openRouterUseMiddleOutTransform: v.optional(v.boolean()),
+      // Google Vertex AI configuration
+      googleProjectId: v.optional(v.string()),
+      googleRegion: v.optional(v.string()),
+      googleCredentials: v.optional(v.string()),
+      googleModelId: v.optional(v.string()),
+      googleEnableUrlContext: v.optional(v.boolean()),
+      googleEnableGrounding: v.optional(v.boolean()),
+      googleEnableReasoning: v.optional(v.boolean()),
     }).index("by_tokenIdentifier", ["tokenIdentifier"]),
  
     cachedModels: defineTable({
@@ -162,7 +178,81 @@ const applicationTables = {
         max_input_tokens: v.number(),
         max_output_tokens: v.number(),
         pricing: v.optional(v.any()),
-        category: v.optional(v.string())
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
+
+    cachedOpenrouterModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
+
+    cachedGoogleModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
       })),
     }).index("by_lastFetched", ["lastFetched"]),
  

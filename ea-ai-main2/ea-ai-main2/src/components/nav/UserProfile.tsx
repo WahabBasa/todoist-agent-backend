@@ -15,10 +15,11 @@ import { User, Settings, LogOut } from "lucide-react"
 
 interface UserProfileProps {
   onOpenSettings?: () => void;
+  onOpenAdmin?: () => void;
   collapsed?: boolean;
 }
 
-export function UserProfile({ collapsed = false, onOpenSettings }: UserProfileProps) {
+export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin }: UserProfileProps) {
   const { user, isLoaded } = useUser()
   const { signOut } = useClerk()
 
@@ -87,6 +88,10 @@ export function UserProfile({ collapsed = false, onOpenSettings }: UserProfilePr
           <DropdownMenuItem onClick={() => onOpenSettings?.()}>
             <Settings className="mr-2 h-4 w-4" />
             <span className="font-sans">Settings</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onOpenAdmin?.()}>
+            <User className="mr-2 h-4 w-4" />
+            <span className="font-sans">Admin Dashboard</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut}>

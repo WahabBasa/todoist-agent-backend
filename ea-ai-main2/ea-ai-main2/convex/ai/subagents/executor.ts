@@ -123,8 +123,15 @@ export async function executeSubagent(
 
     console.log(`[SUBAGENT_EXECUTION] Starting ${subagentName} with ${Object.keys(filteredTools).length} tools`);
 
-    // 4. Create OpenRouter client for isolated execution
-    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    // 4. Get user's provider configuration and create OpenRouter client for isolated execution
+    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
+    }
+    
+    const openrouter = createOpenRouter({ apiKey });
     const model = subagentConfig.model?.modelId || "anthropic/claude-3.5-haiku-20241022";
     const openrouterModel = openrouter.chat(model);
 

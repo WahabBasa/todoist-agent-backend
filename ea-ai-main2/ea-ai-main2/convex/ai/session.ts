@@ -77,7 +77,15 @@ export const chatWithAI = action({
       logStep('Model Init', `${modelName}; Cache: N/A`);
     }
     
-    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+    // Get user's provider configuration
+    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
+    }
+    
+    const openrouter = createOpenRouter({ apiKey });
     
     // Initialize Langfuse tracing
     const conversationTrace = createConversationTrace({

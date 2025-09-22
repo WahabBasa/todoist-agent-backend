@@ -29,8 +29,8 @@ interface SessionsContextType {
   deleteSession: (sessionId: Id<"chatSessions">) => Promise<void>;
   
   // UI state
-  activeView: "chat" | "settings";
-  setActiveView: (view: "chat" | "settings") => void;
+  activeView: "chat" | "settings" | "admin";
+  setActiveView: (view: "chat" | "settings" | "admin") => void;
 }
 
 const SessionsContext = createContext<SessionsContextType | null>(null);
@@ -83,7 +83,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     console.log('🔄 [SESSIONS DEBUG] Current session ID changed:', currentSessionId);
   }, [currentSessionId]);
-  const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "settings" | "admin">("chat");
 
   // Extract sessions array safely
   const sessions = sessionsQuery?.sessions || [];

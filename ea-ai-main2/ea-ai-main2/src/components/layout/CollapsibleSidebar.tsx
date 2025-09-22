@@ -130,6 +130,7 @@ export function CollapsibleSidebar() {
       <div className="mt-auto shrink-0 p-3">
         <UserProfile
           onOpenSettings={() => setActiveView("settings")}
+          onOpenAdmin={() => setActiveView("admin")}
           collapsed={collapsed}
         />
       </div>
