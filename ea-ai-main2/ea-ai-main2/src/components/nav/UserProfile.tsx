@@ -1,3 +1,5 @@
+"use client";
+
 import { useUser, useClerk } from "@clerk/clerk-react"
 import { cn } from "@/lib/utils"
 import { Button } from "../ui/button"

@@ -1,7 +1,7 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { Toaster } from "sonner";
 
@@ -16,6 +16,7 @@ import { SessionsProvider, useSessions } from "./context/sessions";
 import { api } from "../convex/_generated/api";
 import { AppLoading } from "./components/ui/AppLoading";
 import { CustomAuthForm } from "./components/CustomAuthForm";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function App() {
   return (
@@ -32,14 +33,18 @@ export default function App() {
         </div>
       </AuthLoading>
       <Authenticated>
-        <SessionsProvider>
-          <ChatProvider>
-            <MainApp />
-          </ChatProvider>
-        </SessionsProvider>
+        <ErrorBoundary>
+          <SessionsProvider>
+            <ChatProvider>
+              <MainApp />
+            </ChatProvider>
+          </SessionsProvider>
+        </ErrorBoundary>
       </Authenticated>
       <Unauthenticated>
-        <LandingPage />
+        <ErrorBoundary>
+          <LandingPage />
+        </ErrorBoundary>
       </Unauthenticated>
     </div>
   );

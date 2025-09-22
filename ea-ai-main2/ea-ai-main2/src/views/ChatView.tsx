@@ -1,3 +1,5 @@
+"use client";
+
 import { Chat } from "../components/chat/Chat"
 import { CollapsibleSidebar } from "../components/layout/CollapsibleSidebar"
 import { SettingsView } from "./SettingsView"
