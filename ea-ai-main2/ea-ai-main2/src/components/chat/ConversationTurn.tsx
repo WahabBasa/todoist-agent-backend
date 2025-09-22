@@ -17,6 +17,19 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   isThinking = false,
   isLast = false
 }) => {
+  // Debug: Log what's being passed to this component
+  React.useEffect(() => {
+    console.log('🔄 [FRONTEND DEBUG] ConversationTurn component rendered:', {
+      id,
+      userMessagePreview: userMessage.substring(0, 50) + '...',
+      hasAiMessage: !!aiMessage,
+      aiMessagePreview: aiMessage ? aiMessage.substring(0, 50) + '...' : null,
+      isThinking,
+      isLast,
+      isEmptyResponse: !aiMessage || aiMessage.trim() === ''
+    });
+  }, [id, userMessage, aiMessage, isThinking, isLast]);
+  
   const [copied, setCopied] = React.useState(false)
   
   // Check for empty responses

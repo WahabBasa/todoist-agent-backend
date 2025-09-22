@@ -212,6 +212,15 @@ export const chatWithAI = action({
       const finalToolResults = await result.toolResults;
       const finalUsage = await result.usage;
       
+      console.log('✅ [BACKEND DEBUG] AI SDK result:', {
+        finalTextType: typeof finalText,
+        finalTextLength: finalText?.length || 0,
+        finalTextPreview: finalText ? finalText.substring(0, 100) + '...' : null,
+        toolCallsCount: finalToolCalls?.length || 0,
+        toolResultsCount: finalToolResults?.length || 0,
+        hasUsage: !!finalUsage
+      });
+      
       // Log tool calls if any were made, or log why none were called
       if (finalToolCalls && finalToolCalls.length > 0) {
         const toolCallsForLogging = finalToolCalls.map(call => ({
@@ -288,6 +297,13 @@ export const chatWithAI = action({
      }
 
       // Add consolidated assistant response (fix double response issue)
+      console.log('🔄 [BACKEND DEBUG] Building final conversation history:', {
+        finalHistoryLength: finalHistory.length,
+        finalToolCallsLength: finalToolCalls.length,
+        finalTextLength: finalText?.length || 0,
+        finalTextPreview: finalText ? finalText.substring(0, 50) + '...' : null
+      });
+      
       if (finalToolCalls.length > 0 || (finalText && finalText.trim())) {
         // Single assistant message with both tool calls and text content
         const assistantMessage: any = {
@@ -305,6 +321,12 @@ export const chatWithAI = action({
           }));
         }
 
+        console.log('➕ [BACKEND DEBUG] Adding assistant message to history:', {
+          contentPreview: assistantMessage.content.substring(0, 50) + '...',
+          hasToolCalls: !!assistantMessage.toolCalls,
+          toolCallsCount: assistantMessage.toolCalls?.length || 0
+        });
+        
         finalHistory.push(assistantMessage);
 
         // Add tool results as separate message (required for conversation flow)
@@ -343,9 +365,23 @@ export const chatWithAI = action({
       }
 
       // Save conversation - simple, direct approach
-      await ctx.runMutation(api.conversations.upsertConversation, { 
+      console.log('💾 [BACKEND DEBUG] Saving conversation to database:', {
+        sessionId,
+        messageCount: finalHistory.length,
+        lastMessages: finalHistory.slice(-3).map(msg => ({
+          role: msg.role,
+          contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
+        }))
+      });
+      
+      const savedConversationId = await ctx.runMutation(api.conversations.upsertConversation, { 
         sessionId,
         messages: finalHistory as any 
+      });
+      
+      console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
+        conversationId: savedConversationId,
+        sessionId
       });
 
       // Clean up internal todos if conversation is complete
@@ -403,6 +439,11 @@ export const chatWithAI = action({
       // Remove any XML tags from the response to prevent them from being returned to the user
       let cleanResponse = finalText || "I've completed the requested actions.";
       
+      console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
+        originalResponse: cleanResponse,
+        originalLength: cleanResponse.length
+      });
+      
       // Special handling for information-collector mode switch
       const lastAssistantMessageFinal = finalHistory.filter(msg => msg.role === "assistant").pop();
       if (lastAssistantMessageFinal && lastAssistantMessageFinal.toolCalls) {
@@ -418,6 +459,11 @@ export const chatWithAI = action({
       }
       
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
+      
+      console.log('✅ [BACKEND DEBUG] Final clean response:', {
+        cleanResponseLength: cleanResponse.length,
+        cleanResponsePreview: cleanResponse.substring(0, 100) + '...'
+      });
       
       // Log final response with metrics (with error protection)
       try {
@@ -436,8 +482,15 @@ export const chatWithAI = action({
         console.warn("[Logging] Failed to log final response:", loggingError);
       }
       
+      console.log('📤 [BACKEND DEBUG] Returning response to frontend:', {
+        responseLength: cleanResponse.length,
+        responsePreview: cleanResponse.substring(0, 100) + '...',
+        hasMetadata: !!finalUsage
+      });
+      
       return {
         response: cleanResponse,
+        text: cleanResponse,
         fromCache: false,
         metadata: {
           toolCalls: finalToolCalls.length,
@@ -493,6 +546,7 @@ export const chatWithAI = action({
       
       return {
         response: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
+        text: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
         fromCache: false,
         metadata: {
           error: errorMessage,

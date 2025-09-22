@@ -19,15 +19,28 @@ async function getTokenIdentifier(ctx: QueryCtx): Promise<string | null> {
 
 // Helper function for schema migration: Convert legacy format to new format
 function migrateConversationSchema(conversation: any) {
-  if (!conversation) return null;
+  console.log('🔄 [BACKEND DEBUG] Checking conversation schema migration:', {
+    conversationExists: !!conversation,
+    hasSchemaVersion: !!conversation?.schemaVersion,
+    schemaVersion: conversation?.schemaVersion,
+    hasMessages: !!conversation?.messages,
+    hasMessage: !!conversation?.message
+  });
+  
+  if (!conversation) {
+    console.log('⚠️ [BACKEND DEBUG] No conversation to migrate');
+    return null;
+  }
   
   // If already migrated or has new format, return as-is
   if (conversation.schemaVersion === 2 || conversation.messages) {
+    console.log('✅ [BACKEND DEBUG] Conversation already in new format, no migration needed');
     return conversation;
   }
   
   // Legacy format detected - convert to new format
   if (conversation.message) {
+    console.log('🔄 [BACKEND DEBUG] Migrating legacy conversation format');
     const migratedMessages = [];
     
     // Add user message
@@ -48,13 +61,24 @@ function migrateConversationSchema(conversation: any) {
     }
     
     // Return conversation with migrated messages
-    return {
+    const result = {
       ...conversation,
       messages: migratedMessages,
       schemaVersion: 2,
     };
+    
+    console.log('✅ [BACKEND DEBUG] Migration completed:', {
+      messageCount: result.messages.length,
+      messagesPreview: result.messages.map((msg: any) => ({
+        role: msg.role,
+        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
+      }))
+    });
+    
+    return result;
   }
   
+  console.log('⚠️ [BACKEND DEBUG] Unknown conversation format, returning as-is');
   return conversation;
 }
 
@@ -67,17 +91,25 @@ export const getConversationBySession = query({
     // Big-brain pattern: return null when user not found
     const tokenIdentifier = await getTokenIdentifier(ctx);
     if (!tokenIdentifier) {
+      console.log('🔒 [BACKEND DEBUG] No token identifier found for conversation query');
       return null;
     }
 
     if (!args.sessionId) {
       // No session provided, return null (will be handled by frontend)
+      console.log('⚠️ [BACKEND DEBUG] No session ID provided for conversation query');
       return null;
     }
 
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      console.log('🔒 [BACKEND DEBUG] Session not found or unauthorized:', {
+        sessionId: args.sessionId,
+        sessionExists: !!session,
+        sessionTokenIdentifier: session?.tokenIdentifier,
+        userTokenIdentifier: tokenIdentifier
+      });
       return null; // Big-brain pattern: return null instead of throwing
     }
 
@@ -86,9 +118,27 @@ export const getConversationBySession = query({
       .withIndex("by_tokenIdentifier_and_session", (q) => 
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .first();
+      
+    console.log('📚 [BACKEND DEBUG] Fetched conversation from database:', {
+      sessionId: args.sessionId,
+      conversationExists: !!conversation,
+      messageCount: conversation?.messages?.length || 0,
+      messagesPreview: conversation?.messages?.slice(-2).map(msg => ({
+        role: msg.role,
+        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
+      })) || 'no messages'
+    });
 
     // Apply schema migration if needed
-    return migrateConversationSchema(conversation);
+    const migratedConversation = migrateConversationSchema(conversation);
+    
+    console.log('📚 [BACKEND DEBUG] Migrated conversation:', {
+      originalExists: !!conversation,
+      migratedExists: !!migratedConversation,
+      messageCount: migratedConversation?.messages?.length || 0
+    });
+    
+    return migratedConversation;
   },
 });
 
@@ -172,11 +222,23 @@ export const upsertConversation = mutation({
   },
   handler: async (ctx, args) => {
     const tokenIdentifier = await requireAuth(ctx);
+    
+    console.log('💾 [BACKEND DEBUG] Upserting conversation:', {
+      sessionId: args.sessionId,
+      messageCount: args.messages.length,
+      tokenIdentifier: tokenIdentifier.substring(0, 20) + '...'
+    });
 
     // Verify session belongs to user if sessionId is provided
     if (args.sessionId) {
       const session = await ctx.db.get(args.sessionId);
       if (!session || session.tokenIdentifier !== tokenIdentifier) {
+        console.log('🔒 [BACKEND DEBUG] Session not found or unauthorized for upsert:', {
+          sessionId: args.sessionId,
+          sessionExists: !!session,
+          sessionTokenIdentifier: session?.tokenIdentifier,
+          userTokenIdentifier: tokenIdentifier
+        });
         throw new ConvexError("Chat session not found or unauthorized");
       }
     }
@@ -214,6 +276,15 @@ export const upsertConversation = mutation({
     
     if (conversation) {
       // Update existing conversation
+      console.log('🔄 [BACKEND DEBUG] Updating existing conversation:', {
+        conversationId: conversation._id,
+        messageCount: args.messages.length,
+        messagesPreview: args.messages.slice(-2).map(msg => ({
+          role: msg.role,
+          contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
+        }))
+      });
+      
       await ctx.db.patch(conversation._id, {
         messages: args.messages,
         schemaVersion: 2,
@@ -227,9 +298,19 @@ export const upsertConversation = mutation({
         });
       }
       
+      console.log('✅ [BACKEND DEBUG] Conversation updated successfully');
       return conversation._id;
     } else {
       // Create new conversation
+      console.log('➕ [BACKEND DEBUG] Creating new conversation:', {
+        sessionId: args.sessionId,
+        messageCount: args.messages.length,
+        messagesPreview: args.messages.slice(-2).map(msg => ({
+          role: msg.role,
+          contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
+        }))
+      });
+      
       const conversationId = await ctx.db.insert("conversations", {
         tokenIdentifier,
         sessionId: args.sessionId,
@@ -245,6 +326,7 @@ export const upsertConversation = mutation({
         });
       }
       
+      console.log('✅ [BACKEND DEBUG] New conversation created successfully:', conversationId);
       return conversationId;
     }
   },

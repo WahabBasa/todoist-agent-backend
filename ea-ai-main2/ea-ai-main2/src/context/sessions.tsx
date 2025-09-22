@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
@@ -52,7 +52,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const loadPersistedSession = (): Id<"chatSessions"> | null => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? stored as Id<"chatSessions"> : null;
+      return stored ? (stored as Id<"chatSessions">) : null;
     } catch (error) {
       console.warn('Failed to load persisted session:', error);
       return null;
@@ -74,13 +74,35 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   // Session state - single source of truth with persistence
   const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(() => {
     // Initialize from localStorage if available
-    return loadPersistedSession();
+    const stored = loadPersistedSession();
+    console.log('🔄 [SESSIONS DEBUG] Initializing session state from localStorage:', stored);
+    return stored;
   });
+  
+  // Debug: Log when currentSessionId changes
+  React.useEffect(() => {
+    console.log('🔄 [SESSIONS DEBUG] Current session ID changed:', currentSessionId);
+  }, [currentSessionId]);
   const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
 
   // Extract sessions array safely
   const sessions = sessionsQuery?.sessions || [];
   const isLoadingSessions = sessionsQuery === undefined;
+  
+  // Debug: Log sessions
+  React.useEffect(() => {
+    console.log('🔄 [SESSIONS DEBUG] Sessions updated:', {
+      isLoading: isLoadingSessions,
+      sessionCount: sessions.length,
+      sessions: sessions.map(s => ({
+        id: s._id,
+        title: s.title,
+        isDefault: s.isDefault,
+        messageCount: s.messageCount,
+        lastMessageAt: new Date(s.lastMessageAt).toISOString()
+      }))
+    });
+  }, [sessions, isLoadingSessions]);
 
   // Validate persisted session on app startup
   useEffect(() => {
@@ -137,22 +159,19 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, [createChatSession]);
 
   // ChatHub pattern: Select session with persistence
-  const selectSession = useCallback(async (sessionId: Id<"chatSessions"> | null) => {
-    console.log('🔄 Switching to session:', sessionId);
-    
-    // Return a promise to allow awaiting the session change
-    return new Promise<void>((resolve) => {
-      setCurrentSessionId(sessionId);
-      persistSession(sessionId); // Persist to localStorage
-      
-      if (sessionId) {
-        setActiveView("chat");
-      }
-      
-      // Small delay to ensure state updates are processed
-      setTimeout(resolve, 0);
+  const selectSession = useCallback((sessionId: Id<"chatSessions"> | null) => {
+    console.log('🔄 [SESSIONS DEBUG] Selecting session:', {
+      sessionId,
+      previousSessionId: currentSessionId
     });
-  }, []);
+    
+    setCurrentSessionId(sessionId);
+    persistSession(sessionId); // Persist to localStorage
+    
+    if (sessionId) {
+      setActiveView("chat");
+    }
+  }, [currentSessionId]);
 
   // ChatHub pattern: Delete session (pure reactive)
   const deleteSession = useCallback(async (sessionId: Id<"chatSessions">) => {

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { cn } from "@/lib/utils"
 import { Id } from "../../../convex/_generated/dataModel"
 import { ConversationTurn } from './ConversationTurn'
@@ -6,21 +6,84 @@ import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
 import { useChat } from '../../context/chat'
 
+// Helper interface for conversation turn
+interface ConversationTurnData {
+  id: string;
+  userMessage: string;
+  aiMessage?: string;
+  isThinking: boolean;
+}
+
 export function Chat() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const messagesAreaRef = useRef<HTMLDivElement>(null)
   
-  // ChatHub pattern: Consumer-only - get everything from context
+  // Get simplified chat state from new context
   const {
-    conversationTurns,
+    messages,
+    input,
+    setInput,
+    handleInputChange,
+    handleSubmit,
     isLoading,
     isFreshSession,
-    submitMessage,
-    clearChat
+    clearChat,
+    error
   } = useChat()
+
+  // Convert messages to conversation turns for compatibility
+  const conversationTurns = React.useMemo((): ConversationTurnData[] => {
+    const turns: ConversationTurnData[] = [];
+    
+    // Group messages into user-assistant pairs
+    let i = 0;
+    while (i < messages.length) {
+      const currentMessage = messages[i];
+      
+      if (currentMessage.role === 'user') {
+        // Look for the next assistant message
+        const assistantMessage = messages[i + 1];
+        
+        turns.push({
+          id: currentMessage.id,
+          userMessage: currentMessage.content,
+          aiMessage: (assistantMessage?.role === 'assistant') ? assistantMessage.content : undefined,
+          isThinking: false
+        });
+        
+        // Skip the assistant message if we found one
+        i += (assistantMessage?.role === 'assistant') ? 2 : 1;
+      } else {
+        i++;
+      }
+    }
+    
+    // Add thinking state for loading
+    if (isLoading && turns.length > 0) {
+      const lastTurn = turns[turns.length - 1];
+      if (!lastTurn.aiMessage) {
+        lastTurn.isThinking = true;
+      }
+    }
+    
+    return turns;
+  }, [messages, isLoading])
   
-  // Simple input state (only for UI)
-  const [input, setInput] = useState("")
+  // Debug: Log conversation turns
+  React.useEffect(() => {
+    console.log('💬 [FRONTEND DEBUG] Conversation turns updated:', {
+      count: conversationTurns.length,
+      turns: conversationTurns.map(turn => ({
+        id: turn.id,
+        userMessage: turn.userMessage.substring(0, 30) + '...',
+        hasAiMessage: !!turn.aiMessage,
+        aiMessagePreview: turn.aiMessage ? turn.aiMessage.substring(0, 30) + '...' : null,
+        isThinking: turn.isThinking
+      }))
+    });
+  }, [conversationTurns]);
+  
+  // UI state (composition and enter key handling)
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
   
@@ -52,20 +115,10 @@ export function Chat() {
     }
   }, [conversationTurns, isLoading])
 
-  // ChatHub pattern: Simple form submission
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  // Wrapper for form submission to match ChatInput interface
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
-
-    const message = input.trim()
-    setInput("") // Clear input immediately
-    
-    // Let context handle everything - don't await to avoid ESLint error
-    submitMessage(message)
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
+    handleSubmit(e as React.FormEvent) // Use the hook's handleSubmit
   }
 
   const handleCompositionStart = () => setIsComposing(true)
@@ -79,8 +132,8 @@ export function Chat() {
   }
 
   const handleClearChat = () => {
-    setInput("")
-    clearChat()
+    setInput("") // Clear local input
+    clearChat() // Use context's clearChat
   }
 
   return (
@@ -133,7 +186,7 @@ export function Chat() {
             ref={inputRef}
             value={input}
             onChange={handleInputChange}
-            onSubmit={handleSubmit}
+            onSubmit={handleFormSubmit}
             onClear={handleClearChat}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}

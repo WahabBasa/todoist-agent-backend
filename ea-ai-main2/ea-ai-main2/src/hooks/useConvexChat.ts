@@ -1,0 +1,156 @@
+import { useState, useCallback, useEffect } from 'react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt?: Date;
+}
+
+export interface UseConvexChatOptions {
+  id?: string; // session ID
+  initialMessages?: Message[];
+  onFinish?: (message: Message) => void;
+  onError?: (error: Error) => void;
+}
+
+export interface UseConvexChatReturn {
+  messages: Message[];
+  input: string;
+  setInput: (input: string) => void;
+  handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  handleSubmit: (e: React.FormEvent) => void;
+  append: (message: { content: string; role?: 'user' | 'assistant' }) => Promise<void>;
+  isLoading: boolean;
+  error: Error | null;
+  reload: () => void;
+  stop: () => void;
+}
+
+/**
+ * Custom hook that provides Vercel AI SDK-like interface but uses Convex backend
+ * This gives us the same simple API as useChat but works with our existing infrastructure
+ */
+export function useConvexChat({
+  id,
+  initialMessages = [],
+  onFinish,
+  onError
+}: UseConvexChatOptions = {}): UseConvexChatReturn {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const chatWithAI = useAction(api.ai.session.chatWithAI);
+
+  // Reset messages when initialMessages change (for session switching)
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  }, []);
+
+  const append = useCallback(async (message: { content: string; role?: 'user' | 'assistant' }) => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    setError(null);
+
+    const userMessage: Message = {
+      id: `msg-${Date.now()}-user`,
+      role: message.role || 'user',
+      content: message.content,
+      createdAt: new Date()
+    };
+
+    // Add user message optimistically
+    setMessages(prev => [...prev, userMessage]);
+
+    try {
+      // Create time context
+      const currentTimeContext = {
+        currentTime: new Date().toISOString(),
+        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        localTime: new Date().toLocaleString(),
+        timestamp: Date.now(),
+        source: "convex_chat_hook"
+      };
+
+      // Call Convex action
+      const result = await chatWithAI({
+        message: message.content,
+        useHaiku: false,
+        sessionId: id as Id<"chatSessions"> | undefined,
+        currentTimeContext
+      });
+
+      // Create assistant message
+      const assistantMessage: Message = {
+        id: `msg-${Date.now()}-assistant`,
+        role: 'assistant',
+        content: result.response || result.text || "I'm ready to help!",
+        createdAt: new Date()
+      };
+
+      // Add assistant response
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Call onFinish callback
+      if (onFinish) {
+        onFinish(assistantMessage);
+      }
+
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      
+      // Remove the optimistic user message on error
+      setMessages(prev => prev.slice(0, -1));
+      
+      if (onError) {
+        onError(error);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, id, chatWithAI, onFinish, onError]);
+
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const messageContent = input.trim();
+    setInput('');
+    append({ content: messageContent });
+  }, [input, isLoading, append]);
+
+  const reload = useCallback(() => {
+    // For simplicity, we'll just clear error state
+    // In a more sophisticated implementation, we could re-send the last message
+    setError(null);
+  }, []);
+
+  const stop = useCallback(() => {
+    // Since we're not actually streaming, we can't stop mid-generation
+    // This is a no-op for compatibility with useChat interface
+  }, []);
+
+  return {
+    messages,
+    input,
+    setInput,
+    handleInputChange,
+    handleSubmit,
+    append,
+    isLoading,
+    error,
+    reload,
+    stop
+  };
+}

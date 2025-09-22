@@ -56,12 +56,30 @@ function MainApp() {
   const isDataReady = !isLoadingSessions && defaultSession !== undefined;
   const [hasInitialized, setHasInitialized] = useState(false);
   
+  // Debug: Log initialization state
+  React.useEffect(() => {
+    console.log('🔄 [APP DEBUG] App initialization state:', {
+      isDataReady,
+      hasInitialized,
+      currentSessionId,
+      sessionsCount: sessions.length,
+      defaultSessionExists: !!defaultSession,
+      defaultSessionId: defaultSession?._id
+    });
+  }, [isDataReady, hasInitialized, currentSessionId, sessions.length, defaultSession]);
+  
   // Simplified session initialization - runs only once when data is ready
   useEffect(() => {
-    if (!isDataReady || hasInitialized) return;
+    if (!isDataReady || hasInitialized) {
+      console.log('🔄 [APP DEBUG] Skipping initialization:', {
+        isDataReady,
+        hasInitialized
+      });
+      return;
+    }
     
     const initializeSession = async () => {
-      console.log('🔄 Initializing session...', {
+      console.log('🔄 [APP DEBUG] Initializing session...', {
         currentSessionId,
         sessionsCount: sessions.length,
         defaultSessionExists: !!defaultSession
@@ -73,18 +91,20 @@ function MainApp() {
           if (sessions.length > 0) {
             // Use most recent session
             const mostRecentSession = sessions[0];
-            console.log('📋 Using most recent session:', mostRecentSession._id);
-            await selectSession(mostRecentSession._id);
+            console.log('📋 [APP DEBUG] Using most recent session:', mostRecentSession._id);
+            selectSession(mostRecentSession._id);
           } else if (defaultSession) {
             // Use default session
-            console.log('📋 Using default session:', defaultSession._id);
-            await selectSession(defaultSession._id);
+            console.log('📋 [APP DEBUG] Using default session:', defaultSession._id);
+            selectSession(defaultSession._id);
           } else {
             // Create and use new default session
-            console.log('🚀 Creating new default session...');
+            console.log('🚀 [APP DEBUG] Creating new default session...');
             const newDefaultId = await ensureDefaultSession();
-            await selectSession(newDefaultId);
+            selectSession(newDefaultId);
           }
+        } else {
+          console.log('✅ [APP DEBUG] Current session already exists:', currentSessionId);
         }
       } catch (error) {
         console.error('Session initialization failed:', error);
