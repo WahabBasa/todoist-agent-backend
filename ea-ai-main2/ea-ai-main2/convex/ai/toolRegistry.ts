@@ -10,6 +10,7 @@ import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
 import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
+import { logStep, logModeSwitch } from "./logger";
 
 // Import mode registry
 import { ModeRegistry } from "./modes/registry";
@@ -108,7 +109,7 @@ export async function createSimpleToolRegistry(
   actionCtx: ActionCtx,
   userId: string,
   currentTimeContext?: any,
-  sessionId?: string,
+  sessionId?: string | Id<"chatSessions">,
   modeName: string = "primary" // New parameter for mode-aware filtering
 ): Promise<Record<string, any>> {
   
@@ -210,13 +211,16 @@ export async function createSimpleToolRegistry(
     }
   }
 
-  // console.log(`[TOOL_REGISTRY] Successfully created ${Object.keys(tools).length} tools`);
-  
   // Log available tools for debugging
   const toolNames = Object.keys(tools);
   const batchTools = toolNames.filter(name => name.includes('Batch') || name.includes('batch'));
-  console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
-  console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
+  
+  if (process.env.LOG_LEVEL === 'debug') {
+    console.log(`[TOOL_LIST] Available tools: ${toolNames.join(', ')}`);
+    console.log(`[TOOL_LIST] Batch tools: ${batchTools.join(', ') || 'NONE'}`);
+  } else {
+    logStep('Tool Registry Loaded', `${toolNames.length} tools (${batchTools.length} batch)`);
+  }
 
   return tools;
 }
@@ -230,7 +234,7 @@ export async function createModeToolRegistry(
   userId: string,
   modeName: string = "primary",
   currentTimeContext?: any,
-  sessionId?: string
+  sessionId?: string | Id<"chatSessions">
 ): Promise<Record<string, any>> {
   try {
     // Create the full tool registry
@@ -261,9 +265,24 @@ export async function createModeToolRegistry(
       }
     }
     
-    // console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
-    console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
-    console.log(`[MODE_TOOLS] Available tools in ${modeName}: ${Object.keys(filteredTools).join(', ')}`);
+    let formattedTodos = '';
+    if (sessionId) {
+      try {
+        const todoResult = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, { sessionId: typeof sessionId === 'string' ? sessionId as Id<"chatSessions"> : sessionId });
+        if (todoResult && todoResult.todos && todoResult.todos.length > 0) {
+          formattedTodos = todoResult.todos.map((t: any) => `- [${t.status === 'completed' ? 'x' : ' '}] ${t.content}`).join('\n');
+        }
+      } catch (err) {
+        console.warn(`[MODE_TOOLS] Failed to fetch todos:`, err);
+      }
+    }
+    
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+      console.log(`[MODE_TOOLS] Available tools in ${modeName}: ${Object.keys(filteredTools).join(', ')}`);
+    } else {
+      logModeSwitch("unknown", modeName, "tool registry loaded", sessionId?.toString());
+    }
     
     return filteredTools;
   } catch (error) {
@@ -281,7 +300,7 @@ export async function createPrimaryModeToolRegistry(
   actionCtx: ActionCtx,
   userId: string,
   currentTimeContext?: any,
-  sessionId?: string
+  sessionId?: string | Id<"chatSessions">
 ): Promise<Record<string, any>> {
   return await createModeToolRegistry(actionCtx, userId, "primary", currentTimeContext, sessionId);
 }

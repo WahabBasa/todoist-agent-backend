@@ -14,6 +14,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "./_generated/api";
 import { SystemPrompt } from "./ai/system";
 import { MessageCaching } from "./ai/caching";
+import { logToolExec, logError } from "./ai/logger";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 // Use big-brain authentication pattern
@@ -329,25 +330,39 @@ function recordToolFailure(toolName: string): void {
   toolFailureTracker.set(toolName, failure);
 }
 
-async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: any, sessionId?: any, userId?: string): Promise<ToolResultPart> {
-    const { toolName, args, toolCallId } = toolCall;
-    console.log(`[Executor] 🔧 Executing tool: ${toolName} with args:`, JSON.stringify(args, null, 2));
-    
-    // Execute tool calls fresh each time for real-time accuracy
-    
-    // Circuit breaker check
-    if (!checkCircuitBreaker(toolName)) {
-        console.warn(`[Executor] 🚫 Circuit breaker active for tool: ${toolName}`);
-        return {
-            type: 'tool-result' as const,
-            toolCallId,
-            toolName,
-            output: "Tool temporarily unavailable due to repeated failures. Please try again later."
-        } as unknown as ToolResultPart;
-    }
+function summarizeArgs(args: any): string {
+  if (!args) return 'no args';
+  if (typeof args === 'object' && args !== null) {
+    const keys = Object.keys(args);
+    if (keys.length === 0) return 'empty object';
+    return keys.map(k => `${k}: ${String(args[k]).substring(0, 30)}`).join(', ');
+  }
+  return String(args).substring(0, 100);
+}
 
-    try {
-        let result: any;
+async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: any, sessionId?: any, userId?: string): Promise<ToolResultPart> {
+  const { toolName, args, toolCallId } = toolCall;
+  if (process.env.LOG_LEVEL !== 'error') {
+    logToolExec(toolName, summarizeArgs(args));
+  }
+  
+  // Execute tool calls fresh each time for real-time accuracy
+  
+  // Circuit breaker check
+  if (!checkCircuitBreaker(toolName)) {
+    if (process.env.LOG_LEVEL !== 'error') {
+      logToolExec(toolName, 'circuit breaker active');
+    }
+    return {
+      type: 'tool-result' as const,
+      toolCallId,
+      toolName,
+      output: "Tool temporarily unavailable due to repeated failures. Please try again later."
+    } as unknown as ToolResultPart;
+  }
+
+  try {
+    let result: any;
         
         // Add project ID validation for getTasks
         if (toolName === "getTasks" && args.projectId) {
@@ -647,16 +662,18 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
         
         // Tool execution completed
         
-        console.log(`[Executor] ✅ Tool ${toolName} executed successfully.`);
+        if (process.env.LOG_LEVEL !== 'error') {
+          logToolExec(toolName, 'completed');
+        }
         return {
-            type: 'tool-result' as const,
-            toolCallId,
-            toolName,
-            output: result || {},
+          type: 'tool-result' as const,
+          toolCallId,
+          toolName,
+          output: result || {},
         } as ToolResultPart;
-    } catch (error) {
+      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-        console.error(`[Executor] ❌ Tool ${toolName} failed:`, errorMessage);
+        logError(`Tool ${toolName} failed: ${errorMessage}`, "tool execution");
         
         // Record the failure for circuit breaker
         recordToolFailure(toolName);
@@ -664,23 +681,25 @@ async function executeTool(ctx: ActionCtx, toolCall: any, currentTimeContext?: a
         // Provide helpful error messages for Todoist integration issues
         let userFriendlyMessage = errorMessage;
         if (errorMessage.includes("Todoist not connected")) {
-            userFriendlyMessage = "🔗 Please connect your Todoist account first. Go to Settings to link your Todoist account and start managing your real tasks.";
+          userFriendlyMessage = "🔗 Please connect your Todoist account first. Go to Settings to link your Todoist account and start managing your real tasks.";
         } else if (errorMessage.includes("authentication expired")) {
-            userFriendlyMessage = "🔑 Your Todoist connection has expired. Please reconnect your account in Settings.";
-        } else if (errorMessage.includes("Todoist API error")) {
-            userFriendlyMessage = "⚠️ Todoist service is temporarily unavailable. Please try again in a few moments.";
+          userFriendlyMessage = "🔑 Your Todoist connection has expired. Please reconnect your account in Settings.";
+        } else if (errorMessage.includes("Todoist API error") || errorMessage.includes("Overloaded")) {
+          userFriendlyMessage = "⚠️ Todoist service is temporarily unavailable. Please try again in a few moments.";
         } else if (errorMessage.includes("Rate limit")) {
-            userFriendlyMessage = "⏱️ Too many requests to Todoist. Please wait a moment before trying again.";
+          userFriendlyMessage = "⏱️ Too many requests to Todoist. Please wait a moment before trying again.";
         }
         
+        logError(userFriendlyMessage, "user friendly error");
+        
         return {
-            type: 'tool-result' as const,
-            toolCallId,
-            toolName,
-            output: `Error: ${userFriendlyMessage}`
+          type: 'tool-result' as const,
+          toolCallId,
+          toolName,
+          output: `Error: ${userFriendlyMessage}`
         } as unknown as ToolResultPart;
+      }
     }
-}
 
 // =================================================================
 // 3. THE MAIN AGENT: Manages the agentic workflow.
@@ -701,7 +720,9 @@ export const chatWithAILegacy = action({
   handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }) => {
     // Use big-brain authentication pattern for consistent user validation
     const { userId } = await requireUserAuthForAction(ctx);
-    console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[AI] Authenticated user: ${userId.substring(0, 20)}...`);
+    }
 
     const modelName = useHaiku ? "anthropic/claude-3.5-haiku-20241022" : "anthropic/claude-3.5-haiku-20241022";
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
@@ -718,7 +739,9 @@ export const chatWithAILegacy = action({
     const history = (conversation?.messages as any[]) || [];
     history.push({ role: "user", content: message, timestamp: Date.now() });
 
-    console.log(`[Main Agent] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[Main Agent] Starting interaction for user ${userId.substring(0, 20)}...: "${message}"`);
+    }
 
     // Initialize OpenRouter + Anthropic caching
     MessageCaching.initializeCaching();
@@ -741,7 +764,9 @@ export const chatWithAILegacy = action({
                                 hasBulkOperations || hasQuantifiedTasks || hasMultiEntityWork;
 
     if (shouldCreateTodolist) {
-      console.log(`[Main Agent] Complex/bulk request detected - REQUIRES internal todolist for: "${message.slice(0, 50)}..."`);
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log(`[Main Agent] Complex/bulk request detected - REQUIRES internal todolist for: "${message.slice(0, 50)}..."`);
+      }
     }
 
     // Enhanced conversation state deduplication to prevent infinite loops
@@ -751,7 +776,9 @@ export const chatWithAILegacy = action({
     
     const MAX_ITERATIONS = 6; // Reduced from 15 to prevent rate limits
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-        console.log(`[Main Agent] -> Planning iteration ${i + 1}...`);
+        if (process.env.LOG_LEVEL === 'debug') {
+          console.log(`[Main Agent] -> Planning iteration ${i + 1}...`);
+        }
         
         // Advanced state tracking: user + message content + history length + last 3 message types
         const userPrefix = userId.substring(0, 20);
@@ -760,8 +787,10 @@ export const chatWithAILegacy = action({
         const stateKey = `${userPrefix}-${message.slice(0, 50)}-${history.length}-${recentMessageTypes}-${lastToolCalls}`;
         
         if (conversationStateTracker.has(stateKey)) {
+          if (process.env.LOG_LEVEL === 'debug') {
             console.warn(`[CIRCUIT_BREAKER] Duplicate conversation state detected at iteration ${i + 1}`);
-            throw new Error(`Conversation loop detected. State: ${stateKey.slice(0, 100)}...`);
+          }
+          throw new Error(`Conversation loop detected. State: ${stateKey.slice(0, 100)}...`);
         }
         conversationStateTracker.add(stateKey);
         
@@ -772,7 +801,9 @@ export const chatWithAILegacy = action({
             for (const tc of lastMessage.toolCalls) {
               const callCount = toolCallTracker.get(tc.name) || 0;
               if (callCount >= 3) {
-                console.warn(`[CIRCUIT_BREAKER] Tool ${tc.name} called ${callCount} times, potential oscillation`);
+                if (process.env.LOG_LEVEL === 'debug') {
+                  console.warn(`[CIRCUIT_BREAKER] Tool ${tc.name} called ${callCount} times, potential oscillation`);
+                }
                 throw new Error(`Tool oscillation detected: ${tc.name} called repeatedly`);
               }
               toolCallTracker.set(tc.name, callCount + 1);
@@ -814,12 +845,16 @@ export const chatWithAILegacy = action({
           }];
         }
         
-        console.log(`[Main Agent] Messages count before AI call: ${modelMessages.length}`);
-        console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
+        if (process.env.LOG_LEVEL === 'debug') {
+          console.log(`[Main Agent] Messages count before AI call: ${modelMessages.length}`);
+          console.log(`[DEBUG] Converted messages:`, JSON.stringify(modelMessages.slice(-3), null, 2));
+        }
         
         // Ensure we have at least the current user message
         if (modelMessages.length === 0) {
-          console.warn('[CONVERSION] No valid messages found, using current user message');
+          if (process.env.LOG_LEVEL === 'debug') {
+            console.warn('[CONVERSION] No valid messages found, using current user message');
+          }
           modelMessages.push({ role: 'user', content: message });
         }
         
@@ -901,22 +936,28 @@ Do NOT use any other tools until internal todolist is created.
         }
 
         if (!toolCalls || toolCalls.length === 0) {
-            console.log(`[Main Agent] Planning complete. Final response: "${text}"`);
+            if (process.env.LOG_LEVEL === 'debug') {
+              console.log(`[Main Agent] Planning complete. Final response: "${text}"`);
+            }
             history.push({ role: "assistant", content: text, timestamp: Date.now() });
             
             // Clean up internal todolist if conversation is complete
             try {
               await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
-              console.log(`[Main Agent] Deactivated internal todolist for completed conversation`);
+              if (process.env.LOG_LEVEL === 'debug') {
+                console.log(`[Main Agent] Deactivated internal todolist for completed conversation`);
+              }
             } catch (error) {
-              console.warn(`[Main Agent] Failed to deactivate todolist:`, error);
+              if (process.env.LOG_LEVEL === 'debug') {
+                console.warn(`[Main Agent] Failed to deactivate todolist:`, error);
+              }
               // Non-blocking error - continue with response
             }
             
             // Save conversation - session-aware or default
-            await ctx.runMutation(api.conversations.upsertConversation, { 
+            await ctx.runMutation(api.conversations.upsertConversation, {
               sessionId,  // Will use default session if undefined
-              messages: history as any 
+              messages: history as any
             });
             
             return { response: text };
@@ -924,19 +965,21 @@ Do NOT use any other tools until internal todolist is created.
 
         history.push({
           role: "assistant",
-          toolCalls: toolCalls.map(tc => ({ 
-            name: tc.toolName, 
-            args: tc.input || {}, 
-            toolCallId: tc.toolCallId 
+          toolCalls: toolCalls.map(tc => ({
+            name: tc.toolName,
+            args: tc.input || {},
+            toolCallId: tc.toolCallId
           })),
           timestamp: Date.now(),
         });
 
-        console.log(`[Main Agent] Executing ${toolCalls.length} tool(s)...`);
+        if (process.env.LOG_LEVEL === 'debug') {
+          console.log(`[Main Agent] Executing ${toolCalls.length} tool(s)...`);
+        }
         const toolResults = await Promise.all(toolCalls.map(call => executeTool(ctx, {
-            toolName: call.toolName,
-            args: call.input,
-            toolCallId: call.toolCallId
+          toolName: call.toolName,
+          args: call.input,
+          toolCallId: call.toolCallId
         }, currentTimeContext, sessionId, userId)));
         
         // Validate tool call ID consistency and filter out mismatched results
@@ -986,15 +1029,17 @@ Do NOT use any other tools until internal todolist is created.
 export const getCacheStatistics = action({
   args: {},
   handler: async (ctx) => {
-    // Use big-brain authentication pattern
-    const { userId } = await requireUserAuthForAction(ctx);
+    if (process.env.LOG_LEVEL === 'debug') {
+      // Use big-brain authentication pattern
+      const { userId } = await requireUserAuthForAction(ctx);
+    }
     
     // OpenRouter + Anthropic ephemeral caching handles statistics automatically
     return {
       cacheType: "Anthropic Ephemeral Caching via OpenRouter",
       note: "Cache statistics are now handled server-side by Anthropic",
       benefits: "60-80% cost reduction on cache hits, 5-minute cache duration",
-      userId: userId.substring(0, 20) + "...",
+      userId: "user",
       timestamp: Date.now(),
     };
   },
@@ -1007,10 +1052,12 @@ export const cleanupCache = action({
     // Use big-brain authentication pattern  
     const { userId } = await requireUserAuthForAction(ctx);
     
-    console.log(`[Caching] Cache cleanup requested by user: ${userId.substring(0, 20)}... (handled by Anthropic)`);
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[Caching] Cache cleanup requested by user: ${userId.substring(0, 20)}... (handled by Anthropic)`);
+    }
     
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: "Anthropic ephemeral cache expires automatically (5 minutes)",
       cacheType: "Server-side ephemeral caching",
       timestamp: Date.now()

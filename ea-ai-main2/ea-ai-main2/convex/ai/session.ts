@@ -24,7 +24,7 @@ import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage"
 import { ModeRegistry } from "./modes/registry";
 
 // Import clean logging system
-import { logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled } from "./logger";
+import { logStep, logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled, logDebug, logError, logFinalResponse } from "./logger";
 
 // Langfuse Cloud tracing imports
 import {
@@ -73,9 +73,9 @@ export const chatWithAI = action({
     const activeModelId: string = config?.activeModelId || process.env.DEFAULT_MODEL_ID || "anthropic/claude-3.5-haiku-20241022";
     const modelName: string = activeModelId;
     
-    // 🤖 Strategic logging for OpenRouter integration
-    console.log(`🤖 [OpenRouter] Using model: ${modelName} (from ${config?.activeModelId ? 'user config' : 'default'})`);
-    console.log(`🌐 [OpenRouter] Client initialized with API key: ${process.env.OPENROUTER_API_KEY ? '***' + process.env.OPENROUTER_API_KEY.slice(-4) : 'MISSING'}`);
+    if (process.env.LOG_LEVEL !== 'error') {
+      logStep('Model Init', `${modelName}; Cache: N/A`);
+    }
     
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     
@@ -92,6 +92,9 @@ export const chatWithAI = action({
     let tools: Record<string, any> = {}; // Declare tools here so it's available in catch block
 
     try {
+      // Log session start
+      logSession("start", sessionId, message);
+      
       // Load conversation history and session state - simple, direct approach
       let conversation;
       let session;
@@ -110,13 +113,13 @@ export const chatWithAI = action({
       const activeMode = session?.activeMode || "primary";
       const currentModeName = activeMode;
       
-      console.log(`[ModeAnalysis] Using primary mode - LLM will determine delegation via task tool`);
+      logDebug("Using primary mode - LLM will determine delegation via task tool");
       
       // Log mode information but don't update session mode in database
       // Primary modes share context in same session (like OpenCode)
       tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
-      logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode");
-      console.log(`[ModeTools] Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
+      logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode", sessionId);
+      logDebug(`Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
       
       // Log user message
       logUserMessage(message, sessionId);
@@ -157,7 +160,7 @@ export const chatWithAI = action({
         currentModeName
       );
       
-      console.log(`[SystemPrompt] Generated system prompt for mode: ${currentModeName}`);
+      logDebug(`Generated system prompt for mode: ${currentModeName}`);
       
       // Add system message to conversation
       const messagesWithSystem = [
@@ -181,8 +184,8 @@ export const chatWithAI = action({
       // Create mode-specific tool registry and log current mode with tool count
       tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
       const toolCount = Object.keys(tools).length;
-      logCurrentMode(currentModeName, toolCount, "orchestration mode");
-      console.log(`[ModeTools] Created tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
+      logCurrentMode(currentModeName, toolCount, "orchestration mode", sessionId);
+      logDebug(`Created tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
 
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -216,12 +219,12 @@ export const chatWithAI = action({
           args: call.input
         }));
         logToolCalls(toolCallsForLogging);
-        console.log(`[ToolExecution] Successfully executed ${finalToolCalls.length} tool(s)`);
+        logDebug(`Successfully executed ${finalToolCalls.length} tool(s)`);
       } else {
         // Log when no tools are called to help debug AI behavior
         const availableToolNames = Object.keys(tools);
         logNoToolsCalled(availableToolNames, message);
-        console.log(`[ToolExecution] No tools were called. Available tools: ${availableToolNames.join(", ")}`);
+        logDebug(`No tools were called. Available tools: ${availableToolNames.join(", ")}`);
         
         // Special handling for information-collector mode
         // Check if we just switched to information-collector mode
@@ -235,7 +238,7 @@ export const chatWithAI = action({
           );
           
           if (modeSwitchCall) {
-            console.log(`[ModeSwitch] Detected switch to information-collector mode. Preparing to collect information.`);
+            logModeSwitch("primary", "information-collector", "User delegation detected", sessionId);
           }
         }
       }
@@ -268,7 +271,7 @@ export const chatWithAI = action({
      const finalHistory = [...cleanHistory];
 
      // Debug: Log the current conversation state
-     console.log(`[ConversationState] Building final history with ${finalHistory.length} messages`);
+     logDebug(`Building final history with ${finalHistory.length} messages`);
      
      // Check if we have a mode switch that should trigger information collection
      const lastAssistantMessageBeforeResponse = finalHistory.filter(msg => msg.role === "assistant").pop();
@@ -280,7 +283,7 @@ export const chatWithAI = action({
        );
        
        if (modeSwitchCall) {
-         console.log(`[ModeSwitch] Detected information-collector mode switch. Adding follow-up message.`);
+         logModeSwitch("primary", "information-collector", "Follow-up message needed", sessionId);
        }
      }
 
@@ -351,7 +354,7 @@ export const chatWithAI = action({
           await ctx.runMutation(api.aiInternalTodos.deactivateInternalTodos, { sessionId });
         }
       } catch (error) {
-        console.warn(`[SessionSimplified] Todo cleanup failed:`, error);
+        logError(error instanceof Error ? error : new Error(String(error)), "Todo cleanup failed");
       }
 
       // Tool calls and results are automatically tracked in createToolCallSpan/createToolResultSpan
@@ -388,6 +391,14 @@ export const chatWithAI = action({
         } : undefined
       });
       
+      // Log session completion (with error protection)
+      try {
+        logSession("end", sessionId, undefined, currentModeName);
+      } catch (loggingError) {
+        // Don't let logging errors prevent response from being returned
+        console.warn("[Logging] Failed to log session end:", loggingError);
+      }
+      
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
       let cleanResponse = finalText || "I've completed the requested actions.";
@@ -408,6 +419,23 @@ export const chatWithAI = action({
       
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
       
+      // Log final response with metrics (with error protection)
+      try {
+        logFinalResponse(cleanResponse, {
+          toolCalls: finalToolCalls.length,
+          toolResults: finalToolResults.length,
+          tokens: finalUsage ? {
+            input: finalUsage.inputTokens || 0,
+            output: finalUsage.outputTokens || 0,
+            total: finalUsage.totalTokens || 0
+          } : undefined,
+          processingTime: 0 // Will be calculated properly in future enhancement
+        }, sessionId);
+      } catch (loggingError) {
+        // Don't let logging errors prevent response from being returned
+        console.warn("[Logging] Failed to log final response:", loggingError);
+      }
+      
       return {
         response: cleanResponse,
         fromCache: false,
@@ -417,7 +445,7 @@ export const chatWithAI = action({
           tokens: finalUsage ? {
             input: finalUsage.inputTokens || 0,
             output: finalUsage.outputTokens || 0,
-            total: finalUsage.totalTokens
+            total: finalUsage.totalTokens || 0
           } : undefined,
           processingTime: Date.now() - Date.now() // Will be calculated properly
         }
@@ -425,7 +453,7 @@ export const chatWithAI = action({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      console.error('[SessionSimplified] Chat failed:', error);
+      logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
       
       // End conversation with error
       await endConversation({
@@ -433,6 +461,9 @@ export const chatWithAI = action({
         toolCalls: 0,
         toolResults: 0
       });
+      
+      // Log session end with error
+      logSession("end", sessionId, undefined, "error");
       
       // Simple error handling - save error message to conversation
       const conversation = await ctx.runQuery(api.conversations.getConversationBySession, { sessionId });
@@ -455,9 +486,9 @@ export const chatWithAI = action({
 
       // OpenTelemetry spans are automatically flushed
       try {
-        console.log("[OpenTelemetry] Error traces recorded successfully");
+        logDebug("Error traces recorded successfully");
       } catch (telemetryError) {
-        console.error("[OpenTelemetry] Error recording traces:", telemetryError);
+        logError(telemetryError instanceof Error ? telemetryError : new Error(String(telemetryError)), "Error recording traces");
       }
       
       return {
@@ -512,7 +543,7 @@ export const getSessionStats = action({
  * This follows the OpenCode pattern where the AI decides when to switch modes
  */
 async function determineOptimalMode(message: string, history: any[]): Promise<string> {
-  console.log(`[ModeRouter] LLM will determine optimal mode via task tool: "${message.substring(0, 50)}..."`);
+  logDebug(`LLM will determine optimal mode via task tool: "${message.substring(0, 50)}..."`);
   
   // Always return primary mode - let the LLM decide when to delegate
   return "primary";
@@ -526,7 +557,7 @@ async function determineOptimalMode(message: string, history: any[]): Promise<st
 async function injectModePrompts(history: any[], sessionId: string | undefined, currentMode: string): Promise<any[]> {
   // Don't inject mode prompts automatically - let task tool handle delegation
   // This prevents contamination and follows OpenCode's pattern
-  console.log(`[ModePrompts] Skipping automatic mode prompt injection for mode: ${currentMode}`);
+  logDebug(`Skipping automatic mode prompt injection for mode: ${currentMode}`);
   return history;
 }
 
@@ -548,7 +579,7 @@ async function createModeToolRegistry(
     // Get mode configuration
     const modeConfig = ModeRegistry.getMode(modeName);
     if (!modeConfig) {
-      console.error(`[ModeToolRegistry] Mode ${modeName} not found, using all tools`);
+      logError(`Mode ${modeName} not found, using all tools`, "ModeToolRegistry");
       return allTools; // Fallback to all tools if mode not found
     }
     
@@ -570,11 +601,11 @@ async function createModeToolRegistry(
       }
     }
     
-    console.log(`[ModeToolRegistry] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
+    logDebug(`Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
     
     return filteredTools;
   } catch (error) {
-    console.error(`[ModeToolRegistry] Failed to create filtered tool registry:`, error);
+    logError(error instanceof Error ? error : new Error(String(error)), "Failed to create filtered tool registry");
     // Return all tools as fallback
     return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
   }

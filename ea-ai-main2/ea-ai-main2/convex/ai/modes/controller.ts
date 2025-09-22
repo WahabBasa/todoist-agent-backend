@@ -1,5 +1,6 @@
 // Mode controller - manages mode switching and transitions
 import { ModeRegistry } from "./registry";
+import { logModeSwitch } from "../logger";
 
 export namespace ModeController {
   // Current session mode state
@@ -61,7 +62,13 @@ export namespace ModeController {
     }
 
     // Only log mode switches
-    console.log(`[MODE_SWITCH] Session ${sessionId} switched from ${state.previousMode} to ${modeName}`);
+    // Get tool count for the new mode
+    const modeTools = ModeRegistry.getModeTools(modeName);
+    const toolCount = Object.keys(modeTools).filter(toolName => modeTools[toolName] === true).length;
+    
+    // Log mode switch with structured logging
+    logModeSwitch(state.previousMode || "unknown", modeName, "Mode controller switch", sessionId);
+    
     return true;
   }
 
