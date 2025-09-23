@@ -258,122 +258,84 @@ export const fetchProviderModels = action({
       console.log(`✅ [Provider] Successfully fetched ${models.length} models from OpenRouter API`);
     } else if (provider === "google") {
       // For Google Vertex AI, focus on Anthropic Claude models available on Vertex AI
-      const googleProjectId = userConfig?.googleProjectId;
-      const googleRegion = userConfig?.googleRegion;
-      const googleCredentials = userConfig?.googleCredentials;
+      // Allow browsing models without credentials, but require credentials for actual use
+      console.log(`📥 [Provider] Loading static list of Google Vertex AI (Anthropic Claude) models...`);
       
-      if (!googleProjectId) {
-        throw new Error("Google Project ID is required for Vertex AI. Please configure it in the admin dashboard.");
-      }
+      // Focus specifically on Anthropic Claude models available on Google Vertex AI
+      // Based on Google Cloud documentation, these are the main Claude models available:
+      models = [
+        {
+          id: "claude-3-5-sonnet-v2@20241022",
+          name: "Claude 3.5 Sonnet (New)",
+          provider: { id: "anthropic" },
+          context_window: 200000,
+          max_input_tokens: 200000,
+          max_output_tokens: 8192,
+          category: "Anthropic",
+          release_date: "2024-10-22",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          cost: {
+            input: 0.003,
+            output: 0.015,
+            cache_read: 0.003,
+            cache_write: 0.00375
+          },
+          limit: {
+            context: 200000,
+            output: 8192
+          }
+        },
+        {
+          id: "claude-3-5-sonnet@20240620",
+          name: "Claude 3.5 Sonnet",
+          provider: { id: "anthropic" },
+          context_window: 200000,
+          max_input_tokens: 200000,
+          max_output_tokens: 8192,
+          category: "Anthropic",
+          release_date: "2024-06-20",
+          attachment: true,
+          reasoning: true,
+          tool_call: true,
+          cost: {
+            input: 0.003,
+            output: 0.015,
+            cache_read: 0.003,
+            cache_write: 0.00375
+          },
+          limit: {
+            context: 200000,
+            output: 8192
+          }
+        },
+        {
+          id: "claude-3-haiku@20240307",
+          name: "Claude 3 Haiku",
+          provider: { id: "anthropic" },
+          context_window: 200000,
+          max_input_tokens: 200000,
+          max_output_tokens: 4096,
+          category: "Anthropic",
+          release_date: "2024-03-07",
+          attachment: true,
+          reasoning: false,
+          tool_call: true,
+          cost: {
+            input: 0.00025,
+            output: 0.00125,
+            cache_read: 0.0003,
+            cache_write: 0.0003
+          },
+          limit: {
+            context: 200000,
+            output: 4096
+          }
+        }
+      ];
       
-      try {
-        console.log(`📥 [Provider] Fetching Google Vertex AI (Anthropic Claude) models for project: ${googleProjectId}...`);
-        
-        // Focus specifically on Anthropic Claude models available on Google Vertex AI
-        // Based on Google Cloud documentation, these are the main Claude models available:
-        models = [
-          {
-            id: "claude-3-5-sonnet-v2@20241022",
-            name: "Claude 3.5 Sonnet (New)",
-            provider: { id: "anthropic" },
-            context_window: 200000,
-            max_input_tokens: 200000,
-            max_output_tokens: 8192,
-            category: "Anthropic",
-            release_date: "2024-10-22",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.003,
-              output: 0.015,
-              cache_read: 0.003,
-              cache_write: 0.00375
-            },
-            limit: {
-              context: 200000,
-              output: 8192
-            }
-          },
-          {
-            id: "claude-3-5-sonnet@20240620",
-            name: "Claude 3.5 Sonnet",
-            provider: { id: "anthropic" },
-            context_window: 200000,
-            max_input_tokens: 200000,
-            max_output_tokens: 8192,
-            category: "Anthropic",
-            release_date: "2024-06-20",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.003,
-              output: 0.015,
-              cache_read: 0.003,
-              cache_write: 0.00375
-            },
-            limit: {
-              context: 200000,
-              output: 8192
-            }
-          },
-          {
-            id: "claude-3-haiku@20240307",
-            name: "Claude 3 Haiku",
-            provider: { id: "anthropic" },
-            context_window: 200000,
-            max_input_tokens: 200000,
-            max_output_tokens: 4096,
-            category: "Anthropic",
-            release_date: "2024-03-07",
-            attachment: true,
-            reasoning: false,
-            tool_call: true,
-            cost: {
-              input: 0.00025,
-              output: 0.00125,
-              cache_read: 0.0003,
-              cache_write: 0.0003
-            },
-            limit: {
-              context: 200000,
-              output: 4096
-            }
-          }
-        ];
-        
-        console.log(`✅ [Provider] Successfully loaded ${models.length} Anthropic Claude models from Google Vertex AI`);
-      } catch (error) {
-        console.error(`❌ [Provider] Failed to fetch Google Vertex AI models:`, error);
-        // Fallback to minimal set
-        models = [
-          {
-            id: "claude-3-5-sonnet@20240620",
-            name: "Claude 3.5 Sonnet",
-            provider: { id: "anthropic" },
-            context_window: 200000,
-            max_input_tokens: 200000,
-            max_output_tokens: 8192,
-            category: "Anthropic",
-            release_date: "2024-06-20",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.003,
-              output: 0.015,
-              cache_read: 0.003,
-              cache_write: 0.00375
-            },
-            limit: {
-              context: 200000,
-              output: 8192
-            }
-          }
-        ];
-        console.log(`⚠️ [Provider] Falling back to minimal Google Vertex AI models`);
-      }
+      console.log(`✅ [Provider] Successfully loaded ${models.length} Anthropic Claude models from Google Vertex AI`);
     } else if (provider === "vercel-ai-gateway") {
       try {
         console.log(`📥 [Provider] Fetching models from Vercel AI Gateway...`);

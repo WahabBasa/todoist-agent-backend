@@ -149,7 +149,7 @@ const applicationTables = {
       updatedAt: v.number(),
       isAdmin: v.boolean(),
       // Unified provider configuration
-      apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"))),
+      apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"), v.literal("vercel-ai-gateway"))),
       // OpenRouter configuration
       openRouterApiKey: v.optional(v.string()),
       openRouterModelId: v.optional(v.string()),

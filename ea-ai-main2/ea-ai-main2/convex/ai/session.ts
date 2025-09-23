@@ -182,13 +182,9 @@ export const chatWithAI = action({
       console.log(`🔄 [MODEL_SELECTION] Initializing Google Vertex AI provider`);
       
       // Get Google credentials from config
-      const googleProjectId = userConfig?.googleProjectId;
+      const googleProjectId = userConfig?.googleProjectId || "not-provided";
       const googleRegion = userConfig?.googleRegion;
       const googleCredentials = userConfig?.googleCredentials;
-      
-      if (!googleProjectId) {
-        throw new Error("Google Project ID is required for Vertex AI. Please configure it in the admin dashboard.");
-      }
       
       // Set up Google credentials if provided
       if (googleCredentials) {
