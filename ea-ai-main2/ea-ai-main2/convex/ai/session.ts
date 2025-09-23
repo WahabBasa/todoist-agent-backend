@@ -4,6 +4,7 @@ import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { streamText, stepCountIs, type StreamTextResult } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createVertex } from "@ai-sdk/google-vertex";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { MessageCaching } from "./caching";
@@ -114,29 +115,31 @@ export const chatWithAI = action({
       // 1. Check if model passed explicitly (highest priority)
       if (useHaiku === false && userConfig?.activeModelId) {
         console.log(`🎯 [MODEL_SELECTION] Using explicit user setting: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at OpenRouter API level
+        // Trust user's model selection - validation happens at provider API level
         return userConfig.activeModelId;
       }
       
       // 2. Check user's configured model
       if (userConfig?.activeModelId) {
         console.log(`🎯 [MODEL_SELECTION] Using user config: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at OpenRouter API level
+        // Trust user's model selection - validation happens at provider API level
         return userConfig.activeModelId;
       }
       
       // 3. Get cached models only as fallback if user hasn't selected a model
       console.log(`📦 [MODEL_FALLBACK] User has not selected a model, checking cached models...`);
-      const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider: "openrouter" });
+      const provider = userConfig?.apiProvider || "openrouter";
+      const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider });
       console.log(`📦 [MODEL_FALLBACK] Cached models status:`, {
         hasCachedModels: !!cachedModels,
         modelCount: cachedModels?.models?.length || 0,
-        lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never'
+        lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never',
+        provider
       });
       
       // 4. Find a fallback model from cached models
       if (cachedModels?.models && cachedModels.models.length > 0) {
-        // Prefer Claude models as fallback
+        // Prefer Claude models as fallback for OpenRouter
         const claudeModel = cachedModels.models.find((m: any) => 
           m.id.includes('claude') && m.id.includes('3-5')
         );
@@ -158,34 +161,70 @@ export const chatWithAI = action({
     })();
     
     // Use the full model ID directly - OpenCode's trust and validate at runtime approach
-    // No need to parse the model ID, just pass it directly to OpenRouter
+    // No need to parse the model ID, just pass it directly to the provider
     const modelName = selectedModelId;
+    const provider = userConfig?.apiProvider || "openrouter";
     
     console.log(`🔄 [MODEL_SELECTION] Using full model ID:`, {
-      modelId: modelName
+      modelId: modelName,
+      provider: provider
     });
     
     if (process.env.LOG_LEVEL !== 'error') {
-      logStep('Model Init', `${modelName}`);
+      logStep('Model Init', `${modelName} (${provider})`);
     }
     
-    // Get API key from unified config
-    const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
-    console.log(`🔑 [MODEL_SELECTION] API key source: ${userConfig?.openRouterApiKey ? 'user_config' : 'environment'}`);
+    // Initialize the appropriate provider
+    let modelProvider: any;
     
-    if (!apiKey) {
-      console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
+    if (provider === "google") {
+      // Initialize Google Vertex AI
+      console.log(`🔄 [MODEL_SELECTION] Initializing Google Vertex AI provider`);
+      
+      // Get Google credentials from config
+      const googleProjectId = userConfig?.googleProjectId;
+      const googleRegion = userConfig?.googleRegion;
+      const googleCredentials = userConfig?.googleCredentials;
+      
+      if (!googleProjectId) {
+        throw new Error("Google Project ID is required for Vertex AI. Please configure it in the admin dashboard.");
+      }
+      
+      // Set up Google credentials if provided
+      if (googleCredentials) {
+        try {
+          // Parse the credentials JSON and set up authentication
+          const credentials = JSON.parse(googleCredentials);
+          process.env.GOOGLE_APPLICATION_CREDENTIALS = JSON.stringify(credentials);
+        } catch (error) {
+          console.warn("⚠️ [GOOGLE] Failed to parse Google credentials JSON, using default authentication");
+        }
+      }
+      
+      // Initialize Google Vertex AI provider
+      modelProvider = createVertex({
+        project: googleProjectId,
+        location: googleRegion || "us-central1",
+      });
+    } else {
+      // Initialize OpenRouter (default)
+      console.log(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
+      
+      // Get API key from unified config
+      const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+      console.log(`🔑 [MODEL_SELECTION] API key source: ${userConfig?.openRouterApiKey ? 'user_config' : 'environment'}`);
+      
+      if (!apiKey) {
+        console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
+        throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
+      }
+      
+      // Initialize OpenRouter with proper configuration  
+      modelProvider = createOpenRouter({ 
+        apiKey,
+        baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
+      });
     }
-    
-    if (!apiKey) {
-      throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
-    }
-    
-    // Initialize OpenRouter with proper configuration  
-    const openrouter = createOpenRouter({ 
-      apiKey,
-      baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
-    });
     
     // Initialize Langfuse tracing
     const conversationTrace = createConversationTrace({
@@ -299,9 +338,9 @@ export const chatWithAI = action({
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
       // Use AI SDK's streamText with native tool handling
-      // Pass the correctly parsed model name to OpenRouter
+      // Pass the correctly parsed model name to the appropriate provider
       const result: StreamTextResult<Record<string, any>, never> = await streamText({
-        model: openrouter.chat(modelName, {
+        model: modelProvider.chat(modelName, {
           usage: { include: true }
         }),
         messages: cachedMessages,
@@ -621,7 +660,7 @@ export const chatWithAI = action({
         sessionId,
         selectedModelId: selectedModelId || 'unknown',
         hasUserConfig: !!userConfig,
-        hasApiKey: !!apiKey
+        hasApiKey: !!(userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY)
       });
       
       logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
