@@ -14,6 +14,8 @@ import {
   ExternalLink, Info
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConvexAuth, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 interface ModelInfo {
   id: string;
@@ -60,6 +62,10 @@ interface ProviderSettings {
 export function AdminDashboard() {
   console.log('🔄 [DEBUG] AdminDashboard component rendered');
   
+  // Convex authentication and mutations
+  const { isAuthenticated } = useConvexAuth();
+  const setProviderConfig = useMutation(api.providers.unified.setProviderConfig);
+  
   const [config, setConfig] = useState<ProviderSettings>({
     apiProvider: "openrouter",
     openRouterApiKey: "",
@@ -97,15 +103,32 @@ export function AdminDashboard() {
   }, []);
 
   const handleSaveConfig = async () => {
+    if (!isAuthenticated) {
+      toast.error("Please log in to save configuration");
+      return;
+    }
+    
     setIsSaving(true);
     try {
-      // Save to localStorage
+      // Save to Convex database instead of localStorage
+      await setProviderConfig({
+        apiProvider: config.apiProvider,
+        openRouterApiKey: config.openRouterApiKey,
+        openRouterModelId: config.openRouterModelId, 
+        openRouterBaseUrl: config.openRouterBaseUrl,
+        openRouterSpecificProvider: config.openRouterSpecificProvider,
+        openRouterUseMiddleOutTransform: config.openRouterUseMiddleOutTransform,
+        activeModelId: config.activeModelId // This is the key field for model selection
+      });
+      
+      // Still save to localStorage for backup/immediate access
       localStorage.setItem("provider-config", JSON.stringify(config));
-      console.log("Configuration saved:", config);
+      
+      console.log("✅ Configuration saved to database:", config);
       toast.success("Configuration saved successfully!");
     } catch (error) {
-      console.error("Failed to save config:", error);
-      toast.error("Failed to save configuration");
+      console.error("❌ Failed to save config:", error);
+      toast.error(`Failed to save configuration: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsSaving(false);
     }
@@ -170,8 +193,29 @@ export function AdminDashboard() {
     }
   };
 
-  const handleModelSelect = (modelId: string) => {
+  const handleModelSelect = async (modelId: string) => {
+    console.log('🎯 [DEBUG] Model selected:', modelId);
     setConfig(prev => ({ ...prev, openRouterModelId: modelId, activeModelId: modelId }));
+    
+    // Auto-save when model is selected (like OpenCode)
+    if (isAuthenticated) {
+      try {
+        await setProviderConfig({
+          apiProvider: config.apiProvider,
+          openRouterApiKey: config.openRouterApiKey,
+          openRouterModelId: modelId,
+          openRouterBaseUrl: config.openRouterBaseUrl,
+          openRouterSpecificProvider: config.openRouterSpecificProvider,
+          openRouterUseMiddleOutTransform: config.openRouterUseMiddleOutTransform,
+          activeModelId: modelId // Ensure both fields are set
+        });
+        console.log('✅ [DEBUG] Model selection auto-saved to database:', modelId);
+        toast.success(`Model "${models[modelId]?.name || modelId}" selected and saved!`);
+      } catch (error) {
+        console.error('❌ [DEBUG] Failed to auto-save model selection:', error);
+        toast.error("Model selected but failed to save. Please click Save Configuration.");
+      }
+    }
   };
 
   const deriveCategory = (name: string): string => {

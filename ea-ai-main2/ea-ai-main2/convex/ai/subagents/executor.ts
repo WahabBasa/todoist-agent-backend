@@ -1,6 +1,6 @@
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
-import { Id } from "../../_generated/dataModel";
+import { Id, Doc } from "../../_generated/dataModel";
 import { SubagentRegistry } from "./registry";
 import { createSimpleToolRegistry } from "../toolRegistry";
 import { streamText, stepCountIs } from "ai";
@@ -296,7 +296,7 @@ export async function getSubagentExecutionHistory(
     parentSessionId,
   });
 
-  return subagentSessions.map(session => ({
+  return subagentSessions.map((session: Doc<"chatSessions">) => ({
     sessionId: session._id,
     subagentName: session.subagentType || "unknown",
     delegatedTask: session.delegationContext?.delegatedTask || "",

@@ -2,7 +2,7 @@
 
 import { action } from "../_generated/server";
 import { v } from "convex/values";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, type StreamTextResult } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
@@ -26,6 +26,9 @@ import { ModeRegistry } from "./modes/registry";
 // Import clean logging system
 import { logStep, logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled, logDebug, logError, logFinalResponse } from "./logger";
 
+// Import existing types
+import type { ProviderSettings, ModelInfo } from "../providers/unified";
+
 // Langfuse Cloud tracing imports
 import {
   createConversationTrace,
@@ -38,6 +41,29 @@ import {
   endConversation,
   endSpan
 } from "./langfuse/logger";
+
+// Type definitions for session.ts following OpenCode's pragmatic approach
+
+interface ChatMetadata {
+  toolCalls: number;
+  toolResults: number;
+  tokens?: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  processingTime?: number;
+  error?: string;
+  userFriendlyError?: string;
+  needsSetup?: boolean;
+}
+
+interface ChatResponse {
+  response: string;
+  text: string;
+  fromCache: boolean;
+  metadata: ChatMetadata;
+}
 
 /**
  * Simplified Convex + AI SDK integration
@@ -63,29 +89,116 @@ export const chatWithAI = action({
       source: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }) => {
+  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<ChatResponse> => {
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
     
-    // Fetch user config for active model
+    // OpenCode-style unified config retrieval
     const tokenIdentifier = userId;
-    const config = await ctx.runQuery(api.ai.models.getUserConfig, { tokenIdentifier });
-    const activeModelId: string = config?.activeModelId || process.env.DEFAULT_MODEL_ID || "anthropic/claude-3.5-haiku-20241022";
-    const modelName: string = activeModelId;
+    console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
+    
+    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    console.log(`📋 [MODEL_SELECTION] User config retrieved:`, {
+      hasConfig: !!userConfig,
+      activeModelId: userConfig?.activeModelId,
+      hasApiKey: !!userConfig?.openRouterApiKey,
+      apiKeyPreview: userConfig?.openRouterApiKey ? `${userConfig.openRouterApiKey.substring(0, 10)}...` : 'none'
+    });
+    
+    // Get cached models for validation
+    const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider: "openrouter" });
+    console.log(`📦 [MODEL_VALIDATION] Cached models status:`, {
+      hasCachedModels: !!cachedModels,
+      modelCount: cachedModels?.models?.length || 0,
+      lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never'
+    });
+    
+    // OpenCode-style model selection hierarchy
+    const selectedModelId: string = await (async (): Promise<string> => {
+      console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
+      console.log(`   - useHaiku parameter: ${useHaiku}`);
+      console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
+      
+      let candidateModel: string | null = null;
+      
+      // 1. Check if model passed explicitly (highest priority)
+      if (useHaiku === false && userConfig?.activeModelId) {
+        candidateModel = userConfig.activeModelId;
+        console.log(`🎯 [MODEL_SELECTION] Candidate from explicit user setting: ${candidateModel}`);
+      }
+      
+      // 2. Check user's configured model
+      else if (userConfig?.activeModelId) {
+        candidateModel = userConfig.activeModelId;
+        console.log(`🎯 [MODEL_SELECTION] Candidate from user config: ${candidateModel}`);
+      }
+      
+      // 3. Trust user's model selection (OpenCode pattern)
+      if (candidateModel) {
+        // If user has selected a model, trust their choice
+        // Validation happens at OpenRouter API level, not preemptively
+        console.log(`✅ [MODEL_SELECTION] Trusting user's model choice: ${candidateModel}`);
+        return candidateModel;
+      }
+      
+      // 4. Find a fallback model from cached models
+      if (cachedModels?.models && cachedModels.models.length > 0) {
+        // Prefer Claude models as fallback
+        const claudeModel = cachedModels.models.find((m: any) => 
+          m.id.includes('claude') && m.id.includes('3-5')
+        );
+        if (claudeModel) {
+          console.log(`🔄 [MODEL_FALLBACK] Using Claude fallback: ${claudeModel.id}`);
+          return claudeModel.id;
+        }
+        
+        // Otherwise use the first available model
+        const firstModel = cachedModels.models[0];
+        console.log(`🔄 [MODEL_FALLBACK] Using first available: ${firstModel.id}`);
+        return firstModel.id;
+      }
+      
+      // 5. Ultimate fallback - use a sensible default
+      const defaultModel = "anthropic/claude-3-5-haiku-20241022";
+      console.warn(`⚠️ [MODEL_FALLBACK] No user model or cache available, using default: ${defaultModel}`);
+      return defaultModel;
+    })();
+    
+    // Parse model for OpenRouter (extract model name from provider/model format)
+    const parts = selectedModelId.includes('/') 
+      ? selectedModelId.split('/', 2) 
+      : ['openrouter', selectedModelId];
+    const provider = parts[0] || 'openrouter';
+    const modelName = parts[1] || selectedModelId;
+    
+    console.log(`🔄 [MODEL_SELECTION] Model parsing:`, {
+      originalModelId: selectedModelId,
+      parsedProvider: provider,
+      parsedModelName: modelName,
+      hasSlash: selectedModelId.includes('/')
+    });
     
     if (process.env.LOG_LEVEL !== 'error') {
-      logStep('Model Init', `${modelName}; Cache: N/A`);
+      logStep('Model Init', `${selectedModelId} → ${modelName}; Provider: ${provider}`);
     }
     
-    // Get user's provider configuration
-    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    // Get API key from unified config
     const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+    console.log(`🔑 [MODEL_SELECTION] API key source: ${userConfig?.openRouterApiKey ? 'user_config' : 'environment'}`);
+    
+    if (!apiKey) {
+      console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
+    }
     
     if (!apiKey) {
       throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
     }
     
-    const openrouter = createOpenRouter({ apiKey });
+    // Initialize OpenRouter with proper configuration  
+    const openrouter = createOpenRouter({ 
+      apiKey,
+      baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
+    });
     
     // Initialize Langfuse tracing
     const conversationTrace = createConversationTrace({
@@ -199,7 +312,8 @@ export const chatWithAI = action({
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
       // Use AI SDK's streamText with native tool handling
-      const result = await streamText({
+      // Pass the correctly parsed model name to OpenRouter
+      const result: StreamTextResult<Record<string, any>, never> = await streamText({
         model: openrouter.chat(modelName, {
           usage: { include: true }
         }),
@@ -215,9 +329,9 @@ export const chatWithAI = action({
       // This is much simpler than manual stream processing
 
       // Get final result from AI SDK - properly await promises
-      const finalText = await result.text;
-      const finalToolCalls = await result.toolCalls;
-      const finalToolResults = await result.toolResults;
+      const finalText: string = await result.text;
+      const finalToolCalls: any[] = await result.toolCalls;
+      const finalToolResults: any[] = await result.toolResults;
       const finalUsage = await result.usage;
       
       console.log('✅ [BACKEND DEBUG] AI SDK result:', {
@@ -231,7 +345,7 @@ export const chatWithAI = action({
       
       // Log tool calls if any were made, or log why none were called
       if (finalToolCalls && finalToolCalls.length > 0) {
-        const toolCallsForLogging = finalToolCalls.map(call => ({
+        const toolCallsForLogging = finalToolCalls.map((call: any) => ({
           name: call.toolName,
           args: call.input
         }));
@@ -322,7 +436,7 @@ export const chatWithAI = action({
 
         // Add tool calls if present
         if (finalToolCalls.length > 0) {
-          assistantMessage.toolCalls = finalToolCalls.map(tc => ({
+          assistantMessage.toolCalls = finalToolCalls.map((tc: any) => ({
             name: tc.toolName,
             args: tc.input,
             toolCallId: tc.toolCallId
@@ -341,7 +455,7 @@ export const chatWithAI = action({
         if (finalToolResults.length > 0) {
           finalHistory.push({
             role: "tool",
-            toolResults: finalToolResults.map(tr => ({
+            toolResults: finalToolResults.map((tr: any) => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
               output: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
@@ -445,7 +559,7 @@ export const chatWithAI = action({
       
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
-      let cleanResponse = finalText || "I've completed the requested actions.";
+      let cleanResponse: string = finalText || "I've completed the requested actions.";
       
       console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
         originalResponse: cleanResponse,
@@ -514,11 +628,32 @@ export const chatWithAI = action({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      console.error(`❌ [SESSION_ERROR] Chat session failed:`, {
+        error: errorMessage,
+        userId: userId.substring(0, 20) + "...",
+        sessionId,
+        selectedModelId: selectedModelId || 'unknown',
+        hasUserConfig: !!userConfig,
+        hasApiKey: !!apiKey
+      });
+      
       logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
+      
+      // Enhanced error handling for model selection issues
+      let userFriendlyError = errorMessage;
+      if (errorMessage.includes("No models available")) {
+        userFriendlyError = "🔧 **Setup Required**: Please go to Admin Dashboard and fetch models from OpenRouter before chatting.";
+      } else if (errorMessage.includes("OpenRouter API key")) {
+        userFriendlyError = "🔑 **API Key Required**: Please configure your OpenRouter API key in the Admin Dashboard.";
+      } else if (errorMessage.includes("Model not found")) {
+        userFriendlyError = "🔄 **Model Issue**: Your selected model is no longer available. Please choose a different model in Admin Dashboard.";
+      } else if (errorMessage.includes("Unauthorized")) {
+        userFriendlyError = "🔒 **Authentication Required**: Please log in to continue.";
+      }
       
       // End conversation with error
       await endConversation({
-        response: `Error: ${errorMessage}`,
+        response: `Error: ${userFriendlyError}`,
         toolCalls: 0,
         toolResults: 0
       });
@@ -536,7 +671,7 @@ export const chatWithAI = action({
       });
       errorHistory.push({
         role: "assistant",
-        content: `I encountered an error: ${errorMessage}. Please try again or contact support if this persists.`,
+        content: userFriendlyError,
         timestamp: Date.now()
       });
 
@@ -553,13 +688,15 @@ export const chatWithAI = action({
       }
       
       return {
-        response: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
-        text: `I encountered an error while processing your request: ${errorMessage}. Please try again.`,
+        response: userFriendlyError,
+        text: userFriendlyError,
         fromCache: false,
         metadata: {
           error: errorMessage,
+          userFriendlyError,
           toolCalls: 0,
-          toolResults: 0
+          toolResults: 0,
+          needsSetup: errorMessage.includes("No models available") || errorMessage.includes("API key")
         }
       };
     }
