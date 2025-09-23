@@ -105,41 +105,34 @@ export const chatWithAI = action({
       apiKeyPreview: userConfig?.openRouterApiKey ? `${userConfig.openRouterApiKey.substring(0, 10)}...` : 'none'
     });
     
-    // Get cached models for validation
-    const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider: "openrouter" });
-    console.log(`📦 [MODEL_VALIDATION] Cached models status:`, {
-      hasCachedModels: !!cachedModels,
-      modelCount: cachedModels?.models?.length || 0,
-      lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never'
-    });
-    
-    // OpenCode-style model selection hierarchy
+    // OpenCode-style model selection hierarchy - trust and validate at runtime
     const selectedModelId: string = await (async (): Promise<string> => {
       console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
       console.log(`   - useHaiku parameter: ${useHaiku}`);
       console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
       
-      let candidateModel: string | null = null;
-      
       // 1. Check if model passed explicitly (highest priority)
       if (useHaiku === false && userConfig?.activeModelId) {
-        candidateModel = userConfig.activeModelId;
-        console.log(`🎯 [MODEL_SELECTION] Candidate from explicit user setting: ${candidateModel}`);
+        console.log(`🎯 [MODEL_SELECTION] Using explicit user setting: ${userConfig.activeModelId}`);
+        // Trust user's model selection - validation happens at OpenRouter API level
+        return userConfig.activeModelId;
       }
       
       // 2. Check user's configured model
-      else if (userConfig?.activeModelId) {
-        candidateModel = userConfig.activeModelId;
-        console.log(`🎯 [MODEL_SELECTION] Candidate from user config: ${candidateModel}`);
+      if (userConfig?.activeModelId) {
+        console.log(`🎯 [MODEL_SELECTION] Using user config: ${userConfig.activeModelId}`);
+        // Trust user's model selection - validation happens at OpenRouter API level
+        return userConfig.activeModelId;
       }
       
-      // 3. Trust user's model selection (OpenCode pattern)
-      if (candidateModel) {
-        // If user has selected a model, trust their choice
-        // Validation happens at OpenRouter API level, not preemptively
-        console.log(`✅ [MODEL_SELECTION] Trusting user's model choice: ${candidateModel}`);
-        return candidateModel;
-      }
+      // 3. Get cached models only as fallback if user hasn't selected a model
+      console.log(`📦 [MODEL_FALLBACK] User has not selected a model, checking cached models...`);
+      const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider: "openrouter" });
+      console.log(`📦 [MODEL_FALLBACK] Cached models status:`, {
+        hasCachedModels: !!cachedModels,
+        modelCount: cachedModels?.models?.length || 0,
+        lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never'
+      });
       
       // 4. Find a fallback model from cached models
       if (cachedModels?.models && cachedModels.models.length > 0) {
@@ -164,22 +157,16 @@ export const chatWithAI = action({
       return defaultModel;
     })();
     
-    // Parse model for OpenRouter (extract model name from provider/model format)
-    const parts = selectedModelId.includes('/') 
-      ? selectedModelId.split('/', 2) 
-      : ['openrouter', selectedModelId];
-    const provider = parts[0] || 'openrouter';
-    const modelName = parts[1] || selectedModelId;
+    // Use the full model ID directly - OpenCode's trust and validate at runtime approach
+    // No need to parse the model ID, just pass it directly to OpenRouter
+    const modelName = selectedModelId;
     
-    console.log(`🔄 [MODEL_SELECTION] Model parsing:`, {
-      originalModelId: selectedModelId,
-      parsedProvider: provider,
-      parsedModelName: modelName,
-      hasSlash: selectedModelId.includes('/')
+    console.log(`🔄 [MODEL_SELECTION] Using full model ID:`, {
+      modelId: modelName
     });
     
     if (process.env.LOG_LEVEL !== 'error') {
-      logStep('Model Init', `${selectedModelId} → ${modelName}; Provider: ${provider}`);
+      logStep('Model Init', `${modelName}`);
     }
     
     // Get API key from unified config
