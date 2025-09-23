@@ -14,7 +14,7 @@ import {
   ExternalLink, Info
 } from "lucide-react";
 import { toast } from "sonner";
-import { useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useAction, useQuery, useConvex } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
 interface ModelInfo {
@@ -50,7 +50,7 @@ interface ModelInfo {
 }
 
 interface ProviderSettings {
-  apiProvider: "openrouter" | "google";
+  apiProvider: "openrouter" | "google" | "vercel-ai-gateway";
   openRouterApiKey?: string;
   openRouterModelId?: string;
   openRouterBaseUrl?: string;
@@ -71,7 +71,9 @@ export function AdminDashboard() {
   
   // Convex authentication and mutations
   const { isAuthenticated } = useConvexAuth();
+  const convex = useConvex();
   const setProviderConfig = useMutation(api.providers.unified.setProviderConfig);
+  const fetchProviderModels = useAction(api.providers.unified.fetchProviderModels);
   
   const [config, setConfig] = useState<ProviderSettings>({
     apiProvider: "openrouter",
@@ -170,14 +172,17 @@ export function AdminDashboard() {
       await fetchProviderModels({ provider: config.apiProvider });
       
       // After fetching, get the cached models
-      const cachedModels = await getCachedProviderModels({ provider: config.apiProvider });
+      const cachedModels = await convex.query(api.providers.unified.getCachedProviderModels, { provider: config.apiProvider });
       if (cachedModels?.models) {
         const modelMap: Record<string, ModelInfo> = {};
         cachedModels.models.forEach(model => {
           modelMap[model.id] = model;
         });
         setModels(modelMap);
-        toast.success(`Fetched ${cachedModels.models.length} models from ${config.apiProvider === "google" ? "Google Vertex AI" : "OpenRouter"}!`);
+        const providerName = config.apiProvider === "google" ? "Google Vertex AI" : 
+                          config.apiProvider === "vercel-ai-gateway" ? "Vercel AI Gateway" : 
+                          "OpenRouter";
+        toast.success(`Fetched ${cachedModels.models.length} models from ${providerName}!`);
       }
     } catch (error) {
       console.error("Failed to fetch models:", error);
@@ -281,7 +286,7 @@ export function AdminDashboard() {
               <Label htmlFor="apiProvider">AI Provider</Label>
               <Select 
                 value={config.apiProvider} 
-                onValueChange={(value: "openrouter" | "google") => 
+                onValueChange={(value: "openrouter" | "google" | "vercel-ai-gateway") => 
                   setConfig(prev => ({ ...prev, apiProvider: value }))
                 }
               >
@@ -299,6 +304,12 @@ export function AdminDashboard() {
                     <div className="flex items-center gap-2">
                       <Server className="h-4 w-4" />
                       Google Vertex AI
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="vercel-ai-gateway">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4" />
+                      Vercel AI Gateway
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -504,7 +515,9 @@ export function AdminDashboard() {
               Model Management
             </CardTitle>
             <CardDescription>
-              Fetch and select models available through {config.apiProvider === "google" ? "Google Vertex AI" : "OpenRouter"}
+              Fetch and select models available through {config.apiProvider === "google" ? "Google Vertex AI" : 
+                                                       config.apiProvider === "vercel-ai-gateway" ? "Vercel AI Gateway" : 
+                                                       "OpenRouter"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -522,7 +535,9 @@ export function AdminDashboard() {
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Fetch Models from {config.apiProvider === "google" ? "Google Vertex AI" : "OpenRouter"}
+                    Fetch Models from {config.apiProvider === "google" ? "Google Vertex AI" : 
+                                       config.apiProvider === "vercel-ai-gateway" ? "Vercel AI Gateway" : 
+                                       "OpenRouter"}
                   </>
                 )}
               </Button>
@@ -629,7 +644,9 @@ export function AdminDashboard() {
                 <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No models cached yet</p>
                 <p className="text-sm mt-1">
-                  Click "Fetch Models" to load available models from {config.apiProvider === "google" ? "Google Vertex AI" : "OpenRouter"}
+                  Click "Fetch Models" to load available models from {config.apiProvider === "google" ? "Google Vertex AI" : 
+                                                                       config.apiProvider === "vercel-ai-gateway" ? "Vercel AI Gateway" : 
+                                                                       "OpenRouter"}
                 </p>
               </div>
             )}

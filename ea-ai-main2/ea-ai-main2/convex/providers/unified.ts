@@ -5,7 +5,7 @@ import { api } from "../_generated/api";
 // Unified provider settings schema following OpenCode approach
 export interface ProviderSettings {
   // Provider selection
-  apiProvider: "openrouter" | "google";
+  apiProvider: "openrouter" | "google" | "vercel-ai-gateway";
   
   // OpenRouter settings
   openRouterApiKey?: string;
@@ -66,7 +66,7 @@ export interface ModelInfo {
 export const systemConfigSchema = v.object({
   tokenIdentifier: v.string(),
   // Provider selection
-  apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"))),
+  apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"), v.literal("vercel-ai-gateway"))),
   // OpenRouter configuration
   openRouterApiKey: v.optional(v.string()),
   openRouterModelId: v.optional(v.string()),
@@ -131,7 +131,7 @@ export const getUserProviderConfig = query({
 // Mutation to set user's provider configuration
 export const setProviderConfig = mutation({
   args: {
-    apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"))),
+    apiProvider: v.optional(v.union(v.literal("openrouter"), v.literal("google"), v.literal("vercel-ai-gateway"))),
     openRouterApiKey: v.optional(v.string()),
     openRouterModelId: v.optional(v.string()),
     openRouterBaseUrl: v.optional(v.string()),
@@ -204,7 +204,7 @@ export const setProviderConfig = mutation({
 // Action to fetch models from provider APIs
 export const fetchProviderModels = action({
   args: {
-    provider: v.union(v.literal("openrouter"), v.literal("google"))
+    provider: v.union(v.literal("openrouter"), v.literal("google"), v.literal("vercel-ai-gateway"))
   },
   handler: async (ctx, { provider }) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -228,9 +228,7 @@ export const fetchProviderModels = action({
 
       const response = await fetch("https://openrouter.ai/api/v1/models", {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://opencode.ai/",
-          "X-Title": "opencode",
+          Authorization: `Bearer ${apiKey}`
         }
       });
 
@@ -376,6 +374,50 @@ export const fetchProviderModels = action({
         ];
         console.log(`⚠️ [Provider] Falling back to minimal Google Vertex AI models`);
       }
+    } else if (provider === "vercel-ai-gateway") {
+      try {
+        console.log(`📥 [Provider] Fetching models from Vercel AI Gateway...`);
+        
+        const response = await fetch("https://ai-gateway.vercel.sh/v1/models");
+        
+        if (!response.ok) {
+          console.error(`❌ [Provider] Vercel AI Gateway API failed: ${response.status} ${response.statusText}`);
+          throw new Error(`Failed to fetch models: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        models = data.data
+          .filter((m: any) => m.type === "language") // Only language models, not embeddings
+          .map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            provider: { id: m.owned_by || "unknown" },
+            context_window: m.context_window || 128000,
+            max_input_tokens: m.context_window || 128000,
+            max_output_tokens: m.max_tokens || 4096,
+            pricing: m.pricing,
+            category: deriveCategory(m.name || m.id),
+            release_date: undefined,
+            attachment: undefined,
+            reasoning: undefined,
+            tool_call: undefined,
+            cost: m.pricing ? {
+              input: parseFloat(m.pricing.input) || 0,
+              output: parseFloat(m.pricing.output) || 0,
+              cache_read: m.pricing.input_cache_read ? parseFloat(m.pricing.input_cache_read) : undefined,
+              cache_write: m.pricing.input_cache_write ? parseFloat(m.pricing.input_cache_write) : undefined,
+            } : undefined,
+            limit: {
+              context: m.context_window || 128000,
+              output: m.max_tokens || 4096,
+            },
+          }));
+
+        console.log(`✅ [Provider] Successfully fetched ${models.length} models from Vercel AI Gateway`);
+      } catch (error) {
+        console.error(`❌ [Provider] Failed to fetch Vercel AI Gateway models:`, error);
+        throw new Error(`Failed to fetch models from Vercel AI Gateway: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     }
 
     // Cache the models
@@ -450,7 +492,9 @@ export const cacheProviderModels = mutation({
   },
   handler: async (ctx, { models, lastFetched, provider }) => {
     // Use provider-specific cache table with correct naming
-    const cacheTableName = provider === "openrouter" ? "cachedOpenrouterModels" : "cachedGoogleModels";
+    const cacheTableName = provider === "openrouter" ? "cachedOpenrouterModels" : 
+                           provider === "google" ? "cachedGoogleModels" : 
+                           "cachedVercelAiGatewayModels";
     
     const results = await ctx.db.query(cacheTableName).collect();
     const existing = results[0];
@@ -465,11 +509,13 @@ export const cacheProviderModels = mutation({
 // Query to get cached provider models
 export const getCachedProviderModels = query({
   args: {
-    provider: v.union(v.literal("openrouter"), v.literal("google"))
+    provider: v.union(v.literal("openrouter"), v.literal("google"), v.literal("vercel-ai-gateway"))
   },
   handler: async (ctx, { provider }) => {
     // Use provider-specific cache table with correct naming
-    const cacheTableName = provider === "openrouter" ? "cachedOpenrouterModels" : "cachedGoogleModels";
+    const cacheTableName = provider === "openrouter" ? "cachedOpenrouterModels" : 
+                           provider === "google" ? "cachedGoogleModels" : 
+                           "cachedVercelAiGatewayModels";
     
     const results = await ctx.db.query(cacheTableName).collect();
     return results[0] || null;

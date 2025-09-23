@@ -255,6 +255,36 @@ const applicationTables = {
         })),
       })),
     }).index("by_lastFetched", ["lastFetched"]),
+
+    cachedVercelAiGatewayModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
  
    
 };
