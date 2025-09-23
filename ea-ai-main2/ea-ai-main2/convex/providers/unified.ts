@@ -259,7 +259,7 @@ export const fetchProviderModels = action({
 
       console.log(`✅ [Provider] Successfully fetched ${models.length} models from OpenRouter API`);
     } else if (provider === "google") {
-      // For Google Vertex AI, we need to properly fetch models
+      // For Google Vertex AI, focus on Anthropic Claude models available on Vertex AI
       const googleProjectId = userConfig?.googleProjectId;
       const googleRegion = userConfig?.googleRegion;
       const googleCredentials = userConfig?.googleCredentials;
@@ -269,340 +269,107 @@ export const fetchProviderModels = action({
       }
       
       try {
-        // Try to use Google's API to fetch available models
-        // This is a simplified approach since the actual implementation would require proper authentication
-        console.log(`📥 [Provider] Fetching Google Vertex AI models for project: ${googleProjectId}...`);
+        console.log(`📥 [Provider] Fetching Google Vertex AI (Anthropic Claude) models for project: ${googleProjectId}...`);
         
-        // In a real implementation, we would use the Google Cloud Vertex AI API
-        // For now, we'll return a comprehensive list of known Google models
-        const knownGoogleModels: ModelInfo[] = [
+        // Focus specifically on Anthropic Claude models available on Google Vertex AI
+        // Based on Google Cloud documentation, these are the main Claude models available:
+        models = [
           {
-            id: "gemini-1.5-pro-002",
-            name: "Gemini 1.5 Pro (Latest)",
-            provider: { id: "google" },
-            context_window: 2097152,
-            max_input_tokens: 2097152,
+            id: "claude-3-5-sonnet-v2@20241022",
+            name: "Claude 3.5 Sonnet (New)",
+            provider: { id: "anthropic" },
+            context_window: 200000,
+            max_input_tokens: 200000,
             max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-11-01",
+            category: "Anthropic",
+            release_date: "2024-10-22",
             attachment: true,
             reasoning: true,
             tool_call: true,
             cost: {
-              input: 0.00125,
-              output: 0.005,
-              cache_read: 0.00125,
-              cache_write: 0.00125
+              input: 0.003,
+              output: 0.015,
+              cache_read: 0.003,
+              cache_write: 0.00375
             },
             limit: {
-              context: 2097152,
+              context: 200000,
               output: 8192
             }
           },
           {
-            id: "gemini-1.5-flash-002",
-            name: "Gemini 1.5 Flash (Latest)",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
+            id: "claude-3-5-sonnet@20240620",
+            name: "Claude 3.5 Sonnet",
+            provider: { id: "anthropic" },
+            context_window: 200000,
+            max_input_tokens: 200000,
             max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-11-01",
+            category: "Anthropic",
+            release_date: "2024-06-20",
             attachment: true,
             reasoning: true,
             tool_call: true,
             cost: {
-              input: 0.000075,
-              output: 0.0003,
-              cache_read: 0.000075,
-              cache_write: 0.000075
+              input: 0.003,
+              output: 0.015,
+              cache_read: 0.003,
+              cache_write: 0.00375
             },
             limit: {
-              context: 1048576,
+              context: 200000,
               output: 8192
             }
           },
           {
-            id: "gemini-2.0-flash-exp",
-            name: "Gemini 2.0 Flash Experimental",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-12-01",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.000035,
-              output: 0.00015,
-              cache_read: 0.000035,
-              cache_write: 0.000035
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.0-pro-002",
-            name: "Gemini 1.0 Pro",
-            provider: { id: "google" },
-            context_window: 32768,
-            max_input_tokens: 32768,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-02-15",
+            id: "claude-3-haiku@20240307",
+            name: "Claude 3 Haiku",
+            provider: { id: "anthropic" },
+            context_window: 200000,
+            max_input_tokens: 200000,
+            max_output_tokens: 4096,
+            category: "Anthropic",
+            release_date: "2024-03-07",
             attachment: true,
             reasoning: false,
             tool_call: true,
             cost: {
-              input: 0.0005,
-              output: 0.0015,
-              cache_read: 0.0005,
-              cache_write: 0.0005
+              input: 0.00025,
+              output: 0.00125,
+              cache_read: 0.0003,
+              cache_write: 0.0003
             },
             limit: {
-              context: 32768,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.5-pro-001",
-            name: "Gemini 1.5 Pro (Previous Version)",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-05-01",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.00125,
-              output: 0.005,
-              cache_read: 0.00125,
-              cache_write: 0.00125
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.5-flash-001",
-            name: "Gemini 1.5 Flash (Previous Version)",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-05-01",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.000075,
-              output: 0.0003,
-              cache_read: 0.000075,
-              cache_write: 0.000075
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-2.0-pro-exp-02-10",
-            name: "Gemini 2.0 Pro Experimental",
-            provider: { id: "google" },
-            context_window: 2097152,
-            max_input_tokens: 2097152,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2025-02-10",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.0025,
-              output: 0.01,
-              cache_read: 0.0025,
-              cache_write: 0.0025
-            },
-            limit: {
-              context: 2097152,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.5-pro-003",
-            name: "Gemini 1.5 Pro (Updated)",
-            provider: { id: "google" },
-            context_window: 2097152,
-            max_input_tokens: 2097152,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2025-01-15",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.00125,
-              output: 0.005,
-              cache_read: 0.00125,
-              cache_write: 0.00125
-            },
-            limit: {
-              context: 2097152,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-2.0-flash-001",
-            name: "Gemini 2.0 Flash",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2025-01-20",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.000035,
-              output: 0.00015,
-              cache_read: 0.000035,
-              cache_write: 0.000035
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-2.0-pro-001",
-            name: "Gemini 2.0 Pro",
-            provider: { id: "google" },
-            context_window: 2097152,
-            max_input_tokens: 2097152,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2025-01-25",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.0025,
-              output: 0.01,
-              cache_read: 0.0025,
-              cache_write: 0.0025
-            },
-            limit: {
-              context: 2097152,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.5-flash-8b-001",
-            name: "Gemini 1.5 Flash 8B",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-12-15",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.0000375,
-              output: 0.00015,
-              cache_read: 0.0000375,
-              cache_write: 0.0000375
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-2.0-flash-lite-preview-02-14",
-            name: "Gemini 2.0 Flash Lite Preview",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2025-02-14",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.000015,
-              output: 0.00006,
-              cache_read: 0.000015,
-              cache_write: 0.000015
-            },
-            limit: {
-              context: 1048576,
-              output: 8192
+              context: 200000,
+              output: 4096
             }
           }
         ];
         
-        models = knownGoogleModels;
-        console.log(`✅ [Provider] Successfully loaded ${models.length} Google Vertex AI models`);
+        console.log(`✅ [Provider] Successfully loaded ${models.length} Anthropic Claude models from Google Vertex AI`);
       } catch (error) {
         console.error(`❌ [Provider] Failed to fetch Google Vertex AI models:`, error);
-        // Fallback to a minimal set of models
+        // Fallback to minimal set
         models = [
           {
-            id: "gemini-1.5-pro-002",
-            name: "Gemini 1.5 Pro (Latest)",
-            provider: { id: "google" },
-            context_window: 2097152,
-            max_input_tokens: 2097152,
+            id: "claude-3-5-sonnet@20240620",
+            name: "Claude 3.5 Sonnet",
+            provider: { id: "anthropic" },
+            context_window: 200000,
+            max_input_tokens: 200000,
             max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-11-01",
+            category: "Anthropic",
+            release_date: "2024-06-20",
             attachment: true,
             reasoning: true,
             tool_call: true,
             cost: {
-              input: 0.00125,
-              output: 0.005,
-              cache_read: 0.00125,
-              cache_write: 0.00125
+              input: 0.003,
+              output: 0.015,
+              cache_read: 0.003,
+              cache_write: 0.00375
             },
             limit: {
-              context: 2097152,
-              output: 8192
-            }
-          },
-          {
-            id: "gemini-1.5-flash-002",
-            name: "Gemini 1.5 Flash (Latest)",
-            provider: { id: "google" },
-            context_window: 1048576,
-            max_input_tokens: 1048576,
-            max_output_tokens: 8192,
-            category: "Google",
-            release_date: "2024-11-01",
-            attachment: true,
-            reasoning: true,
-            tool_call: true,
-            cost: {
-              input: 0.000075,
-              output: 0.0003,
-              cache_read: 0.000075,
-              cache_write: 0.000075
-            },
-            limit: {
-              context: 1048576,
+              context: 200000,
               output: 8192
             }
           }
