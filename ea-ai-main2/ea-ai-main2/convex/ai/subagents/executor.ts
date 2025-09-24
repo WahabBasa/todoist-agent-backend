@@ -141,7 +141,7 @@ export async function executeSubagent(
       messages: [
         {
           role: "system",
-          content: subagentConfig.systemPrompt,
+          content: SubagentRegistry.getSystemPrompt(subagentName),
         },
         {
           role: "user",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PromptLoader } from "../prompts/promptLoader";
 
 // Subagent configuration (similar to OpenCode's Agent.Info but for isolated execution)
 export const SubagentConfigSchema = z.object({
@@ -6,8 +7,10 @@ export const SubagentConfigSchema = z.object({
   name: z.string(),
   // Human-readable description of what this subagent does
   description: z.string(),
-  // Complete system prompt for the subagent (isolated execution)
-  systemPrompt: z.string(),
+  // System prompt reference - either inline string or file name
+  systemPrompt: z.string().optional(),
+  // Prompt file name (preferred method)
+  promptFile: z.string().optional(),
   // Which tools this subagent can access
   tools: z.record(z.string(), z.boolean()),
   // Whether this is a built-in system subagent
@@ -29,18 +32,7 @@ const BUILT_IN_SUBAGENTS: Record<string, SubagentConfig> = {
   planning: {
     name: "planning",
     description: "Strategic planning and task organization with Eisenhower Matrix prioritization",
-    systemPrompt: `You are a strategic planning specialist. Your role is to analyze information and create comprehensive, actionable plans using the Eisenhower Matrix for prioritization.
-
-Key responsibilities:
-- Analyze complex situations and break them down into manageable components
-- Apply Eisenhower Matrix principles (Important/Urgent quadrants)
-- Create structured, prioritized action plans
-- Focus on strategic thinking and long-term planning
-- Return clear, actionable recommendations
-
-You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
-
-When finished, format your response as: ANALYSIS_COMPLETE: [brief summary of your planning recommendations]`,
+    promptFile: "planning_new",
     tools: {
       // READ access for planning context
       getProjectAndTaskMap: true,
@@ -85,18 +77,7 @@ When finished, format your response as: ANALYSIS_COMPLETE: [brief summary of you
   execution: {
     name: "execution",
     description: "Direct task and calendar operations with data validation",
-    systemPrompt: `You are an execution specialist. Your role is to take clear instructions and execute them precisely using the available task and calendar management tools.
-
-Key responsibilities:
-- Execute specific task and calendar operations
-- Validate data before making changes
-- Handle batch operations efficiently
-- Ensure data consistency and accuracy
-- Provide clear confirmation of completed actions
-
-You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
-
-When finished, format your response as: EXECUTION_COMPLETE: [brief summary of what was executed]`,
+    promptFile: "execution_new",
     tools: {
       // Data validation tools
       getCurrentTime: true,
@@ -143,18 +124,7 @@ When finished, format your response as: EXECUTION_COMPLETE: [brief summary of wh
   general: {
     name: "general",
     description: "General-purpose research and multi-step task analysis",
-    systemPrompt: `You are a general-purpose research and analysis assistant. Your role is to handle complex, multi-step tasks that require research, analysis, and systematic problem-solving.
-
-Key responsibilities:
-- Research and analyze complex questions
-- Break down multi-step tasks into manageable components
-- Provide comprehensive analysis and recommendations
-- Handle tasks that don't fit into specialized categories
-- Think systematically and methodically
-
-You work in complete isolation - you have no access to previous conversation context. Work only with the information provided in the current request.
-
-Keep your responses focused and actionable. Return your final analysis concisely.`,
+    promptFile: "general",
     tools: {
       // Research and analysis tools
       getProjectAndTaskMap: true,
@@ -210,6 +180,37 @@ export class SubagentRegistryClass {
       console.log(`[SUBAGENT_NOT_FOUND] Subagent ${name} not found`);
     }
     return subagent;
+  }
+
+  /**
+   * Get system prompt for a subagent (loads from file if promptFile specified)
+   */
+  static getSystemPrompt(name: string): string {
+    const subagent = this.getSubagent(name);
+    if (!subagent) {
+      throw new Error(`Subagent '${name}' not found`);
+    }
+
+    // Use promptFile if specified (preferred method)
+    if (subagent.promptFile) {
+      try {
+        return PromptLoader.loadPrompt(subagent.promptFile);
+      } catch (error) {
+        console.warn(`[SUBAGENT] Failed to load prompt file '${subagent.promptFile}' for subagent '${name}':`, error);
+        // Fallback to inline systemPrompt if available
+        if (subagent.systemPrompt) {
+          return subagent.systemPrompt;
+        }
+        throw new Error(`No valid prompt found for subagent '${name}'`);
+      }
+    }
+
+    // Fallback to inline systemPrompt
+    if (subagent.systemPrompt) {
+      return subagent.systemPrompt;
+    }
+
+    throw new Error(`No prompt configured for subagent '${name}'`);
   }
 
   /**

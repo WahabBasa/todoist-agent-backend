@@ -172,7 +172,7 @@ async function executeSubagentMode(
   // Log subagent call for monitoring
   logSubagentCall({
     subagentType: subagentName,
-    systemPrompt: subagentConfig.systemPrompt,
+    systemPrompt: SubagentRegistry.getSystemPrompt(subagentName),
     userMessage: prompt,
     conversationHistory: [], // No parent context passed
     timestamp: new Date().toLocaleTimeString()
