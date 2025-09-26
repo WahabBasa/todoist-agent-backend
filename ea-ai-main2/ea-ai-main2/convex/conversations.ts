@@ -1,4 +1,6 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
+import { ModeController } from "./ai/modes/controller";
+import { logDebug } from "./ai/logger";
 import { v, ConvexError } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
@@ -218,6 +220,7 @@ export const upsertConversation = mutation({
         result: v.any(),
       }))),
       timestamp: v.number(),
+      mode: v.optional(v.string()),
     })),
   },
   handler: async (ctx, args) => {
@@ -272,21 +275,36 @@ export const upsertConversation = mutation({
       args.sessionId = defaultSession._id;
     }
 
+    const effectiveSessionId = args.sessionId!;
+    const currentMode = ModeController.getCurrentMode(effectiveSessionId) || "primary";
+
+    // Process messages to set mode on new assistant messages if missing
+    const processedMessages = args.messages.map((msg) => {
+      if (msg.role === "assistant" && !msg.mode) {
+        logDebug(`[MESSAGE] Set mode ${currentMode} for assistant message in ${effectiveSessionId}`);
+        return {
+          ...msg,
+          mode: currentMode,
+        };
+      }
+      return msg;
+    });
+
     const now = Date.now();
     
     if (conversation) {
       // Update existing conversation
       console.log('🔄 [BACKEND DEBUG] Updating existing conversation:', {
         conversationId: conversation._id,
-        messageCount: args.messages.length,
-        messagesPreview: args.messages.slice(-2).map(msg => ({
+        messageCount: processedMessages.length,
+        messagesPreview: processedMessages.slice(-2).map(msg => ({
           role: msg.role,
           contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
         }))
       });
       
       await ctx.db.patch(conversation._id, {
-        messages: args.messages,
+        messages: processedMessages,
         schemaVersion: 2,
       });
       
@@ -314,7 +332,7 @@ export const upsertConversation = mutation({
       const conversationId = await ctx.db.insert("conversations", {
         tokenIdentifier,
         sessionId: args.sessionId,
-        messages: args.messages,
+        messages: processedMessages,
         schemaVersion: 2,
       });
       
@@ -322,7 +340,7 @@ export const upsertConversation = mutation({
       if (args.sessionId) {
         await ctx.db.patch(args.sessionId, {
           lastMessageAt: now,
-          messageCount: args.messages.length,
+          messageCount: processedMessages.length,
         });
       }
       

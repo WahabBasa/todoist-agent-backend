@@ -275,3 +275,13 @@ export function logSession(event: "start" | "end", sessionId?: string, userMessa
     console.log(`🏁 [SESSION] ${timestamp()}${sessionText}${modeText} Completed`);
   }
 }
+
+/**
+ * Log warnings (similar to errors but less severe)
+ */
+export function logWarning(message: string, context?: string): void {
+  if (!isLoggingEnabled("info")) return;
+  
+  const contextText = context ? ` [${context}]` : "";
+  console.warn(`⚠️ [WARNING] ${timestamp()}${contextText} ${message}`);
+}

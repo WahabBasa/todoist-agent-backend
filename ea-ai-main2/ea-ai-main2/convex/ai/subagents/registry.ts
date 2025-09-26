@@ -29,51 +29,6 @@ export type SubagentConfig = z.infer<typeof SubagentConfigSchema>;
 
 // Built-in subagent configurations - converted from former modes
 const BUILT_IN_SUBAGENTS: Record<string, SubagentConfig> = {
-  planning: {
-    name: "planning",
-    description: "Strategic planning and task organization with Eisenhower Matrix prioritization",
-    promptFile: "planning_new",
-    tools: {
-      // READ access for planning context
-      getProjectAndTaskMap: true,
-      getProjectDetails: true,
-      getTaskDetails: true,
-      getTasks: true,
-      listCalendarEvents: true,
-      searchCalendarEvents: true,
-      getCurrentTime: true,
-      getSystemStatus: true,
-      validateInput: true,
-      
-      // Internal planning workflow
-      internalTodoWrite: true,
-      internalTodoRead: true,
-      
-      // DISABLED: No execution tools (planning only)
-      createTask: false,
-      updateTask: false,
-      deleteTask: false,
-      createProject: false,
-      updateProject: false,
-      deleteProject: false,
-      createBatchTasks: false,
-      deleteBatchTasks: false,
-      completeBatchTasks: false,
-      updateBatchTasks: false,
-      createProjectWithTasks: false,
-      reorganizeTasksBatch: false,
-      createCalendarEvent: false,
-      updateCalendarEvent: false,
-      deleteCalendarEvent: false,
-      
-      // DISABLED: No delegation (prevents recursion)
-      task: false,
-    },
-    builtIn: true,
-    temperature: 0.4,
-    options: {},
-  },
-
   execution: {
     name: "execution",
     description: "Direct task and calendar operations with data validation",

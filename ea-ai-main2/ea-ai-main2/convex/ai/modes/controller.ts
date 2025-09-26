@@ -1,6 +1,7 @@
 // Mode controller - manages mode switching and transitions
 import { ModeRegistry } from "./registry";
-import { logModeSwitch } from "../logger";
+import { logModeSwitch, logDebug } from "../logger";
+import { api } from "../../_generated/api";
 
 export namespace ModeController {
   // Current session mode state
@@ -32,6 +33,14 @@ export namespace ModeController {
   export function getCurrentMode(sessionId: string): string {
     const state = sessionStates.get(sessionId);
     return state ? state.currentMode : "primary";
+  }
+
+  /**
+   * Get previous mode for a session
+   */
+  export function getPreviousMode(sessionId: string): string | null {
+    const state = sessionStates.get(sessionId);
+    return state ? state.previousMode : null;
   }
 
   /**
@@ -90,6 +99,44 @@ export namespace ModeController {
       return false;
     }
     return switchToMode(sessionId, state.previousMode);
+  }
+
+  /**
+   * Handle mode switching with state management and persistence (similar to Roo-Code's ClineProvider.handleModeSwitch)
+   */
+  export async function handleModeSwitch(sessionId: string, newMode: string, ctx: any): Promise<boolean> {
+    try {
+      // Verify the new mode is valid
+      if (!ModeRegistry.isValidMode(newMode)) {
+        console.warn(`[ModeController] Invalid mode requested: ${newMode}`);
+        return false;
+      }
+  
+      // Check if we're already in the requested mode
+      const currentMode = getCurrentMode(sessionId);
+      if (currentMode === newMode) {
+        console.log(`[ModeController] Already in ${newMode} mode`);
+        return false;
+      }
+  
+      // Update the session's mode state with the new mode
+      const success = switchToMode(sessionId, newMode);
+      
+      if (success) {
+        // Persist to DB
+        await ctx.runMutation(api.chatSessions.updateActiveMode, { sessionId, activeMode: newMode });
+        logDebug(`[MODE_SWITCH] Persisted ${newMode} to DB for ${sessionId}`);
+        
+        console.log(`[ModeController] Successfully switched from ${currentMode} to ${newMode} mode`);
+        return true;
+      } else {
+        console.warn(`[ModeController] Failed to switch to ${newMode} mode`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`[ModeController] Error in handleModeSwitch:`, error);
+      return false;
+    }
   }
 
   /**

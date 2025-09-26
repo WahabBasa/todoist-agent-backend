@@ -83,6 +83,7 @@ const applicationTables = {
         result: v.any(),
       }))),
       timestamp: v.number(),
+      mode: v.optional(v.string()),
     }))),
     // Legacy schema - temporary optional fields for migration
     message: v.optional(v.string()),

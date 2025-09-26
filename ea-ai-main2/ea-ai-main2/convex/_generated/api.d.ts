@@ -49,6 +49,7 @@ import type * as ai_tools_ToolRepetitionDetector from "../ai/tools/ToolRepetitio
 import type * as ai_tools_googleCalendar from "../ai/tools/googleCalendar.js";
 import type * as ai_tools_internal from "../ai/tools/internal.js";
 import type * as ai_tools_simpleDelegation from "../ai/tools/simpleDelegation.js";
+import type * as ai_tools_switchModeTool from "../ai/tools/switchModeTool.js";
 import type * as ai_tools_taskTool from "../ai/tools/taskTool.js";
 import type * as ai_tools_todoist from "../ai/tools/todoist.js";
 import type * as ai_tools_utils from "../ai/tools/utils.js";
@@ -62,7 +63,6 @@ import type * as ai_tracing_spans_promptSpans from "../ai/tracing/spans/promptSp
 import type * as ai_tracing_spans_toolCallSpans from "../ai/tracing/spans/toolCallSpans.js";
 import type * as ai_tracing_tracer from "../ai/tracing/tracer.js";
 import type * as ai_tracing_utils_spanUtils from "../ai/tracing/utils/spanUtils.js";
-import type * as ai from "../ai.js";
 import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as auth_admin from "../auth/admin.js";
 import type * as chatSessions from "../chatSessions.js";
@@ -135,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   "ai/tools/googleCalendar": typeof ai_tools_googleCalendar;
   "ai/tools/internal": typeof ai_tools_internal;
   "ai/tools/simpleDelegation": typeof ai_tools_simpleDelegation;
+  "ai/tools/switchModeTool": typeof ai_tools_switchModeTool;
   "ai/tools/taskTool": typeof ai_tools_taskTool;
   "ai/tools/todoist": typeof ai_tools_todoist;
   "ai/tools/utils": typeof ai_tools_utils;
@@ -148,7 +149,6 @@ declare const fullApi: ApiFromModules<{
   "ai/tracing/spans/toolCallSpans": typeof ai_tracing_spans_toolCallSpans;
   "ai/tracing/tracer": typeof ai_tracing_tracer;
   "ai/tracing/utils/spanUtils": typeof ai_tracing_utils_spanUtils;
-  ai: typeof ai;
   aiInternalTodos: typeof aiInternalTodos;
   "auth/admin": typeof auth_admin;
   chatSessions: typeof chatSessions;

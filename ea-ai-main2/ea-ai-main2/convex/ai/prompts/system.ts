@@ -4,9 +4,9 @@ import {
   getToolUseGuidelinesSection,
   getSystemInfoSection,
   getObjectiveSection,
-  getModesSection,
   getCustomSystemPromptSection
 } from "./sections";
+import { getModesSection } from "./sections/modes";
 import { PromptLoader } from "./promptLoader";
 
 export interface SystemPromptSettings {

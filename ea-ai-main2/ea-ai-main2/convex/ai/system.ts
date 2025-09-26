@@ -85,7 +85,7 @@ export namespace SystemPrompt {
     }
   }
 
-  // Main prompt getter that combines provider selection with environment  
+  // Main prompt getter that combines provider selection with environment
   export async function getSystemPrompt(
     ctx: any, // ActionCtx for database access
     modelID: string, 
@@ -107,14 +107,25 @@ export namespace SystemPrompt {
     
     const envContext = environment();
     
+    // Add current mode context to the prompt
+    const modeContext = `
+<current_mode_context>
+**Current Mode**: ${modeName}
+**Mode Capabilities**: Available modes and switching instructions have been provided in the system prompt
+**Mode Switching**: Use switchMode tool to autonomously change modes when appropriate
+**Goal-Driven Switching**: Switch modes to reduce user overwhelm and operational overhead
+</current_mode_context>`;
+    
     // Integration point: Custom prompt gets injected after base prompt, before environment context
-    return basePrompt + envContext;
+    return basePrompt + modeContext + envContext;
   }
   
   // Mode-specific prompt selection with intelligent fallback
+  // For primary mode: always use zen_new so the primary agent can make intelligent decisions
+  // For other modes: use their specific prompts, but allow enhanced todo if appropriate
   function getModeSpecificPrompt(modeName: string, userMessage: string): string {
-    // Use enhanced internal todo prompt for complex operations (any mode)
-    if (shouldUseEnhancedTodoPrompt(userMessage)) {
+    // For non-primary modes, we can still use enhanced todo prompt if needed
+    if (modeName !== "primary" && shouldUseEnhancedTodoPrompt(userMessage)) {
       return "internalTodoEnhanced";
     }
     
@@ -130,11 +141,17 @@ export namespace SystemPrompt {
   }
 
   // Synchronous version for backward compatibility (without custom prompts)
-  export function getSystemPromptSync(modelID: string, dynamicInstructions: string = "", userMessage: string = ""): string {
+  export function getSystemPromptSync(
+    modelID: string, 
+    dynamicInstructions: string = "", 
+    userMessage: string = "", 
+    modeName: string = "primary"
+  ): string {
     let promptName = provider(modelID);
     
-    // Use enhanced internal todo prompt for complex operations
-    if (shouldUseEnhancedTodoPrompt(userMessage)) {
+    // Use enhanced internal todo prompt for complex operations in non-primary modes
+    // For primary mode, keep zen_new prompt so primary agent can make intelligent decisions
+    if (promptName !== "zen_new" && shouldUseEnhancedTodoPrompt(userMessage)) {
       promptName = "internalTodoEnhanced";
     }
     
@@ -142,7 +159,16 @@ export namespace SystemPrompt {
     const basePrompt = generateSystemPrompt("", dynamicInstructions);
     const envContext = environment();
     
-    return basePrompt + envContext;
+    // Add current mode context to the prompt
+    const modeContext = `
+<current_mode_context>
+**Current Mode**: ${modeName}
+**Mode Capabilities**: Available modes and switching instructions have been provided in the system prompt
+**Mode Switching**: Use switchMode tool to autonomously change modes when appropriate
+**Goal-Driven Switching**: Switch modes to reduce user overwhelm and operational overhead
+</current_mode_context>`;
+    
+    return basePrompt + modeContext + envContext;
   }
 
 

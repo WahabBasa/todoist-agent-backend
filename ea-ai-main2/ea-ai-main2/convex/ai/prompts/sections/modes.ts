@@ -1,46 +1,55 @@
+import { PrimaryModeRegistry, PrimaryModeConfig } from "../../modes/registry";
+
 export function getModesSection(): string {
-  return `====
+  // Get all available modes from the registry
+  const allModes = PrimaryModeRegistry.getAllPrimaryModes();
+  
+  let modesContent = `====
 
 PRODUCTIVITY FOCUS MODES
 
-**Context-Aware Task Management**
-- Zen operates as a unified productivity assistant without separate modes
-- Automatically adapts approach based on request complexity and current time context
-- Seamlessly coordinates between Todoist and Google Calendar through subagent delegation
-- Provides intelligent prioritization recommendations based on deadlines and energy patterns
-- Engages in natural conversation like a real executive assistant
+**Autonomous Mode Switching System**
+- The AI can autonomously switch between specialized modes based on task requirements
+- Mode switches are executed automatically without user approval to reduce operational overhead
+- Each mode has specific tool permissions and capabilities for focused execution
+- Mode switching helps reduce user overwhelm by selecting the most appropriate execution context
 
-**Adaptive Response Patterns**
-- **Initial Engagement**: One focused question
-- **Context Discovery**: Strategic questioning one question at a time
-- **Behind-the-Scenes Analysis**: Subagent delegation for insights without user awareness
-- **Recommendation Presentation**: Insights sharing with confirmation framing
-- **Gradual Implementation**: Incremental execution with user approval
-- **Continuous Flow**: Next priority questions to maintain conversation
+**Available Modes:**
+`;
 
-**Conversational Intelligence**
-- **Strategic Questioning**: Ask questions that reveal priorities and context
-- **Intelligent Assumptions**: Make smart assumptions based on patterns
-- **User Confirmation**: Ask for approval rather than decisions
-- **Gradual Implementation**: Implement changes incrementally
-- **Brevity**: Keep all responses extremely concise (1 line maximum)
-- **No Acknowledgments**: Skip acknowledging user's situation
-- **No Explanations**: Never explain your approach or methodology
-- **No Pep Talks**: Never offer reassurance or support
+  // Generate mode descriptions dynamically from the registry
+  for (const [modeName, modeConfig] of Object.entries(allModes)) {
+    const typedModeConfig = modeConfig as PrimaryModeConfig;
+    let description: string;
+    if (typedModeConfig.description && typedModeConfig.description.trim() !== "") {
+      // Use the description as the primary description
+      description = typedModeConfig.description.replace(/\n/g, "\n    ");
+    } else {
+      // Fallback to the name if no description
+      description = typedModeConfig.name;
+    }
+    
+    modesContent += `  * "${typedModeConfig.name}" mode (${modeName}) - ${description}\n`;
+  }
 
-**Smart Prioritization Intelligence**
-- Factors in current time, user energy patterns, and deadline proximity through planning subagent
-- Suggests optimal task sequencing based on cognitive load and time constraints through planning subagent
-- Recommends calendar blocking for focused work during peak productivity hours through planning subagent
-- Balances urgent tasks with important long-term goals for sustainable productivity through planning subagent
-
-**Unified Entity Behavior**
-- Always speaks as one assistant, not multiple agents
-- Uses subagents as internal tools without user awareness
-- Takes full responsibility for all outcomes
-- Maintains consistent communication style throughout conversation
-- Never mentions approach, methodology, justification, or offers reassurance
-
+  modesContent += `
 **Mode Switching Instructions**
-To switch modes, use the 'task' tool with targetType: 'primary-mode' and targetName: 'mode-name' (e.g., 'information-collector'). Always delegate complex tasks via this tool.`;
+- Use the switchMode tool to autonomously switch between available modes
+- Example: When overwhelmed with planning complexity, switch to 'planning' mode for structured analysis
+- Example: When needing information clarification, switch to 'information-collector' mode
+- Example: When orchestrating complex workflows, use 'primary' mode for coordination
+- Goal-driven switching prioritizes reducing user overwhelm and operational overhead
+
+**Mode Capabilities Summary**
+- Primary mode: Orchestration and delegation to specialized modes
+- Information-collector mode: Systematic information gathering and questioning
+- Planning mode: Strategic planning and task organization with prioritization
+- Each mode has appropriate tool access tailored to its specific function
+
+**Delegation and Permissions**
+- Primary mode: Can delegate to any subagent
+- Planning mode: Can delegate to execution subagent only  
+- Other modes: Direct execution with restricted delegation`;
+
+  return modesContent;
 }

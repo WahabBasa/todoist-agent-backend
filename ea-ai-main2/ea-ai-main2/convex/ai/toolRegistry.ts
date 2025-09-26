@@ -9,6 +9,7 @@ import { UtilityTools } from "./tools/utils";
 import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
+import { switchModeTool } from "./tools/switchModeTool";
 import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
 import { logStep, logModeSwitch } from "./logger";
 
@@ -130,6 +131,7 @@ export async function createSimpleToolRegistry(
     ...GoogleCalendarTools,
     ...SimpleDelegationTools,
     ...TaskTool, // Now include TaskTool for mode delegation
+    switchMode: switchModeTool, // Include switchMode tool for mode switching
   };
 
   // console.log(`[SimpleToolRegistry] Including TaskTool for mode delegation`);
