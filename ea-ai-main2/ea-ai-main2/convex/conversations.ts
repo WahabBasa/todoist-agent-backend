@@ -221,6 +221,15 @@ export const upsertConversation = mutation({
       }))),
       timestamp: v.number(),
       mode: v.optional(v.string()),
+      metadata: v.optional(v.object({
+        mode: v.optional(v.string()),
+        toolStates: v.optional(v.record(v.string(), v.union(v.literal("pending"), v.literal("running"), v.literal("completed")))),
+        delegation: v.optional(v.object({
+          target: v.string(),
+          status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+          reason: v.optional(v.string()),
+        })),
+      })),
     })),
   },
   handler: async (ctx, args) => {
