@@ -83,7 +83,16 @@ const applicationTables = {
         result: v.any(),
       }))),
       timestamp: v.number(),
-      mode: v.optional(v.string()),
+      mode: v.optional(v.string()), // Existing
+      metadata: v.optional(v.object({ // New: Embedded OpenCode-style metadata
+        mode: v.optional(v.string()),
+        toolStates: v.optional(v.record(v.string(), v.union(v.literal("pending"), v.literal("running"), v.literal("completed")))),
+        delegation: v.optional(v.object({
+          target: v.string(),
+          status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+          reason: v.optional(v.string())
+        }))
+      }))
     }))),
     // Legacy schema - temporary optional fields for migration
     message: v.optional(v.string()),

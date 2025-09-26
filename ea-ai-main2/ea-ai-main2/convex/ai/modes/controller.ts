@@ -34,6 +34,15 @@ export namespace ModeController {
     const state = sessionStates.get(sessionId);
     return state ? state.currentMode : "primary";
   }
+  
+  export function setCurrentMode(sessionId: string, mode: string): void {
+    let state = sessionStates.get(sessionId);
+    if (!state) {
+      initializeSession(sessionId);
+      state = sessionStates.get(sessionId)!;
+    }
+    state.currentMode = mode;
+  }
 
   /**
    * Get previous mode for a session

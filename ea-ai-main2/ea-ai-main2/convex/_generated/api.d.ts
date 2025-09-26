@@ -15,10 +15,12 @@ import type {
 } from "convex/server";
 import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistantMessage/parseAssistantMessage.js";
 import type * as ai_caching from "../ai/caching.js";
+import type * as ai_compaction from "../ai/compaction.js";
 import type * as ai_fetchModels from "../ai/fetchModels.js";
 import type * as ai_langfuse_client from "../ai/langfuse/client.js";
 import type * as ai_langfuse_logger from "../ai/langfuse/logger.js";
 import type * as ai_logger from "../ai/logger.js";
+import type * as ai_messageSchemas from "../ai/messageSchemas.js";
 import type * as ai_models from "../ai/models.js";
 import type * as ai_modes_controller from "../ai/modes/controller.js";
 import type * as ai_modes_registry from "../ai/modes/registry.js";
@@ -101,10 +103,12 @@ import type * as todoist_userAccess from "../todoist/userAccess.js";
 declare const fullApi: ApiFromModules<{
   "ai/assistantMessage/parseAssistantMessage": typeof ai_assistantMessage_parseAssistantMessage;
   "ai/caching": typeof ai_caching;
+  "ai/compaction": typeof ai_compaction;
   "ai/fetchModels": typeof ai_fetchModels;
   "ai/langfuse/client": typeof ai_langfuse_client;
   "ai/langfuse/logger": typeof ai_langfuse_logger;
   "ai/logger": typeof ai_logger;
+  "ai/messageSchemas": typeof ai_messageSchemas;
   "ai/models": typeof ai_models;
   "ai/modes/controller": typeof ai_modes_controller;
   "ai/modes/registry": typeof ai_modes_registry;

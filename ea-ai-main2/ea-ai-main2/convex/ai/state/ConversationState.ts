@@ -18,7 +18,7 @@ export interface ConversationPhase {
 export interface ToolExecutionState {
   toolName: string;
   executionId: string;
-  status: 'pending' | 'executing' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'executing' | 'completed' | 'failed';
   startTime: number;
   endTime?: number;
   error?: string;
@@ -42,6 +42,7 @@ export interface ProgressTracker {
 
 export class ConversationState {
   private currentPhase: string = 'initial';
+  private currentMode: string = 'primary'; // New: Embedded mode tracking
   private toolExecutionStack: ToolExecutionState[] = [];
   private userInteractionHistory: UserInteraction[] = [];
   private progressTrackers: Map<string, ProgressTracker> = new Map();
@@ -123,12 +124,53 @@ export class ConversationState {
     const toolState: ToolExecutionState = {
       toolName,
       executionId,
-      status: 'executing',
+      status: 'pending', // OpenCode: Start as pending
       startTime: Date.now()
     };
     
     this.toolExecutionStack.push(toolState);
     this.lastActivityTimestamp = Date.now();
+  }
+  
+  // New: Update tool state (running/completed)
+  public updateToolState(executionId: string, status: 'running' | 'completed' | 'failed', result?: any, error?: string): void {
+    const toolState = this.toolExecutionStack.find(t => t.executionId === executionId);
+    if (toolState) {
+      toolState.status = status;
+      if (status === 'completed' || status === 'failed') {
+        toolState.endTime = Date.now();
+      }
+      if (result) toolState.result = result;
+      if (error) toolState.error = error;
+      this.lastActivityTimestamp = Date.now();
+    }
+  }
+  
+  // New: Get embedded tool states for messages
+  public getEmbeddedToolStates(): Record<string, ToolExecutionState['status']> {
+    return this.toolExecutionStack.reduce((acc, ts) => {
+      acc[ts.toolName] = ts.status;
+      return acc;
+    }, {} as Record<string, ToolExecutionState['status']>);
+  }
+  
+  // New: Set current mode from embedded metadata
+  public setCurrentMode(mode: string): void {
+    this.currentMode = mode;
+    this.lastActivityTimestamp = Date.now();
+  }
+  
+  public getCurrentMode(): string {
+    return this.currentMode;
+  }
+  
+  // New: Create snapshot for compaction
+  public createSnapshot(): { mode: string; toolStates: Record<string, string>; phase: string } {
+    return {
+      mode: this.currentMode,
+      toolStates: this.getEmbeddedToolStates(),
+      phase: this.currentPhase
+    };
   }
   
   /**

@@ -7,6 +7,7 @@ import { SubagentRegistry } from "../subagents/registry";
 import { executeSubagent } from "../subagents/executor";
 import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
 import { Id } from "../../_generated/dataModel";
+import { ConversationState } from "../state/ConversationState";
 
 /**
  * Type guard to ensure sessionId is a valid Convex ID
@@ -62,31 +63,64 @@ export const taskTool: ToolDefinition = {
   id: "task",
   description: generateTaskToolDescription(),
   
-  inputSchema: z.object({
-    targetType: z.enum(["primary-mode", "subagent"]).describe("Type of delegation: primary-mode for context-preserving modes, subagent for isolated execution"),
-    targetName: z.string().describe("Name of the target: 'information-collector' for primary-mode, or subagent name like 'planning', 'execution', 'general'"),
-    prompt: z.string().describe("Clear, detailed description of the task to delegate. Be specific about what analysis, research, or work is needed."),
-    description: z.string().optional().describe("Short 3-5 word description of the task for progress tracking"),
-  }),
+  inputSchema: z.object({ // Enhanced Zod for structured delegation
+    targetType: z.enum(["primary-mode", "subagent"]),
+    targetName: z.string().min(1).max(50),
+    prompt: z.string().min(10).max(2000),
+    description: z.string().max(100).optional(),
+    delegationMetadata: z.object({ // New: AgentPart-like structure
+      reason: z.string().optional(),
+      expectedOutput: z.string().optional(),
+      priority: z.enum(["high", "medium", "low"]).optional()
+    }).optional()
+  }).refine((data) => {
+    if (data.targetType === "primary-mode") {
+      return ["primary", "information-collector"].includes(String(data.targetName));
+    }
+    return true;
+  }, { message: "Invalid target for type" }),
   
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
-    const { targetType, targetName, prompt, description } = args;
+    // Zod validation already handled by schema
+    const validatedArgs = taskTool.inputSchema.parse(args);
+    const { targetType, targetName, prompt, description, delegationMetadata } = validatedArgs;
     const taskDescription = description || `${targetName} task`;
     
-    console.log(`[TASK_DELEGATION] Starting ${targetType} delegation to ${targetName}: ${taskDescription}`);
+    console.log(`[TASK_DELEGATION] Starting ${targetType} to ${targetName}: ${taskDescription}`);
     
+    // Update ConversationState with delegation (OpenCode AgentPart)
+    const convState = new ConversationState(); // Assume loaded from session
+    convState.setCurrentMode(targetName);
+    const delegationId = `del_${Date.now()}`;
+    convState.startToolExecution('task', delegationId);
+    convState.updateToolState(delegationId, 'running');
+  
     let refinedPrompt = prompt;
     if (targetType === "primary-mode" && targetName === "information-collector") {
       refinedPrompt = `FOCUS ONLY on the FIRST task mentioned (work deadlines). Ask EXACTLY ONE question about its DEADLINE using the format "QUESTION_FOR_USER: When is your work deadline due?". Do NOT ask about time, dependencies, or other tasks. Do NOT list questions. Do NOT provide explanations or multiple questions. Wait for user answer.`;
-      console.log(`[TASK_DELEGATION] Refined sequential prompt for information-collector: ${refinedPrompt}`);
     }
-    console.log(`[TASK_DELEGATION] Prompt: ${refinedPrompt}`);
-
+  
+    let result;
     if (targetType === "primary-mode") {
-      return await executePrimaryMode(targetName, refinedPrompt, ctx, actionCtx);
+      result = await executePrimaryMode(targetName, refinedPrompt, ctx, actionCtx);
     } else {
-      return await executeSubagentMode(targetName, refinedPrompt, ctx, actionCtx);
+      result = await executeSubagentMode(targetName, refinedPrompt, ctx, actionCtx);
     }
+  
+    // Update state post-execution
+    convState.updateToolState(delegationId, 'completed', result);
+    // Embed in return for message
+    return {
+      ...result,
+      embeddedMetadata: {
+        delegation: {
+          target: targetName,
+          status: 'completed',
+          reason: delegationMetadata?.reason
+        },
+        toolStates: convState.getEmbeddedToolStates()
+      }
+    };
   }
 };
 

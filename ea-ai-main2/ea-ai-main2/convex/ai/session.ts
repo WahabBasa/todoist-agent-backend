@@ -7,6 +7,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
+import { autoCompactHistory } from "./compaction";
 import { MessageCaching } from "./caching";
 import { requireUserAuthForAction } from "../todoist/userAccess";
 import {
@@ -58,6 +59,8 @@ interface ChatMetadata {
   error?: string;
   userFriendlyError?: string;
   needsSetup?: boolean;
+  embeddedMode?: string; // New: From parsed metadata
+  toolStates?: Record<string, 'pending'|'running'|'completed'>;
 }
 
 interface ChatResponse {
@@ -257,12 +260,20 @@ export const chatWithAI = action({
       // This follows the OpenCode pattern where primary agents share context in same session
       const activeMode = session?.activeMode || "primary";
       const inMemoryMode = sessionId ? ModeController.getCurrentMode(sessionId) : null;
-      logDebug(`[MODE_VALIDATION] DB activeMode: ${activeMode}, In-memory: ${inMemoryMode || 'none'} for ${sessionId}`);
-      if (inMemoryMode && inMemoryMode !== activeMode) {
-        logWarning(`[MODE_MISMATCH] Discrepancy detected: DB=${activeMode}, Memory=${inMemoryMode}`);
-      }
-      const effectiveMode = inMemoryMode || activeMode;
+      
+      // Parse embedded metadata from history (OpenCode-style)
+      const { parseEmbeddedMetadata } = await import('./messageSchemas');
+      const embeddedData = history.length > 0 ? parseEmbeddedMetadata(history[history.length - 1]) : null;
+      const embeddedMode = embeddedData?.mode;
+      
+      logDebug(`[MODE_VALIDATION] DB: ${activeMode}, Memory: ${inMemoryMode || 'none'}, Embedded: ${embeddedMode || 'none'}`);
+      const effectiveMode = embeddedMode || inMemoryMode || activeMode || 'primary';
       const currentModeName = effectiveMode;
+      
+      // Sync ModeController with effective mode
+      if (sessionId && effectiveMode !== inMemoryMode) {
+        ModeController.setCurrentMode(sessionId, effectiveMode);
+      }
       
       logDebug("Using primary mode - LLM will determine delegation via task tool");
       
@@ -296,9 +307,9 @@ export const chatWithAI = action({
       const previousMode = sessionId ? ModeController.getPreviousMode(sessionId) : null;
       
       // Inject mode-specific prompts if needed
-      const historyWithModePrompts = await injectModePrompts(cleanHistory, sessionId, currentModeName, previousMode);
+      const historyWithModePrompts = await injectModePrompts(cleanHistory, sessionId, currentModeName, previousMode); // Enhanced with OpenCode transitions
       if (effectiveMode !== activeMode) {
-        logDebug(`[MODE_FALLBACK] Using in-memory mode ${effectiveMode}`);
+        logDebug(`[MODE_FALLBACK] Using embedded/in-memory mode ${effectiveMode}`);
       }
 
       // Direct conversion to AI SDK format - no complex pipeline
@@ -308,14 +319,16 @@ export const chatWithAI = action({
       MessageCaching.initializeCaching();
 
       // Generate system prompt using mode-specific system
-      const systemPrompt = await SystemPrompt.getSystemPrompt(
+      let systemPrompt = await SystemPrompt.getSystemPrompt(
         ctx,
-        modelName, 
-        "", // No special instructions needed 
+        modelName,
+        "",
         message,
         userId,
         currentModeName
       );
+      // Inject OpenCode-style transition instructions
+      systemPrompt = systemPrompt + "\n\n<INSTRUCTIONS> For delegation/switching: If needed, use 'task' tool with structured args. Output synthetic transitions like <DELEGATE target='information-collector'>reason</DELEGATE> in responses.</INSTRUCTIONS>";
       
       logDebug(`Generated system prompt for mode: ${currentModeName}`);
       
@@ -463,13 +476,20 @@ export const chatWithAI = action({
       });
       
       if (finalToolCalls.length > 0 || (finalText && finalText.trim())) {
-        // Single assistant message with both tool calls and text content
-        const assistantMessage: any = {
-          role: "assistant",
-          content: finalText || "",
-          timestamp: Date.now()
-        };
-
+        // Single assistant message with embedded metadata (OpenCode-style)
+        const { createEmbeddedMessage } = await import('./messageSchemas');
+        async function updateToolStates(toolCalls: any[], toolResults: any[]): Promise<Record<string, 'pending'|'running'|'completed'>> {
+          const toolStates: Record<string, 'pending' | 'running' | 'completed'> = {};
+          toolCalls.forEach(tc => toolStates[tc.toolName] = 'running' as const);
+          toolResults.forEach(tr => toolStates[tr.toolName] = 'completed' as const);
+          return toolStates;
+        }
+        
+        const toolStates = await updateToolStates(finalToolCalls, finalToolResults); // From ConversationState
+        const base = { role: "assistant", content: finalText || "", timestamp: Date.now() };
+        const metadata = { mode: currentModeName, toolStates, delegation: embeddedData?.delegation ?? undefined };
+        const assistantMessage: any = createEmbeddedMessage(base, metadata);
+      
         // Add tool calls if present
         if (finalToolCalls.length > 0) {
           assistantMessage.toolCalls = finalToolCalls.map((tc: any) => ({
@@ -478,11 +498,11 @@ export const chatWithAI = action({
             toolCallId: tc.toolCallId
           }));
         }
-
-        console.log('➕ [BACKEND DEBUG] Adding assistant message to history:', {
+      
+        console.log('➕ [BACKEND DEBUG] Adding embedded assistant message:', {
           contentPreview: assistantMessage.content.substring(0, 50) + '...',
-          hasToolCalls: !!assistantMessage.toolCalls,
-          toolCallsCount: assistantMessage.toolCalls?.length || 0
+          embeddedMode: assistantMessage.mode,
+          toolStatesCount: Object.keys(toolStates || {}).length
         });
         
         finalHistory.push(assistantMessage);
@@ -534,10 +554,17 @@ export const chatWithAI = action({
         }))
       });
       
-      const savedConversationId = await ctx.runMutation(api.conversations.upsertConversation, { 
+      const compactedHistory = await autoCompactHistory(finalHistory, 50); // New: OpenCode auto-compaction
+      const savedConversationId = await ctx.runMutation(api.conversations.upsertConversation, {
         sessionId,
-        messages: finalHistory as any 
+        messages: compactedHistory as any
       });
+      
+      // Sync activeMode with embedded mode from last message
+      const lastEmbeddedMode = parseEmbeddedMetadata(compactedHistory[compactedHistory.length - 1])?.mode;
+      if (lastEmbeddedMode && sessionId) {
+        await ctx.runMutation(api.chatSessions.updateActiveMode, { sessionId, activeMode: lastEmbeddedMode });
+      }
       
       console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
         conversationId: savedConversationId,
@@ -917,4 +944,10 @@ async function createModeToolRegistry(
     // Return all tools as fallback
     return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
   }
+}
+async function updateToolStates(toolCalls: any[], toolResults: any[]): Promise<Record<string, 'pending'|'running'|'completed'>> {
+  const toolStates: Record<string, 'pending' | 'running' | 'completed'> = {};
+  toolCalls.forEach(tc => toolStates[tc.toolName] = 'running' as const);
+  toolResults.forEach(tr => toolStates[tr.toolName] = 'completed' as const);
+  return toolStates;
 }
