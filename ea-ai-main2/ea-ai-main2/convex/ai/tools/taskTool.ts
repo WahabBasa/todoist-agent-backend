@@ -97,7 +97,9 @@ export const taskTool: ToolDefinition = {
   
     let refinedPrompt = prompt;
     if (targetType === "primary-mode" && targetName === "information-collector") {
-      refinedPrompt = `FOCUS ONLY on the FIRST task mentioned (work deadlines). Ask EXACTLY ONE question about its DEADLINE using the format "QUESTION_FOR_USER: When is your work deadline due?". Do NOT ask about time, dependencies, or other tasks. Do NOT list questions. Do NOT provide explanations or multiple questions. Wait for user answer.`;
+      refinedPrompt = `CRITICAL SINGLE-QUESTION ENFORCEMENT: You MUST ask EXACTLY ONE question and STOP. If multiple tasks are mentioned, focus ONLY on the FIRST task. Ask ONE question about its DEADLINE using format "QUESTION_FOR_USER: When is this due?". Do NOT ask multiple questions. Do NOT list questions. Do NOT mention other tasks. Do NOT provide explanations. Ask ONE question, wait for answer, then stop. VIOLATION OF THIS RULE IS FORBIDDEN.
+
+Original context: ${prompt}`;
     }
   
     let result;

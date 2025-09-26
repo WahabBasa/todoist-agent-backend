@@ -846,15 +846,47 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
   if (previousMode && currentMode !== previousMode) {
     logDebug(`[PROMPT_INJECTION] Detected switch from ${previousMode} to ${currentMode} for ${sessionId}`);
     
+    // Special context filtering for information-collector mode
+    let contextualPrompt = promptInjection;
+    if (currentMode === "information-collector") {
+      // Extract only the first task mentioned from recent user messages
+      const recentUserMessages = modifiedHistory.slice(-3).filter(msg => msg.role === "user");
+      const lastUserMessage = recentUserMessages[recentUserMessages.length - 1];
+      
+      if (lastUserMessage && lastUserMessage.content) {
+        // Simple first task extraction - look for common task patterns
+        const taskPatterns = [
+          /work[\s\w]*deadlines?/i,
+          /taxes?/i, 
+          /car[\s\w]*maintenance/i,
+          /apartment[\s\w]*cleaning/i,
+          /birthday[\s\w]*party/i,
+          /project[\s\w]*/i
+        ];
+        
+        let firstTask = "the first task";
+        for (const pattern of taskPatterns) {
+          const match = lastUserMessage.content.match(pattern);
+          if (match) {
+            firstTask = match[0];
+            break;
+          }
+        }
+        
+        contextualPrompt = `${promptInjection} Focus ONLY on "${firstTask}" mentioned by the user. Ask ONE question about its deadline first. Ignore all other tasks until this one is complete.`;
+      }
+    }
+    
     // Create synthetic system message for mode switch
     const switchMessage = {
       role: "system" as const,
-      content: `Switched to ${currentMode} mode: ${promptInjection}`,
+      content: `Switched to ${currentMode} mode: ${contextualPrompt}`,
       timestamp: Date.now(),
       metadata: {
         type: "mode-injection",
         mode: currentMode,
-        switchFrom: previousMode
+        switchFrom: previousMode,
+        contextFiltered: currentMode === "information-collector"
       }
     };
     
@@ -864,7 +896,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
     
     modifiedHistory.splice(insertIndex, 0, switchMessage);
     
-    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId}`);
+    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId} ${currentMode === "information-collector" ? "(with context filtering)" : ""}`);
   } else if (modeConfig && modeConfig.promptInjection) {
     // Fallback: inject if no recent mode prompt (for initial entry)
     const recentHistory = modifiedHistory.slice(-5);
