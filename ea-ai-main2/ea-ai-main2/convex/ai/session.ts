@@ -873,7 +873,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
           }
         }
         
-        contextualPrompt = `${promptInjection} Focus ONLY on "${firstTask}" mentioned by the user. Ask ONE question about its deadline first. Ignore all other tasks until this one is complete.`;
+        contextualPrompt = `<OVERRIDE PRIOR INSTRUCTIONS> Ignore any previous messages about collecting multiple data points, worry scales, or bundling questions. Follow ONLY this mode's rules: Ask ONE question at a time, starting with deadline for the first task. Use QUESTION_FOR_USER: format. Focus ONLY on "${firstTask}" mentioned by the user. Ask ONE question about its deadline first. Ignore all other tasks until this one is complete.`;
       }
     }
     

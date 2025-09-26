@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- information-collector: Systematic information gathering and user questioning
+- information-collector: Gather task details sequentially: one question per turn (deadline first, then effort, then involved). No worry scales or multiple questions.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}
@@ -157,7 +157,7 @@ async function executePrimaryMode(
     // Add synthetic message part with mode prompt (like OpenCode)
     await actionCtx.runMutation(api.conversations.addSyntheticMessage, {
       sessionId: validSessionId,
-      content: modeConfig.promptInjection,
+      content: prompt, // Use refinedPrompt instead of modeConfig.promptInjection
       timestamp: Date.now(),
     });
   }

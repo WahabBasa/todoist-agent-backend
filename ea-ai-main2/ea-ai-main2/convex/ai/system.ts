@@ -18,12 +18,10 @@ export namespace SystemPrompt {
 
   // Environment context injection (similar to OpenCode)
   export function environment(): string {
-    return `
-<current_date_context>
-**Today's Date**: ${new Date().toISOString().split('T')[0]} (${new Date().getFullYear()})
-**Calendar Rule**: ALL events must be created in ${new Date().getFullYear()} or later years
-**Relative Dates**: Calculate from current date using getCurrentTime() first
-</current_date_context>`;
+    const now = new Date();
+    const utc = now.toISOString().split('T')[0] + ' UTC';
+    const local = now.toLocaleDateString('en-US', { timeZone: 'Asia/Dubai', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' (UTC+4)';
+    return `\n<current_date_context>\nCurrent date/time: ${local}. UTC: ${utc}.\nUse this for all time-sensitive decisions (e.g., deadlines relative to now). Do not assume other dates.\n</current_date_context>`;
   }
 
   // Load prompt from file (now actually loads from files!)
