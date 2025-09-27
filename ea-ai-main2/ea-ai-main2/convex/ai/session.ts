@@ -45,6 +45,33 @@ import {
   endSpan
 } from "./langfuse/logger";
 
+// Enhanced Error Types - Following OpenCode's structured error approach
+export class RateLimitError extends Error {
+  constructor(
+    public statusCode: number, 
+    public retryAfter?: number,
+    public provider?: string,
+    public modelId?: string
+  ) {
+    super(`Rate limited (${statusCode})${provider ? ` by ${provider}` : ''}${modelId ? ` for model ${modelId}` : ''}`);
+    this.name = 'RateLimitError';
+  }
+}
+
+export class ProviderAuthError extends Error {
+  constructor(public provider: string, message: string, public modelId?: string) {
+    super(`${provider}: ${message}${modelId ? ` (model: ${modelId})` : ''}`);
+    this.name = 'ProviderAuthError';
+  }
+}
+
+export class ModelNotFoundError extends Error {
+  constructor(public modelId: string, public provider: string) {
+    super(`Model ${modelId} not found on ${provider}`);
+    this.name = 'ModelNotFoundError';
+  }
+}
+
 // Type definitions for session.ts following OpenCode's pragmatic approach
 
 interface ChatMetadata {
@@ -61,6 +88,8 @@ interface ChatMetadata {
   needsSetup?: boolean;
   embeddedMode?: string; // New: From parsed metadata
   toolStates?: Record<string, 'pending'|'running'|'completed'>;
+  errorType?: string; // Enhanced: Error classification
+  retryAfter?: number; // Enhanced: Rate limit retry timing
 }
 
 interface ChatResponse {
@@ -360,15 +389,82 @@ export const chatWithAI = action({
       // Initialize tool repetition detector
       const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
-      // Use AI SDK's streamText with native tool handling
+      // Enhanced retry wrapper for rate limiting resilience
+      async function streamTextWithRateLimit(params: any): Promise<StreamTextResult<Record<string, any>, never>> {
+        let attempt = 0;
+        const maxAttempts = 5;
+        
+        while (attempt < maxAttempts) {
+          try {
+            logDebug(`[RETRY] Attempt ${attempt + 1}/${maxAttempts} for model ${modelName}`);
+            
+            return await streamText({
+              ...params,
+              maxRetries: 8, // Increased from 3 to 8 for rate limit resilience
+            });
+            
+          } catch (error: any) {
+            // Enhanced error classification
+            const isRateLimit = error?.statusCode === 429 || 
+                               error?.responseBody?.includes('rate-limited') ||
+                               error?.message?.includes('rate limit') ||
+                               error?.message?.includes('temporarily rate-limited');
+            
+            if (isRateLimit && attempt < maxAttempts - 1) {
+              // Parse retry-after header if available
+              const retryAfter = error?.responseHeaders?.['retry-after'] || 
+                               error?.responseHeaders?.['Retry-After'];
+              const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : null;
+              
+              // Exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+              const baseDelay = Math.min(1000 * Math.pow(2, attempt), 30000);
+              const jitter = Math.random() * 1000; // Add 0-1s jitter
+              const delay = retryAfterSeconds ? retryAfterSeconds * 1000 : baseDelay + jitter;
+              
+              logWarning(`[RATE_LIMIT] Attempt ${attempt + 1} failed, retrying in ${Math.round(delay/1000)}s. Model: ${modelName}`);
+              
+              // Create structured rate limit error for logging
+              const rateLimitError = new RateLimitError(
+                error?.statusCode || 429,
+                retryAfterSeconds ?? undefined,
+                provider,
+                modelName
+              );
+              logError(rateLimitError, `Rate limit retry ${attempt + 1}/${maxAttempts}`);
+              
+              await new Promise(resolve => setTimeout(resolve, delay));
+              attempt++;
+              continue;
+            }
+            
+            // For non-rate-limit errors or final attempt, classify and throw
+            if (error?.statusCode === 401 || error?.message?.includes('API key') || error?.message?.includes('Unauthorized')) {
+              throw new ProviderAuthError(provider, error.message || 'Authentication failed', modelName);
+            } else if (error?.statusCode === 404 || error?.message?.includes('model not found')) {
+              throw new ModelNotFoundError(modelName, provider);
+            } else if (isRateLimit) {
+              // Final rate limit attempt failed
+              const retryAfterSeconds = error?.responseHeaders?.['retry-after'] || 
+                                      error?.responseHeaders?.['Retry-After'];
+              throw new RateLimitError(error?.statusCode || 429, retryAfterSeconds ? parseInt(retryAfterSeconds) : undefined, provider, modelName);
+            }
+            
+            // Re-throw original error for unhandled cases
+            throw error;
+          }
+        }
+        
+        throw new Error(`Max retry attempts (${maxAttempts}) exceeded for ${modelName}`);
+      }
+
+      // Use enhanced streamText with rate limit handling
       // Pass the correctly parsed model name to the appropriate provider
-      const result: StreamTextResult<Record<string, any>, never> = await streamText({
+      const result: StreamTextResult<Record<string, any>, never> = await streamTextWithRateLimit({
         model: modelProvider.chat(modelName, {
           usage: { include: true }
         }),
         messages: cachedMessages,
         tools,
-        maxRetries: 3,
         // Allow multi-step tool workflows for complex operations
         stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
       });
@@ -709,6 +805,7 @@ export const chatWithAI = action({
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       console.error(`❌ [SESSION_ERROR] Chat session failed:`, {
         error: errorMessage,
+        errorType: error instanceof Error ? error.constructor.name : 'unknown',
         userId: userId.substring(0, 20) + "...",
         sessionId,
         selectedModelId: selectedModelId || 'unknown',
@@ -718,16 +815,40 @@ export const chatWithAI = action({
       
       logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
       
-      // Enhanced error handling for model selection issues
+      // Enhanced error classification based on error types
       let userFriendlyError = errorMessage;
-      if (errorMessage.includes("No models available")) {
+      let needsSetup = false;
+      
+      if (error instanceof RateLimitError) {
+        // Rate limiting error - provide clear guidance
+        const retryInMinutes = error.retryAfter ? Math.ceil(error.retryAfter / 60) : 1;
+        userFriendlyError = `⏳ **Rate Limited**: ${error.modelId || 'The model'} is temporarily busy. ` +
+                           `Please wait ${retryInMinutes} minute${retryInMinutes !== 1 ? 's' : ''} and try again. ` +
+                           `This is normal during peak usage times.`;
+      } else if (error instanceof ProviderAuthError) {
+        // Authentication/API key issues
+        userFriendlyError = `🔑 **Authentication Error**: ${error.message}. ` +
+                           `Please check your API key configuration in the Admin Dashboard.`;
+        needsSetup = true;
+      } else if (error instanceof ModelNotFoundError) {
+        // Model not available
+        userFriendlyError = `🔄 **Model Unavailable**: The model "${error.modelId}" is not available on ${error.provider}. ` +
+                           `Please select a different model in the Admin Dashboard.`;
+        needsSetup = true;
+      } else if (errorMessage.includes("No models available")) {
         userFriendlyError = "🔧 **Setup Required**: Please go to Admin Dashboard and fetch models from OpenRouter before chatting.";
+        needsSetup = true;
       } else if (errorMessage.includes("OpenRouter API key")) {
         userFriendlyError = "🔑 **API Key Required**: Please configure your OpenRouter API key in the Admin Dashboard.";
+        needsSetup = true;
       } else if (errorMessage.includes("Model not found")) {
         userFriendlyError = "🔄 **Model Issue**: Your selected model is no longer available. Please choose a different model in Admin Dashboard.";
+        needsSetup = true;
       } else if (errorMessage.includes("Unauthorized")) {
         userFriendlyError = "🔒 **Authentication Required**: Please log in to continue.";
+      } else if (errorMessage.includes("rate limit") || errorMessage.includes("rate-limited") || errorMessage.includes("429")) {
+        // Catch any other rate limiting patterns that weren't caught by RateLimitError
+        userFriendlyError = "⏳ **Rate Limited**: The AI service is temporarily busy. Please wait a moment and try again.";
       }
       
       // End conversation with error
@@ -775,7 +896,9 @@ export const chatWithAI = action({
           userFriendlyError,
           toolCalls: 0,
           toolResults: 0,
-          needsSetup: errorMessage.includes("No models available") || errorMessage.includes("API key")
+          needsSetup: needsSetup,
+          errorType: error instanceof Error ? error.constructor.name : 'unknown',
+          retryAfter: error instanceof RateLimitError ? error.retryAfter : undefined
         }
       };
     }
