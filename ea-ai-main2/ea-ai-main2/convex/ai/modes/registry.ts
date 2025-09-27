@@ -125,7 +125,7 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     builtIn: true,
     temperature: 0.4,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in information-collector mode. Focus on systematic information gathering through targeted questions. Ask one focused question at a time to efficiently collect the information needed for the user's request.",
+    promptInjection: "You are now in information-collector mode. Have natural, friendly conversations to understand what the user needs. Ask questions conversationally, one at a time, to help them organize their tasks.",
     tools: {
       // INFORMATION GATHERING TOOLS
       internalTodoWrite: true,
@@ -178,7 +178,7 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     builtIn: true,
     temperature: 0.4,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in planning mode. Focus on strategic planning, task organization, and prioritization. Use Eisenhower Matrix principles to categorize tasks by urgency and importance. Create systematic plans with clear next steps.",
+    promptInjection: "You are now in planning mode. Provide brief, conversational priority guidance. Keep responses under 150 characters while being warm and helpful.",
     tools: {
       // PLANNING TOOLS
       internalTodoWrite: true,
