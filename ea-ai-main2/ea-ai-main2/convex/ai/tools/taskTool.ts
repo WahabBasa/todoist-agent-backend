@@ -95,12 +95,7 @@ export const taskTool: ToolDefinition = {
     convState.startToolExecution('task', delegationId);
     convState.updateToolState(delegationId, 'running');
   
-    let refinedPrompt = prompt;
-    if (targetType === "primary-mode" && targetName === "information-collector") {
-      refinedPrompt = `CRITICAL SINGLE-QUESTION ENFORCEMENT: You MUST ask EXACTLY ONE question and STOP. If multiple tasks are mentioned, focus ONLY on the FIRST task. Ask ONE question about its DEADLINE using format "QUESTION_FOR_USER: When is this due?". Do NOT ask multiple questions. Do NOT list questions. Do NOT mention other tasks. Do NOT provide explanations. Ask ONE question, wait for answer, then stop. VIOLATION OF THIS RULE IS FORBIDDEN.
-
-Original context: ${prompt}`;
-    }
+    const refinedPrompt = prompt;
   
     let result;
     if (targetType === "primary-mode") {

@@ -125,7 +125,7 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     builtIn: true,
     temperature: 0.4,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in information-collector mode. Have natural, friendly conversations to understand what the user needs. Ask questions conversationally, one at a time, to help them organize their tasks.",
+    promptInjection: "You are now in information-collector mode. Follow the deadline-first pattern: for each task, ask about timing/deadline first, then ask about duration, then acknowledge and move to the next task's timing. Ask one question at a time conversationally.",
     tools: {
       // INFORMATION GATHERING TOOLS
       internalTodoWrite: true,
