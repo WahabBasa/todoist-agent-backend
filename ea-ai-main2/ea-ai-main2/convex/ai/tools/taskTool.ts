@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- information-collector: Gather task details sequentially: one question per turn (deadline first, then effort, then involved). No worry scales or multiple questions.
+- information-collector: Gather task details sequentially: one question per turn (deadline first, then time duration). No worry scales or multiple questions.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}
