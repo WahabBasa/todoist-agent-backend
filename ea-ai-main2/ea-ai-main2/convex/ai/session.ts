@@ -87,6 +87,7 @@ interface ChatMetadata {
   error?: string;
   userFriendlyError?: string;
   needsSetup?: boolean;
+  isRetriable?: boolean;
   embeddedMode?: string; // New: From parsed metadata
   toolStates?: Record<string, 'pending'|'running'|'completed'>;
 }
@@ -359,7 +360,7 @@ export const chatWithAI = action({
         currentModeName
       );
       // Inject OpenCode-style transition instructions
-      systemPrompt = systemPrompt + "\n\n<INSTRUCTIONS> For delegation/switching: If needed, use 'task' tool with structured args. Output synthetic transitions like <DELEGATE target='information-collector'>reason</DELEGATE> in responses.</INSTRUCTIONS>";
+      systemPrompt = systemPrompt + "\n\n<INSTRUCTIONS> For delegation/switching: If needed, use 'task' tool with structured args. Output synthetic transitions like <DELEGATE target='planning'>reason</DELEGATE> in responses.</INSTRUCTIONS>";
       
       logDebug(`Generated system prompt for mode: ${currentModeName}`);
       
@@ -437,8 +438,8 @@ export const chatWithAI = action({
         logNoToolsCalled(availableToolNames, message);
         logDebug(`No tools were called. Available tools: ${availableToolNames.join(", ")}`);
         
-        // Special handling for information-collector mode
-        // Check if we just switched to information-collector mode
+        // Special handling for planning mode
+        // Check if we just switched to planning mode
         // Using cleanHistory instead of finalHistory since finalHistory isn't declared yet
         const lastAssistantMessageInNoTools = cleanHistory.filter(msg => msg.role === "assistant").pop();
         if (lastAssistantMessageInNoTools && lastAssistantMessageInNoTools.toolCalls) {
@@ -551,7 +552,7 @@ export const chatWithAI = action({
           });
         }
       } else if (finalToolCalls.length === 0 && finalToolResults.length === 0) {
-        // If no tools were called and no results, check if we switched to information-collector mode
+        // If no tools were called and no results, check if we switched to planning mode
         // In this case, we should continue the conversation with the information collector
         const modeSwitchToolCall = finalHistory.find(msg => 
           msg.role === "assistant" && 
@@ -569,7 +570,7 @@ export const chatWithAI = action({
           if (!finalText || finalText.trim() === "") {
             logDebug("Empty response after mode switch to planning - the new mode should respond");
             
-            // We don't add a placeholder message here, as the next user input should trigger the information-collector
+            // We don't add a placeholder message here, as the next user input should trigger the planning
             // The mode switching already happened via the task tool, so the context is set for the next turn
           }
         }
@@ -662,7 +663,7 @@ export const chatWithAI = action({
         originalLength: cleanResponse.length
       });
       
-      // Special handling for information-collector mode switch
+      // Special handling for planning mode switch
       // If mode switch occurred but no response was generated, provide appropriate default response
       const lastAssistantMessageFinal = finalHistory.filter(msg => msg.role === "assistant").pop();
       if (lastAssistantMessageFinal && lastAssistantMessageFinal.toolCalls) {
@@ -680,7 +681,7 @@ export const chatWithAI = action({
           // Look for the original user message that triggered the mode switch
           const userMessage = message; // This is the user's message that triggered the switch
           
-          // Generate an appropriate response for information-collector mode
+          // Generate an appropriate response for planning mode
           // This should ideally be handled by the AI itself, but we provide a fallback
           if (userMessage.toLowerCase().includes("deadline") || userMessage.toLowerCase().includes("work")) {
             cleanResponse = "I'd be happy to help you organize your tasks. When is your work deadline due?";
@@ -749,16 +750,28 @@ export const chatWithAI = action({
       
       logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
       
-      // Enhanced error handling for model selection issues
+      // Enhanced error handling for model selection issues and rate limiting
       let userFriendlyError = errorMessage;
+      let isRetriable = false;
+
       if (errorMessage.includes("No models available")) {
         userFriendlyError = "🔧 **Setup Required**: Please go to Admin Dashboard and fetch models from OpenRouter before chatting.";
+        isRetriable = false;
       } else if (errorMessage.includes("OpenRouter API key")) {
         userFriendlyError = "🔑 **API Key Required**: Please configure your OpenRouter API key in the Admin Dashboard.";
+        isRetriable = false;
       } else if (errorMessage.includes("Model not found")) {
         userFriendlyError = "🔄 **Model Issue**: Your selected model is no longer available. Please choose a different model in Admin Dashboard.";
+        isRetriable = false;
       } else if (errorMessage.includes("Unauthorized")) {
         userFriendlyError = "🔒 **Authentication Required**: Please log in to continue.";
+        isRetriable = false;
+      } else if (errorMessage.includes("rate-limited") || errorMessage.includes("Rate limit") || errorMessage.includes("429")) {
+        userFriendlyError = "⏱️ **Rate Limited**: The AI model is temporarily rate-limited. Please try again in a moment.";
+        isRetriable = true;
+      } else if (errorMessage.includes("Failed after") && errorMessage.includes("attempts")) {
+        userFriendlyError = "⏱️ **Service Temporarily Unavailable**: The AI service is experiencing high demand. Please try again.";
+        isRetriable = true;
       }
       
       // End conversation with error
@@ -804,6 +817,7 @@ export const chatWithAI = action({
         metadata: {
           error: errorMessage,
           userFriendlyError,
+          isRetriable,
           toolCalls: 0,
           toolResults: 0,
           needsSetup: errorMessage.includes("No models available") || errorMessage.includes("API key")
@@ -877,45 +891,8 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
   if (previousMode && currentMode !== previousMode) {
     logDebug(`[PROMPT_INJECTION] Detected switch from ${previousMode} to ${currentMode} for ${sessionId}`);
     
-    // Special context filtering for planning mode
+    // Use standard prompt injection without complex context filtering
     let contextualPrompt = promptInjection;
-    if (currentMode === "planning") {
-      // Extract only the first task mentioned from recent user messages
-      const recentUserMessages = modifiedHistory.slice(-3).filter(msg => msg.role === "user");
-      const lastUserMessage = recentUserMessages[recentUserMessages.length - 1];
-      
-      if (lastUserMessage && lastUserMessage.content) {
-        // Enhanced task extraction - look for common brain dump patterns
-        const taskPatterns = [
-          /work[\s\w]*deadlines?/i,
-          /work[\s\w]*presentation/i,
-          /taxes?/i,
-          /car[\s\w]*maintenance/i,
-          /apartment[\s\w]*cleaning/i,
-          /grocery[\s\w]*shopping/i,
-          /birthday[\s\w]*party/i,
-          /project[\s\w]*/i,
-          /meeting[\s\w]*/i,
-          /appointment[\s\w]*/i,
-          /email[\s\w]*/i,
-          /report[\s\w]*/i,
-          /presentation[\s\w]*/i,
-          /exercise[\s\w]*/i,
-          /doctor[\s\w]*/i
-        ];
-        
-        let firstTask = "the first task";
-        for (const pattern of taskPatterns) {
-          const match = lastUserMessage.content.match(pattern);
-          if (match) {
-            firstTask = match[0];
-            break;
-          }
-        }
-        
-        contextualPrompt = `${promptInjection} Focus on "${firstTask}" first - ask about its deadline, then move to other tasks systematically.`;
-      }
-    }
     
     // Create synthetic system message for mode switch
     const switchMessage = {
@@ -926,7 +903,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
         type: "mode-injection",
         mode: currentMode,
         switchFrom: previousMode,
-        contextFiltered: currentMode === "planning"
+        contextFiltered: false
       }
     };
     
@@ -936,7 +913,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
     
     modifiedHistory.splice(insertIndex, 0, switchMessage);
     
-    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId} ${currentMode === "planning" ? "(with context filtering)" : ""}`);
+    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId}`);
   } else if (modeConfig && modeConfig.promptInjection) {
     // Fallback: inject if no recent mode prompt (for initial entry)
     const recentHistory = modifiedHistory.slice(-5);

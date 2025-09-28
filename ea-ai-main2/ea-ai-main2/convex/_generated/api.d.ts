@@ -26,7 +26,6 @@ import type * as ai_modes_controller from "../ai/modes/controller.js";
 import type * as ai_modes_registry from "../ai/modes/registry.js";
 import type * as ai_prompts_execution_new from "../ai/prompts/execution_new.js";
 import type * as ai_prompts_general from "../ai/prompts/general.js";
-import type * as ai_prompts_information_collector_new from "../ai/prompts/information_collector_new.js";
 import type * as ai_prompts_internalTodoEnhanced from "../ai/prompts/internalTodoEnhanced.js";
 import type * as ai_prompts_planning_new from "../ai/prompts/planning_new.js";
 import type * as ai_prompts_promptLoader from "../ai/prompts/promptLoader.js";
@@ -114,7 +113,6 @@ declare const fullApi: ApiFromModules<{
   "ai/modes/registry": typeof ai_modes_registry;
   "ai/prompts/execution_new": typeof ai_prompts_execution_new;
   "ai/prompts/general": typeof ai_prompts_general;
-  "ai/prompts/information_collector_new": typeof ai_prompts_information_collector_new;
   "ai/prompts/internalTodoEnhanced": typeof ai_prompts_internalTodoEnhanced;
   "ai/prompts/planning_new": typeof ai_prompts_planning_new;
   "ai/prompts/promptLoader": typeof ai_prompts_promptLoader;

@@ -9,6 +9,7 @@ interface ConversationTurnProps {
   isThinking?: boolean
   isLast?: boolean
   error?: Error | null
+  isRetriable?: boolean
   onRetry?: () => void
 }
 
@@ -19,6 +20,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   isThinking = false,
   isLast = false,
   error = null,
+  isRetriable = false,
   onRetry
 }) => {
   // Debug: Log what's being passed to this component
@@ -39,8 +41,8 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   // Check for empty responses
   const isEmptyResponse = !aiMessage || aiMessage.trim() === '';
   
-  // Check if we should show retry button (error state on last message with no AI response)
-  const shouldShowRetry = isLast && error && isEmptyResponse && !isThinking && onRetry;
+  // Check if we should show retry button (error state on last message with no AI response and retriable error)
+  const shouldShowRetry = isLast && error && isEmptyResponse && !isThinking && isRetriable && onRetry;
 
   const handleCopy = () => {
     if (!aiMessage || isEmptyResponse) return

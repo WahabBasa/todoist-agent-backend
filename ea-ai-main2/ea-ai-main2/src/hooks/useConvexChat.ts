@@ -26,6 +26,7 @@ export interface UseConvexChatReturn {
   append: (message: { content: string; role?: 'user' | 'assistant' }) => Promise<void>;
   isLoading: boolean;
   error: Error | null;
+  isRetriable: boolean;
   reload: () => void;
   stop: () => void;
 }
@@ -44,6 +45,7 @@ export function useConvexChat({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [isRetriable, setIsRetriable] = useState(false);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
   const chatWithAI = useAction(api.ai.session.chatWithAI);
@@ -62,6 +64,7 @@ export function useConvexChat({
     
     setIsLoading(true);
     setError(null);
+    setIsRetriable(false);
 
     const userMessage: Message = {
       id: `msg-${Date.now()}-user`,
@@ -91,6 +94,28 @@ export function useConvexChat({
         currentTimeContext
       });
 
+      // Check for error in response metadata
+      if (result.metadata?.error) {
+        // Create error object from response metadata
+        const responseError = new Error(result.metadata.userFriendlyError || result.metadata.error);
+
+        // Store the failed message for retry
+        setLastFailedMessage(message.content);
+
+        // Remove the optimistic user message on error
+        setMessages(prev => prev.slice(0, -1));
+
+        // Set error state and retriability
+        setError(responseError);
+        setIsRetriable(result.metadata.isRetriable || false);
+
+        if (onError) {
+          onError(responseError);
+        }
+
+        return; // Don't proceed with adding assistant message
+      }
+
       // Create assistant message
       const assistantMessage: Message = {
         id: `msg-${Date.now()}-assistant`,
@@ -110,13 +135,21 @@ export function useConvexChat({
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
-      
+
+      // For thrown errors, check if they're typically retriable (network errors, etc.)
+      const errorMessage = error.message.toLowerCase();
+      const isNetworkError = errorMessage.includes('network') ||
+                           errorMessage.includes('timeout') ||
+                           errorMessage.includes('connection') ||
+                           errorMessage.includes('fetch');
+      setIsRetriable(isNetworkError);
+
       // Store the failed message for retry
       setLastFailedMessage(message.content);
-      
+
       // Remove the optimistic user message on error
       setMessages(prev => prev.slice(0, -1));
-      
+
       if (onError) {
         onError(error);
       }
@@ -138,11 +171,13 @@ export function useConvexChat({
     // Retry the last failed message if available
     if (lastFailedMessage && !isLoading) {
       setError(null);
+      setIsRetriable(false);
       setLastFailedMessage(null);
       append({ content: lastFailedMessage });
     } else {
       // Just clear error state if no message to retry
       setError(null);
+      setIsRetriable(false);
     }
   }, [lastFailedMessage, isLoading, append]);
 
@@ -160,6 +195,7 @@ export function useConvexChat({
     append,
     isLoading,
     error,
+    isRetriable,
     reload,
     stop
   };

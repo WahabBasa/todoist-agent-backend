@@ -5,7 +5,6 @@
 
 // Import all prompt files
 import { prompt as zenNewPrompt } from "./zen_new";
-import { prompt as informationCollectorPrompt } from "./information_collector_new";
 import { prompt as planningPrompt } from "./planning_new";
 import { prompt as executionPrompt } from "./execution_new";
 import { prompt as internalTodoEnhancedPrompt } from "./internalTodoEnhanced";
@@ -15,7 +14,6 @@ import { prompt as generalPrompt } from "./general";
 const PROMPT_REGISTRY: Record<string, string> = {
   "zen_new": zenNewPrompt,
   "zen": zenNewPrompt, // Alias for backward compatibility
-  "information_collector_new": planningPrompt, // Redirected to planning prompt
   "planning_new": planningPrompt,
   "execution_new": executionPrompt,
   "internalTodoEnhanced": internalTodoEnhancedPrompt,
@@ -189,7 +187,6 @@ export function getPrompt(promptName: string): string {
 export const PROMPT_NAMES = {
   ZEN_NEW: "zen_new" as const,
   ZEN: "zen" as const,
-  INFORMATION_COLLECTOR_NEW: "information_collector_new" as const,
   PLANNING_NEW: "planning_new" as const,
   EXECUTION_NEW: "execution_new" as const,
   INTERNAL_TODO_ENHANCED: "internalTodoEnhanced" as const,

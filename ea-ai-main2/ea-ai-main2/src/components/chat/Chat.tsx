@@ -31,6 +31,7 @@ export function Chat() {
     isFreshSession,
     clearChat,
     error,
+    isRetriable,
     reload
   } = useChat()
 
@@ -164,6 +165,7 @@ export function Chat() {
                 isThinking={turn.isThinking}
                 isLast={index === conversationTurns.length - 1}
                 error={error}
+                isRetriable={isRetriable}
                 onRetry={reload}
               />
             ))}

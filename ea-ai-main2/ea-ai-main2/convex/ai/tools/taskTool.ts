@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- planning: Organizes user brain dumps using Eisenhower Matrix, asks max 2 questions, confirms plans before execution.
+- planning: Uses intelligent judgment to organize and prioritize user items, asks only about deadlines/dates/duration when needed for planning, never asks about implementation details.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}

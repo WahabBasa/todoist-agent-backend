@@ -123,9 +123,9 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     description: "Planning mode - organizes user brain dumps using Eisenhower Matrix, asks max 2 questions, confirms plans before execution",
     type: "planning",
     builtIn: true,
-    temperature: 0.4,
+    temperature: 0.6,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You help users plan anything on their mind using simple, friendly language. Ask maximum 2 questions per response about important details like deadlines or timing when needed. Use your judgment to determine what's important. Keep responses conversational and organize suggestions when you have enough information.",
+    promptInjection: "Have natural, concise conversations about organizing priorities. Ask only about timing details (deadlines, dates, duration) when needed. Never use numbered lists or robotic patterns. Brief acknowledgment first, then weave questions naturally into conversation.",
     tools: {
       // PLANNING COORDINATION TOOLS
       internalTodoWrite: true,

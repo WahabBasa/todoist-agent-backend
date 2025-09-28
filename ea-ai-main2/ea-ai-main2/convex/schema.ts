@@ -42,8 +42,7 @@ const applicationTables = {
     // --- Legacy fields for migration ---
     modeType: v.optional(v.union(
       v.literal("primary"),
-      v.literal("information-collector"), // Keep for backward compatibility
-      v.literal("planning"),
+      v.literal("planning"), // Keep for backward compatibility
       v.literal("execution")
     )), // Old mode type field
     modeName: v.optional(v.string()), // Old mode name field

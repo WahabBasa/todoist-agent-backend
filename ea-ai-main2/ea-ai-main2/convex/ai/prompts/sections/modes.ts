@@ -36,13 +36,12 @@ PRODUCTIVITY FOCUS MODES
 **Mode Switching Instructions**
 - Use the switchMode tool to autonomously switch between available modes
 - Example: When overwhelmed with planning complexity, switch to 'planning' mode for structured analysis
-- Example: When needing information clarification, switch to 'information-collector' mode
+- Example: When needing planning assistance, switch to 'planning' mode
 - Example: When orchestrating complex workflows, use 'primary' mode for coordination
 - Goal-driven switching prioritizes reducing user overwhelm and operational overhead
 
 **Mode Capabilities Summary**
 - Primary mode: Orchestration and delegation to specialized modes
-- Information-collector mode: Systematic information gathering and questioning
 - Planning mode: Strategic planning and task organization with prioritization
 - Each mode has appropriate tool access tailored to its specific function
 

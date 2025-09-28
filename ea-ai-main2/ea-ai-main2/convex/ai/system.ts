@@ -130,7 +130,6 @@ export namespace SystemPrompt {
     // Map modes to their specific prompts
     const modePromptMap: Record<string, string> = {
       "primary": "zen_new",
-      "information-collector": "information_collector_new", 
       "planning": "planning_new",
       "execution": "execution_new"
     };

@@ -31,9 +31,8 @@ export const create = mutation({
     })),
     // Legacy fields for migration
     modeType: v.optional(v.union(
-      v.literal("primary"), 
-      v.literal("information-collector"), 
-      v.literal("planning"), 
+      v.literal("primary"),
+      v.literal("planning"),
       v.literal("execution")
     )),
     modeName: v.optional(v.string()),
@@ -68,9 +67,8 @@ export const createChatSession = mutation({
     title: v.optional(v.string()),
     isDefault: v.optional(v.boolean()),
     modeType: v.optional(v.union(
-      v.literal("primary"), 
-      v.literal("information-collector"), 
-      v.literal("planning"), 
+      v.literal("primary"),
+      v.literal("planning"),
       v.literal("execution")
     )),
     modeName: v.optional(v.string()),
@@ -527,9 +525,8 @@ export const createChildSession = mutation({
     parentSessionId: v.id("chatSessions"),
     title: v.string(),
     modeType: v.union(
-      v.literal("primary"), 
-      v.literal("information-collector"), 
-      v.literal("planning"), 
+      v.literal("primary"),
+      v.literal("planning"),
       v.literal("execution")
     ),
     modeName: v.string(),
