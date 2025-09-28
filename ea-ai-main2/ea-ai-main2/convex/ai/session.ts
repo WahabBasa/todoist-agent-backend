@@ -414,11 +414,11 @@ export const chatWithAI = action({
           const modeSwitchCall = lastAssistantMessageInNoTools.toolCalls.find((tc: any) =>
             tc.name === "task" &&
             tc.args?.targetType === "primary-mode" &&
-            tc.args?.targetName === "information-collector"
+            tc.args?.targetName === "planning"
           );
           
           if (modeSwitchCall) {
-            logModeSwitch("primary", "information-collector", "User delegation detected", sessionId);
+            logModeSwitch("primary", "planning", "User delegation detected", sessionId);
           }
         }
       }
@@ -459,11 +459,11 @@ export const chatWithAI = action({
        const modeSwitchCall = lastAssistantMessageBeforeResponse.toolCalls.find((tc: any) =>
          tc.name === "task" &&
          tc.args?.targetType === "primary-mode" &&
-         tc.args?.targetName === "information-collector"
+         tc.args?.targetName === "planning"
        );
        
        if (modeSwitchCall) {
-         logModeSwitch("primary", "information-collector", "Follow-up message needed", sessionId);
+         logModeSwitch("primary", "planning", "Follow-up message needed", sessionId);
        }
      }
 
@@ -514,7 +514,7 @@ export const chatWithAI = action({
             toolResults: finalToolResults.map((tr: any) => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
-              output: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
+              result: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
             })),
             timestamp: Date.now()
           });
@@ -527,8 +527,8 @@ export const chatWithAI = action({
           msg.toolCalls && 
           msg.toolCalls.some((tc: any) => 
             tc.name === "task" && 
-            tc.args?.targetType === "primary-mode" && 
-            tc.args?.targetName === "information-collector"
+            tc.args?.targetType === "primary-mode" &&
+            tc.args?.targetName === "planning"
           )
         );
 
@@ -536,7 +536,7 @@ export const chatWithAI = action({
           // Check if we have an empty response after mode switch, which indicates the AI didn't respond as expected
           // If finalText is empty but a mode switch occurred, we need to ensure the new mode has a chance to respond
           if (!finalText || finalText.trim() === "") {
-            logDebug("Empty response after mode switch to information-collector - the new mode should respond");
+            logDebug("Empty response after mode switch to planning - the new mode should respond");
             
             // We don't add a placeholder message here, as the next user input should trigger the information-collector
             // The mode switching already happened via the task tool, so the context is set for the next turn
@@ -638,12 +638,12 @@ export const chatWithAI = action({
         const modeSwitchCall = lastAssistantMessageFinal.toolCalls.find((tc: any) =>
           tc.name === "task" &&
           tc.args?.targetType === "primary-mode" &&
-          tc.args?.targetName === "information-collector"
+          tc.args?.targetName === "planning"
         );
         
         if (modeSwitchCall && (!finalText || finalText.trim() === "") && finalToolResults.length === 0) {
           // If the mode switch happened via tool call but no AI response was generated,
-          // we need to simulate what the information-collector should say
+          // we need to simulate what the planning mode should say
           // In a real scenario, the AI should generate this itself based on mode context
           
           // Look for the original user message that triggered the mode switch
@@ -846,22 +846,31 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
   if (previousMode && currentMode !== previousMode) {
     logDebug(`[PROMPT_INJECTION] Detected switch from ${previousMode} to ${currentMode} for ${sessionId}`);
     
-    // Special context filtering for information-collector mode
+    // Special context filtering for planning mode
     let contextualPrompt = promptInjection;
-    if (currentMode === "information-collector") {
+    if (currentMode === "planning") {
       // Extract only the first task mentioned from recent user messages
       const recentUserMessages = modifiedHistory.slice(-3).filter(msg => msg.role === "user");
       const lastUserMessage = recentUserMessages[recentUserMessages.length - 1];
       
       if (lastUserMessage && lastUserMessage.content) {
-        // Simple first task extraction - look for common task patterns
+        // Enhanced task extraction - look for common brain dump patterns
         const taskPatterns = [
           /work[\s\w]*deadlines?/i,
-          /taxes?/i, 
+          /work[\s\w]*presentation/i,
+          /taxes?/i,
           /car[\s\w]*maintenance/i,
           /apartment[\s\w]*cleaning/i,
+          /grocery[\s\w]*shopping/i,
           /birthday[\s\w]*party/i,
-          /project[\s\w]*/i
+          /project[\s\w]*/i,
+          /meeting[\s\w]*/i,
+          /appointment[\s\w]*/i,
+          /email[\s\w]*/i,
+          /report[\s\w]*/i,
+          /presentation[\s\w]*/i,
+          /exercise[\s\w]*/i,
+          /doctor[\s\w]*/i
         ];
         
         let firstTask = "the first task";
@@ -886,7 +895,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
         type: "mode-injection",
         mode: currentMode,
         switchFrom: previousMode,
-        contextFiltered: currentMode === "information-collector"
+        contextFiltered: currentMode === "planning"
       }
     };
     
@@ -896,7 +905,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
     
     modifiedHistory.splice(insertIndex, 0, switchMessage);
     
-    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId} ${currentMode === "information-collector" ? "(with context filtering)" : ""}`);
+    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId} ${currentMode === "planning" ? "(with context filtering)" : ""}`);
   } else if (modeConfig && modeConfig.promptInjection) {
     // Fallback: inject if no recent mode prompt (for initial entry)
     const recentHistory = modifiedHistory.slice(-5);

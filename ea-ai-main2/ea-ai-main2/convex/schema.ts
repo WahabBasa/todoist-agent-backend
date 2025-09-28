@@ -22,7 +22,7 @@ const applicationTables = {
     // Primary mode system (for sessions that preserve context)
     primaryMode: v.optional(v.union(
       v.literal("primary"),
-      v.literal("information-collector")
+      v.literal("planning")
     )), // Which primary mode is active (context-preserving)
     
     // Subagent system (for isolated executions)
@@ -42,7 +42,7 @@ const applicationTables = {
     // --- Legacy fields for migration ---
     modeType: v.optional(v.union(
       v.literal("primary"),
-      v.literal("information-collector"),
+      v.literal("information-collector"), // Keep for backward compatibility
       v.literal("planning"),
       v.literal("execution")
     )), // Old mode type field

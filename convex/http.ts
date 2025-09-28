@@ -1,3 +1,5 @@
+"use node";
+
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
@@ -31,10 +33,12 @@ http.route({
     }
 
     try {
+      // Map modelProvider to useHaiku boolean (assume 'haiku' for true, else false)
+      const useHaiku = modelProvider === 'haiku';
       // Process message with AI agent (Clerk auth is handled within the action)
-      const result = await ctx.runAction(api.agents.processMessage, {
+      const result = await ctx.runAction(api.aiActions.processMessage, {
         message,
-        modelProvider,
+        useHaiku,
       });
 
       return new Response(JSON.stringify(result), {

@@ -15,7 +15,7 @@ import { prompt as generalPrompt } from "./general";
 const PROMPT_REGISTRY: Record<string, string> = {
   "zen_new": zenNewPrompt,
   "zen": zenNewPrompt, // Alias for backward compatibility
-  "information_collector_new": informationCollectorPrompt,
+  "information_collector_new": planningPrompt, // Redirected to planning prompt
   "planning_new": planningPrompt,
   "execution_new": executionPrompt,
   "internalTodoEnhanced": internalTodoEnhancedPrompt,

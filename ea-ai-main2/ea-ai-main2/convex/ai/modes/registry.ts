@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Primary mode types - modes that preserve conversation context
-export const PrimaryModeType = z.enum(["primary", "information-collector", "planning"]);
+export const PrimaryModeType = z.enum(["primary", "planning"]);
 export type PrimaryModeType = z.infer<typeof PrimaryModeType>;
 
 // Permission levels for different capabilities (following OpenCode's 3-level system)
@@ -118,16 +118,16 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     options: {},
   },
   
-  "information-collector": {
-    name: "information-collector",
-    description: "Information Collector mode - systematic information gathering and user questioning specialist",
-    type: "information-collector",
+  planning: {
+    name: "planning",
+    description: "Planning mode - organizes user brain dumps using Eisenhower Matrix, asks max 2 questions, confirms plans before execution",
+    type: "planning",
     builtIn: true,
     temperature: 0.4,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in information-collector mode. Have natural conversations to understand when important tasks are due. Focus on tasks that actually matter - things with real deadlines or consequences. Use good judgment to identify which tasks need deadlines.",
+    promptInjection: "You help users plan anything on their mind using simple, friendly language. Ask maximum 2 questions per response about important details like deadlines or timing when needed. Use your judgment to determine what's important. Keep responses conversational and organize suggestions when you have enough information.",
     tools: {
-      // INFORMATION GATHERING TOOLS
+      // PLANNING COORDINATION TOOLS
       internalTodoWrite: true,
       internalTodoRead: true,
       internalTodoUpdate: true,
@@ -135,8 +135,8 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
-      
-      // READ access for information gathering
+
+      // READ access for planning context
       Read: true,
       getProjectAndTaskMap: true,
       getProjectDetails: true,
@@ -144,62 +144,10 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       getTasks: true,
       listCalendarEvents: true,
       searchCalendarEvents: true,
-      
-      // DISABLED: No execution tools
-      createTask: false,
-      updateTask: false,
-      deleteTask: false,
-      createProject: false,
-      updateProject: false,
-      deleteProject: false,
-      createBatchTasks: false,
-      deleteBatchTasks: false,
-      completeBatchTasks: false,
-      updateBatchTasks: false,
-      createProjectWithTasks: false,
-      reorganizeTasksBatch: false,
-      createCalendarEvent: false,
-      updateCalendarEvent: false,
-      deleteCalendarEvent: false,
-      
-      // DISABLED: No delegation to prevent recursion
-      task: false,
-      researchTask: false,
-      analyzeCode: false,
-      planTask: false,
-    },
-    options: {},
-  },
-  
-  planning: {
-    name: "planning",
-    description: "Planning mode - strategic planning and task organization with Eisenhower Matrix prioritization",
-    type: "planning",
-    builtIn: true,
-    temperature: 0.4,
-    permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in planning mode. Provide brief, conversational priority guidance. Keep responses under 150 characters while being warm and helpful.",
-    tools: {
-      // PLANNING TOOLS
-      internalTodoWrite: true,
-      internalTodoRead: true,
-      internalTodoUpdate: true,
-      internalTodoClear: true,
-      getCurrentTime: true,
-      getSystemStatus: true,
-      validateInput: true,
-      
-      // READ access for planning context
-      getProjectAndTaskMap: true,
-      getProjectDetails: true,
-      getTaskDetails: true,
-      getTasks: true,
-      listCalendarEvents: true,
-      searchCalendarEvents: true,
-      
-      // ENABLE delegation to execution subagent only
-      task: true, // Allow delegation to subagents (execution subagent will be available)
-      
+
+      // ENABLE delegation to execution agent only
+      task: true, // Allow delegation to execution subagent after plan confirmation
+
       // DISABLED: No direct execution tools (planning only)
       createTask: false,
       updateTask: false,
@@ -216,12 +164,12 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       createCalendarEvent: false,
       updateCalendarEvent: false,
       deleteCalendarEvent: false,
-      
-      // PLANNING-SPECIFIC TOOLS (if available)
+
+      // DISABLED: No other delegations or writing tools
       Write: false,
-      Read: false,
       researchTask: false,
       analyzeCode: false,
+      planTask: false,
     },
     options: {},
   },
@@ -267,10 +215,10 @@ export class PrimaryModeRegistryClass {
   }
 
   /**
-   * Get information-collector modes
+   * Get planning modes
    */
-  static getInformationCollectorModes(): PrimaryModeConfig[] {
-    return this.getPrimaryModesByType("information-collector");
+  static getPlanningModes(): PrimaryModeConfig[] {
+    return this.getPrimaryModesByType("planning");
   }
 
   /**
@@ -308,11 +256,11 @@ export class PrimaryModeRegistryClass {
   }
 
   /**
-   * Check if name refers to a primary mode that can collect information
+   * Check if name refers to a planning mode
    */
-  static canUseAsInformationCollector(name: string): boolean {
+  static canUseAsPlanning(name: string): boolean {
     const mode = this.getPrimaryMode(name);
-    return mode ? mode.type === "information-collector" : false;
+    return mode ? mode.type === "planning" : false;
   }
 
   /**
@@ -377,10 +325,8 @@ export class PrimaryModeRegistryClass {
    * Legacy compatibility: Get next mode (simplified for primary modes only)
    */
   static getNextMode(currentMode: string): string {
-    // Mode sequence for transitions: primary <-> information-collector <-> planning
+    // Mode sequence for transitions: primary <-> planning
     if (currentMode === "primary") {
-      return "information-collector";
-    } else if (currentMode === "information-collector") {
       return "planning";
     } else if (currentMode === "planning") {
       return "primary";
@@ -395,7 +341,6 @@ export class PrimaryModeRegistryClass {
     switch (taskType) {
       case "gather-information":
       case "information-gathering":
-        return "information-collector";
       case "planning":
       case "strategic-planning":
       case "prioritization":
@@ -411,12 +356,10 @@ export class PrimaryModeRegistryClass {
   static getWorkflowSequence(taskType: string): string[] {
     switch (taskType) {
       case "information-gathering":
-        return ["primary", "information-collector"];
       case "complex-planning":
       case "strategic-planning":
-        return ["primary", "planning", "execution"]; // Planning mode can delegate to execution
       case "prioritization":
-        return ["planning", "information-collector"];
+        return ["primary", "planning", "execution"]; // Planning mode can delegate to execution
       default:
         return ["primary"];
     }

@@ -25,8 +25,8 @@ function validateSessionId(sessionId: string | Id<"chatSessions"> | undefined): 
  * Enhanced TaskTool - Unified Primary Mode + Subagent System
  * 
  * Supports two distinct systems:
- * 1. Primary Modes (context-preserving): primary, information-collector
- * 2. Subagents (isolated execution): planning, execution, general, custom
+ * 1. Primary Modes (context-preserving): primary, planning
+ * 2. Subagents (isolated execution): execution, general, custom
  * 
  * Following OpenCode's pattern but adapted for Convex multi-user environment
  */
@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- information-collector: Natural conversations to understand when important tasks are due. Focuses on tasks with real deadlines or consequences.
+- planning: Organizes user brain dumps using Eisenhower Matrix, asks max 2 questions, confirms plans before execution.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}
@@ -75,7 +75,7 @@ export const taskTool: ToolDefinition = {
     }).optional()
   }).refine((data) => {
     if (data.targetType === "primary-mode") {
-      return ["primary", "information-collector"].includes(String(data.targetName));
+      return ["primary", "planning"].includes(String(data.targetName));
     }
     return true;
   }, { message: "Invalid target for type" }),
@@ -132,7 +132,7 @@ async function executePrimaryMode(
 ): Promise<any> {
   // Validate primary mode exists
   if (!PrimaryModeRegistry.isValidPrimaryMode(modeName)) {
-    throw new Error(`Invalid primary mode: ${modeName}. Available modes: primary, information-collector`);
+    throw new Error(`Invalid primary mode: ${modeName}. Available modes: primary, planning`);
   }
 
   const modeConfig = PrimaryModeRegistry.getPrimaryMode(modeName);

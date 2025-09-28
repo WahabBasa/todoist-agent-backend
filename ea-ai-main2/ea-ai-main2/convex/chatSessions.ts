@@ -18,7 +18,7 @@ export const create = mutation({
     isDefault: v.optional(v.boolean()),
     // NEW: Session type system
     sessionType: v.optional(v.union(v.literal("primary"), v.literal("subagent"))),
-    primaryMode: v.optional(v.union(v.literal("primary"), v.literal("information-collector"))),
+    primaryMode: v.optional(v.union(v.literal("primary"), v.literal("planning"))),
     subagentType: v.optional(v.string()),
     parentSessionId: v.optional(v.id("chatSessions")),
     delegationContext: v.optional(v.object({

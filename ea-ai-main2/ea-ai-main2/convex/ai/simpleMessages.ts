@@ -23,7 +23,7 @@ export interface ConvexMessage {
   toolResults?: {
     toolCallId: string;
     toolName?: string;
-    output: string;
+    result: any;
   }[];
   timestamp?: number;
 }
@@ -148,7 +148,7 @@ export function sanitizeMessages(messages: ConvexMessage[]): ConvexMessage[] {
     ...msg,
     content: msg.content?.trim() || undefined,
     toolCalls: msg.toolCalls?.filter(tc => tc.toolCallId && tc.name),
-    toolResults: msg.toolResults?.filter(tr => tr.toolCallId && tr.output)
+    toolResults: msg.toolResults?.filter(tr => tr.toolCallId && tr.result)
   })).filter(msg => 
     msg.content || 
     (msg.toolCalls && msg.toolCalls.length > 0) || 

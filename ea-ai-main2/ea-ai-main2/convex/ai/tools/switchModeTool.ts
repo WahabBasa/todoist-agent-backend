@@ -8,7 +8,7 @@ export const switchModeTool: ToolDefinition = {
   id: "switchMode",
   description: "Autonomously switch to a different mode for specialized task execution. Use this when the current mode lacks the appropriate tools or context for the task at hand. This helps reduce user overwhelm and operational overhead by automatically selecting the most appropriate execution context.",
   inputSchema: z.object({
-    modeName: z.string().describe("The name of the mode to switch to (e.g., 'primary', 'information-collector', 'planning', etc.)"),
+    modeName: z.string().describe("The name of the mode to switch to (e.g., 'primary', 'planning')"),
     reason: z.string().describe("The reason for switching to this mode - what specific capabilities or tools this mode provides that the current mode doesn't have"),
     goalDrivenSwitch: z.boolean().optional().describe("Set to true if this switch is goal-driven to reduce user overwhelm or operational overhead (default: true)"),
   }),
