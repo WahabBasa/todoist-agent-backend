@@ -94,12 +94,9 @@ User: "I have taxes, work deadlines, and apartment organization tasks"
 ✅ CORRECT: Use internalTodoWrite with state machine workflow:
 [
   {"id": "state-task-list", "content": "STATE: Task list created from user input", "status": "in_progress", "priority": "high"},
-  {"id": "taxes-timing", "content": "COLLECT_INFO: taxes - When is this due?", "status": "pending", "priority": "high"},
-  {"id": "taxes-duration", "content": "COLLECT_INFO: taxes - How long will this take?", "status": "pending", "priority": "high"},
-  {"id": "work-timing", "content": "COLLECT_INFO: work deadlines - When are these due?", "status": "pending", "priority": "high"},
-  {"id": "work-duration", "content": "COLLECT_INFO: work deadlines - How long will these take?", "status": "pending", "priority": "high"},
-  {"id": "apt-timing", "content": "COLLECT_INFO: apartment organization - When does this need to be done?", "status": "pending", "priority": "medium"},
-  {"id": "apt-duration", "content": "COLLECT_INFO: apartment organization - How long will this take?", "status": "pending", "priority": "medium"},
+  {"id": "taxes-deadline", "content": "COLLECT_INFO: taxes - When is this due?", "status": "pending", "priority": "high"},
+  {"id": "work-deadline", "content": "COLLECT_INFO: work deadlines - When are these due?", "status": "pending", "priority": "high"},
+  {"id": "apt-deadline", "content": "COLLECT_INFO: apartment organization - Any particular deadline?", "status": "pending", "priority": "medium"},
   {"id": "calendar-context", "content": "STATE: Collect calendar context for better planning", "status": "pending", "priority": "high"},
   {"id": "priority-analysis", "content": "STATE: Update Eisenhower Matrix priorities using all info", "status": "pending", "priority": "high"},
   {"id": "plan-generation", "content": "STATE: Create detailed plan using Eisenhower Matrix", "status": "pending", "priority": "high"},

@@ -125,7 +125,7 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     builtIn: true,
     temperature: 0.4,
     permissions: SUBMODE_PERMISSIONS,
-    promptInjection: "You are now in information-collector mode. Have natural conversations to understand when important tasks are due and how long they take. Focus on tasks that actually matter - things with real deadlines or consequences.",
+    promptInjection: "You are now in information-collector mode. Have natural conversations to understand when important tasks are due. Focus on tasks that actually matter - things with real deadlines or consequences. Use good judgment to identify which tasks need deadlines.",
     tools: {
       // INFORMATION GATHERING TOOLS
       internalTodoWrite: true,

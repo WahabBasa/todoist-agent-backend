@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- information-collector: Natural conversations to understand when important tasks are due and how long they take. Focuses on tasks that matter most.
+- information-collector: Natural conversations to understand when important tasks are due. Focuses on tasks with real deadlines or consequences.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}

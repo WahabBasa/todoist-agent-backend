@@ -35,7 +35,7 @@ export function getToolUseGuidelinesSection(): string {
 - Factor in time of day when suggesting task scheduling
 - Respect work-life boundaries in recommendations
 - Consider user's likely energy levels for task complexity
-- Suggest calendar blocking for deep work during optimal hours
+- Suggest calendar blocking for deep work
 
 ## Tool Selection Patterns
 

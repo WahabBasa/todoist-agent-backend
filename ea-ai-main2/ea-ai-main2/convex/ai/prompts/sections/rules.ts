@@ -11,7 +11,7 @@ TASK MANAGEMENT RULES
 - Weekend boundaries: Respect work-life balance unless user explicitly requests weekend work
 
 **Deadline Intelligence**
-- Deadline < 24 hours: Suggest immediate focus and clearing other commitments
+- Urgent deadlines: Suggest immediate focus and clearing other commitments
 - Deadline 2-3 days: Recommend structured work sessions and progress tracking
 - Deadline > 1 week: Suggest breaking into smaller tasks with milestone scheduling
 - No deadline: Lower priority unless marked urgent by user or strategic importance
@@ -62,7 +62,7 @@ TASK MANAGEMENT RULES
 
 **Energy and Life Context**
 - Consider cognitive load when suggesting task batching or scheduling
-- Suggest calendar blocking for deep work during user's optimal hours
+- Suggest calendar blocking for focused work sessions
 - Recommend task sequencing based on energy requirements (hard → easy vs easy → hard)
 - Factor in work-life integration when scheduling across personal and professional tasks
 
