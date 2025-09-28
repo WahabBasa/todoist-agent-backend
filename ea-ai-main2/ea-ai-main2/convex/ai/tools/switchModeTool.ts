@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ModeController } from "../modes/controller";
 import { ToolDefinition } from "../toolRegistry";
+import { validateToolContext, validateActionContext } from "./utils";
 
 // Enhanced switchMode tool based on Roo-Code pattern but without user approval mechanism
 // Allows LLM to autonomously switch modes for goal-driven execution
@@ -14,36 +15,48 @@ export const switchModeTool: ToolDefinition = {
   }),
   async execute(args: any, ctx: any, actionCtx: any) {
     const { modeName, reason, goalDrivenSwitch } = args;
-    
-    // Ensure sessionId is available for mode switching
-    if (!ctx.sessionId) {
-      throw new Error("Switch mode operation requires an active session");
+
+    // SECURITY: Use centralized validation utilities
+    validateToolContext(ctx, "switchModeTool");
+    validateActionContext(actionCtx, "switchModeTool");
+
+    // SECURITY: Sanitize mode name input
+    if (!modeName || typeof modeName !== 'string') {
+      console.error(`[switchModeTool] Invalid modeName provided`);
+      throw new Error("Mode name must be a valid string");
     }
-    
-    // Perform the mode switch using ModeController
-    const switchSuccess = await ModeController.handleModeSwitch(ctx.sessionId, modeName, ctx);
+
+    const sanitizedModeName = modeName.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (sanitizedModeName !== modeName) {
+      console.warn(`[switchModeTool] Mode name sanitized: ${modeName} -> ${sanitizedModeName}`);
+    }
+
+    // Perform the mode switch using ModeController with validated inputs
+    const switchSuccess = await ModeController.handleModeSwitch(ctx.sessionId, sanitizedModeName, ctx);
     
     if (switchSuccess) {
       return {
-        title: `Successfully switched to ${modeName} mode`,
+        title: `Successfully switched to ${sanitizedModeName} mode`,
         metadata: {
-          modeName,
+          modeName: sanitizedModeName,
+          originalModeName: modeName !== sanitizedModeName ? modeName : undefined,
           reason,
           goalDrivenSwitch: goalDrivenSwitch || false,
           success: true
         },
-        output: `Successfully switched to ${modeName} mode because: ${reason}`
+        output: `Successfully switched to ${sanitizedModeName} mode because: ${reason}`
       };
     } else {
       return {
-        title: `Failed to switch to ${modeName} mode`,
+        title: `Failed to switch to ${sanitizedModeName} mode`,
         metadata: {
-          modeName,
+          modeName: sanitizedModeName,
+          originalModeName: modeName !== sanitizedModeName ? modeName : undefined,
           reason,
           success: false,
           error: `Mode switch failed - mode may not exist or switch operation failed`
         },
-        output: `Failed to switch to ${modeName} mode. Mode may not exist or switch operation failed.`
+        output: `Failed to switch to ${sanitizedModeName} mode. Mode may not exist or switch operation failed.`
       };
     }
   }

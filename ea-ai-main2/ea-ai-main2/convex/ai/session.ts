@@ -47,6 +47,34 @@ import {
 
 // Type definitions for session.ts following OpenCode's pragmatic approach
 
+/**
+ * SECURITY: Sanitizes user input to prevent variable injection vulnerabilities
+ * Prevents user content from contaminating JavaScript execution context
+ */
+function sanitizeUserInput(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Remove potential JavaScript injection patterns
+  const sanitized = input
+    // Remove null bytes and control characters
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    // Escape potentially problematic sequences that could affect variable names
+    .replace(/\${/g, '\\${')  // Template literal injection
+    .replace(/`/g, '\\`')     // Template literal backticks
+    .replace(/eval\s*\(/gi, 'eval_(')  // eval() calls
+    // Don't remove common words like "I" - just ensure they can't become variables
+    .trim();
+
+  // Log if significant sanitization occurred
+  if (sanitized !== input) {
+    console.warn(`[SECURITY] User input sanitized - removed ${input.length - sanitized.length} characters`);
+  }
+
+  return sanitized;
+}
+
 interface ChatMetadata {
   toolCalls: number;
   toolResults: number;
@@ -97,6 +125,9 @@ export const chatWithAI = action({
   handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<ChatResponse> => {
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
+
+    // SECURITY: Sanitize user input to prevent variable injection
+    const sanitizedMessage = sanitizeUserInput(message);
     
     // OpenCode-style unified config retrieval
     const tokenIdentifier = userId;
@@ -283,8 +314,8 @@ export const chatWithAI = action({
       logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode", sessionId);
       logDebug(`Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
       
-      // Log user message
-      logUserMessage(message, sessionId);
+      // Log user message (use sanitized version for logging)
+      logUserMessage(sanitizedMessage, sessionId);
       
       // Create user message span
       userMessageSpan = createUserMessageSpan({
@@ -293,10 +324,10 @@ export const chatWithAI = action({
         message: message
       });
 
-      // Add user message to conversation
+      // Add user message to conversation (use sanitized version)
       const updatedHistory = addMessageToConversation(history, {
         role: "user",
-        content: message
+        content: sanitizedMessage
       });
 
       // Simple conversation optimization
@@ -745,7 +776,7 @@ export const chatWithAI = action({
       const errorHistory = [...sanitizeMessages(((conversation as any)?.messages as ConvexMessage[]) || [])];
       errorHistory.push({
         role: "user",
-        content: message,
+        content: sanitizedMessage,
         timestamp: Date.now()
       });
       errorHistory.push({

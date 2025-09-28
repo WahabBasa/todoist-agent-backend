@@ -112,34 +112,72 @@ export namespace ModeController {
 
   /**
    * Handle mode switching with state management and persistence (similar to Roo-Code's ClineProvider.handleModeSwitch)
+   * SECURITY: Validates context object to prevent user input injection
    */
   export async function handleModeSwitch(sessionId: string, newMode: string, ctx: any): Promise<boolean> {
     try {
-      // Verify the new mode is valid
-      if (!ModeRegistry.isValidMode(newMode)) {
-        console.warn(`[ModeController] Invalid mode requested: ${newMode}`);
+      // SECURITY: Validate and sanitize inputs
+      if (!sessionId || typeof sessionId !== 'string') {
+        console.error(`[ModeController] Invalid sessionId provided`);
         return false;
       }
-  
+
+      if (!newMode || typeof newMode !== 'string') {
+        console.error(`[ModeController] Invalid newMode provided`);
+        return false;
+      }
+
+      // SECURITY: Validate context object has required methods and properties
+      if (!ctx || typeof ctx !== 'object') {
+        console.error(`[ModeController] Invalid context object provided`);
+        return false;
+      }
+
+      if (typeof ctx.runMutation !== 'function') {
+        console.error(`[ModeController] Context missing runMutation function - potential input injection detected`);
+        return false;
+      }
+
+      // Sanitize mode name to prevent injection
+      const sanitizedMode = newMode.replace(/[^a-zA-Z0-9_-]/g, '');
+      if (sanitizedMode !== newMode) {
+        console.warn(`[ModeController] Mode name contained invalid characters, sanitized: ${newMode} -> ${sanitizedMode}`);
+      }
+
+      // Verify the new mode is valid
+      if (!ModeRegistry.isValidMode(sanitizedMode)) {
+        console.warn(`[ModeController] Invalid mode requested: ${sanitizedMode}`);
+        return false;
+      }
+
       // Check if we're already in the requested mode
       const currentMode = getCurrentMode(sessionId);
-      if (currentMode === newMode) {
-        console.log(`[ModeController] Already in ${newMode} mode`);
+      if (currentMode === sanitizedMode) {
+        console.log(`[ModeController] Already in ${sanitizedMode} mode`);
         return false;
       }
-  
+
       // Update the session's mode state with the new mode
-      const success = switchToMode(sessionId, newMode);
-      
+      const success = switchToMode(sessionId, sanitizedMode);
+
       if (success) {
-        // Persist to DB
-        await ctx.runMutation(api.chatSessions.updateActiveMode, { sessionId, activeMode: newMode });
-        logDebug(`[MODE_SWITCH] Persisted ${newMode} to DB for ${sessionId}`);
-        
-        console.log(`[ModeController] Successfully switched from ${currentMode} to ${newMode} mode`);
+        // SECURITY: Use validated context with error boundary
+        try {
+          await ctx.runMutation(api.chatSessions.updateActiveMode, {
+            sessionId: sessionId,
+            activeMode: sanitizedMode
+          });
+          logDebug(`[MODE_SWITCH] Persisted ${sanitizedMode} to DB for ${sessionId}`);
+        } catch (dbError) {
+          console.error(`[ModeController] Database persistence failed:`, dbError);
+          // Mode switch in memory succeeded, but DB persistence failed
+          // This is non-critical, so we still return true
+        }
+
+        console.log(`[ModeController] Successfully switched from ${currentMode} to ${sanitizedMode} mode`);
         return true;
       } else {
-        console.warn(`[ModeController] Failed to switch to ${newMode} mode`);
+        console.warn(`[ModeController] Failed to switch to ${sanitizedMode} mode`);
         return false;
       }
     } catch (error) {
