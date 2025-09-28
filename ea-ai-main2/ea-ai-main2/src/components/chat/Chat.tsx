@@ -30,7 +30,8 @@ export function Chat() {
     isLoading,
     isFreshSession,
     clearChat,
-    error
+    error,
+    reload
   } = useChat()
 
   // Convert messages to conversation turns for compatibility
@@ -162,6 +163,8 @@ export function Chat() {
                 aiMessage={turn.aiMessage}
                 isThinking={turn.isThinking}
                 isLast={index === conversationTurns.length - 1}
+                error={error}
+                onRetry={reload}
               />
             ))}
           </div>

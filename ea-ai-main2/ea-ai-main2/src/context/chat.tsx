@@ -20,6 +20,7 @@ interface ChatContextType {
   
   // Additional helpers
   clearChat: () => void;
+  reload: () => void;
   isFreshSession: boolean;
 }
 
@@ -57,7 +58,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     handleInputChange,
     handleSubmit,
     isLoading,
-    error
+    error,
+    reload
   } = useConvexChat({
     id: currentSessionId || undefined,
     initialMessages,
@@ -89,6 +91,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isLoading,
     error,
     clearChat,
+    reload,
     isFreshSession,
   };
 

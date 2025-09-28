@@ -44,6 +44,7 @@ export function useConvexChat({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
   const chatWithAI = useAction(api.ai.session.chatWithAI);
 
@@ -110,6 +111,9 @@ export function useConvexChat({
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
       
+      // Store the failed message for retry
+      setLastFailedMessage(message.content);
+      
       // Remove the optimistic user message on error
       setMessages(prev => prev.slice(0, -1));
       
@@ -131,10 +135,16 @@ export function useConvexChat({
   }, [input, isLoading, append]);
 
   const reload = useCallback(() => {
-    // For simplicity, we'll just clear error state
-    // In a more sophisticated implementation, we could re-send the last message
-    setError(null);
-  }, []);
+    // Retry the last failed message if available
+    if (lastFailedMessage && !isLoading) {
+      setError(null);
+      setLastFailedMessage(null);
+      append({ content: lastFailedMessage });
+    } else {
+      // Just clear error state if no message to retry
+      setError(null);
+    }
+  }, [lastFailedMessage, isLoading, append]);
 
   const stop = useCallback(() => {
     // Since we're not actually streaming, we can't stop mid-generation

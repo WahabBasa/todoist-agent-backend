@@ -1,5 +1,5 @@
 import React from 'react'
-import { User, Bot, Copy, Check, AlertCircle } from 'lucide-react'
+import { User, Bot, Copy, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
 
 interface ConversationTurnProps {
@@ -8,6 +8,8 @@ interface ConversationTurnProps {
   aiMessage?: string
   isThinking?: boolean
   isLast?: boolean
+  error?: Error | null
+  onRetry?: () => void
 }
 
 export const ConversationTurn: React.FC<ConversationTurnProps> = ({
@@ -15,7 +17,9 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   userMessage,
   aiMessage,
   isThinking = false,
-  isLast = false
+  isLast = false,
+  error = null,
+  onRetry
 }) => {
   // Debug: Log what's being passed to this component
   React.useEffect(() => {
@@ -34,6 +38,9 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   
   // Check for empty responses
   const isEmptyResponse = !aiMessage || aiMessage.trim() === '';
+  
+  // Check if we should show retry button (error state on last message with no AI response)
+  const shouldShowRetry = isLast && error && isEmptyResponse && !isThinking && onRetry;
 
   const handleCopy = () => {
     if (!aiMessage || isEmptyResponse) return
@@ -44,6 +51,12 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy message:', err)
+    }
+  }
+
+  const handleRetry = () => {
+    if (onRetry) {
+      onRetry();
     }
   }
 
@@ -99,10 +112,24 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
                 <span className="text-tertiary text-xs ml-2">Thinking...</span>
               </div>
             ) : isEmptyResponse ? (
-              /* Empty Response State */
-              <div className="flex items-center gap-2 text-destructive">
+              /* Empty Response State with optional retry */
+              <div className="flex items-center gap-3 text-destructive">
                 <AlertCircle size={16} />
-                <span className="text-sm">No response was generated. Please try again.</span>
+                <span className="text-sm">
+                  {error ? `Error: ${error.message}` : 'No response was generated. Please try again.'}
+                </span>
+                {shouldShowRetry && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetry}
+                    className="ml-2 h-7 px-3 text-xs"
+                    aria-label="Retry message"
+                  >
+                    <RotateCcw size={12} className="mr-1" />
+                    Retry
+                  </Button>
+                )}
               </div>
             ) : (
               /* AI Response */
