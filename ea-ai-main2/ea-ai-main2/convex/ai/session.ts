@@ -300,25 +300,30 @@ export const chatWithAI = action({
       
       // MODE DETERMINATION LOGGING: Enhanced logging for mode debugging
       console.log(`🔍 [MODE_DETERMINATION] Session: ${sessionId?.substring(0, 8) || 'none'}`);
-      console.log(`   📊 Database mode: ${activeMode}`);
-      console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'preserved' : 'reset due to serverless'})`);
-      console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata)`);
+      console.log(`   📊 Database mode: ${activeMode} (authoritative source)`);
+      console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'stale from reset' : 'reset due to serverless'} - IGNORED)`);
+      console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata - fallback only)`);
 
-      logDebug(`[MODE_VALIDATION] DB: ${activeMode}, Memory: ${inMemoryMode || 'none'}, Embedded: ${embeddedMode || 'none'}`);
-      // MODE PRECEDENCE FIX: Prioritize database mode over potentially stale embedded metadata
-      const effectiveMode = inMemoryMode || activeMode || embeddedMode || 'primary';
+      logDebug(`[MODE_PRECEDENCE] Database-first: DB=${activeMode}, Embedded=${embeddedMode || 'none'}, Memory=${inMemoryMode || 'none'} (ignored)`);
+      
+      // MODE PRECEDENCE FIX: Database-first precedence (no in-memory state in serverless)
+      // In serverless environments, in-memory state is unreliable and resets between executions
+      // Database is the authoritative source, embedded mode is fallback from message metadata
+      const effectiveMode = activeMode || embeddedMode || 'primary';
       let currentModeName = effectiveMode;
 
       console.log(`   ✅ Effective mode: ${effectiveMode} (${
-        inMemoryMode ? 'from memory' :
         activeMode && activeMode !== 'primary' ? 'from database' :
         embeddedMode ? 'from embedded metadata' :
         'default primary'
       })`);
       
-      // Sync ModeController with effective mode
-      if (sessionId && effectiveMode !== inMemoryMode) {
-        ModeController.setCurrentMode(sessionId, effectiveMode);
+      // Always sync ModeController with database mode at function start
+      // This ensures in-memory state matches the authoritative database state
+      if (sessionId && activeMode) {
+        ModeController.setCurrentMode(sessionId, activeMode);
+        logDebug(`[MODE_SYNC] Synced ModeController to database mode: ${activeMode}`);
+        console.log(`   🔁 ModeController synchronized with database: ${activeMode}`);
       }
       
       logDebug("Using primary mode - LLM will determine delegation via task tool");
@@ -355,7 +360,7 @@ export const chatWithAI = action({
       // Inject mode-specific prompts if needed
       const historyWithModePrompts = await injectModePrompts(cleanHistory, sessionId, currentModeName, previousMode); // Enhanced with OpenCode transitions
       if (effectiveMode !== activeMode) {
-        logDebug(`[MODE_FALLBACK] Using embedded/in-memory mode ${effectiveMode}`);
+        logDebug(`[MODE_FALLBACK] Using fallback mode ${effectiveMode} (likely embedded metadata fallback)`);
       }
 
       // Direct conversion to AI SDK format - no complex pipeline
