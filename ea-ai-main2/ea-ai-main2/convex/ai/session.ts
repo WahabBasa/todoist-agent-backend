@@ -173,27 +173,9 @@ export const chatWithAI = action({
         provider
       });
       
-      // 4. Find a fallback model from cached models
-      if (cachedModels?.models && cachedModels.models.length > 0) {
-        // Prefer Claude models as fallback for OpenRouter
-        const claudeModel = cachedModels.models.find((m: any) => 
-          m.id.includes('claude') && m.id.includes('3-5')
-        );
-        if (claudeModel) {
-          console.log(`🔄 [MODEL_FALLBACK] Using Claude fallback: ${claudeModel.id}`);
-          return claudeModel.id;
-        }
-        
-        // Otherwise use the first available model
-        const firstModel = cachedModels.models[0];
-        console.log(`🔄 [MODEL_FALLBACK] Using first available: ${firstModel.id}`);
-        return firstModel.id;
-      }
-      
-      // 5. Ultimate fallback - use a sensible default
-      const defaultModel = "anthropic/claude-3-5-haiku-20241022";
-      console.warn(`⚠️ [MODEL_FALLBACK] No user model or cache available, using default: ${defaultModel}`);
-      return defaultModel;
+      // 4. No fallback - require dashboard selection
+      console.error(`❌ [MODEL_SELECTION] No model selected in dashboard`);
+      throw new Error("No model selected. Please select a model in the Admin Dashboard.");
     })();
     
     // Use the full model ID directly - OpenCode's trust and validate at runtime approach

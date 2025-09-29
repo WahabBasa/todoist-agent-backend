@@ -35,7 +35,7 @@ export const PrimaryModeConfig = z.object({
   tools: z.record(z.string(), z.boolean()),
   // Mode-specific options/parameters
   options: z.record(z.string(), z.any()),
-  // Custom system prompt injection for this mode (like OpenCode plan/build)
+  // Custom system prompt injection for this mode - direct communication approach
   promptInjection: z.string().optional(),
   // Temperature override for this mode
   temperature: z.number().optional(),
@@ -78,7 +78,6 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       task: true,
       switchMode: true,
       evaluateUserResponse: true, // NEW: LLM decision-making tool
-      askClarifyingQuestion: true, // NEW: Smart user interaction tool
       internalTodoWrite: true,
       internalTodoRead: true,
       getCurrentTime: true,
@@ -129,7 +128,6 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     permissions: SUBMODE_PERMISSIONS,
     tools: {
       // PLANNING COORDINATION TOOLS
-      askClarifyingQuestion: true, // NEW: Smart user interaction tool for planning
       evaluateUserResponse: true, // NEW: LLM decision-making tool for plan approval
       internalTodoWrite: true,
       internalTodoRead: true,

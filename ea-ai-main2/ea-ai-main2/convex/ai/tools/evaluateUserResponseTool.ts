@@ -29,7 +29,6 @@ export const evaluateUserResponseTool: ToolDefinition = {
       "execute_plan",
       "revise_plan",
       "restart_planning",
-      "ask_clarifying_questions",
       "switch_to_execution_mode",
       "switch_to_planning_mode",
       "provide_alternative_approach"

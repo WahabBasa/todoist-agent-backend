@@ -47,7 +47,6 @@ import type * as ai_subagents_registry from "../ai/subagents/registry.js";
 import type * as ai_system from "../ai/system.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_ToolRepetitionDetector from "../ai/tools/ToolRepetitionDetector.js";
-import type * as ai_tools_askClarifyingQuestionTool from "../ai/tools/askClarifyingQuestionTool.js";
 import type * as ai_tools_evaluateUserResponseTool from "../ai/tools/evaluateUserResponseTool.js";
 import type * as ai_tools_googleCalendar from "../ai/tools/googleCalendar.js";
 import type * as ai_tools_internal from "../ai/tools/internal.js";
@@ -135,7 +134,6 @@ declare const fullApi: ApiFromModules<{
   "ai/system": typeof ai_system;
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/ToolRepetitionDetector": typeof ai_tools_ToolRepetitionDetector;
-  "ai/tools/askClarifyingQuestionTool": typeof ai_tools_askClarifyingQuestionTool;
   "ai/tools/evaluateUserResponseTool": typeof ai_tools_evaluateUserResponseTool;
   "ai/tools/googleCalendar": typeof ai_tools_googleCalendar;
   "ai/tools/internal": typeof ai_tools_internal;

@@ -132,9 +132,17 @@ export async function executeSubagent(
     }
     
     const openrouter = createOpenRouter({ apiKey });
-    const model = subagentConfig.model?.modelId || "anthropic/claude-3.5-haiku-20241022";
-    const openrouterModel = openrouter.chat(model);
 
+    // Model selection: Subagent override OR dashboard selection (NO fallback)
+    const model = subagentConfig.model?.modelId || userConfig?.activeModelId;
+    
+    if (!model) {
+      throw new Error("No model selected. Please select a model in the Admin Dashboard.");
+    }
+    
+    console.log(`🎯 [SUBAGENT_MODEL] Using model for ${subagentName}: ${model} (source: ${subagentConfig.model?.modelId ? 'subagent-config' : 'dashboard'})`);
+    
+    const openrouterModel = openrouter.chat(model);
     // 5. Execute in complete isolation (no parent context)
     const result = await streamText({
       model: openrouterModel,

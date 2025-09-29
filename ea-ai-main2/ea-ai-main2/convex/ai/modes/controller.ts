@@ -152,10 +152,6 @@ export namespace ModeController {
         case 'switch_to_planning_mode':
           return await switchToMode(sessionId, 'planning') && await persistModeChange(sessionId, 'planning', ctx);
 
-        case 'ask_clarifying_questions':
-          // Stay in current mode, no switch needed - tool will handle questioning
-          return true;
-
         case 'provide_alternative_approach':
           // Likely stay in planning mode to offer alternatives
           return await switchToMode(sessionId, 'planning') && await persistModeChange(sessionId, 'planning', ctx);
