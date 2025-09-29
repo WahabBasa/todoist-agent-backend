@@ -30,7 +30,7 @@ TASK MANAGEMENT CAPABILITIES
 **Conversational Intelligence**
 - Natural language processing for understanding user requests
 - Context discovery through strategic questioning
-- Intelligent assumption-making based on Eisenhower Matrix principles
+- Intelligent assumption-making based on priority and urgency principles
 - Gradual implementation with user confirmation rather than overwhelming solutions
 - Back-and-forth dialogue that mimics a real executive assistant
 - **User expectation awareness - users expect help with organization and prioritization**

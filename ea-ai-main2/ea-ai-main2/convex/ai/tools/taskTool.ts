@@ -174,7 +174,7 @@ async function executePrimaryMode(
       contextPreserved: true,
       promptInjected: !!modeConfig.promptInjection
     },
-    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved. I'll now ask you some questions to help organize your tasks.`
+    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved. I'll help you figure out what to tackle first.`
   };
 }
 
