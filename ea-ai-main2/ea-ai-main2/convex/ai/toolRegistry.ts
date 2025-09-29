@@ -10,6 +10,8 @@ import { GoogleCalendarTools } from "./tools/googleCalendar";
 import { SimpleDelegationTools } from "./tools/simpleDelegation";
 import { TaskTool } from "./tools/taskTool";
 import { switchModeTool } from "./tools/switchModeTool";
+import { evaluateUserResponseTool } from "./tools/evaluateUserResponseTool";
+import { askClarifyingQuestionTool } from "./tools/askClarifyingQuestionTool";
 import { createToolCallSpan, createToolResultSpan } from "./langfuse/logger";
 import { logStep, logModeSwitch } from "./logger";
 
@@ -132,6 +134,8 @@ export async function createSimpleToolRegistry(
     ...SimpleDelegationTools,
     ...TaskTool, // Now include TaskTool for mode delegation
     switchMode: switchModeTool, // Include switchMode tool for mode switching
+    evaluateUserResponse: evaluateUserResponseTool, // LLM decision-making tool
+    askClarifyingQuestion: askClarifyingQuestionTool, // Smart user interaction tool
   };
 
   // console.log(`[SimpleToolRegistry] Including TaskTool for mode delegation`);

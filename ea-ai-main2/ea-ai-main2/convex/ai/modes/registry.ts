@@ -77,6 +77,8 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       // ORCHESTRATION TOOLS ONLY
       task: true,
       switchMode: true,
+      evaluateUserResponse: true, // NEW: LLM decision-making tool
+      askClarifyingQuestion: true, // NEW: Smart user interaction tool
       internalTodoWrite: true,
       internalTodoRead: true,
       getCurrentTime: true,
@@ -127,6 +129,8 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
     permissions: SUBMODE_PERMISSIONS,
     tools: {
       // PLANNING COORDINATION TOOLS
+      askClarifyingQuestion: true, // NEW: Smart user interaction tool for planning
+      evaluateUserResponse: true, // NEW: LLM decision-making tool for plan approval
       internalTodoWrite: true,
       internalTodoRead: true,
       internalTodoUpdate: true,

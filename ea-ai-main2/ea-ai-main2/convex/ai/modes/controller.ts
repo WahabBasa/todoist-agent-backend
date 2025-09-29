@@ -111,6 +111,66 @@ export namespace ModeController {
   }
 
   /**
+   * Execute LLM decisions from evaluateUserResponse tool
+   * Handles the application layer execution of model decisions
+   */
+  export async function executeUserResponseDecision(sessionId: string, decision: any, ctx: any): Promise<boolean> {
+    try {
+      // SECURITY: Validate inputs
+      if (!sessionId || typeof sessionId !== 'string') {
+        console.error(`[ModeController] Invalid sessionId provided`);
+        return false;
+      }
+
+      if (!decision || typeof decision !== 'object') {
+        console.error(`[ModeController] Invalid decision object provided`);
+        return false;
+      }
+
+      // SECURITY: Validate required decision fields
+      const { nextAction, decision: decisionType, focusArea } = decision;
+
+      if (!nextAction || !decisionType) {
+        console.error(`[ModeController] Decision missing required fields`);
+        return false;
+      }
+
+      logDebug(`[ModeController] Executing decision: ${decisionType} -> ${nextAction}`);
+
+      // Execute the decision based on the LLM's analysis
+      switch (nextAction) {
+        case 'execute_plan':
+          return await switchToMode(sessionId, 'execution') && await persistModeChange(sessionId, 'execution', ctx);
+
+        case 'revise_plan':
+        case 'restart_planning':
+          return await switchToMode(sessionId, 'planning') && await persistModeChange(sessionId, 'planning', ctx);
+
+        case 'switch_to_execution_mode':
+          return await switchToMode(sessionId, 'execution') && await persistModeChange(sessionId, 'execution', ctx);
+
+        case 'switch_to_planning_mode':
+          return await switchToMode(sessionId, 'planning') && await persistModeChange(sessionId, 'planning', ctx);
+
+        case 'ask_clarifying_questions':
+          // Stay in current mode, no switch needed - tool will handle questioning
+          return true;
+
+        case 'provide_alternative_approach':
+          // Likely stay in planning mode to offer alternatives
+          return await switchToMode(sessionId, 'planning') && await persistModeChange(sessionId, 'planning', ctx);
+
+        default:
+          console.warn(`[ModeController] Unknown nextAction: ${nextAction}`);
+          return false;
+      }
+    } catch (error) {
+      console.error(`[ModeController] Error executing user response decision:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Handle mode switching with state management and persistence (similar to Roo-Code's ClineProvider.handleModeSwitch)
    * SECURITY: Validates context object to prevent user input injection
    */
@@ -182,6 +242,36 @@ export namespace ModeController {
       }
     } catch (error) {
       console.error(`[ModeController] Error in handleModeSwitch:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Helper function to persist mode changes to database
+   * SECURITY: Validates context and sanitizes mode name
+   */
+  async function persistModeChange(sessionId: string, mode: string, ctx: any): Promise<boolean> {
+    try {
+      // SECURITY: Validate context object
+      if (!ctx || typeof ctx !== 'object' || typeof ctx.runMutation !== 'function') {
+        console.error(`[ModeController] Invalid context for persistence`);
+        return false;
+      }
+
+      // Sanitize mode name
+      const sanitizedMode = mode.replace(/[^a-zA-Z0-9_-]/g, '');
+
+      await ctx.runMutation(api.chatSessions.updateActiveMode, {
+        sessionId: sessionId,
+        activeMode: sanitizedMode
+      });
+
+      logDebug(`[MODE_SWITCH] Persisted ${sanitizedMode} to DB for ${sessionId}`);
+      return true;
+    } catch (dbError) {
+      console.error(`[ModeController] Database persistence failed:`, dbError);
+      // Mode switch in memory succeeded, but DB persistence failed
+      // This is non-critical for the core functionality
       return false;
     }
   }
