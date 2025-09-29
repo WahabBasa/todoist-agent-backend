@@ -298,9 +298,23 @@ export const chatWithAI = action({
       const embeddedData = history.length > 0 ? parseEmbeddedMetadata(history[history.length - 1]) : null;
       const embeddedMode = embeddedData?.mode;
       
+      // MODE DETERMINATION LOGGING: Enhanced logging for mode debugging
+      console.log(`🔍 [MODE_DETERMINATION] Session: ${sessionId?.substring(0, 8) || 'none'}`);
+      console.log(`   📊 Database mode: ${activeMode}`);
+      console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'preserved' : 'reset due to serverless'})`);
+      console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata)`);
+
       logDebug(`[MODE_VALIDATION] DB: ${activeMode}, Memory: ${inMemoryMode || 'none'}, Embedded: ${embeddedMode || 'none'}`);
-      const effectiveMode = embeddedMode || inMemoryMode || activeMode || 'primary';
-      const currentModeName = effectiveMode;
+      // MODE PRECEDENCE FIX: Prioritize database mode over potentially stale embedded metadata
+      const effectiveMode = inMemoryMode || activeMode || embeddedMode || 'primary';
+      let currentModeName = effectiveMode;
+
+      console.log(`   ✅ Effective mode: ${effectiveMode} (${
+        inMemoryMode ? 'from memory' :
+        activeMode && activeMode !== 'primary' ? 'from database' :
+        embeddedMode ? 'from embedded metadata' :
+        'default primary'
+      })`);
       
       // Sync ModeController with effective mode
       if (sessionId && effectiveMode !== inMemoryMode) {
@@ -423,6 +437,34 @@ export const chatWithAI = action({
         toolResultsCount: finalToolResults?.length || 0,
         hasUsage: !!finalUsage
       });
+
+      // MODE TIMING FIX: Update currentModeName after successful mode switches
+      if (finalToolCalls?.length > 0 && sessionId) {
+        const modeSwitchCall = finalToolCalls.find((tc: any) => tc.toolName === "switchMode");
+        if (modeSwitchCall) {
+          // Get the actual current mode from the ModeController
+          const updatedMode = ModeController.getCurrentMode(sessionId);
+
+          // MODE VALIDATION: Verify database was updated correctly
+          try {
+            const currentSession = await ctx.runQuery(api.chatSessions.getChatSession, { sessionId });
+            const dbMode = currentSession?.activeMode || "primary";
+
+            if (dbMode !== updatedMode) {
+              logError(new Error(`Mode validation failed: DB has ${dbMode}, ModeController has ${updatedMode}`), "Mode sync issue");
+            } else {
+              logDebug(`[MODE_VALIDATION] ✅ Mode switch successful: ${currentModeName} -> ${updatedMode} (DB confirmed)`);
+            }
+          } catch (validationError) {
+            logError(validationError instanceof Error ? validationError : new Error(String(validationError)), "Mode validation query failed");
+          }
+
+          if (updatedMode !== currentModeName) {
+            logDebug(`[MODE_TIMING_FIX] Updating currentModeName: ${currentModeName} -> ${updatedMode}`);
+            currentModeName = updatedMode;
+          }
+        }
+      }
       
       // Log tool calls if any were made, or log why none were called
       if (finalToolCalls && finalToolCalls.length > 0) {
@@ -592,11 +634,9 @@ export const chatWithAI = action({
         messages: compactedHistory as any
       });
       
-      // Sync activeMode with embedded mode from last message
-      const lastEmbeddedMode = parseEmbeddedMetadata(compactedHistory[compactedHistory.length - 1])?.mode;
-      if (lastEmbeddedMode && sessionId) {
-        await ctx.runMutation(api.chatSessions.updateActiveMode, { sessionId, activeMode: lastEmbeddedMode });
-      }
+      // MODE PERSISTENCE FIX: Removed embedded mode overwrite that caused reset loop
+      // Database mode is now the single source of truth, updated only by switchMode tool
+      // This prevents stale embedded metadata from overwriting correct database mode
       
       console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
         conversationId: savedConversationId,
