@@ -45,6 +45,7 @@ import type * as ai_state_ConversationState from "../ai/state/ConversationState.
 import type * as ai_subagents_executor from "../ai/subagents/executor.js";
 import type * as ai_subagents_registry from "../ai/subagents/registry.js";
 import type * as ai_system from "../ai/system.js";
+import type * as ai_test_error_handling from "../ai/test-error-handling.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_ToolRepetitionDetector from "../ai/tools/ToolRepetitionDetector.js";
 import type * as ai_tools_evaluateUserResponseTool from "../ai/tools/evaluateUserResponseTool.js";
@@ -132,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   "ai/subagents/executor": typeof ai_subagents_executor;
   "ai/subagents/registry": typeof ai_subagents_registry;
   "ai/system": typeof ai_system;
+  "ai/test-error-handling": typeof ai_test_error_handling;
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/ToolRepetitionDetector": typeof ai_tools_ToolRepetitionDetector;
   "ai/tools/evaluateUserResponseTool": typeof ai_tools_evaluateUserResponseTool;
