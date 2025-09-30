@@ -80,10 +80,13 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       evaluateUserResponse: true, // NEW: LLM decision-making tool
       internalTodoWrite: true,
       internalTodoRead: true,
+
+      // READING TOOLS - Full read access for informed decision-making
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
-      
+      listTools: true,
+
       // READ-ONLY data access for decision making
       getProjectAndTaskMap: true,
       getProjectDetails: true,

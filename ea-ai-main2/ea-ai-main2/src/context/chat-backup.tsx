@@ -279,7 +279,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.log('🤖 [FRONTEND DEBUG] Calling AI for turn:', turnId);
       const result = await chatWithAI({ 
         message: content.trim(), 
-        useHaiku: false,
+
         sessionId: currentSessionId,
         currentTimeContext
       });
