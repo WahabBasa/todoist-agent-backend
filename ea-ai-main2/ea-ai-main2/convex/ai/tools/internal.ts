@@ -94,9 +94,9 @@ User: "I have taxes, work deadlines, and apartment organization tasks"
 ✅ CORRECT: Use internalTodoWrite with state machine workflow:
 [
   {"id": "state-task-list", "content": "STATE: Task list created from user input", "status": "in_progress", "priority": "high"},
-  {"id": "taxes-info", "content": "COLLECT_INFO: taxes - Deadline, Worry, Effort", "status": "pending", "priority": "high"},
-  {"id": "work-info", "content": "COLLECT_INFO: work deadlines - Deadline, Worry, Effort", "status": "pending", "priority": "high"},
-  {"id": "apt-info", "content": "COLLECT_INFO: apartment organization - Deadline, Worry, Effort", "status": "pending", "priority": "medium"},
+  {"id": "taxes-deadline", "content": "COLLECT_INFO: taxes - When is this due?", "status": "pending", "priority": "high"},
+  {"id": "work-deadline", "content": "COLLECT_INFO: work deadlines - When are these due?", "status": "pending", "priority": "high"},
+  {"id": "apt-deadline", "content": "COLLECT_INFO: apartment organization - Any particular deadline?", "status": "pending", "priority": "medium"},
   {"id": "calendar-context", "content": "STATE: Collect calendar context for better planning", "status": "pending", "priority": "high"},
   {"id": "priority-analysis", "content": "STATE: Update Eisenhower Matrix priorities using all info", "status": "pending", "priority": "high"},
   {"id": "plan-generation", "content": "STATE: Create detailed plan using Eisenhower Matrix", "status": "pending", "priority": "high"},

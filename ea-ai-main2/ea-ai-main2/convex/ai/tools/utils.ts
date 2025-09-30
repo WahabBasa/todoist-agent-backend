@@ -2,6 +2,41 @@ import { z } from "zod";
 import { ToolDefinition, ToolContext } from "../toolRegistry";
 import { ActionCtx } from "../../_generated/server";
 
+// SECURITY: Context validation utility to prevent injection attacks
+export function validateToolContext(ctx: any, toolName: string): void {
+  if (!ctx || typeof ctx !== 'object') {
+    console.error(`[${toolName}] Invalid context object provided`);
+    throw new Error(`Invalid context object in ${toolName} - potential security issue`);
+  }
+
+  if (!ctx.sessionId || typeof ctx.sessionId !== 'string') {
+    console.error(`[${toolName}] Invalid or missing sessionId`);
+    throw new Error(`${toolName} requires a valid session`);
+  }
+
+  if (!ctx.userId || typeof ctx.userId !== 'string') {
+    console.error(`[${toolName}] Invalid or missing userId`);
+    throw new Error(`${toolName} requires a valid user`);
+  }
+}
+
+export function validateActionContext(actionCtx: any, toolName: string): void {
+  if (!actionCtx || typeof actionCtx !== 'object') {
+    console.error(`[${toolName}] Invalid action context provided`);
+    throw new Error(`Invalid action context in ${toolName} - potential security issue`);
+  }
+
+  if (typeof actionCtx.runMutation !== 'function') {
+    console.error(`[${toolName}] Action context missing runMutation - potential input injection`);
+    throw new Error(`Invalid action context in ${toolName}: missing required Convex methods`);
+  }
+
+  if (typeof actionCtx.runQuery !== 'function') {
+    console.error(`[${toolName}] Action context missing runQuery - potential input injection`);
+    throw new Error(`Invalid action context in ${toolName}: missing required Convex methods`);
+  }
+}
+
 // Utility tools for time, context, and system information
 
 export const getCurrentTime: ToolDefinition = {

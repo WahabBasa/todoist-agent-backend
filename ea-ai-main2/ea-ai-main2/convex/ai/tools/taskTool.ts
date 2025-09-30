@@ -25,8 +25,8 @@ function validateSessionId(sessionId: string | Id<"chatSessions"> | undefined): 
  * Enhanced TaskTool - Unified Primary Mode + Subagent System
  * 
  * Supports two distinct systems:
- * 1. Primary Modes (context-preserving): primary, information-collector
- * 2. Subagents (isolated execution): planning, execution, general, custom
+ * 1. Primary Modes (context-preserving): primary, planning
+ * 2. Subagents (isolated execution): execution, general, custom
  * 
  * Following OpenCode's pattern but adapted for Convex multi-user environment
  */
@@ -38,7 +38,7 @@ function generateTaskToolDescription(): string {
   return `Launch specialized modes or subagents for complex, multi-step tasks autonomously.
 
 PRIMARY MODES (context preserved, same conversation):
-- information-collector: Gather task details sequentially: one question per turn (deadline first, then effort, then involved). No worry scales or multiple questions.
+- planning: Uses intelligent judgment to organize and prioritize user items, asks only about deadlines/dates/duration when needed for planning, never asks about implementation details.
 
 AVAILABLE SUBAGENTS (isolated execution, no parent context):
 ${subagentList}
@@ -75,7 +75,7 @@ export const taskTool: ToolDefinition = {
     }).optional()
   }).refine((data) => {
     if (data.targetType === "primary-mode") {
-      return ["primary", "information-collector"].includes(String(data.targetName));
+      return ["primary", "planning"].includes(String(data.targetName));
     }
     return true;
   }, { message: "Invalid target for type" }),
@@ -95,12 +95,7 @@ export const taskTool: ToolDefinition = {
     convState.startToolExecution('task', delegationId);
     convState.updateToolState(delegationId, 'running');
   
-    let refinedPrompt = prompt;
-    if (targetType === "primary-mode" && targetName === "information-collector") {
-      refinedPrompt = `CRITICAL SINGLE-QUESTION ENFORCEMENT: You MUST ask EXACTLY ONE question and STOP. If multiple tasks are mentioned, focus ONLY on the FIRST task. Ask ONE question about its DEADLINE using format "QUESTION_FOR_USER: When is this due?". Do NOT ask multiple questions. Do NOT list questions. Do NOT mention other tasks. Do NOT provide explanations. Ask ONE question, wait for answer, then stop. VIOLATION OF THIS RULE IS FORBIDDEN.
-
-Original context: ${prompt}`;
-    }
+    const refinedPrompt = prompt;
   
     let result;
     if (targetType === "primary-mode") {
@@ -137,7 +132,7 @@ async function executePrimaryMode(
 ): Promise<any> {
   // Validate primary mode exists
   if (!PrimaryModeRegistry.isValidPrimaryMode(modeName)) {
-    throw new Error(`Invalid primary mode: ${modeName}. Available modes: primary, information-collector`);
+    throw new Error(`Invalid primary mode: ${modeName}. Available modes: primary, planning`);
   }
 
   const modeConfig = PrimaryModeRegistry.getPrimaryMode(modeName);
@@ -179,7 +174,7 @@ async function executePrimaryMode(
       contextPreserved: true,
       promptInjected: !!modeConfig.promptInjection
     },
-    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved. I'll now ask you some questions to help organize your tasks.`
+    output: `Now in ${modeName} mode. ${modeConfig.description}. Context from this conversation is preserved. I'll help you figure out what to tackle first.`
   };
 }
 
@@ -242,13 +237,12 @@ async function executeSubagentMode(
 
     return {
       title: `${subagentName} Task Completed`,
-      metadata: { 
+      metadata: {
         modeType: "subagent",
         subagentName,
         executionTimeMs: result.executionTimeMs,
         toolCallsCount: result.toolCallsCount,
-        isolated: true,
-        sessionId: result.sessionId
+        isolated: true
       },
       output: result.result
     };

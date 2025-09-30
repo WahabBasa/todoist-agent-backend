@@ -22,7 +22,7 @@ const applicationTables = {
     // Primary mode system (for sessions that preserve context)
     primaryMode: v.optional(v.union(
       v.literal("primary"),
-      v.literal("information-collector")
+      v.literal("planning")
     )), // Which primary mode is active (context-preserving)
     
     // Subagent system (for isolated executions)
@@ -42,8 +42,7 @@ const applicationTables = {
     // --- Legacy fields for migration ---
     modeType: v.optional(v.union(
       v.literal("primary"),
-      v.literal("information-collector"),
-      v.literal("planning"),
+      v.literal("planning"), // Keep for backward compatibility
       v.literal("execution")
     )), // Old mode type field
     modeName: v.optional(v.string()), // Old mode name field
@@ -155,7 +154,7 @@ const applicationTables = {
  
     systemConfig: defineTable({
       tokenIdentifier: v.string(),
-      activeModelId: v.string(),
+      activeModelId: v.optional(v.string()),
       updatedAt: v.number(),
       isAdmin: v.boolean(),
       // Unified provider configuration

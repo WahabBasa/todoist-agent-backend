@@ -109,7 +109,7 @@ export const setOpenRouterConfig = mutation({
         openRouterBaseUrl: args.openRouterBaseUrl,
         openRouterSpecificProvider: args.openRouterSpecificProvider,
         openRouterUseMiddleOutTransform: args.openRouterUseMiddleOutTransform,
-        activeModelId: args.openRouterModelId || "anthropic/claude-3.5-haiku-20241022", // default model
+        activeModelId: args.openRouterModelId,
         updatedAt: now,
         isAdmin: false // default
       });

@@ -193,7 +193,7 @@ export const setProviderConfig = mutation({
         googleEnableUrlContext: args.googleEnableUrlContext,
         googleEnableGrounding: args.googleEnableGrounding,
         googleEnableReasoning: args.googleEnableReasoning,
-        activeModelId: args.activeModelId || "anthropic/claude-3.5-haiku-20241022",
+        activeModelId: args.activeModelId,
         updatedAt: now,
         isAdmin: false // default
       });

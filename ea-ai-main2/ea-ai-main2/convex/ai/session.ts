@@ -74,6 +74,34 @@ export class ModelNotFoundError extends Error {
 
 // Type definitions for session.ts following OpenCode's pragmatic approach
 
+/**
+ * SECURITY: Sanitizes user input to prevent variable injection vulnerabilities
+ * Prevents user content from contaminating JavaScript execution context
+ */
+function sanitizeUserInput(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Remove potential JavaScript injection patterns
+  const sanitized = input
+    // Remove null bytes and control characters
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    // Escape potentially problematic sequences that could affect variable names
+    .replace(/\${/g, '\\${')  // Template literal injection
+    .replace(/`/g, '\\`')     // Template literal backticks
+    .replace(/eval\s*\(/gi, 'eval_(')  // eval() calls
+    // Don't remove common words like "I" - just ensure they can't become variables
+    .trim();
+
+  // Log if significant sanitization occurred
+  if (sanitized !== input) {
+    console.warn(`[SECURITY] User input sanitized - removed ${input.length - sanitized.length} characters`);
+  }
+
+  return sanitized;
+}
+
 interface ChatMetadata {
   toolCalls: number;
   toolResults: number;
@@ -86,6 +114,7 @@ interface ChatMetadata {
   error?: string;
   userFriendlyError?: string;
   needsSetup?: boolean;
+  isRetriable?: boolean;
   embeddedMode?: string; // New: From parsed metadata
   toolStates?: Record<string, 'pending'|'running'|'completed'>;
   errorType?: string; // Enhanced: Error classification
@@ -113,7 +142,6 @@ interface ChatResponse {
 export const chatWithAI = action({
   args: {
     message: v.string(),
-    useHaiku: v.optional(v.boolean()),
     sessionId: v.optional(v.id("chatSessions")),
     currentTimeContext: v.optional(v.object({
       currentTime: v.string(),
@@ -123,9 +151,12 @@ export const chatWithAI = action({
       source: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<ChatResponse> => {
+  handler: async (ctx, { message, sessionId, currentTimeContext }): Promise<ChatResponse> => {
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
+
+    // SECURITY: Sanitize user input to prevent variable injection
+    const sanitizedMessage = sanitizeUserInput(message);
     
     // OpenCode-style unified config retrieval
     const tokenIdentifier = userId;
@@ -142,19 +173,11 @@ export const chatWithAI = action({
     // OpenCode-style model selection hierarchy - trust and validate at runtime
     const selectedModelId: string = await (async (): Promise<string> => {
       console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
-      console.log(`   - useHaiku parameter: ${useHaiku}`);
       console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
-      
-      // 1. Check if model passed explicitly (highest priority)
-      if (useHaiku === false && userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using explicit user setting: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at provider API level
-        return userConfig.activeModelId;
-      }
-      
-      // 2. Check user's configured model
+
+      // 1. Check user's configured model (dashboard selection)
       if (userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using user config: ${userConfig.activeModelId}`);
+        console.log(`🎯 [MODEL_SELECTION] Using dashboard selection: ${userConfig.activeModelId}`);
         // Trust user's model selection - validation happens at provider API level
         return userConfig.activeModelId;
       }
@@ -170,27 +193,9 @@ export const chatWithAI = action({
         provider
       });
       
-      // 4. Find a fallback model from cached models
-      if (cachedModels?.models && cachedModels.models.length > 0) {
-        // Prefer Claude models as fallback for OpenRouter
-        const claudeModel = cachedModels.models.find((m: any) => 
-          m.id.includes('claude') && m.id.includes('3-5')
-        );
-        if (claudeModel) {
-          console.log(`🔄 [MODEL_FALLBACK] Using Claude fallback: ${claudeModel.id}`);
-          return claudeModel.id;
-        }
-        
-        // Otherwise use the first available model
-        const firstModel = cachedModels.models[0];
-        console.log(`🔄 [MODEL_FALLBACK] Using first available: ${firstModel.id}`);
-        return firstModel.id;
-      }
-      
-      // 5. Ultimate fallback - use a sensible default
-      const defaultModel = "anthropic/claude-3-5-haiku-20241022";
-      console.warn(`⚠️ [MODEL_FALLBACK] No user model or cache available, using default: ${defaultModel}`);
-      return defaultModel;
+      // 4. No fallback - require dashboard selection
+      console.error(`❌ [MODEL_SELECTION] No model selected in dashboard`);
+      throw new Error("No model selected. Please select a model in the Admin Dashboard.");
     })();
     
     // Use the full model ID directly - OpenCode's trust and validate at runtime approach
@@ -295,13 +300,32 @@ export const chatWithAI = action({
       const embeddedData = history.length > 0 ? parseEmbeddedMetadata(history[history.length - 1]) : null;
       const embeddedMode = embeddedData?.mode;
       
-      logDebug(`[MODE_VALIDATION] DB: ${activeMode}, Memory: ${inMemoryMode || 'none'}, Embedded: ${embeddedMode || 'none'}`);
-      const effectiveMode = embeddedMode || inMemoryMode || activeMode || 'primary';
-      const currentModeName = effectiveMode;
+      // MODE DETERMINATION LOGGING: Enhanced logging for mode debugging
+      console.log(`🔍 [MODE_DETERMINATION] Session: ${sessionId?.substring(0, 8) || 'none'}`);
+      console.log(`   📊 Database mode: ${activeMode} (authoritative source)`);
+      console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'stale from reset' : 'reset due to serverless'} - IGNORED)`);
+      console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata - fallback only)`);
+
+      logDebug(`[MODE_PRECEDENCE] Database-first: DB=${activeMode}, Embedded=${embeddedMode || 'none'}, Memory=${inMemoryMode || 'none'} (ignored)`);
       
-      // Sync ModeController with effective mode
-      if (sessionId && effectiveMode !== inMemoryMode) {
-        ModeController.setCurrentMode(sessionId, effectiveMode);
+      // MODE PRECEDENCE FIX: Database-first precedence (no in-memory state in serverless)
+      // In serverless environments, in-memory state is unreliable and resets between executions
+      // Database is the authoritative source, embedded mode is fallback from message metadata
+      const effectiveMode = activeMode || embeddedMode || 'primary';
+      let currentModeName = effectiveMode;
+
+      console.log(`   ✅ Effective mode: ${effectiveMode} (${
+        activeMode && activeMode !== 'primary' ? 'from database' :
+        embeddedMode ? 'from embedded metadata' :
+        'default primary'
+      })`);
+      
+      // Always sync ModeController with database mode at function start
+      // This ensures in-memory state matches the authoritative database state
+      if (sessionId && activeMode) {
+        ModeController.setCurrentMode(sessionId, activeMode);
+        logDebug(`[MODE_SYNC] Synced ModeController to database mode: ${activeMode}`);
+        console.log(`   🔁 ModeController synchronized with database: ${activeMode}`);
       }
       
       logDebug("Using primary mode - LLM will determine delegation via task tool");
@@ -312,8 +336,8 @@ export const chatWithAI = action({
       logCurrentMode(currentModeName, Object.keys(tools).length, "orchestration mode", sessionId);
       logDebug(`Created tool registry for mode: ${currentModeName} with ${Object.keys(tools).length} tools available`);
       
-      // Log user message
-      logUserMessage(message, sessionId);
+      // Log user message (use sanitized version for logging)
+      logUserMessage(sanitizedMessage, sessionId);
       
       // Create user message span
       userMessageSpan = createUserMessageSpan({
@@ -322,10 +346,10 @@ export const chatWithAI = action({
         message: message
       });
 
-      // Add user message to conversation
+      // Add user message to conversation (use sanitized version)
       const updatedHistory = addMessageToConversation(history, {
         role: "user",
-        content: message
+        content: sanitizedMessage
       });
 
       // Simple conversation optimization
@@ -338,7 +362,7 @@ export const chatWithAI = action({
       // Inject mode-specific prompts if needed
       const historyWithModePrompts = await injectModePrompts(cleanHistory, sessionId, currentModeName, previousMode); // Enhanced with OpenCode transitions
       if (effectiveMode !== activeMode) {
-        logDebug(`[MODE_FALLBACK] Using embedded/in-memory mode ${effectiveMode}`);
+        logDebug(`[MODE_FALLBACK] Using fallback mode ${effectiveMode} (likely embedded metadata fallback)`);
       }
 
       // Direct conversion to AI SDK format - no complex pipeline
@@ -357,7 +381,7 @@ export const chatWithAI = action({
         currentModeName
       );
       // Inject OpenCode-style transition instructions
-      systemPrompt = systemPrompt + "\n\n<INSTRUCTIONS> For delegation/switching: If needed, use 'task' tool with structured args. Output synthetic transitions like <DELEGATE target='information-collector'>reason</DELEGATE> in responses.</INSTRUCTIONS>";
+      systemPrompt = systemPrompt + "\n\n<INSTRUCTIONS> For delegation/switching: If needed, use 'task' tool with structured args. Output synthetic transitions like <DELEGATE target='planning'>reason</DELEGATE> in responses.</INSTRUCTIONS>";
       
       logDebug(`Generated system prompt for mode: ${currentModeName}`);
       
@@ -487,6 +511,34 @@ export const chatWithAI = action({
         toolResultsCount: finalToolResults?.length || 0,
         hasUsage: !!finalUsage
       });
+
+      // MODE TIMING FIX: Update currentModeName after successful mode switches
+      if (finalToolCalls?.length > 0 && sessionId) {
+        const modeSwitchCall = finalToolCalls.find((tc: any) => tc.toolName === "switchMode");
+        if (modeSwitchCall) {
+          // Get the actual current mode from the ModeController
+          const updatedMode = ModeController.getCurrentMode(sessionId);
+
+          // MODE VALIDATION: Verify database was updated correctly
+          try {
+            const currentSession = await ctx.runQuery(api.chatSessions.getChatSession, { sessionId });
+            const dbMode = currentSession?.activeMode || "primary";
+
+            if (dbMode !== updatedMode) {
+              logError(new Error(`Mode validation failed: DB has ${dbMode}, ModeController has ${updatedMode}`), "Mode sync issue");
+            } else {
+              logDebug(`[MODE_VALIDATION] ✅ Mode switch successful: ${currentModeName} -> ${updatedMode} (DB confirmed)`);
+            }
+          } catch (validationError) {
+            logError(validationError instanceof Error ? validationError : new Error(String(validationError)), "Mode validation query failed");
+          }
+
+          if (updatedMode !== currentModeName) {
+            logDebug(`[MODE_TIMING_FIX] Updating currentModeName: ${currentModeName} -> ${updatedMode}`);
+            currentModeName = updatedMode;
+          }
+        }
+      }
       
       // Log tool calls if any were made, or log why none were called
       if (finalToolCalls && finalToolCalls.length > 0) {
@@ -502,19 +554,19 @@ export const chatWithAI = action({
         logNoToolsCalled(availableToolNames, message);
         logDebug(`No tools were called. Available tools: ${availableToolNames.join(", ")}`);
         
-        // Special handling for information-collector mode
-        // Check if we just switched to information-collector mode
+        // Special handling for planning mode
+        // Check if we just switched to planning mode
         // Using cleanHistory instead of finalHistory since finalHistory isn't declared yet
         const lastAssistantMessageInNoTools = cleanHistory.filter(msg => msg.role === "assistant").pop();
         if (lastAssistantMessageInNoTools && lastAssistantMessageInNoTools.toolCalls) {
           const modeSwitchCall = lastAssistantMessageInNoTools.toolCalls.find((tc: any) =>
             tc.name === "task" &&
             tc.args?.targetType === "primary-mode" &&
-            tc.args?.targetName === "information-collector"
+            tc.args?.targetName === "planning"
           );
           
           if (modeSwitchCall) {
-            logModeSwitch("primary", "information-collector", "User delegation detected", sessionId);
+            logModeSwitch("primary", "planning", "User delegation detected", sessionId);
           }
         }
       }
@@ -555,11 +607,11 @@ export const chatWithAI = action({
        const modeSwitchCall = lastAssistantMessageBeforeResponse.toolCalls.find((tc: any) =>
          tc.name === "task" &&
          tc.args?.targetType === "primary-mode" &&
-         tc.args?.targetName === "information-collector"
+         tc.args?.targetName === "planning"
        );
        
        if (modeSwitchCall) {
-         logModeSwitch("primary", "information-collector", "Follow-up message needed", sessionId);
+         logModeSwitch("primary", "planning", "Follow-up message needed", sessionId);
        }
      }
 
@@ -610,21 +662,21 @@ export const chatWithAI = action({
             toolResults: finalToolResults.map((tr: any) => ({
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
-              output: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
+              result: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
             })),
             timestamp: Date.now()
           });
         }
       } else if (finalToolCalls.length === 0 && finalToolResults.length === 0) {
-        // If no tools were called and no results, check if we switched to information-collector mode
+        // If no tools were called and no results, check if we switched to planning mode
         // In this case, we should continue the conversation with the information collector
         const modeSwitchToolCall = finalHistory.find(msg => 
           msg.role === "assistant" && 
           msg.toolCalls && 
           msg.toolCalls.some((tc: any) => 
             tc.name === "task" && 
-            tc.args?.targetType === "primary-mode" && 
-            tc.args?.targetName === "information-collector"
+            tc.args?.targetType === "primary-mode" &&
+            tc.args?.targetName === "planning"
           )
         );
 
@@ -632,9 +684,9 @@ export const chatWithAI = action({
           // Check if we have an empty response after mode switch, which indicates the AI didn't respond as expected
           // If finalText is empty but a mode switch occurred, we need to ensure the new mode has a chance to respond
           if (!finalText || finalText.trim() === "") {
-            logDebug("Empty response after mode switch to information-collector - the new mode should respond");
+            logDebug("Empty response after mode switch to planning - the new mode should respond");
             
-            // We don't add a placeholder message here, as the next user input should trigger the information-collector
+            // We don't add a placeholder message here, as the next user input should trigger the planning
             // The mode switching already happened via the task tool, so the context is set for the next turn
           }
         }
@@ -656,11 +708,9 @@ export const chatWithAI = action({
         messages: compactedHistory as any
       });
       
-      // Sync activeMode with embedded mode from last message
-      const lastEmbeddedMode = parseEmbeddedMetadata(compactedHistory[compactedHistory.length - 1])?.mode;
-      if (lastEmbeddedMode && sessionId) {
-        await ctx.runMutation(api.chatSessions.updateActiveMode, { sessionId, activeMode: lastEmbeddedMode });
-      }
+      // MODE PERSISTENCE FIX: Removed embedded mode overwrite that caused reset loop
+      // Database mode is now the single source of truth, updated only by switchMode tool
+      // This prevents stale embedded metadata from overwriting correct database mode
       
       console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
         conversationId: savedConversationId,
@@ -727,25 +777,25 @@ export const chatWithAI = action({
         originalLength: cleanResponse.length
       });
       
-      // Special handling for information-collector mode switch
+      // Special handling for planning mode switch
       // If mode switch occurred but no response was generated, provide appropriate default response
       const lastAssistantMessageFinal = finalHistory.filter(msg => msg.role === "assistant").pop();
       if (lastAssistantMessageFinal && lastAssistantMessageFinal.toolCalls) {
         const modeSwitchCall = lastAssistantMessageFinal.toolCalls.find((tc: any) =>
           tc.name === "task" &&
           tc.args?.targetType === "primary-mode" &&
-          tc.args?.targetName === "information-collector"
+          tc.args?.targetName === "planning"
         );
         
         if (modeSwitchCall && (!finalText || finalText.trim() === "") && finalToolResults.length === 0) {
           // If the mode switch happened via tool call but no AI response was generated,
-          // we need to simulate what the information-collector should say
+          // we need to simulate what the planning mode should say
           // In a real scenario, the AI should generate this itself based on mode context
           
           // Look for the original user message that triggered the mode switch
           const userMessage = message; // This is the user's message that triggered the switch
           
-          // Generate an appropriate response for information-collector mode
+          // Generate an appropriate response for planning mode
           // This should ideally be handled by the AI itself, but we provide a fallback
           if (userMessage.toLowerCase().includes("deadline") || userMessage.toLowerCase().includes("work")) {
             cleanResponse = "I'd be happy to help you organize your tasks. When is your work deadline due?";
@@ -814,17 +864,19 @@ export const chatWithAI = action({
       });
       
       logError(error instanceof Error ? error : new Error(String(error)), "Chat session failed");
-      
+
       // Enhanced error classification based on error types
       let userFriendlyError = errorMessage;
       let needsSetup = false;
-      
+      let isRetriable = false;
+
       if (error instanceof RateLimitError) {
         // Rate limiting error - provide clear guidance
         const retryInMinutes = error.retryAfter ? Math.ceil(error.retryAfter / 60) : 1;
         userFriendlyError = `⏳ **Rate Limited**: ${error.modelId || 'The model'} is temporarily busy. ` +
                            `Please wait ${retryInMinutes} minute${retryInMinutes !== 1 ? 's' : ''} and try again. ` +
                            `This is normal during peak usage times.`;
+        isRetriable = true;
       } else if (error instanceof ProviderAuthError) {
         // Authentication/API key issues
         userFriendlyError = `🔑 **Authentication Error**: ${error.message}. ` +
@@ -849,6 +901,10 @@ export const chatWithAI = action({
       } else if (errorMessage.includes("rate limit") || errorMessage.includes("rate-limited") || errorMessage.includes("429")) {
         // Catch any other rate limiting patterns that weren't caught by RateLimitError
         userFriendlyError = "⏳ **Rate Limited**: The AI service is temporarily busy. Please wait a moment and try again.";
+        isRetriable = true;
+      } else if (errorMessage.includes("Failed after") && errorMessage.includes("attempts")) {
+        userFriendlyError = "⏱️ **Service Temporarily Unavailable**: The AI service is experiencing high demand. Please try again.";
+        isRetriable = true;
       }
       
       // End conversation with error
@@ -866,7 +922,7 @@ export const chatWithAI = action({
       const errorHistory = [...sanitizeMessages(((conversation as any)?.messages as ConvexMessage[]) || [])];
       errorHistory.push({
         role: "user",
-        content: message,
+        content: sanitizedMessage,
         timestamp: Date.now()
       });
       errorHistory.push({
@@ -894,6 +950,7 @@ export const chatWithAI = action({
         metadata: {
           error: errorMessage,
           userFriendlyError,
+          isRetriable,
           toolCalls: 0,
           toolResults: 0,
           needsSetup: needsSetup,
@@ -969,36 +1026,8 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
   if (previousMode && currentMode !== previousMode) {
     logDebug(`[PROMPT_INJECTION] Detected switch from ${previousMode} to ${currentMode} for ${sessionId}`);
     
-    // Special context filtering for information-collector mode
+    // Use standard prompt injection without complex context filtering
     let contextualPrompt = promptInjection;
-    if (currentMode === "information-collector") {
-      // Extract only the first task mentioned from recent user messages
-      const recentUserMessages = modifiedHistory.slice(-3).filter(msg => msg.role === "user");
-      const lastUserMessage = recentUserMessages[recentUserMessages.length - 1];
-      
-      if (lastUserMessage && lastUserMessage.content) {
-        // Simple first task extraction - look for common task patterns
-        const taskPatterns = [
-          /work[\s\w]*deadlines?/i,
-          /taxes?/i, 
-          /car[\s\w]*maintenance/i,
-          /apartment[\s\w]*cleaning/i,
-          /birthday[\s\w]*party/i,
-          /project[\s\w]*/i
-        ];
-        
-        let firstTask = "the first task";
-        for (const pattern of taskPatterns) {
-          const match = lastUserMessage.content.match(pattern);
-          if (match) {
-            firstTask = match[0];
-            break;
-          }
-        }
-        
-        contextualPrompt = `<OVERRIDE PRIOR INSTRUCTIONS> Ignore any previous messages about collecting multiple data points, worry scales, or bundling questions. Follow ONLY this mode's rules: Ask ONE question at a time, starting with deadline for the first task. Use QUESTION_FOR_USER: format. Focus ONLY on "${firstTask}" mentioned by the user. Ask ONE question about its deadline first. Ignore all other tasks until this one is complete.`;
-      }
-    }
     
     // Create synthetic system message for mode switch
     const switchMessage = {
@@ -1009,7 +1038,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
         type: "mode-injection",
         mode: currentMode,
         switchFrom: previousMode,
-        contextFiltered: currentMode === "information-collector"
+        contextFiltered: false
       }
     };
     
@@ -1019,7 +1048,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
     
     modifiedHistory.splice(insertIndex, 0, switchMessage);
     
-    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId} ${currentMode === "information-collector" ? "(with context filtering)" : ""}`);
+    logDebug(`[PROMPT_INJECTION] Injected switch to ${currentMode} for ${sessionId}`);
   } else if (modeConfig && modeConfig.promptInjection) {
     // Fallback: inject if no recent mode prompt (for initial entry)
     const recentHistory = modifiedHistory.slice(-5);

@@ -1,3 +1,5 @@
+"use node";
+
 export interface TodoistTask {
   id: string;
   content: string;
