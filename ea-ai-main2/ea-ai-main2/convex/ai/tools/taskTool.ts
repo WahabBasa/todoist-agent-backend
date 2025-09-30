@@ -237,13 +237,12 @@ async function executeSubagentMode(
 
     return {
       title: `${subagentName} Task Completed`,
-      metadata: { 
+      metadata: {
         modeType: "subagent",
         subagentName,
         executionTimeMs: result.executionTimeMs,
         toolCallsCount: result.toolCallsCount,
-        isolated: true,
-        sessionId: result.sessionId
+        isolated: true
       },
       output: result.result
     };

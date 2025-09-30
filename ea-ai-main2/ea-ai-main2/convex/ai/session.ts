@@ -113,7 +113,6 @@ interface ChatResponse {
 export const chatWithAI = action({
   args: {
     message: v.string(),
-    useHaiku: v.optional(v.boolean()),
     sessionId: v.optional(v.id("chatSessions")),
     currentTimeContext: v.optional(v.object({
       currentTime: v.string(),
@@ -123,7 +122,7 @@ export const chatWithAI = action({
       source: v.optional(v.string()),
     })),
   },
-  handler: async (ctx, { message, useHaiku = true, sessionId, currentTimeContext }): Promise<ChatResponse> => {
+  handler: async (ctx, { message, sessionId, currentTimeContext }): Promise<ChatResponse> => {
     // Authentication
     const { userId } = await requireUserAuthForAction(ctx);
 
@@ -145,19 +144,11 @@ export const chatWithAI = action({
     // OpenCode-style model selection hierarchy - trust and validate at runtime
     const selectedModelId: string = await (async (): Promise<string> => {
       console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
-      console.log(`   - useHaiku parameter: ${useHaiku}`);
       console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
-      
-      // 1. Check if model passed explicitly (highest priority)
-      if (useHaiku === false && userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using explicit user setting: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at provider API level
-        return userConfig.activeModelId;
-      }
-      
-      // 2. Check user's configured model
+
+      // 1. Check user's configured model (dashboard selection)
       if (userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using user config: ${userConfig.activeModelId}`);
+        console.log(`🎯 [MODEL_SELECTION] Using dashboard selection: ${userConfig.activeModelId}`);
         // Trust user's model selection - validation happens at provider API level
         return userConfig.activeModelId;
       }

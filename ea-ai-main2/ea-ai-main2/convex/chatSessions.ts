@@ -120,11 +120,13 @@ export const getChatSessions = query({
     const limit = args.limit || 20;
     const offset = args.offset || 0;
 
-    // ChatHub pattern: Get ALL sessions ordered by lastMessageAt DESC (most recent first)
+    // ChatHub pattern: Get ALL user sessions ordered by lastMessageAt DESC (most recent first)
+    // Filter out subagent sessions - they are for isolated execution and shouldn't appear in sidebar
     const sessions = await ctx.db
       .query("chatSessions")
       .withIndex("by_tokenIdentifier_and_time", (q) => q.eq("tokenIdentifier", tokenIdentifier))
       .order("desc")
+      .filter((q) => q.neq(q.field("sessionType"), "subagent"))
       .collect();
 
     // Debug: Log session count to understand missing history issue

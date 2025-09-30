@@ -198,7 +198,7 @@ export const setProviderConfig = mutation({
         isAdmin: false // default
       });
     }
-  } I
+  }
 });
 
 // Action to fetch models from provider APIs

@@ -154,7 +154,7 @@ const applicationTables = {
  
     systemConfig: defineTable({
       tokenIdentifier: v.string(),
-      activeModelId: v.string(),
+      activeModelId: v.optional(v.string()),
       updatedAt: v.number(),
       isAdmin: v.boolean(),
       // Unified provider configuration
