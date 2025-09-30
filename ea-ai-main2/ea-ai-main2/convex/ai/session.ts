@@ -224,10 +224,16 @@ export const chatWithAI = action({
         throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
       }
       
+      const specificProvider = userConfig?.openRouterSpecificProvider?.trim();
+      const providerRoutingPreferences = specificProvider
+        ? { provider: { order: [specificProvider], allow_fallbacks: false } }
+        : { provider: { sort: "throughput" } };
+
       // Initialize OpenRouter with proper configuration  
       modelProvider = createOpenRouter({ 
         apiKey,
         baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
+        extraBody: providerRoutingPreferences,
       });
     }
     

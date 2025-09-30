@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -95,6 +95,7 @@ export function AdminDashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [models, setModels] = useState<Record<string, ModelInfo>>({});
+  const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [apiKeyError, setApiKeyError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -104,16 +105,35 @@ export function AdminDashboard() {
     if (savedConfig) {
       try {
         const parsedConfig = JSON.parse(savedConfig);
-        setConfig(parsedConfig);
-        
-        // Load cached models
-        const savedModels = localStorage.getItem("cached-models");
-        if (savedModels) {
-          const parsedModels = JSON.parse(savedModels);
-          setModels(parsedModels);
-        }
+        setConfig((prev) => ({
+          ...prev,
+          ...parsedConfig,
+          openRouterSpecificProvider: parsedConfig?.openRouterSpecificProvider || "",
+        }));
       } catch (e) {
         console.error("Failed to parse saved config:", e);
+      }
+    }
+
+    const savedModels = localStorage.getItem("cached-models");
+    if (savedModels) {
+      try {
+        const parsedModels = JSON.parse(savedModels);
+        const modelsArray: ModelInfo[] = Array.isArray(parsedModels)
+          ? parsedModels
+          : Object.values(parsedModels || {});
+
+        const modelMap: Record<string, ModelInfo> = {};
+        modelsArray.forEach((model) => {
+          if (model?.id) {
+            modelMap[model.id] = model;
+          }
+        });
+
+        setModelList(modelsArray);
+        setModels(modelMap);
+      } catch (e) {
+        console.error("Failed to parse cached models:", e);
       }
     }
   }, []);
@@ -126,28 +146,36 @@ export function AdminDashboard() {
     
     setIsSaving(true);
     try {
+      const sanitizedSpecificProvider = (config.openRouterSpecificProvider || "").trim();
+      const updatedConfig = {
+        ...config,
+        openRouterSpecificProvider: sanitizedSpecificProvider,
+      };
+
       // Save to Convex database instead of localStorage
       await setProviderConfig({
-        apiProvider: config.apiProvider,
-        openRouterApiKey: config.openRouterApiKey,
-        openRouterModelId: config.openRouterModelId, 
-        openRouterBaseUrl: config.openRouterBaseUrl,
-        openRouterSpecificProvider: config.openRouterSpecificProvider,
-        openRouterUseMiddleOutTransform: config.openRouterUseMiddleOutTransform,
-        googleProjectId: config.googleProjectId,
-        googleRegion: config.googleRegion,
-        googleCredentials: config.googleCredentials,
-        googleModelId: config.googleModelId,
-        googleEnableUrlContext: config.googleEnableUrlContext,
-        googleEnableGrounding: config.googleEnableGrounding,
-        googleEnableReasoning: config.googleEnableReasoning,
-        activeModelId: config.activeModelId // This is the key field for model selection
+        apiProvider: updatedConfig.apiProvider,
+        openRouterApiKey: updatedConfig.openRouterApiKey,
+        openRouterModelId: updatedConfig.openRouterModelId, 
+        openRouterBaseUrl: updatedConfig.openRouterBaseUrl,
+        openRouterSpecificProvider: sanitizedSpecificProvider ? sanitizedSpecificProvider : undefined,
+        openRouterUseMiddleOutTransform: updatedConfig.openRouterUseMiddleOutTransform,
+        googleProjectId: updatedConfig.googleProjectId,
+        googleRegion: updatedConfig.googleRegion,
+        googleCredentials: updatedConfig.googleCredentials,
+        googleModelId: updatedConfig.googleModelId,
+        googleEnableUrlContext: updatedConfig.googleEnableUrlContext,
+        googleEnableGrounding: updatedConfig.googleEnableGrounding,
+        googleEnableReasoning: updatedConfig.googleEnableReasoning,
+        activeModelId: updatedConfig.activeModelId // This is the key field for model selection
       });
       
       // Still save to localStorage for backup/immediate access
-      localStorage.setItem("provider-config", JSON.stringify(config));
+      localStorage.setItem("provider-config", JSON.stringify(updatedConfig));
+
+      setConfig(updatedConfig);
       
-      console.log("✅ Configuration saved to database:", config);
+      console.log("✅ Configuration saved to database:", updatedConfig);
       toast.success("Configuration saved successfully!");
     } catch (error) {
       console.error("❌ Failed to save config:", error);
@@ -179,9 +207,11 @@ export function AdminDashboard() {
           modelMap[model.id] = model;
         });
         setModels(modelMap);
+        setModelList(cachedModels.models);
         const providerName = config.apiProvider === "google" ? "Google Vertex AI" : 
                           config.apiProvider === "vercel-ai-gateway" ? "Vercel AI Gateway" : 
                           "OpenRouter";
+        localStorage.setItem("cached-models", JSON.stringify(cachedModels.models));
         toast.success(`Fetched ${cachedModels.models.length} models from ${providerName}!`);
       }
     } catch (error) {
@@ -194,39 +224,103 @@ export function AdminDashboard() {
 
   const handleModelSelect = async (modelId: string) => {
     console.log('🎯 [DEBUG] Model selected:', modelId);
-    
-    // Update the appropriate model field based on provider
-    if (config.apiProvider === "openrouter") {
-      setConfig(prev => ({ ...prev, openRouterModelId: modelId, activeModelId: modelId }));
-    } else {
-      setConfig(prev => ({ ...prev, googleModelId: modelId, activeModelId: modelId }));
-    }
-    
-    // Auto-save when model is selected (like OpenCode)
+    const sanitizedCurrentProvider = (config.openRouterSpecificProvider || "").trim();
+    const providerOptions = config.apiProvider === "openrouter" ? getProviderSlugsForModel(modelId) : [];
+    const providerStillValid = sanitizedCurrentProvider && providerOptions.includes(sanitizedCurrentProvider);
+
+    const updatedConfig: ProviderSettings = {
+      ...config,
+      activeModelId: modelId,
+      openRouterModelId: config.apiProvider === "openrouter" ? modelId : config.openRouterModelId,
+      googleModelId: config.apiProvider === "google" ? modelId : config.googleModelId,
+      openRouterSpecificProvider: config.apiProvider === "openrouter" && providerStillValid
+        ? sanitizedCurrentProvider
+        : config.apiProvider === "openrouter"
+          ? ""
+          : config.openRouterSpecificProvider,
+    };
+
+    setConfig(updatedConfig);
+    localStorage.setItem("provider-config", JSON.stringify(updatedConfig));
+
     if (isAuthenticated) {
       try {
         await setProviderConfig({
-          apiProvider: config.apiProvider,
-          openRouterApiKey: config.openRouterApiKey,
-          openRouterModelId: config.apiProvider === "openrouter" ? modelId : config.openRouterModelId,
-          openRouterBaseUrl: config.openRouterBaseUrl,
-          openRouterSpecificProvider: config.openRouterSpecificProvider,
-          openRouterUseMiddleOutTransform: config.openRouterUseMiddleOutTransform,
-          googleProjectId: config.googleProjectId,
-          googleRegion: config.googleRegion,
-          googleCredentials: config.googleCredentials,
-          googleModelId: config.apiProvider === "google" ? modelId : config.googleModelId,
-          googleEnableUrlContext: config.googleEnableUrlContext,
-          googleEnableGrounding: config.googleEnableGrounding,
-          googleEnableReasoning: config.googleEnableReasoning,
-          activeModelId: modelId // Ensure both fields are set
+          apiProvider: updatedConfig.apiProvider,
+          openRouterApiKey: updatedConfig.openRouterApiKey,
+          openRouterModelId: updatedConfig.openRouterModelId,
+          openRouterBaseUrl: updatedConfig.openRouterBaseUrl,
+          openRouterSpecificProvider: updatedConfig.openRouterSpecificProvider
+            ? updatedConfig.openRouterSpecificProvider
+            : undefined,
+          openRouterUseMiddleOutTransform: updatedConfig.openRouterUseMiddleOutTransform,
+          googleProjectId: updatedConfig.googleProjectId,
+          googleRegion: updatedConfig.googleRegion,
+          googleCredentials: updatedConfig.googleCredentials,
+          googleModelId: updatedConfig.googleModelId,
+          googleEnableUrlContext: updatedConfig.googleEnableUrlContext,
+          googleEnableGrounding: updatedConfig.googleEnableGrounding,
+          googleEnableReasoning: updatedConfig.googleEnableReasoning,
+          activeModelId: updatedConfig.activeModelId,
         });
         console.log('✅ [DEBUG] Model selection auto-saved to database:', modelId);
-        toast.success(`Model "${models[modelId]?.name || modelId}" selected and saved!`);
+        const selectedName = models[modelId]?.name || modelId;
+        if (providerOptions.length > 0 && !providerStillValid && sanitizedCurrentProvider) {
+          toast.success(`Model "${selectedName}" selected. Provider reset to auto.`);
+        } else {
+          toast.success(`Model "${selectedName}" selected and saved!`);
+        }
       } catch (error) {
         console.error('❌ [DEBUG] Failed to auto-save model selection:', error);
         toast.error("Model selected but failed to save. Please click Save Configuration.");
       }
+    }
+  };
+
+  const handleProviderSelect = async (providerSlug: string) => {
+    if (config.apiProvider !== "openrouter") {
+      return;
+    }
+
+    const sanitized = providerSlug === "auto" ? "" : providerSlug;
+    const updatedConfig: ProviderSettings = {
+      ...config,
+      openRouterSpecificProvider: sanitized,
+    };
+
+    setConfig(updatedConfig);
+    localStorage.setItem("provider-config", JSON.stringify(updatedConfig));
+
+    if (!isAuthenticated) {
+      return;
+    }
+
+    try {
+      await setProviderConfig({
+        apiProvider: updatedConfig.apiProvider,
+        openRouterApiKey: updatedConfig.openRouterApiKey,
+        openRouterModelId: updatedConfig.openRouterModelId,
+        openRouterBaseUrl: updatedConfig.openRouterBaseUrl,
+        openRouterSpecificProvider: sanitized || undefined,
+        openRouterUseMiddleOutTransform: updatedConfig.openRouterUseMiddleOutTransform,
+        googleProjectId: updatedConfig.googleProjectId,
+        googleRegion: updatedConfig.googleRegion,
+        googleCredentials: updatedConfig.googleCredentials,
+        googleModelId: updatedConfig.googleModelId,
+        googleEnableUrlContext: updatedConfig.googleEnableUrlContext,
+        googleEnableGrounding: updatedConfig.googleEnableGrounding,
+        googleEnableReasoning: updatedConfig.googleEnableReasoning,
+        activeModelId: updatedConfig.activeModelId,
+      });
+
+      if (sanitized) {
+        toast.success(`Provider "${sanitized}" locked for model routing.`);
+      } else {
+        toast.success("Provider routing reset to automatic (highest availability).");
+      }
+    } catch (error) {
+      console.error('❌ [DEBUG] Failed to save provider selection:', error);
+      toast.error("Failed to update provider selection. Please try again.");
     }
   };
 
@@ -260,6 +354,106 @@ export function AdminDashboard() {
            model.id.toLowerCase().includes(query) ||
            (model.category || "").toLowerCase().includes(query);
   });
+
+  const getProviderSlugsForModel = useCallback(
+    (modelId?: string | null) => {
+      if (!modelId) {
+        return [] as string[];
+      }
+
+      const selectedModel = models[modelId];
+      if (!selectedModel) {
+        return [] as string[];
+      }
+
+      const slugSet = new Set<string>();
+      modelList.forEach((modelEntry) => {
+        if (
+          modelEntry.id === modelId ||
+          (!!selectedModel.name && modelEntry.name === selectedModel.name)
+        ) {
+          const slug = modelEntry.provider?.id;
+          if (slug) {
+            slugSet.add(slug);
+          }
+        }
+      });
+
+      if (slugSet.size === 0 && selectedModel.provider?.id) {
+        slugSet.add(selectedModel.provider.id);
+      }
+
+      return Array.from(slugSet).sort();
+    },
+    [modelList, models]
+  );
+
+  const availableProviderSlugs = useMemo(() => {
+    if (config.apiProvider !== "openrouter") {
+      return [] as string[];
+    }
+    return getProviderSlugsForModel(config.activeModelId);
+  }, [config.apiProvider, config.activeModelId, getProviderSlugsForModel]);
+
+  const providerSelectValue = (() => {
+    const sanitized = (config.openRouterSpecificProvider || "").trim();
+    if (!sanitized) {
+      return "auto";
+    }
+    return availableProviderSlugs.includes(sanitized) ? sanitized : "auto";
+  })();
+
+  useEffect(() => {
+    if (config.apiProvider !== "openrouter") {
+      return;
+    }
+
+    const sanitized = (config.openRouterSpecificProvider || "").trim();
+    if (!sanitized) {
+      return;
+    }
+
+    if (availableProviderSlugs.includes(sanitized)) {
+      return;
+    }
+
+    const updatedConfig: ProviderSettings = {
+      ...config,
+      openRouterSpecificProvider: "",
+    };
+
+    setConfig(updatedConfig);
+    localStorage.setItem("provider-config", JSON.stringify(updatedConfig));
+
+    if (!isAuthenticated) {
+      return;
+    }
+
+    (async () => {
+      try {
+        await setProviderConfig({
+          apiProvider: updatedConfig.apiProvider,
+          openRouterApiKey: updatedConfig.openRouterApiKey,
+          openRouterModelId: updatedConfig.openRouterModelId,
+          openRouterBaseUrl: updatedConfig.openRouterBaseUrl,
+          openRouterSpecificProvider: undefined,
+          openRouterUseMiddleOutTransform: updatedConfig.openRouterUseMiddleOutTransform,
+          googleProjectId: updatedConfig.googleProjectId,
+          googleRegion: updatedConfig.googleRegion,
+          googleCredentials: updatedConfig.googleCredentials,
+          googleModelId: updatedConfig.googleModelId,
+          googleEnableUrlContext: updatedConfig.googleEnableUrlContext,
+          googleEnableGrounding: updatedConfig.googleEnableGrounding,
+          googleEnableReasoning: updatedConfig.googleEnableReasoning,
+          activeModelId: updatedConfig.activeModelId,
+        });
+        toast.success("Provider routing reset to automatic (highest availability).");
+      } catch (error) {
+        console.error('❌ [DEBUG] Failed to reset provider selection:', error);
+        toast.error("Failed to reset provider selection. Please try again.");
+      }
+    })();
+  }, [config, availableProviderSlugs, isAuthenticated, setProviderConfig]);
 
   return (
     <div className="space-y-6 p-6 h-[calc(100vh-2rem)] overflow-y-auto">
@@ -363,16 +557,6 @@ export function AdminDashboard() {
                     placeholder="https://openrouter.ai/api/v1"
                     value={config.openRouterBaseUrl}
                     onChange={(e) => setConfig(prev => ({ ...prev, openRouterBaseUrl: e.target.value }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="specificProvider">Specific Provider (Optional)</Label>
-                  <Input
-                    id="specificProvider"
-                    placeholder="anthropic, openai, etc."
-                    value={config.openRouterSpecificProvider}
-                    onChange={(e) => setConfig(prev => ({ ...prev, openRouterSpecificProvider: e.target.value }))}
                   />
                 </div>
 
@@ -563,7 +747,9 @@ export function AdminDashboard() {
                   <Label>Select Model</Label>
                   <Select 
                     value={config.activeModelId} 
-                    onValueChange={handleModelSelect}
+                    onValueChange={(value) => {
+                      void handleModelSelect(value);
+                    }}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a model" />
@@ -590,6 +776,41 @@ export function AdminDashboard() {
                     </p>
                   )}
                 </div>
+
+                {config.apiProvider === "openrouter" && config.activeModelId && (
+                  <div className="space-y-2">
+                    <Label>Provider Routing</Label>
+                    {availableProviderSlugs.length > 0 ? (
+                      <Select
+                        value={providerSelectValue}
+                        onValueChange={(value) => {
+                          void handleProviderSelect(value);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select provider routing" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">
+                            <div className="flex flex-col">
+                              <span>Auto (highest availability)</span>
+                              <span className="text-xs text-muted-foreground">OpenRouter selects the best provider for this model</span>
+                            </div>
+                          </SelectItem>
+                          {availableProviderSlugs.map((provider) => (
+                            <SelectItem key={provider} value={provider}>
+                              <span className="font-mono text-xs sm:text-sm">{provider}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No alternative providers detected for this model. Using automatic routing.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="max-h-96 overflow-y-auto pr-2">
                   <div className="space-y-2">

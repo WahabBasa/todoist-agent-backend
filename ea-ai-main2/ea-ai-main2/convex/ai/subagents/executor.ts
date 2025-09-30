@@ -131,7 +131,16 @@ export async function executeSubagent(
       throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
     }
     
-    const openrouter = createOpenRouter({ apiKey });
+    const specificProvider = userConfig?.openRouterSpecificProvider?.trim();
+    const providerRoutingPreferences = specificProvider
+      ? { provider: { order: [specificProvider], allow_fallbacks: false } }
+      : { provider: { sort: "throughput" } };
+
+    const openrouter = createOpenRouter({
+      apiKey,
+      baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
+      extraBody: providerRoutingPreferences,
+    });
 
     // Model selection: Subagent override OR dashboard selection (NO fallback)
     const model = subagentConfig.model?.modelId || userConfig?.activeModelId;

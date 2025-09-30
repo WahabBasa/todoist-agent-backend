@@ -9,7 +9,11 @@ export async function autoCompactHistory(history: any[], maxLength: number = 50)
   const snapshot = { /* mode, toolStates from last message */ };
   
   // Summarize via LLM (OpenCode snapshot)
-  const model = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY }).chat('anthropic/claude-3-5-sonnet-20240620');
+  const model = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
+    extraBody: { provider: { sort: 'throughput' } },
+  }).chat('anthropic/claude-3-5-sonnet-20240620');
   const summaryResult = await streamText({
     model,
     messages: [{
