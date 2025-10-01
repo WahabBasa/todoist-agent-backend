@@ -1,14 +1,21 @@
 "use client";
 
-import { Chat } from "../components/chat/Chat"
-import { CollapsibleSidebar } from "../components/layout/CollapsibleSidebar"
-import { SettingsView } from "./SettingsView"
-import { AdminDashboard } from "./AdminDashboard"
-import { useSessions } from "../context/sessions"
+import { useEffect } from "react";
+import { Chat } from "../components/chat/Chat";
+import { CollapsibleSidebar } from "../components/layout/CollapsibleSidebar";
+import { SettingsView } from "./SettingsView";
+import { AdminDashboard } from "./AdminDashboard";
+import { useSessions } from "../context/sessions";
 
 export function ChatView() {
   // Get everything from SessionsContext - no props needed
-  const { activeView, setActiveView } = useSessions();
+  const { activeView, setActiveView, isAdmin } = useSessions();
+
+  useEffect(() => {
+    if (activeView === "admin" && !isAdmin) {
+      setActiveView("chat");
+    }
+  }, [activeView, isAdmin, setActiveView]);
   
   console.log('🔄 [DEBUG] Active view changed:', activeView);
   

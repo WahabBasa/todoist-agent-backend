@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { AuthLoading } from "convex/react";
 import { useQuery } from "convex/react";
 import { Toaster } from "sonner";
+import { SignedIn, SignedOut } from "@clerk/clerk-react";
 
 // Import components
 import { ChatView } from "./views/ChatView";
@@ -18,10 +19,43 @@ import { AppLoading } from "./components/ui/AppLoading";
 import { CustomAuthForm } from "./components/CustomAuthForm";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+// Hook to detect OAuth callback
+function useIsOAuthCallback() {
+  const [isCallback, setIsCallback] = useState(false);
+  
+  useEffect(() => {
+    // Check if URL has OAuth callback params
+    const hasOAuthParams = window.location.search.includes('__clerk') || 
+                          window.location.hash.includes('__clerk');
+    setIsCallback(hasOAuthParams);
+    
+    if (hasOAuthParams) {
+      console.log('🔐 OAuth callback detected, processing...');
+    }
+  }, []);
+  
+  return isCallback;
+}
+
 export default function App() {
+  const isOAuthCallback = useIsOAuthCallback();
+  
   return (
     <div className="h-full" suppressHydrationWarning>
       <Toaster position="top-right" />
+      
+      {/* Show loading during OAuth callback */}
+      {isOAuthCallback && (
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
+              <span className="text-primary-foreground font-semibold text-lg">T</span>
+            </div>
+            <p className="text-muted-foreground">Completing sign in...</p>
+          </div>
+        </div>
+      )}
+      
       <AuthLoading>
         <div className="h-full flex items-center justify-center">
           <div className="text-center space-y-4">
@@ -32,7 +66,7 @@ export default function App() {
           </div>
         </div>
       </AuthLoading>
-      <Authenticated>
+      <SignedIn>
         <ErrorBoundary>
           <SessionsProvider>
             <ChatProvider>
@@ -40,12 +74,14 @@ export default function App() {
             </ChatProvider>
           </SessionsProvider>
         </ErrorBoundary>
-      </Authenticated>
-      <Unauthenticated>
-        <ErrorBoundary>
-          <LandingPage />
-        </ErrorBoundary>
-      </Unauthenticated>
+      </SignedIn>
+      <SignedOut>
+        {!isOAuthCallback && (
+          <ErrorBoundary>
+            <LandingPage />
+          </ErrorBoundary>
+        )}
+      </SignedOut>
     </div>
   );
 }

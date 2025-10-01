@@ -21,6 +21,7 @@ interface SessionsContextType {
   currentSessionId: Id<"chatSessions"> | null;
   sessions: ChatSession[];
   isLoadingSessions: boolean;
+  isAdmin: boolean;
   
   // Session operations
   createNewSession: () => Promise<Id<"chatSessions">>;
@@ -40,6 +41,18 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   // Convex session queries
   const sessionsQuery = useQuery(api.chatSessions.getChatSessions, {});
   const defaultSession = useQuery(api.chatSessions.getDefaultSession, {});
+  const adminStatus = useQuery(api.auth.admin.isCurrentUserAdmin, {});
+  const isAdmin = adminStatus === true;
+
+  // Debug: Log admin status
+  useEffect(() => {
+    console.log('?? [FRONTEND] Admin check:', {
+      adminStatus,
+      isAdmin,
+      isLoading: adminStatus === undefined,
+      type: typeof adminStatus
+    });
+  }, [adminStatus, isAdmin]);
   
   // Convex mutations
   const createChatSession = useMutation(api.chatSessions.createChatSession);
@@ -83,7 +96,14 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     console.log('🔄 [SESSIONS DEBUG] Current session ID changed:', currentSessionId);
   }, [currentSessionId]);
-  const [activeView, setActiveView] = useState<"chat" | "settings" | "admin">("chat");
+  const [activeView, setActiveViewState] = useState<"chat" | "settings" | "admin">("chat");
+
+  // Enforce admin gating even if persisted state tries to open the admin view
+  useEffect(() => {
+    if (activeView === "admin" && !isAdmin) {
+      setActiveViewState("chat");
+    }
+  }, [activeView, isAdmin]);
 
   // Extract sessions array safely
   const sessions = sessionsQuery?.sessions || [];
@@ -147,7 +167,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       
       // Switch to the new session
       setCurrentSessionId(newSessionId);
-      setActiveView("chat");
+      setActiveViewState("chat");
       
       console.log('✅ Created and switched to new session:', newSessionId);
       return newSessionId;
@@ -169,9 +189,17 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     persistSession(sessionId); // Persist to localStorage
     
     if (sessionId) {
-      setActiveView("chat");
+      setActiveViewState("chat");
     }
   }, [currentSessionId]);
+
+  const setActiveView = useCallback((view: "chat" | "settings" | "admin") => {
+    if (view === "admin" && !isAdmin) {
+      toast.error("Admin access required.");
+      return;
+    }
+    setActiveViewState(view);
+  }, [isAdmin]);
 
   // ChatHub pattern: Delete session (pure reactive)
   const deleteSession = useCallback(async (sessionId: Id<"chatSessions">) => {
@@ -199,6 +227,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     currentSessionId,
     sessions,
     isLoadingSessions,
+    isAdmin,
     
     // Session operations
     createNewSession,

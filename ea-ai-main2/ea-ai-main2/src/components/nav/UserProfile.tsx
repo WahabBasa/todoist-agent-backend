@@ -17,9 +17,10 @@ interface UserProfileProps {
   onOpenSettings?: () => void;
   onOpenAdmin?: () => void;
   collapsed?: boolean;
+  isAdmin?: boolean;
 }
 
-export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin }: UserProfileProps) {
+export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin, isAdmin = false }: UserProfileProps) {
   const { user, isLoaded } = useUser()
   const { signOut } = useClerk()
 
@@ -89,10 +90,12 @@ export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin }: 
             <Settings className="mr-2 h-4 w-4" />
             <span className="font-sans">Settings</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onOpenAdmin?.()}>
-            <User className="mr-2 h-4 w-4" />
-            <span className="font-sans">Admin Dashboard</span>
-          </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem onClick={() => onOpenAdmin?.()}>
+              <User className="mr-2 h-4 w-4" />
+              <span className="font-sans">Admin Dashboard</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />

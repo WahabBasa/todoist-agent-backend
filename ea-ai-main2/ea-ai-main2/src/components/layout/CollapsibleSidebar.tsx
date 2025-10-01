@@ -57,8 +57,8 @@ export function CollapsibleSidebar() {
     currentSessionId, 
     createNewSession, 
     selectSession, 
-    activeView, 
-    setActiveView 
+    setActiveView,
+    isAdmin
   } = useSessions();
 
   // Load collapse state from localStorage
@@ -130,7 +130,8 @@ export function CollapsibleSidebar() {
       <div className="mt-auto shrink-0 p-3">
         <UserProfile
           onOpenSettings={() => setActiveView("settings")}
-          onOpenAdmin={() => setActiveView("admin")}
+        onOpenAdmin={isAdmin ? () => setActiveView("admin") : undefined}
+        isAdmin={isAdmin}
           collapsed={collapsed}
         />
       </div>

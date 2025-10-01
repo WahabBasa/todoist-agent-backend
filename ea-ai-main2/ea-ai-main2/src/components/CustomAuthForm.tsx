@@ -20,14 +20,32 @@ export function CustomAuthForm() {
       setIsLoading(true);
       setError(null);
       
+      console.log('🔐 Starting Google OAuth with calendar scopes...');
+      
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: "/",
         redirectUrlComplete: "/",
       });
-    } catch (err) {
-      console.error("Google sign-in error:", err);
-      setError("Failed to sign in with Google. Please try again.");
+      
+      // Note: This line won't execute due to redirect
+      console.log('🔐 OAuth redirect initiated');
+      
+    } catch (err: any) {
+      console.error("🔐 Google OAuth Error:", err);
+      console.error("🔐 Error details:", {
+        message: err.message,
+        code: err.code,
+        errors: err.errors
+      });
+      
+      // Show user-friendly error
+      if (err.errors && err.errors.length > 0) {
+        const errorMsg = err.errors[0].longMessage || err.errors[0].message;
+        setError(`OAuth failed: ${errorMsg}`);
+      } else {
+        setError("Failed to sign in with Google. This might be due to calendar permissions. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
