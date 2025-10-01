@@ -49,6 +49,22 @@ interface ModelInfo {
   };
 }
 
+// Enhanced model interface with detailed provider information
+interface EnhancedModelInfo extends ModelInfo {
+  providerSlugs?: string[];        // All providers offering this model
+  pricingByProvider?: Record<string, {
+    prompt?: string;
+    completion?: string;
+    request?: string;
+    image?: string;
+  }>; // Provider-specific pricing
+  endpoints?: Array<{              // Available endpoints by provider
+    provider: string;
+    url: string;
+    status: string;
+  }>;
+}
+
 interface ProviderSettings {
   apiProvider: "openrouter" | "google" | "vercel-ai-gateway";
   openRouterApiKey?: string;
@@ -74,6 +90,8 @@ export function AdminDashboard() {
   const convex = useConvex();
   const setProviderConfig = useMutation(api.providers.unified.setProviderConfig);
   const fetchProviderModels = useAction(api.providers.unified.fetchProviderModels);
+  const fetchDetailedModelInfo = useAction(api.providers.openrouterDetailed.fetchDetailedModelInfo);
+  const getCachedDetailedModelInfo = useQuery(api.providers.openrouterDetailed.getCachedDetailedModelInfo);
   
   const [config, setConfig] = useState<ProviderSettings>({
     apiProvider: "openrouter",
@@ -96,8 +114,10 @@ export function AdminDashboard() {
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [models, setModels] = useState<Record<string, ModelInfo>>({});
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
+  const [enhancedModels, setEnhancedModels] = useState<Record<string, EnhancedModelInfo>>({});
   const [apiKeyError, setApiKeyError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isFetchingDetailedModel, setIsFetchingDetailedModel] = useState<string | null>(null);
 
   // Load config from localStorage on component mount
   useEffect(() => {
@@ -388,12 +408,70 @@ export function AdminDashboard() {
     [modelList, models]
   );
 
+  // Function to fetch detailed model information for a specific model
+  const fetchDetailedModelInfoForModel = useCallback(async (modelId: string) => {
+    if (!modelId || config.apiProvider !== "openrouter") {
+      return;
+    }
+
+    // Check if we already have enhanced information cached
+    if (enhancedModels[modelId]?.providerSlugs && enhancedModels[modelId].providerSlugs.length > 0) {
+      return;
+    }
+
+    // Check if we have cached detailed information
+    const cachedDetailed = getCachedDetailedModelInfo;
+    if (cachedDetailed?.data && cachedDetailed.data.providerSlugs && cachedDetailed.data.providerSlugs.length > 0) {
+      setEnhancedModels(prev => ({
+        ...prev,
+        [modelId]: cachedDetailed.data
+      }));
+      return;
+    }
+
+    try {
+      setIsFetchingDetailedModel(modelId);
+      console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId}`);
+      
+      const detailedInfo = await fetchDetailedModelInfo({ modelId });
+      
+      if (detailedInfo) {
+        setEnhancedModels(prev => ({
+          ...prev,
+          [modelId]: detailedInfo
+        }));
+        console.log(`✅ [AdminDashboard] Successfully fetched detailed info for ${modelId} with ${detailedInfo.providerSlugs?.length || 0} providers`);
+      }
+    } catch (error) {
+      console.error(`❌ [AdminDashboard] Failed to fetch detailed model info for ${modelId}:`, error);
+      toast.error(`Failed to fetch provider information for ${models[modelId]?.name || modelId}`);
+    } finally {
+      setIsFetchingDetailedModel(null);
+    }
+  }, [config.apiProvider, enhancedModels, fetchDetailedModelInfo, getCachedDetailedModelInfo, models]);
+
+  // Enhanced function to get provider slugs for a model
+  const getProviderSlugsForModelEnhanced = useCallback((modelId?: string | null) => {
+    if (!modelId) {
+      return [] as string[];
+    }
+
+    // First check if we have enhanced information
+    const enhancedModel = enhancedModels[modelId];
+    if (enhancedModel?.providerSlugs && enhancedModel.providerSlugs.length > 0) {
+      return enhancedModel.providerSlugs;
+    }
+
+    // Fall back to the original logic
+    return getProviderSlugsForModel(modelId);
+  }, [enhancedModels, getProviderSlugsForModel]);
+
   const availableProviderSlugs = useMemo(() => {
     if (config.apiProvider !== "openrouter") {
       return [] as string[];
     }
-    return getProviderSlugsForModel(config.activeModelId);
-  }, [config.apiProvider, config.activeModelId, getProviderSlugsForModel]);
+    return getProviderSlugsForModelEnhanced(config.activeModelId);
+  }, [config.apiProvider, config.activeModelId, getProviderSlugsForModelEnhanced]);
 
   const providerSelectValue = (() => {
     const sanitized = (config.openRouterSpecificProvider || "").trim();
@@ -454,6 +532,16 @@ export function AdminDashboard() {
       }
     })();
   }, [config, availableProviderSlugs, isAuthenticated, setProviderConfig]);
+
+  // Effect to fetch detailed model information when a model is selected
+  useEffect(() => {
+    if (config.activeModelId && config.apiProvider === "openrouter") {
+      // Only fetch if we don't already have enhanced information
+      if (!enhancedModels[config.activeModelId]?.providerSlugs || enhancedModels[config.activeModelId].providerSlugs.length === 0) {
+        fetchDetailedModelInfoForModel(config.activeModelId);
+      }
+    }
+  }, [config.activeModelId, config.apiProvider, enhancedModels, fetchDetailedModelInfoForModel]);
 
   return (
     <div className="space-y-6 p-6 h-[calc(100vh-2rem)] overflow-y-auto">
@@ -779,13 +867,22 @@ export function AdminDashboard() {
 
                 {config.apiProvider === "openrouter" && config.activeModelId && (
                   <div className="space-y-2">
-                    <Label>Provider Routing</Label>
+                    <div className="flex items-center gap-2">
+                      <Label>Provider Routing</Label>
+                      {isFetchingDetailedModel === config.activeModelId && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Fetching providers...</span>
+                        </div>
+                      )}
+                    </div>
                     {availableProviderSlugs.length > 0 ? (
                       <Select
                         value={providerSelectValue}
                         onValueChange={(value) => {
                           void handleProviderSelect(value);
                         }}
+                        disabled={isFetchingDetailedModel === config.activeModelId}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select provider routing" />
@@ -793,21 +890,58 @@ export function AdminDashboard() {
                         <SelectContent>
                           <SelectItem value="auto">
                             <div className="flex flex-col">
-                              <span>Auto (highest availability)</span>
+                              <div className="flex items-center gap-2">
+                                <span>Auto (highest availability)</span>
+                                <Badge variant="outline" className="text-xs">Recommended</Badge>
+                              </div>
                               <span className="text-xs text-muted-foreground">OpenRouter selects the best provider for this model</span>
                             </div>
                           </SelectItem>
-                          {availableProviderSlugs.map((provider) => (
-                            <SelectItem key={provider} value={provider}>
-                              <span className="font-mono text-xs sm:text-sm">{provider}</span>
-                            </SelectItem>
-                          ))}
+                          {availableProviderSlugs.map((provider) => {
+                            const enhancedModel = enhancedModels[config.activeModelId!];
+                            const endpointInfo = enhancedModel?.endpoints?.find(e => e.provider === provider);
+                            
+                            return (
+                              <SelectItem key={provider} value={provider}>
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs sm:text-sm">{provider}</span>
+                                    {endpointInfo && (
+                                      <Badge 
+                                        variant={endpointInfo.status === 'online' ? 'default' : 
+                                                endpointInfo.status === 'degraded' ? 'secondary' : 'destructive'}
+                                        className="text-xs"
+                                      >
+                                        {endpointInfo.status || 'unknown'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {endpointInfo && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Status: {endpointInfo.status || 'Unknown'} • Direct routing
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No alternative providers detected for this model. Using automatic routing.
-                      </p>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>
+                          {isFetchingDetailedModel === config.activeModelId 
+                            ? "Detecting available providers..."
+                            : "No alternative providers detected for this model. Using automatic routing."
+                          }
+                        </p>
+                        {!isFetchingDetailedModel && enhancedModels[config.activeModelId] && (
+                          <p className="flex items-center gap-1">
+                            <Info className="h-3 w-3" />
+                            OpenRouter will automatically select the best provider based on availability and performance.
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

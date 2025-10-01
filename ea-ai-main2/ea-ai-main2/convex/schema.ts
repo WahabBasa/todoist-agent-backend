@@ -235,6 +235,53 @@ const applicationTables = {
       })),
     }).index("by_lastFetched", ["lastFetched"]),
 
+    cachedDetailedOpenrouterModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
+        providerSlugs: v.optional(v.array(v.string())),
+        pricingByProvider: v.optional(v.record(v.string(), v.any())),
+        endpoints: v.optional(v.array(v.object({
+          provider: v.string(),
+          url: v.string(),
+          status: v.string(),
+        }))),
+        architecture: v.optional(v.object({
+          modality: v.string(),
+          tokenizer: v.string(),
+          instruct_type: v.optional(v.string()),
+        })),
+        top_provider: v.optional(v.object({
+          context_length: v.number(),
+          max_completion_tokens: v.number(),
+          is_moderated: v.boolean(),
+        })),
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
+
     cachedGoogleModels: defineTable({
       lastFetched: v.number(),
       models: v.array(v.object({

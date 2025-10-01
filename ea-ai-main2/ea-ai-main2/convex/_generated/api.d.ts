@@ -84,6 +84,7 @@ import type * as migrateAgentsToModes from "../migrateAgentsToModes.js";
 import type * as migrateTokens from "../migrateTokens.js";
 import type * as migrations_backfillSessionTimestamps from "../migrations/backfillSessionTimestamps.js";
 import type * as providers_openrouter from "../providers/openrouter.js";
+import type * as providers_openrouterDetailed from "../providers/openrouterDetailed.js";
 import type * as providers_unified from "../providers/unified.js";
 import type * as todoist_BatchTodoistHandler from "../todoist/BatchTodoistHandler.js";
 import type * as todoist_auth from "../todoist/auth.js";
@@ -171,6 +172,7 @@ declare const fullApi: ApiFromModules<{
   migrateTokens: typeof migrateTokens;
   "migrations/backfillSessionTimestamps": typeof migrations_backfillSessionTimestamps;
   "providers/openrouter": typeof providers_openrouter;
+  "providers/openrouterDetailed": typeof providers_openrouterDetailed;
   "providers/unified": typeof providers_unified;
   "todoist/BatchTodoistHandler": typeof todoist_BatchTodoistHandler;
   "todoist/auth": typeof todoist_auth;
