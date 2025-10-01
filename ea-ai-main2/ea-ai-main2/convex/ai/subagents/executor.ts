@@ -6,6 +6,19 @@ import { createSimpleToolRegistry } from "../toolRegistry";
 import { streamText, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
+const KNOWN_INVALID_PROVIDER_SLUGS = new Set([
+  "web_search",
+  "internal_reasoning",
+  "prompt",
+  "completion",
+  "request",
+  "image",
+  "image_output",
+  "cache_read",
+  "cache_write",
+  "discount"
+]);
+
 /**
  * Subagent Execution Engine
  * Implements OpenCode-style isolated subagent execution in Convex
@@ -130,17 +143,6 @@ export async function executeSubagent(
     if (!apiKey) {
       throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
     }
-    
-    const specificProvider = userConfig?.openRouterSpecificProvider?.trim();
-    const providerRoutingPreferences = specificProvider
-      ? { provider: { order: [specificProvider], allow_fallbacks: false } }
-      : { provider: { sort: "throughput" } };
-
-    const openrouter = createOpenRouter({
-      apiKey,
-      baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
-      extraBody: providerRoutingPreferences,
-    });
 
     // Model selection: Subagent override OR dashboard selection (NO fallback)
     const model = subagentConfig.model?.modelId || userConfig?.activeModelId;
@@ -151,25 +153,139 @@ export async function executeSubagent(
     
     console.log(`🎯 [SUBAGENT_MODEL] Using model for ${subagentName}: ${model} (source: ${subagentConfig.model?.modelId ? 'subagent-config' : 'dashboard'})`);
     
-    const openrouterModel = openrouter.chat(model);
-    // 5. Execute in complete isolation (no parent context)
-    const result = await streamText({
-      model: openrouterModel,
-      messages: [
-        {
-          role: "system",
-          content: SubagentRegistry.getSystemPrompt(subagentName),
-        },
-        {
-          role: "user",
-          content: prompt, // ONLY the delegation prompt, no parent context
-        },
-      ],
-      tools: filteredTools,
-      temperature: subagentConfig.temperature || 0.3,
-      maxRetries: 3,
-      stopWhen: stepCountIs(12), // Prevent infinite loops
+    let lockedProvider = userConfig?.openRouterSpecificProvider?.trim() || undefined;
+    if (lockedProvider && lockedProvider.length === 0) {
+      lockedProvider = undefined;
+    }
+
+    let providerPreferenceCleared = false;
+    const persistProviderReset = async () => {
+      if (!userConfig || providerPreferenceCleared) {
+        return;
+      }
+      providerPreferenceCleared = true;
+      try {
+        await ctx.runMutation(api.providers.unified.setProviderConfig, {
+          apiProvider: userConfig.apiProvider || "openrouter",
+          openRouterApiKey: userConfig.openRouterApiKey,
+          openRouterModelId: userConfig.openRouterModelId,
+          openRouterBaseUrl: userConfig.openRouterBaseUrl,
+          openRouterSpecificProvider: undefined,
+          openRouterUseMiddleOutTransform: userConfig.openRouterUseMiddleOutTransform,
+          googleProjectId: userConfig.googleProjectId,
+          googleRegion: userConfig.googleRegion,
+          googleCredentials: userConfig.googleCredentials,
+          googleModelId: userConfig.googleModelId,
+          googleEnableUrlContext: userConfig.googleEnableUrlContext,
+          googleEnableGrounding: userConfig.googleEnableGrounding,
+          googleEnableReasoning: userConfig.googleEnableReasoning,
+          activeModelId: userConfig.activeModelId,
+        });
+        console.log(`🔁 [SUBAGENT_MODEL] Cleared OpenRouter provider override for ${model}`);
+        try {
+          const refreshedConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+          const stillLocked = refreshedConfig?.openRouterSpecificProvider;
+          if (stillLocked) {
+            console.warn(`[SUBAGENT_MODEL] Provider override persisted after reset attempt: ${stillLocked}`);
+          } else {
+            console.log(`[SUBAGENT_MODEL] Provider override successfully cleared for ${model}`);
+          }
+        } catch (recheckError) {
+          console.warn(`[SUBAGENT_MODEL] Failed to verify provider override reset: ${recheckError instanceof Error ? recheckError.message : recheckError}`);
+        }
+      } catch (mutationError) {
+        console.warn(`⚠️ [SUBAGENT_MODEL] Failed to persist provider override reset:`, mutationError);
+      }
+    };
+
+    if (lockedProvider) {
+      const lowerLockedProvider = lockedProvider.toLowerCase();
+      if (KNOWN_INVALID_PROVIDER_SLUGS.has(lowerLockedProvider)) {
+        console.warn(`⚠️ [SUBAGENT_MODEL] Ignoring invalid provider override "${lockedProvider}" for ${model}`);
+        lockedProvider = undefined;
+        await persistProviderReset();
+      } else {
+        try {
+          const detailedInfo = await ctx.runQuery(api.providers.openrouterDetailed.getCachedDetailedModelInfo, { modelId: model });
+          if (detailedInfo?.providerSlugs && detailedInfo.providerSlugs.length > 0) {
+            const validSlugs = new Set(detailedInfo.providerSlugs.map((slug: string) => slug.toLowerCase()));
+            if (!validSlugs.has(lowerLockedProvider)) {
+              console.warn(`⚠️ [SUBAGENT_MODEL] Provider "${lockedProvider}" unavailable for ${model}, reverting to automatic routing`);
+              lockedProvider = undefined;
+              await persistProviderReset();
+            }
+          }
+        } catch (validationError) {
+          console.warn(`⚠️ [SUBAGENT_MODEL] Failed to validate provider override "${lockedProvider}":`, validationError);
+        }
+      }
+    }
+
+    const baseURL = userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+    const buildProviderPreferences = (slug?: string) => slug && slug.length > 0
+      ? { provider: { order: [slug], allow_fallbacks: false } }
+      : { provider: { sort: "throughput" } };
+
+    const createClient = (slug?: string) => createOpenRouter({
+      apiKey,
+      baseURL,
+      extraBody: buildProviderPreferences(slug),
     });
+
+    let openrouterClient = createClient(lockedProvider);
+    console.info(`[SUBAGENT_MODEL] Prepared client for ${subagentName} (${model}) with routing:`, buildProviderPreferences(lockedProvider));
+
+    const executeStream = async (client: ReturnType<typeof createOpenRouter>) => {
+      return streamText({
+        model: client.chat(model),
+        messages: [
+          {
+            role: "system",
+            content: SubagentRegistry.getSystemPrompt(subagentName),
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        tools: filteredTools,
+        temperature: subagentConfig.temperature || 0.3,
+        maxRetries: 3,
+        stopWhen: stepCountIs(12),
+      });
+    };
+
+    const isNoEndpointsError = (err: unknown) => {
+      if (!(err instanceof Error)) {
+        return false;
+      }
+      const message = err.message || "";
+      const statusCode = (err as any)?.statusCode;
+      return message.toLowerCase().includes("no endpoints found") || statusCode === 404;
+    };
+
+    let result;
+
+    const attemptRouting = lockedProvider ? "locked" : "auto";
+    console.info(`[SUBAGENT_MODEL] Executing stream for ${subagentName} (${model}) routing=${attemptRouting}`);
+    try {
+      result = await executeStream(openrouterClient);
+    } catch (error) {
+      console.warn(`[SUBAGENT_MODEL] Stream error routing=${attemptRouting}:`, error);
+      if (isNoEndpointsError(error)) {
+        if (lockedProvider) {
+          console.warn(`⚠️ [SUBAGENT_MODEL] Provider "${lockedProvider}" returned no endpoints. Clearing override and falling back.`);
+          await persistProviderReset();
+          lockedProvider = undefined;
+        }
+        openrouterClient = createClient();
+        const fallbackRouting = buildProviderPreferences();
+        console.info(`[SUBAGENT_MODEL] Retrying ${model} with automatic routing preferences:`, fallbackRouting);
+        result = await executeStream(openrouterClient);
+      } else {
+        throw error;
+      }
+    }
 
     // 6. Get final results
     const finalText = await result.text;

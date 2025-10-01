@@ -75,6 +75,19 @@ function sanitizeUserInput(input: string): string {
   return sanitized;
 }
 
+const KNOWN_INVALID_PROVIDER_SLUGS = new Set([
+  "web_search",
+  "internal_reasoning",
+  "prompt",
+  "completion",
+  "request",
+  "image",
+  "image_output",
+  "cache_read",
+  "cache_write",
+  "discount"
+]);
+
 interface ChatMetadata {
   toolCalls: number;
   toolResults: number;
@@ -185,6 +198,12 @@ export const chatWithAI = action({
     
     // Initialize the appropriate provider
     let modelProvider: any;
+    let lockedProvider: string | undefined;
+    let openRouterApiKey: string | undefined;
+    let openRouterBaseUrl = "https://openrouter.ai/api/v1";
+    let providerPreferenceCleared = false;
+    let persistProviderReset: () => Promise<void> = async () => {};
+    let buildProviderPreferences: (slug?: string) => any = () => ({ provider: { sort: "throughput" } });
     
     if (provider === "google") {
       // Initialize Google Vertex AI
@@ -224,17 +243,84 @@ export const chatWithAI = action({
         throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
       }
       
-      const specificProvider = userConfig?.openRouterSpecificProvider?.trim();
-      const providerRoutingPreferences = specificProvider
-        ? { provider: { order: [specificProvider], allow_fallbacks: false } }
+      openRouterApiKey = apiKey;
+      openRouterBaseUrl = userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+      buildProviderPreferences = (slug?: string) => slug && slug.length > 0
+        ? { provider: { order: [slug], allow_fallbacks: false } }
         : { provider: { sort: "throughput" } };
 
-      // Initialize OpenRouter with proper configuration  
-      modelProvider = createOpenRouter({ 
+      const trimmedSpecificProvider = userConfig?.openRouterSpecificProvider?.trim();
+      lockedProvider = trimmedSpecificProvider && trimmedSpecificProvider.length > 0 ? trimmedSpecificProvider : undefined;
+
+      persistProviderReset = async () => {
+        if (!userConfig || providerPreferenceCleared) {
+          return;
+        }
+        providerPreferenceCleared = true;
+        try {
+          await ctx.runMutation(api.providers.unified.setProviderConfig, {
+            apiProvider: userConfig.apiProvider || "openrouter",
+            openRouterApiKey: userConfig.openRouterApiKey,
+            openRouterModelId: userConfig.openRouterModelId,
+            openRouterBaseUrl: userConfig.openRouterBaseUrl,
+            openRouterSpecificProvider: undefined,
+            openRouterUseMiddleOutTransform: userConfig.openRouterUseMiddleOutTransform,
+            googleProjectId: userConfig.googleProjectId,
+            googleRegion: userConfig.googleRegion,
+            googleCredentials: userConfig.googleCredentials,
+            googleModelId: userConfig.googleModelId,
+            googleEnableUrlContext: userConfig.googleEnableUrlContext,
+            googleEnableGrounding: userConfig.googleEnableGrounding,
+            googleEnableReasoning: userConfig.googleEnableReasoning,
+            activeModelId: userConfig.activeModelId,
+          });
+          console.log(`🔁 [MODEL_SELECTION] Cleared OpenRouter provider override for model ${modelName}`);
+          try {
+            const refreshedConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+            const stillLocked = refreshedConfig?.openRouterSpecificProvider;
+            if (stillLocked) {
+              logWarning(`Provider override persisted after reset attempt: ${stillLocked}`);
+            } else {
+              logDebug(`Provider override successfully cleared for ${modelName}`);
+            }
+          } catch (recheckError) {
+            logWarning(`Failed to verify provider override reset: ${recheckError instanceof Error ? recheckError.message : recheckError}`);
+          }
+        } catch (mutationError) {
+          console.warn(`⚠️ [MODEL_SELECTION] Failed to persist provider override reset:`, mutationError);
+        }
+      };
+
+      if (lockedProvider) {
+        const lowerLockedProvider = lockedProvider.toLowerCase();
+        if (KNOWN_INVALID_PROVIDER_SLUGS.has(lowerLockedProvider)) {
+          console.warn(`⚠️ [MODEL_SELECTION] Ignoring invalid provider override "${lockedProvider}" for ${modelName}`);
+          lockedProvider = undefined;
+          await persistProviderReset();
+        } else {
+          try {
+            const detailedInfo = await ctx.runQuery(api.providers.openrouterDetailed.getCachedDetailedModelInfo, { modelId: modelName });
+            if (detailedInfo?.providerSlugs && detailedInfo.providerSlugs.length > 0) {
+              const validSlugs = new Set(detailedInfo.providerSlugs.map((slug: string) => slug.toLowerCase()));
+              if (!validSlugs.has(lowerLockedProvider)) {
+                console.warn(`⚠️ [MODEL_SELECTION] Provider "${lockedProvider}" unavailable for ${modelName}, reverting to automatic routing`);
+                lockedProvider = undefined;
+                await persistProviderReset();
+              }
+            }
+          } catch (validationError) {
+            console.warn(`⚠️ [MODEL_SELECTION] Failed to validate provider override "${lockedProvider}":`, validationError);
+          }
+        }
+      }
+
+      modelProvider = createOpenRouter({
         apiKey,
-        baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
-        extraBody: providerRoutingPreferences,
+        baseURL: openRouterBaseUrl,
+        extraBody: buildProviderPreferences(lockedProvider),
       });
+
+      console.info(`🛠️ [MODEL_SELECTION] Prepared OpenRouter client for ${modelName} with routing:`, buildProviderPreferences(lockedProvider));
     }
     
     // Initialize Langfuse tracing
@@ -392,16 +478,57 @@ export const chatWithAI = action({
 
       // Use AI SDK's streamText with native tool handling
       // Pass the correctly parsed model name to the appropriate provider
-      const result: StreamTextResult<Record<string, any>, never> = await streamText({
-        model: modelProvider.chat(modelName, {
-          usage: { include: true }
-        }),
-        messages: cachedMessages,
-        tools,
-        maxRetries: 3,
-        // Allow multi-step tool workflows for complex operations
-        stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
-      });
+      const executeStream = async (providerClient: any) => {
+        return streamText({
+          model: providerClient.chat(modelName, {
+            usage: { include: true }
+          }),
+          messages: cachedMessages,
+          tools,
+          maxRetries: 3,
+          stopWhen: stepCountIs(8),
+        });
+      };
+
+      const isNoEndpointsError = (err: unknown) => {
+        if (!(err instanceof Error)) {
+          return false;
+        }
+        const message = err.message || "";
+        const hasNoEndpointMessage = message.toLowerCase().includes("no endpoints found");
+        const statusCode = (err as any)?.statusCode;
+        return hasNoEndpointMessage || statusCode === 404;
+      };
+
+      let result: StreamTextResult<Record<string, any>, never>;
+
+      if (provider === "google") {
+        result = await executeStream(modelProvider);
+      } else {
+        const attemptRouting = lockedProvider ? "locked" : "auto";
+        console.info(`🛠️ [MODEL_SELECTION] Executing OpenRouter stream for ${modelName} (routing=${attemptRouting})`);
+        try {
+          result = await executeStream(modelProvider);
+        } catch (error) {
+          console.warn(`⚠️ [MODEL_SELECTION] Stream error for ${modelName} (routing=${attemptRouting}):`, error);
+          if (isNoEndpointsError(error)) {
+            if (lockedProvider) {
+              console.warn(`⚠️ [MODEL_SELECTION] Provider "${lockedProvider}" returned no endpoints. Clearing override and falling back.`);
+              await persistProviderReset();
+              lockedProvider = undefined;
+            }
+            modelProvider = createOpenRouter({
+              apiKey: openRouterApiKey!,
+              baseURL: openRouterBaseUrl,
+              extraBody: buildProviderPreferences(),
+            });
+            const fallbackRouting = buildProviderPreferences();
+            result = await executeStream(modelProvider);
+          } else {
+            throw error;
+          }
+        }
+      }
       
 
       // Let AI SDK handle the entire streaming and tool execution process

@@ -5,8 +5,8 @@ import { DetailedModelInfo, deriveCategory } from "./openrouter";
 
 // Action to fetch detailed model information for a specific model
 export const fetchDetailedModelInfo = action({
-  args: { modelId: v.string() },
-  handler: async (ctx, { modelId }) => {
+  args: { modelId: v.string(), forceRefresh: v.optional(v.boolean()) },
+  handler: async (ctx, { modelId, forceRefresh }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthorized");
     
@@ -20,7 +20,7 @@ export const fetchDetailedModelInfo = action({
       throw new Error("OpenRouter API key is required");
     }
 
-    console.log(`🔍 [OpenRouter] Fetching detailed info for model: ${modelId}`);
+    console.log(`🔍 [OpenRouter] Fetching detailed info for model: ${modelId}${forceRefresh ? " (force refresh)" : ""}`);
 
     // Extract author and slug from model ID (format: "author/slug")
     const [author, slug] = modelId.split('/');

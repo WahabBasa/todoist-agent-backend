@@ -82,6 +82,19 @@ interface ProviderSettings {
   activeModelId?: string;
 }
 
+const KNOWN_INVALID_PROVIDER_SLUGS = new Set([
+  "web_search",
+  "internal_reasoning",
+  "prompt",
+  "completion",
+  "request",
+  "image",
+  "image_output",
+  "cache_read",
+  "cache_write",
+  "discount"
+]);
+
 export function AdminDashboard() {
   console.log('🔄 [DEBUG] AdminDashboard component rendered');
   
@@ -421,24 +434,32 @@ export function AdminDashboard() {
       return;
     }
 
-    // Check if we already have enhanced information cached with providers
-    if (enhancedModels[modelId]?.providerSlugs && enhancedModels[modelId].providerSlugs.length > 0) {
+    const existingSlugs = enhancedModels[modelId]?.providerSlugs || [];
+    const hasCachedProviders = existingSlugs.length > 0;
+    const allSlugsInvalid = hasCachedProviders && existingSlugs.every(slug => KNOWN_INVALID_PROVIDER_SLUGS.has(slug.toLowerCase()));
+    if (hasCachedProviders && !allSlugsInvalid) {
       return;
     }
+
+    const shouldForceRefresh = hasCachedProviders && allSlugsInvalid;
 
     try {
       setFetchAttempts(prev => ({ ...prev, [modelId]: attempts + 1 }));
       setIsFetchingDetailedModel(modelId);
-      console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId} (attempt ${attempts + 1}/2)`);
+      console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId} (attempt ${attempts + 1}/2${shouldForceRefresh ? ", force refresh" : ""})`);
       
-      const detailedInfo = await fetchDetailedModelInfo({ modelId });
+      const detailedInfo = await fetchDetailedModelInfo({ modelId, forceRefresh: shouldForceRefresh });
       
       if (detailedInfo) {
+        const filteredSlugs = (detailedInfo.providerSlugs || []).filter(slug => !KNOWN_INVALID_PROVIDER_SLUGS.has(slug.toLowerCase()));
         setEnhancedModels(prev => ({
           ...prev,
-          [modelId]: detailedInfo
+          [modelId]: {
+            ...detailedInfo,
+            providerSlugs: filteredSlugs,
+          }
         }));
-        console.log(`✅ [AdminDashboard] Successfully fetched detailed info for ${modelId} with ${detailedInfo.providerSlugs?.length || 0} providers`);
+        console.log(`✅ [AdminDashboard] Successfully fetched detailed info for ${modelId} with ${filteredSlugs.length} providers`);
       }
     } catch (error) {
       console.error(`❌ [AdminDashboard] Failed to fetch detailed model info for ${modelId}:`, error);
