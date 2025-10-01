@@ -272,7 +272,7 @@ const applicationTables = {
         architecture: v.optional(v.object({
           modality: v.string(),
           tokenizer: v.string(),
-          instruct_type: v.optional(v.string()),
+          instruct_type: v.optional(v.union(v.string(), v.null())),
           input_modalities: v.optional(v.array(v.string())),
           output_modalities: v.optional(v.array(v.string())),
         })),

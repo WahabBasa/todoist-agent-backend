@@ -127,7 +127,7 @@ export const cachedDetailedModelsSchema = v.object({
     architecture: v.optional(v.object({
       modality: v.string(),
       tokenizer: v.string(),
-      instruct_type: v.optional(v.string())
+      instruct_type: v.optional(v.union(v.string(), v.null()))
     })),
     top_provider: v.optional(v.object({
       context_length: v.number(),

@@ -49,25 +49,37 @@ export const fetchDetailedModelInfo = action({
       const endpointsData = await response.json();
       console.log(`✅ [OpenRouter] Successfully fetched endpoints for ${modelId}`);
 
+      // DEBUG: Log actual response structure to understand format
+      console.log(`🔍 [DEBUG] Endpoints API response structure:`, JSON.stringify(endpointsData, null, 2));
+      console.log(`🔍 [DEBUG] Has 'data' field:`, !!endpointsData.data);
+      console.log(`🔍 [DEBUG] Data type:`, Array.isArray(endpointsData.data) ? 'array' : typeof endpointsData.data);
+      if (endpointsData.data && typeof endpointsData.data === 'object') {
+        console.log(`🔍 [DEBUG] Data keys:`, Object.keys(endpointsData.data));
+      }
+
       // Extract provider slugs from the endpoints data
       const providerSlugs = new Set<string>();
       const endpoints: Array<{ provider: string; url: string; status: string }> = [];
       
-      if (endpointsData.data && Array.isArray(endpointsData.data)) {
-        endpointsData.data.forEach((endpoint: any) => {
-          if (endpoint.provider && endpoint.url) {
-            providerSlugs.add(endpoint.provider);
+      // OpenRouter returns: { data: { endpoints: [...] } }
+      if (endpointsData.data?.endpoints && Array.isArray(endpointsData.data.endpoints)) {
+        endpointsData.data.endpoints.forEach((endpoint: any) => {
+          // Use 'tag' field as provider slug (e.g., "deepinfra", "novita/fp8", "deepseek")
+          if (endpoint.tag) {
+            providerSlugs.add(endpoint.tag);
             endpoints.push({
-              provider: endpoint.provider,
-              url: endpoint.url,
-              status: endpoint.status || "unknown"
+              provider: endpoint.tag,
+              url: endpoint.name || '', // endpoint name includes provider + model
+              status: endpoint.status !== undefined ? String(endpoint.status) : "unknown"
             });
           }
         });
       }
 
-      // Also try to extract provider information from pricing if available
-      // This would require fetching the basic model info again to get pricing data
+      console.log(`📊 [OpenRouter] Extracted ${providerSlugs.size} provider(s) for ${modelId}:`, Array.from(providerSlugs));
+
+      // Fetch basic model info for additional metadata (name, context, pricing, etc.)
+      // Note: Provider slugs are already correctly extracted from /endpoints API above
       const basicModelsResponse = await fetch("https://openrouter.ai/api/v1/models", {
         headers: {
           Authorization: `Bearer ${apiKey}`
@@ -78,34 +90,11 @@ export const fetchDetailedModelInfo = action({
       if (basicModelsResponse.ok) {
         const basicData = await basicModelsResponse.json();
         modelInfo = basicData.data.find((m: any) => m.id === modelId);
-        
-        if (modelInfo?.pricing && typeof modelInfo.pricing === "object") {
-          Object.keys(modelInfo.pricing).forEach((providerKey) => {
-            if (![
-              "prompt",
-              "completion",
-              "request",
-              "image"
-            ].includes(providerKey)) {
-              providerSlugs.add(providerKey);
-            }
-          });
-        }
       }
 
+      // Note: pricingByProvider removed - pricing keys (web_search, internal_reasoning, etc.) 
+      // are not provider names and were causing incorrect dropdown options
       const pricingByProvider: Record<string, any> = {};
-      if (modelInfo?.pricing && typeof modelInfo.pricing === "object") {
-        Object.entries(modelInfo.pricing).forEach(([key, value]) => {
-          if (![
-            "prompt",
-            "completion",
-            "request",
-            "image"
-          ].includes(key) && value && typeof value === "object") {
-            pricingByProvider[key] = value;
-          }
-        });
-      }
 
       const detailedInfo: DetailedModelInfo = {
         id: modelId,
@@ -186,7 +175,7 @@ export const cacheDetailedModelInfo = mutation({
       architecture: v.optional(v.object({
         modality: v.string(),
         tokenizer: v.string(),
-        instruct_type: v.optional(v.string()),
+        instruct_type: v.optional(v.union(v.string(), v.null())),
         input_modalities: v.optional(v.array(v.string())),
         output_modalities: v.optional(v.array(v.string()))
       })),

@@ -117,6 +117,7 @@ export function AdminDashboard() {
   const [apiKeyError, setApiKeyError] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isFetchingDetailedModel, setIsFetchingDetailedModel] = useState<string | null>(null);
+  const [fetchAttempts, setFetchAttempts] = useState<Record<string, number>>({});
 
   // Load config from localStorage on component mount
   useEffect(() => {
@@ -413,14 +414,22 @@ export function AdminDashboard() {
       return;
     }
 
-    // Check if we already have enhanced information cached
+    // GUARD: Prevent infinite loops - max 2 attempts per model
+    const attempts = fetchAttempts[modelId] || 0;
+    if (attempts >= 2) {
+      console.warn(`⚠️ [AdminDashboard] Already attempted to fetch providers for ${modelId} ${attempts} times. Skipping to prevent infinite loop.`);
+      return;
+    }
+
+    // Check if we already have enhanced information cached with providers
     if (enhancedModels[modelId]?.providerSlugs && enhancedModels[modelId].providerSlugs.length > 0) {
       return;
     }
 
     try {
+      setFetchAttempts(prev => ({ ...prev, [modelId]: attempts + 1 }));
       setIsFetchingDetailedModel(modelId);
-      console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId}`);
+      console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId} (attempt ${attempts + 1}/2)`);
       
       const detailedInfo = await fetchDetailedModelInfo({ modelId });
       
@@ -437,7 +446,7 @@ export function AdminDashboard() {
     } finally {
       setIsFetchingDetailedModel(null);
     }
-  }, [config.apiProvider, enhancedModels, fetchDetailedModelInfo, models]);
+  }, [config.apiProvider, enhancedModels, fetchDetailedModelInfo, models, fetchAttempts]);
 
   // Enhanced function to get provider slugs for a model
   const getProviderSlugsForModelEnhanced = useCallback((modelId?: string | null) => {
@@ -534,8 +543,9 @@ export function AdminDashboard() {
   // Effect to fetch detailed model information when a model is selected
   useEffect(() => {
     if (config.activeModelId && config.apiProvider === "openrouter") {
-      // Only fetch if we don't already have enhanced information
-      if (!enhancedModels[config.activeModelId]?.providerSlugs || enhancedModels[config.activeModelId].providerSlugs.length === 0) {
+      // Only fetch if we don't have provider info yet (guards against infinite loop)
+      // Note: The fetchDetailedModelInfoForModel function has its own max-attempts guard
+      if (!enhancedModels[config.activeModelId]?.providerSlugs) {
         fetchDetailedModelInfoForModel(config.activeModelId);
       }
     }
