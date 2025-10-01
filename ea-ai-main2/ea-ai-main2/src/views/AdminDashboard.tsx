@@ -91,7 +91,6 @@ export function AdminDashboard() {
   const setProviderConfig = useMutation(api.providers.unified.setProviderConfig);
   const fetchProviderModels = useAction(api.providers.unified.fetchProviderModels);
   const fetchDetailedModelInfo = useAction(api.providers.openrouterDetailed.fetchDetailedModelInfo);
-  const getCachedDetailedModelInfo = useQuery(api.providers.openrouterDetailed.getCachedDetailedModelInfo);
   
   const [config, setConfig] = useState<ProviderSettings>({
     apiProvider: "openrouter",
@@ -419,16 +418,6 @@ export function AdminDashboard() {
       return;
     }
 
-    // Check if we have cached detailed information
-    const cachedDetailed = getCachedDetailedModelInfo;
-    if (cachedDetailed?.data && cachedDetailed.data.providerSlugs && cachedDetailed.data.providerSlugs.length > 0) {
-      setEnhancedModels(prev => ({
-        ...prev,
-        [modelId]: cachedDetailed.data
-      }));
-      return;
-    }
-
     try {
       setIsFetchingDetailedModel(modelId);
       console.log(`🔍 [AdminDashboard] Fetching detailed model info for: ${modelId}`);
@@ -448,7 +437,7 @@ export function AdminDashboard() {
     } finally {
       setIsFetchingDetailedModel(null);
     }
-  }, [config.apiProvider, enhancedModels, fetchDetailedModelInfo, getCachedDetailedModelInfo, models]);
+  }, [config.apiProvider, enhancedModels, fetchDetailedModelInfo, models]);
 
   // Enhanced function to get provider slugs for a model
   const getProviderSlugsForModelEnhanced = useCallback((modelId?: string | null) => {
@@ -480,6 +469,15 @@ export function AdminDashboard() {
     }
     return availableProviderSlugs.includes(sanitized) ? sanitized : "auto";
   })();
+
+  useEffect(() => {
+    if (config.apiProvider !== "openrouter" || !config.activeModelId) {
+      return;
+    }
+    
+    // Auto-fetch detailed model info when model is selected
+    fetchDetailedModelInfoForModel(config.activeModelId);
+  }, [config.apiProvider, config.activeModelId, fetchDetailedModelInfoForModel]);
 
   useEffect(() => {
     if (config.apiProvider !== "openrouter") {

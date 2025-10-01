@@ -273,10 +273,12 @@ const applicationTables = {
           modality: v.string(),
           tokenizer: v.string(),
           instruct_type: v.optional(v.string()),
+          input_modalities: v.optional(v.array(v.string())),
+          output_modalities: v.optional(v.array(v.string())),
         })),
         top_provider: v.optional(v.object({
           context_length: v.number(),
-          max_completion_tokens: v.number(),
+          max_completion_tokens: v.optional(v.union(v.number(), v.null())),
           is_moderated: v.boolean(),
         })),
       })),
