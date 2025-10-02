@@ -104,6 +104,9 @@ export function AdminDashboard() {
   const setProviderConfig = useMutation(api.providers.unified.setProviderConfig);
   const fetchProviderModels = useAction(api.providers.unified.fetchProviderModels);
   const fetchDetailedModelInfo = useAction(api.providers.openrouterDetailed.fetchDetailedModelInfo);
+  // Load persisted configs from backend
+  const myConfig = useQuery(api.providers.unified.getMyProviderConfig, {});
+  const globalConfig = useQuery(api.providers.unified.getGlobalProviderConfig, {});
   
   const [config, setConfig] = useState<ProviderSettings>({
     apiProvider: "openrouter",
@@ -131,6 +134,7 @@ export function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isFetchingDetailedModel, setIsFetchingDetailedModel] = useState<string | null>(null);
   const [fetchAttempts, setFetchAttempts] = useState<Record<string, number>>({});
+  const [hydratedFromServer, setHydratedFromServer] = useState(false);
 
   // Load config from localStorage on component mount
   useEffect(() => {
@@ -170,6 +174,37 @@ export function AdminDashboard() {
       }
     }
   }, []);
+
+  // Hydrate from Convex once queries resolve (takes precedence over localStorage)
+  useEffect(() => {
+    if (hydratedFromServer) return;
+    // Prefer personal config, else show global for visibility
+    if (myConfig || globalConfig) {
+      const source = (myConfig && Object.keys(myConfig).length > 0) ? myConfig : globalConfig;
+      if (source) {
+        const updated: ProviderSettings = {
+          ...config,
+          apiProvider: (source.apiProvider as any) || config.apiProvider,
+          openRouterApiKey: source.openRouterApiKey || config.openRouterApiKey,
+          openRouterModelId: source.openRouterModelId || config.openRouterModelId,
+          openRouterBaseUrl: source.openRouterBaseUrl || config.openRouterBaseUrl,
+          openRouterSpecificProvider: source.openRouterSpecificProvider || "",
+          openRouterUseMiddleOutTransform: source.openRouterUseMiddleOutTransform ?? config.openRouterUseMiddleOutTransform,
+          googleProjectId: source.googleProjectId || config.googleProjectId,
+          googleRegion: source.googleRegion || config.googleRegion,
+          googleCredentials: source.googleCredentials || config.googleCredentials,
+          googleModelId: source.googleModelId || config.googleModelId,
+          googleEnableUrlContext: source.googleEnableUrlContext ?? config.googleEnableUrlContext,
+          googleEnableGrounding: source.googleEnableGrounding ?? config.googleEnableGrounding,
+          googleEnableReasoning: source.googleEnableReasoning ?? config.googleEnableReasoning,
+          activeModelId: source.activeModelId || config.activeModelId,
+        };
+        setConfig(updated);
+        localStorage.setItem("provider-config", JSON.stringify(updated));
+        setHydratedFromServer(true);
+      }
+    }
+  }, [myConfig, globalConfig, hydratedFromServer]);
 
   const handleSaveConfig = async () => {
     if (!isAuthenticated) {
@@ -589,6 +624,12 @@ export function AdminDashboard() {
             </CardTitle>
             <CardDescription>
               Configure your AI provider settings and preferences
+              {globalConfig?.activeModelId && (
+                <>
+                  <br />
+                  <span className="text-xs text-muted-foreground">Global model in effect for all users: {globalConfig.activeModelId}</span>
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

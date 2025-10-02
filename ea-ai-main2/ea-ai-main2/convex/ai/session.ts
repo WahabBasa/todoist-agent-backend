@@ -147,21 +147,17 @@ export const chatWithAI = action({
     console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
     
     let userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
-    // Global defaults fallback for users without a personal selection
-    if (!userConfig?.activeModelId) {
-      try {
-        const globalDefaults = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: "__GLOBAL__" });
-        if (globalDefaults) {
-          userConfig = { ...(globalDefaults as any), ...(userConfig || {}) } as any;
-          console.log(`🧭 [MODEL_SELECTION] Using global defaults for user without active model`);
-        }
-      } catch (e) {
-        console.warn(`⚠️ [MODEL_SELECTION] Failed to load global defaults:`, e);
-      }
+    // Load global defaults once (admin-selected) and prefer them for everyone
+    let globalConfig: any = null;
+    try {
+      globalConfig = await ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {});
+    } catch (e) {
+      console.warn(`⚠️ [MODEL_SELECTION] Failed to load global config:`, e);
     }
-    console.log(`📋 [MODEL_SELECTION] Effective user config:`, {
+    const effectiveActiveModelId = globalConfig?.activeModelId || userConfig?.activeModelId;
+    console.log(`📋 [MODEL_SELECTION] Effective config:`, {
       hasConfig: !!userConfig,
-      activeModelId: userConfig?.activeModelId,
+      activeModelId: effectiveActiveModelId,
       hasApiKey: !!userConfig?.openRouterApiKey,
       apiKeyPreview: userConfig?.openRouterApiKey ? `${userConfig.openRouterApiKey.substring(0, 10)}...` : 'none'
     });
@@ -171,10 +167,15 @@ export const chatWithAI = action({
       console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
       console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
 
-      // 1. Check user's configured model (dashboard selection)
+      // 1. If admin set a global model, use it for everyone
+      if (globalConfig?.activeModelId) {
+        console.log(`🎯 [MODEL_SELECTION] Using admin global selection: ${globalConfig.activeModelId}`);
+        return globalConfig.activeModelId;
+      }
+
+      // 2. Otherwise, use user's configured model (if any)
       if (userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using dashboard selection: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at provider API level
+        console.log(`🎯 [MODEL_SELECTION] Using user selection: ${userConfig.activeModelId}`);
         return userConfig.activeModelId;
       }
       
@@ -190,7 +191,7 @@ export const chatWithAI = action({
       });
       
       // 4. No fallback - require dashboard selection
-      console.error(`❌ [MODEL_SELECTION] No model selected in dashboard`);
+      console.error(`❌ [MODEL_SELECTION] No model selected (global/user)`);
       throw new Error("No model selected. Please select a model in the Admin Dashboard.");
     })();
     
@@ -246,9 +247,14 @@ export const chatWithAI = action({
       // Initialize OpenRouter (default)
       console.log(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
       
-      // Get API key from unified config
-      const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
-      console.log(`🔑 [MODEL_SELECTION] API key source: ${userConfig?.openRouterApiKey ? 'user_config' : 'environment'}`);
+      // Get API key from unified config (user → global → env)
+      const apiKey = userConfig?.openRouterApiKey || globalConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+      const apiKeySource = userConfig?.openRouterApiKey
+        ? 'user_config'
+        : globalConfig?.openRouterApiKey
+          ? 'global_config'
+          : 'environment';
+      console.log(`🔑 [MODEL_SELECTION] API key source: ${apiKeySource}`);
       
       if (!apiKey) {
         console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
@@ -256,12 +262,12 @@ export const chatWithAI = action({
       }
       
       openRouterApiKey = apiKey;
-      openRouterBaseUrl = userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+      openRouterBaseUrl = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
       buildProviderPreferences = (slug?: string) => slug && slug.length > 0
         ? { provider: { order: [slug], allow_fallbacks: false } }
         : { provider: { sort: "throughput" } };
 
-      const trimmedSpecificProvider = userConfig?.openRouterSpecificProvider?.trim();
+      const trimmedSpecificProvider = (userConfig?.openRouterSpecificProvider ?? globalConfig?.openRouterSpecificProvider)?.trim();
       lockedProvider = trimmedSpecificProvider && trimmedSpecificProvider.length > 0 ? trimmedSpecificProvider : undefined;
 
       persistProviderReset = async () => {

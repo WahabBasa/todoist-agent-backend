@@ -128,6 +128,31 @@ export const getUserProviderConfig = query({
   }
 });
 
+// Convenience: get current user's provider configuration (no args)
+export const getMyProviderConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const tokenIdentifier = identity.tokenIdentifier || identity.subject;
+    return await ctx.db
+      .query("systemConfig")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+  }
+});
+
+// Convenience: get global provider configuration (__GLOBAL__) set by admin
+export const getGlobalProviderConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("systemConfig")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", "__GLOBAL__"))
+      .first();
+  }
+});
+
 // Mutation to set user's provider configuration
 export const setProviderConfig = mutation({
   args: {
@@ -199,13 +224,20 @@ export const setProviderConfig = mutation({
       });
     }
 
-    // If caller is admin, also upsert global defaults so non-admin users inherit a working model
+    // If caller is admin, also upsert global defaults so all users inherit the selection
     try {
-      const adminUserId = process.env.ADMIN_USER_ID;
-      const adminEmail = process.env.ADMIN_EMAIL;
-      const isUserIdMatch = identity.subject === adminUserId;
-      const isEmailMatch = (identity as any).email === adminEmail;
-      const isAdmin = !!(isUserIdMatch || isEmailMatch);
+      // Prefer centralized admin check
+      let isAdmin = false;
+      try {
+        isAdmin = await ctx.runQuery(api.auth.admin.isCurrentUserAdmin, {});
+      } catch (_e) {
+        // Fallback to env-based check if query not available
+        const adminUserId = process.env.ADMIN_USER_ID;
+        const adminEmail = process.env.ADMIN_EMAIL;
+        const isUserIdMatch = identity.subject === adminUserId;
+        const isEmailMatch = (identity as any).email === adminEmail;
+        isAdmin = !!(isUserIdMatch || isEmailMatch);
+      }
 
       if (isAdmin) {
         const globalToken = "__GLOBAL__";
