@@ -33,6 +33,9 @@ export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin, is
   }
 
   const handleSignOut = () => {
+    try {
+      localStorage.removeItem('taskai_current_session_id');
+    } catch {}
     void signOut({ redirectUrl: '/' })
   }
 

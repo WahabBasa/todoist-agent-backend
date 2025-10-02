@@ -25,7 +25,8 @@ http.route({
 
       // In tokenIdentifier pattern, we don't need to sync users to database
       // Clerk authentication is handled directly via tokenIdentifier in each function
-      switch (result.type) {
+      const eventType = result.type as string;
+      switch (eventType) {
         case "user.created":
         case "user.updated":
           const userData = result.data as any;
@@ -40,6 +41,18 @@ http.route({
           break;
         }
 
+        case "session.created": {
+          const sessionData = result.data as any;
+          console.log("Clerk session.created:", {
+            id: sessionData.id,
+            user_id: sessionData.user_id,
+            last_active_at: sessionData.last_active_at,
+          });
+          break;
+        }
+
+        // Note: oauth access token events are not in the SDK's TS union; handle via default branch logging
+
         case "organizationMembership.created":
         case "organizationMembership.updated":
         case "organizationMembership.deleted":
@@ -48,7 +61,15 @@ http.route({
           break;
 
         default:
-          console.log("Ignored Clerk webhook event:", result.type);
+          // Log session/oauth-like events too for debugging unknown types
+          if (eventType?.includes("session") || eventType?.includes("oauth")) {
+            console.log("Clerk webhook event (debug):", eventType, {
+              id: (result.data as any)?.id,
+              user_id: (result.data as any)?.user_id,
+            });
+          } else {
+            console.log("Ignored Clerk webhook event:", eventType);
+          }
       }
 
       return new Response(null, {
@@ -212,3 +233,29 @@ http.route({
 });
 
 export default http;
+
+// Telemetry endpoint to log OAuth callback/debug info (unauthenticated)
+http.route({
+  path: "/telemetry/oauth-callback",
+  method: "POST",
+  handler: httpAction(async (_ctx, request) => {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const { phase, search, hash, href, error, email, userAgent, timestamp } = body || {};
+      console.log("[TELEMETRY][OAUTH]", {
+        phase: phase || "callback",
+        href,
+        search,
+        hash,
+        error,
+        email,
+        userAgent,
+        timestamp,
+      });
+      return new Response("ok", { status: 200 });
+    } catch (e) {
+      console.error("[TELEMETRY][OAUTH] error:", e);
+      return new Response("err", { status: 500 });
+    }
+  }),
+});

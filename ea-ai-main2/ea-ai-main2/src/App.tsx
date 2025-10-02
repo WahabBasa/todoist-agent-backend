@@ -4,7 +4,10 @@ import React, { useState, useEffect } from "react";
 import { AuthLoading } from "convex/react";
 import { useQuery } from "convex/react";
 import { Toaster } from "sonner";
-import { SignedIn, SignedOut } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, useAuth } from "@clerk/clerk-react";
+import { useUser } from "@clerk/clerk-react";
+import { sendAuthTelemetry } from "@/lib/telemetry";
+import AuthCallback from "./components/AuthCallback";
 
 // Import components
 import { ChatView } from "./views/ChatView";
@@ -19,39 +22,80 @@ import { AppLoading } from "./components/ui/AppLoading";
 import { CustomAuthForm } from "./components/CustomAuthForm";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
-// Hook to detect OAuth callback
-function useIsOAuthCallback() {
-  const [isCallback, setIsCallback] = useState(false);
-  
+// Hook to detect OAuth callback and surface errors
+function useOAuthCallbackState() {
+  const [state, setState] = useState<{ isCallback: boolean; error?: string }>(() => ({ isCallback: false }));
+
   useEffect(() => {
-    // Check if URL has OAuth callback params
-    const hasOAuthParams = window.location.search.includes('__clerk') || 
-                          window.location.hash.includes('__clerk');
-    setIsCallback(hasOAuthParams);
-    
+    const search = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const hasOAuthParams = search.has('__clerk') || hash.has('__clerk');
+
+    // Extract common error params if present
+    const error = search.get('error') || search.get('clerk_error') || hash.get('error') || hash.get('clerk_error');
+    const errorDescription = search.get('error_description') || search.get('clerk_error_description') || hash.get('error_description') || hash.get('clerk_error_description');
+
+    setState({
+      isCallback: hasOAuthParams,
+      error: errorDescription || error || undefined,
+    });
+
     if (hasOAuthParams) {
       console.log('🔐 OAuth callback detected, processing...');
+      if (error || errorDescription) {
+        console.warn('🔐 OAuth error detected:', errorDescription || error);
+      }
     }
   }, []);
-  
-  return isCallback;
+
+  return state;
 }
 
 export default function App() {
-  const isOAuthCallback = useIsOAuthCallback();
+  // Dedicated OAuth callback route handled by Clerk
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  const hasClerkParams = typeof window !== 'undefined' && (window.location.search.includes('__clerk') || window.location.hash.includes('__clerk'));
+  const { isSignedIn, isLoaded } = useAuth();
+
+  // 1) Always handle explicit callback route
+  if (path.startsWith('/sso-callback')) {
+    return <AuthCallback />;
+  }
+
+  // 2) Universal callback only if not already signed in (prevents re-login loops)
+  if (hasClerkParams && (!isLoaded || !isSignedIn)) {
+    return <AuthCallback />;
+  }
+
+  const { isCallback: isOAuthCallback, error: oauthError } = useOAuthCallbackState();
+  useEffect(() => {
+    if (isOAuthCallback && path.startsWith('/sso-callback')) {
+      try {
+        sendAuthTelemetry('callback', {
+          search: window.location.search,
+          hash: window.location.hash,
+          href: window.location.href,
+          error: oauthError,
+        });
+      } catch {}
+    }
+  }, [isOAuthCallback, oauthError, path]);
   
   return (
     <div className="h-full" suppressHydrationWarning>
       <Toaster position="top-right" />
       
-      {/* Show loading during OAuth callback */}
-      {isOAuthCallback && (
+      {/* Show loading only on the explicit callback route */}
+      {path.startsWith('/sso-callback') && isOAuthCallback && (
         <div className="h-full flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
               <span className="text-primary-foreground font-semibold text-lg">T</span>
             </div>
             <p className="text-muted-foreground">Completing sign in...</p>
+            {oauthError && (
+              <p className="text-destructive text-sm">Google sign-in failed: {oauthError}</p>
+            )}
           </div>
         </div>
       )}
@@ -67,6 +111,7 @@ export default function App() {
         </div>
       </AuthLoading>
       <SignedIn>
+        <SignedInLogger />
         <ErrorBoundary>
           <SessionsProvider>
             <ChatProvider>
@@ -177,6 +222,21 @@ function MainApp() {
 
 
 function LandingPage() {
+  // Telemetry for bounce-back without __clerk params
+  useEffect(() => {
+    try {
+      const ref = document.referrer || "";
+      const hasClerkParams = window.location.search.includes('__clerk') || window.location.hash.includes('__clerk');
+      if (!hasClerkParams && (ref.includes('accounts.google.com') || ref.includes('clerk'))) {
+        sendAuthTelemetry('bounce', {
+          referrer: ref,
+          search: window.location.search,
+          hash: window.location.hash,
+        });
+      }
+    } catch {}
+  }, []);
+
   return (
     <div className="min-h-screen relative">
       {/* Two-tone Background */}
@@ -222,6 +282,29 @@ function LandingPage() {
       </div>
     </div>
   );
+}
+
+function SignedInLogger() {
+  const { user, isLoaded } = useUser();
+  useEffect(() => {
+    if (isLoaded && user) {
+      sendAuthTelemetry('auth_frontend_complete', {
+        userId: user.id,
+        email: user.primaryEmailAddress?.emailAddress,
+      });
+
+      // Cleanup any stale __clerk params from URL to avoid callback re-trigger
+      try {
+        if (typeof window !== 'undefined') {
+          const hasClerkParams = window.location.search.includes('__clerk') || window.location.hash.includes('__clerk');
+          if (hasClerkParams) {
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        }
+      } catch {}
+    }
+  }, [isLoaded, user]);
+  return null;
 }
 
 

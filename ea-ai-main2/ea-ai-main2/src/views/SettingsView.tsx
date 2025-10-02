@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useAction } from "convex/react";
-import { useClerk, useUser } from "@clerk/clerk-react";
+import { useClerk, useUser, useSignIn } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Button } from "../components/ui/button";
@@ -16,6 +16,7 @@ import {
   User, Settings, Bell, Palette, Link, Shield, 
   AlertTriangle, Download, Trash2, LogOut, ArrowLeft
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface SettingsViewProps {
   onBackToChat: () => void;
@@ -356,6 +357,119 @@ function ConnectedAppsSettings({
 
 
 
+  // GOOGLE CALENDAR CONNECTION STATE
+  const { user } = useUser();
+  const { signIn } = useSignIn();
+  const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+
+  const [gcalConnected, setGcalConnected] = useState<boolean>(false);
+  const [gcalTesting, setGcalTesting] = useState<boolean>(false);
+  const [gcalStatusMsg, setGcalStatusMsg] = useState<string>("");
+
+  const refreshGcalStatus = async () => {
+    try {
+      const has = await hasGoogleCalendarConnection();
+      setGcalConnected(!!has);
+    } catch (e) {
+      console.warn("[Settings] Failed to check Google Calendar connection", e);
+    }
+  };
+
+  useEffect(() => {
+    void refreshGcalStatus();
+    const onFocus = () => void refreshGcalStatus();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  const GCAL_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.settings.readonly'
+  ];
+
+  const telemetry = (phase: string, extra?: Record<string, any>) => {
+    try {
+      const url = `${import.meta.env.VITE_CONVEX_URL}/telemetry/oauth-callback`;
+      const payload = {
+        phase,
+        email: user?.primaryEmailAddress?.emailAddress,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now(),
+        ...extra,
+      };
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+    } catch {}
+  };
+
+  const connectGoogleCalendar = async () => {
+    telemetry('connect_start');
+    setIsConnecting('Google Calendar');
+    try {
+      // Prefer createExternalAccount when available
+      const u: any = user as any;
+      if (u && typeof u.createExternalAccount === 'function') {
+        await u.createExternalAccount({
+          strategy: 'oauth_google',
+          redirectUrl: '/sso-callback',
+          redirectUrlComplete: '/',
+          additionalScopes: GCAL_SCOPES,
+        });
+        return; // Will redirect
+      }
+      // Fallback to signIn.authenticateWithRedirect with additionalScopes
+      const si: any = signIn as any;
+      await si?.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: '/sso-callback',
+        redirectUrlComplete: '/',
+        additionalScopes: GCAL_SCOPES,
+      });
+    } catch (e) {
+      console.error('[Settings] Google Calendar connect failed', e);
+      telemetry('connect_error', { error: String(e) });
+      alert('Failed to start Google Calendar connection. Please try again.');
+      setIsConnecting(null);
+    }
+  };
+
+  const disconnectGoogleCalendar = async () => {
+    try {
+      setIsConnecting('Google Calendar');
+      await removeGoogleCalendarConnection();
+      await refreshGcalStatus();
+      toast.success('Disconnected Google Calendar');
+    } catch (e) {
+      console.error('[Settings] Google Calendar disconnect failed', e);
+      toast.error('Failed to disconnect Google Calendar');
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const testGoogleCalendar = async () => {
+    try {
+      setGcalTesting(true);
+      setGcalStatusMsg('');
+      const res = await testGoogleCalendarConnection();
+      if (res?.success) {
+        setGcalStatusMsg(res.message || 'Connected');
+        toast.success(res.message || 'Google Calendar connected');
+      } else {
+        setGcalStatusMsg(res?.error || 'Not connected');
+        toast.error(res?.error || 'Google Calendar not connected');
+      }
+    } catch (e) {
+      setGcalStatusMsg('Test failed');
+      toast.error('Google Calendar test failed');
+    } finally {
+      setGcalTesting(false);
+      void refreshGcalStatus();
+    }
+  };
+
   // PostMessage listener for OAuth popup messages (including account conflicts)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -417,6 +531,24 @@ function ConnectedAppsSettings({
   };
 
   const connectedApps = [
+    {
+      appName: "Google Calendar",
+      description: gcalConnected
+        ? (gcalStatusMsg || "Connected to your Google Calendar.")
+        : "Connect your Google Calendar to enable scheduling and availability features.",
+      iconBgColor: "bg-green-600",
+      iconText: "G",
+      isConnected: gcalConnected,
+      canConnect: true,
+      isConnecting: isConnecting === 'Google Calendar' || gcalTesting,
+      onConnect: () => {
+        if (gcalConnected) {
+          void disconnectGoogleCalendar();
+        } else {
+          void connectGoogleCalendar();
+        }
+      }
+    },
     {
       appName: "Google Drive",
       description: "Upload Google Docs, Sheets, Slides and other files.",

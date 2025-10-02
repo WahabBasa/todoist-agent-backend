@@ -29,12 +29,17 @@ const ChatContext = createContext<ChatContextType | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   // Session context - get current session from centralized state
-  const { currentSessionId } = useSessions();
+  const { currentSessionId, sessions } = useSessions();
   
   // Load messages for current session from Convex
+  // Guard against stale session IDs from a previous user by validating against current sessions
+  const isValidSession = React.useMemo(() => {
+    return !!currentSessionId && sessions.some(s => s._id === currentSessionId);
+  }, [currentSessionId, sessions]);
+
   const activeConversation = useQuery(
     api.conversations.getConversationBySession,
-    currentSessionId ? { sessionId: currentSessionId } : "skip"
+    isValidSession ? { sessionId: currentSessionId! } : "skip"
   );
 
   // Convert Convex messages to our Message format

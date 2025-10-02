@@ -30,10 +30,11 @@ export const isCurrentUserAdmin = query({
     const adminEmail = process.env.ADMIN_EMAIL;
     
     // Dual security check: User ID AND Email verification
-    const isUserIdMatch = adminUserId && identity.subject === adminUserId;
-    const isEmailMatch = adminEmail && identity.email === adminEmail;
+    const isUserIdMatch = identity.subject === adminUserId; // ensure boolean
+    const isEmailMatch = identity.email === adminEmail;     // ensure boolean
+    const isPublicMetadataAdmin = (identity.publicMetadata as any)?.isAdmin === true;
     
-    const isAdmin = isUserIdMatch || isEmailMatch;
+    const isAdmin = !!(isUserIdMatch || isEmailMatch || isPublicMetadataAdmin);
     
     console.log(`🔐 [Admin] Auth check for user: ${identity.subject?.slice(0, 20)}... (${identity.email})`);
     console.log(`🔐 [Admin] User ID match: ${isUserIdMatch}, Email match: ${isEmailMatch}, Result: ${isAdmin}`);

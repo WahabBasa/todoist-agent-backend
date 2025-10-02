@@ -198,6 +198,50 @@ export const setProviderConfig = mutation({
         isAdmin: false // default
       });
     }
+
+    // If caller is admin, also upsert global defaults so non-admin users inherit a working model
+    try {
+      const adminUserId = process.env.ADMIN_USER_ID;
+      const adminEmail = process.env.ADMIN_EMAIL;
+      const isUserIdMatch = identity.subject === adminUserId;
+      const isEmailMatch = (identity as any).email === adminEmail;
+      const isAdmin = !!(isUserIdMatch || isEmailMatch);
+
+      if (isAdmin) {
+        const globalToken = "__GLOBAL__";
+        const existingGlobal = await ctx.db
+          .query("systemConfig")
+          .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", globalToken))
+          .first();
+
+        const payload = {
+          tokenIdentifier: globalToken,
+          apiProvider: args.apiProvider,
+          openRouterApiKey: args.openRouterApiKey,
+          openRouterModelId: args.openRouterModelId,
+          openRouterBaseUrl: args.openRouterBaseUrl,
+          openRouterSpecificProvider: args.openRouterSpecificProvider,
+          openRouterUseMiddleOutTransform: args.openRouterUseMiddleOutTransform,
+          googleProjectId: args.googleProjectId,
+          googleRegion: args.googleRegion,
+          googleCredentials: args.googleCredentials,
+          googleModelId: args.googleModelId,
+          googleEnableUrlContext: args.googleEnableUrlContext,
+          googleEnableGrounding: args.googleEnableGrounding,
+          googleEnableReasoning: args.googleEnableReasoning,
+          activeModelId: args.activeModelId,
+          updatedAt: now,
+        } as any;
+
+        if (existingGlobal) {
+          await ctx.db.patch(existingGlobal._id, payload);
+        } else {
+          await ctx.db.insert("systemConfig", { ...payload, isAdmin: false });
+        }
+      }
+    } catch (e) {
+      console.warn("[ProviderConfig] Failed to upsert global defaults:", e);
+    }
   }
 });
 

@@ -2,6 +2,7 @@
 
 import { useSignIn, useSignUp } from "@clerk/clerk-react";
 import { useState } from "react";
+import { sendAuthTelemetry, authDebugLog } from "@/lib/telemetry";
 
 export function CustomAuthForm() {
   const { signIn, isLoaded: isSignInLoaded } = useSignIn();
@@ -12,6 +13,8 @@ export function CustomAuthForm() {
   const [showSignUpForm, setShowSignUpForm] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [pendingEmailVerification, setPendingEmailVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
 
   const handleGoogleSignIn = async () => {
     if (!isSignInLoaded) return;
@@ -20,24 +23,21 @@ export function CustomAuthForm() {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔐 Starting Google OAuth with calendar scopes...');
+      authDebugLog('Starting Google OAuth redirect');
+      sendAuthTelemetry('oauth_signin_start');
       
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
-        redirectUrl: "/",
+        redirectUrl: "/sso-callback",
         redirectUrlComplete: "/",
       });
       
       // Note: This line won't execute due to redirect
-      console.log('🔐 OAuth redirect initiated');
+      authDebugLog('OAuth redirect initiated');
       
     } catch (err: any) {
-      console.error("🔐 Google OAuth Error:", err);
-      console.error("🔐 Error details:", {
-        message: err.message,
-        code: err.code,
-        errors: err.errors
-      });
+      authDebugLog('Google OAuth Error', err);
+      sendAuthTelemetry('oauth_signin_error', { error: String(err?.message || err) });
       
       // Show user-friendly error
       if (err.errors && err.errors.length > 0) {
@@ -58,6 +58,7 @@ export function CustomAuthForm() {
     try {
       setIsLoading(true);
       setError(null);
+      sendAuthTelemetry('email_signin_start', { email });
       
       const result = await signIn.create({
         identifier: email,
@@ -66,18 +67,27 @@ export function CustomAuthForm() {
 
       if (result.status === "complete") {
         // Sign in successful, the page will reload automatically
-        console.log("Sign in successful");
+        authDebugLog("Email sign in complete", { email });
+        try {
+          if ((result as any).createdSessionId && typeof (signIn as any).setActive === 'function') {
+            await (signIn as any).setActive({ session: (result as any).createdSessionId });
+          }
+        } catch {}
+        sendAuthTelemetry('email_signin_complete', { email });
       } else if (result.status === "needs_first_factor") {
         // Handle first factor verification (like email verification)
-        console.log("First factor verification needed");
+        authDebugLog("Email sign in needs first factor", { email });
+        sendAuthTelemetry('email_signin_pending_factor', { email, status: result.status });
         setError("Please check your email for verification.");
       } else if (result.status === "needs_second_factor") {
         // Handle two-factor authentication
-        console.log("Second factor verification needed");
+        authDebugLog("Email sign in needs second factor", { email });
+        sendAuthTelemetry('email_signin_pending_factor', { email, status: result.status });
         setError("Two-factor authentication required.");
       }
     } catch (err: any) {
-      console.error("Email sign-in error:", err);
+      authDebugLog("Email sign-in error", err);
+      sendAuthTelemetry('email_signin_error', { email, error: err?.errors?.[0]?.message || String(err?.message || err) });
       if (err.errors && err.errors.length > 0) {
         setError(err.errors[0].message || "Failed to sign in. Please check your credentials.");
       } else {
@@ -95,31 +105,65 @@ export function CustomAuthForm() {
     try {
       setIsLoading(true);
       setError(null);
+      sendAuthTelemetry('email_signup_start', { email });
       
       const result = await signUp.create({
         emailAddress: email,
         password: password,
       });
 
-      if (result.status === "complete") {
-        // Sign up successful, the page will reload automatically
-        console.log("Sign up successful");
-      } else if (result.status === "missing_requirements") {
-        // Handle missing requirements
-        console.log("Missing requirements for sign up");
-        setError("Please complete all required fields.");
-      } else {
-        // Handle other statuses
-        console.log("Sign up status:", result.status);
-        setError("Sign up initiated. Please check your email for verification.");
+      // Send verification code via email
+      try {
+        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+        setPendingEmailVerification(true);
+        sendAuthTelemetry('email_signup_verify_sent', { email });
+      } catch (prepErr: any) {
+        authDebugLog('prepareEmailAddressVerification error', prepErr);
+        setError('Failed to send verification code. Please try again.');
+        sendAuthTelemetry('email_signup_verify_error', { email, error: String(prepErr?.message || prepErr) });
       }
     } catch (err: any) {
-      console.error("Sign-up error:", err);
+      authDebugLog("Sign-up error", err);
+      sendAuthTelemetry('email_signup_error', { email, error: err?.errors?.[0]?.message || String(err?.message || err) });
       if (err.errors && err.errors.length > 0) {
         setError(err.errors[0].message || "Failed to sign up. Please try again.");
       } else {
         setError("Failed to sign up. Please try again.");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSignUpLoaded || !verificationCode) return;
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await signUp.attemptEmailAddressVerification({ code: verificationCode });
+      if (res.status === 'complete') {
+        sendAuthTelemetry('email_signup_verify_success', { email });
+        try {
+          if ((res as any).createdSessionId && typeof (signUp as any).setActive === 'function') {
+            await (signUp as any).setActive({ session: (res as any).createdSessionId });
+          }
+        } catch {}
+        sendAuthTelemetry('email_signup_complete', { email });
+        authDebugLog('Email sign up complete', { email });
+        // Reset local UI state
+        setPendingEmailVerification(false);
+        setVerificationCode("");
+      } else {
+        // Unexpected status; ask user to retry
+        authDebugLog('Email verification status', res.status);
+        setError('Verification incomplete. Please try again.');
+        sendAuthTelemetry('email_signup_verify_status', { email, status: res.status });
+      }
+    } catch (err: any) {
+      authDebugLog('Email verification error', err);
+      setError(err?.errors?.[0]?.message || 'Invalid verification code. Please try again.');
+      sendAuthTelemetry('email_signup_verify_error', { email, error: err?.errors?.[0]?.message || String(err?.message || err) });
     } finally {
       setIsLoading(false);
     }
@@ -158,8 +202,54 @@ export function CustomAuthForm() {
         </div>
       </div>
       
-      {/* Sign In/Up Forms */}
-      {showSignInForm ? (
+      {/* Email Verification Step */}
+      {pendingEmailVerification ? (
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          handleVerifyEmailCode(e).catch(console.error);
+        }} className="space-y-4">
+          <div>
+            <label htmlFor="verification-code" className="block text-sm font-medium text-foreground mb-1">
+              Enter verification code
+            </label>
+            <input
+              id="verification-code"
+              type="text"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              placeholder="6-digit code"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading || !isSignUpLoaded || !verificationCode}
+            className="w-full bg-foreground text-background hover:bg-foreground/90 px-3 py-3 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin mx-auto" />
+            ) : (
+              "Verify"
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingEmailVerification(false);
+              setVerificationCode("");
+              setShowSignInForm(false);
+              setShowSignUpForm(false);
+              setEmail("");
+              setPassword("");
+              setError(null);
+            }}
+            className="w-full text-sm text-muted-foreground hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : showSignInForm ? (
         <form onSubmit={(e) => {
           e.preventDefault();
           handleEmailSignIn(e).catch(console.error);

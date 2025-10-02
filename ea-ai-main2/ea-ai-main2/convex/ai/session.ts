@@ -146,8 +146,20 @@ export const chatWithAI = action({
     const tokenIdentifier = userId;
     console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
     
-    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
-    console.log(`📋 [MODEL_SELECTION] User config retrieved:`, {
+    let userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    // Global defaults fallback for users without a personal selection
+    if (!userConfig?.activeModelId) {
+      try {
+        const globalDefaults = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: "__GLOBAL__" });
+        if (globalDefaults) {
+          userConfig = { ...(globalDefaults as any), ...(userConfig || {}) } as any;
+          console.log(`🧭 [MODEL_SELECTION] Using global defaults for user without active model`);
+        }
+      } catch (e) {
+        console.warn(`⚠️ [MODEL_SELECTION] Failed to load global defaults:`, e);
+      }
+    }
+    console.log(`📋 [MODEL_SELECTION] Effective user config:`, {
       hasConfig: !!userConfig,
       activeModelId: userConfig?.activeModelId,
       hasApiKey: !!userConfig?.openRouterApiKey,
