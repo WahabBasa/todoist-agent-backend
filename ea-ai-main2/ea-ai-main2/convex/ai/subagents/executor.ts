@@ -1,3 +1,5 @@
+"use node";
+
 import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
 import { Id, Doc } from "../../_generated/dataModel";

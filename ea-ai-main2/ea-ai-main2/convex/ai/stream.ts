@@ -1,10 +1,10 @@
-"use node";
+// NOTE: httpAction runs in Convex's default JS runtime (not Node).
+// Avoid importing Node-only packages here.
 
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
 import { streamText, convertToModelMessages } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { createVertex } from "@ai-sdk/google-vertex";
 import { SystemPrompt } from "./system";
 import {
   optimizeConversation,
@@ -46,13 +46,15 @@ export const chat = httpAction(async (ctx, request) => {
 
     const provider = userConfig?.apiProvider || "openrouter";
 
-    // Initialize provider client (typed as any to support .chat like in session.ts)
+    // Initialize provider client for streaming HTTP endpoint.
+    // IMPORTANT: This endpoint must not import Node-only deps.
+    // Only OpenRouter (fetch-based) is supported here.
     let providerClient: any;
     if (provider === "google") {
-      const googleProjectId = userConfig?.googleProjectId || "not-provided";
-      const googleRegion = userConfig?.googleRegion || "us-central1";
-      const vertex: any = createVertex({ project: googleProjectId, location: googleRegion });
-      providerClient = vertex;
+      return new Response(
+        "Google Vertex is not supported in the streaming HTTP endpoint. Please switch to OpenRouter in Admin settings.",
+        { status: 400 }
+      );
     } else {
       const apiKey = userConfig?.openRouterApiKey || globalConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
       if (!apiKey) {
@@ -133,6 +135,7 @@ export const chat = httpAction(async (ctx, request) => {
     });
 
     return result.toUIMessageStreamResponse({ originalMessages: messages });
+  } catch (e) {
     console.error("[STREAM] Error:", e);
     return new Response("Streaming endpoint error", { status: 500 });
   }

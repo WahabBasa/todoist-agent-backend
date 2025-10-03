@@ -3,7 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
 import { chat as streamChat } from "./ai/stream";
-import { WebhookEvent } from "@clerk/backend";
+import type { WebhookEvent } from "@clerk/backend";
 
 const http = httpRouter();
 

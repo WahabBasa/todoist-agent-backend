@@ -1,3 +1,5 @@
+"use node";
+
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'; // Assume provider setup
 import { EmbeddedMetadataSchema } from './messageSchemas';
