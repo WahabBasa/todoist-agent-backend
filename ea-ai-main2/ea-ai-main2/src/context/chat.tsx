@@ -86,7 +86,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return () => { mounted = false; };
   }, [isSignedIn, getToken]);
 
-  const resolvedChatApi = '/convex-http/chat';
+  const resolvedChatApi = React.useMemo(() => {
+    const explicitOrigin = import.meta.env.VITE_CONVEX_HTTP_ORIGIN as string | undefined;
+    if (explicitOrigin) {
+      return `${explicitOrigin.replace(/\/$/, '')}/chat`;
+    }
+
+    const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
+    if (convexUrl) {
+      try {
+        const url = new URL(convexUrl);
+        const siteHost = url.hostname.endsWith('.convex.cloud')
+          ? url.hostname.replace('.convex.cloud', '.convex.site')
+          : url.hostname;
+        return `${url.protocol}//${siteHost}/chat`;
+      } catch {
+        // fall through to relative path fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/chat`;
+    }
+
+    return '/chat';
+  }, []);
 
   // Memoize transport to prevent re-instantiating useChat on each render
   const transport = React.useMemo(() => {
@@ -95,7 +119,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       prepareSendMessagesRequest: ({ messages }) => ({
         // Ensure auth header is sent per-request (hook-level headers are ignored in AI SDK)
         headers: authHeader ? { Authorization: authHeader } : undefined,
-        body: { id: currentSessionId, messages },
+        body: { sessionId: currentSessionId ?? undefined, id: currentSessionId ?? undefined, messages },
       }),
     });
   }, [resolvedChatApi, authHeader, currentSessionId]);

@@ -26,6 +26,8 @@ export interface ConvexMessage {
     result: any;
   }[];
   timestamp?: number;
+  mode?: string;
+  metadata?: any;
 }
 
 /**

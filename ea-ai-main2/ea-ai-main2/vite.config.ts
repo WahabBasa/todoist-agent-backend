@@ -16,6 +16,10 @@ export default defineConfig({
       timeout: 5000,
     },
     proxy: {
+      '/chat': {
+        target: process.env.VITE_CONVEX_HTTP_ORIGIN || 'http://localhost:3210',
+        changeOrigin: true,
+      },
       '/convex-http': {
         target: process.env.VITE_CONVEX_HTTP_ORIGIN || 'http://localhost:3210',
         changeOrigin: true,
