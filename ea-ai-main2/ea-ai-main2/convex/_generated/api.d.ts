@@ -42,6 +42,7 @@ import type * as ai_prompts_zen_new from "../ai/prompts/zen_new.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_simpleMessages from "../ai/simpleMessages.js";
 import type * as ai_state_ConversationState from "../ai/state/ConversationState.js";
+import type * as ai_stream from "../ai/stream.js";
 import type * as ai_subagents_executor from "../ai/subagents/executor.js";
 import type * as ai_subagents_registry from "../ai/subagents/registry.js";
 import type * as ai_system from "../ai/system.js";
@@ -130,6 +131,7 @@ declare const fullApi: ApiFromModules<{
   "ai/session": typeof ai_session;
   "ai/simpleMessages": typeof ai_simpleMessages;
   "ai/state/ConversationState": typeof ai_state_ConversationState;
+  "ai/stream": typeof ai_stream;
   "ai/subagents/executor": typeof ai_subagents_executor;
   "ai/subagents/registry": typeof ai_subagents_registry;
   "ai/system": typeof ai_system;

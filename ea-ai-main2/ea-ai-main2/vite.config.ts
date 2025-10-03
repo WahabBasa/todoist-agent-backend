@@ -15,6 +15,13 @@ export default defineConfig({
       // Reduce HMR aggressiveness to prevent unnecessary reloads
       timeout: 5000,
     },
+    proxy: {
+      '/convex-http': {
+        target: process.env.VITE_CONVEX_HTTP_ORIGIN || 'http://localhost:3210',
+        changeOrigin: true,
+        rewrite: (p: string) => p.replace(/^\/convex-http/, ''),
+      }
+    },
     // Watch options to reduce file system noise
     watch: {
       // Ignore certain directories to reduce churn

@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
+import { chat as streamChat } from "./ai/stream";
 import { WebhookEvent } from "@clerk/backend";
 
 const http = httpRouter();
@@ -258,4 +259,11 @@ http.route({
       return new Response("err", { status: 500 });
     }
   }),
+});
+
+// Streaming chat endpoint (AI SDK useChat compatible)
+http.route({
+  path: "/chat",
+  method: "POST",
+  handler: streamChat,
 });

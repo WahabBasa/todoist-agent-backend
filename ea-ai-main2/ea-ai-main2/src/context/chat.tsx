@@ -5,7 +5,17 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { useSessions } from './sessions';
-import { useConvexChat, Message } from '../hooks/useConvexChat';
+import { useChat as useVercelChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useAuth } from '@clerk/clerk-react';
+
+// Minimal message shape expected by UI components
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt?: Date;
+}
 
 // Simple chat context interface - much cleaner than before
 interface ChatContextType {
@@ -56,28 +66,69 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }));
   }, [activeConversation?.messages]);
 
-  // Use our custom hook that mimics Vercel AI SDK interface
+  // Auth header for Convex httpAction
+  const { getToken, isSignedIn } = useAuth();
+  const [authHeader, setAuthHeader] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (isSignedIn) {
+          const token = await getToken();
+          if (mounted && token) setAuthHeader(`Bearer ${token}`);
+        } else {
+          setAuthHeader(null);
+        }
+      } catch (e) {
+        console.warn('[CHAT] Failed to get auth token', e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [isSignedIn, getToken]);
+
+  const resolvedChatApi = '/convex-http/chat';
+
   const {
     messages,
     input,
-    setInput,
     handleInputChange,
     handleSubmit,
-    isLoading,
-    error,
-    isRetriable,
-    reload
-  } = useConvexChat({
-    id: currentSessionId || undefined,
+    status,
+    stop,
+    reload,
+    setMessages,
+    error
+  } = useVercelChat({
+    transport: new DefaultChatTransport({
+      api: resolvedChatApi,
+      prepareSendMessagesRequest: ({ messages }) => ({
+        body: { id: currentSessionId, messages },
+      }),
+    }),
+    headers: () => authHeader ? { Authorization: authHeader } : {},
     initialMessages,
-    onFinish: (message) => {
-      // Optional: Add any post-message logic here
-      window.dispatchEvent(new CustomEvent('chat-history-updated'));
-    },
-    onError: (error) => {
-      toast.error(`Error: ${error.message}`);
-    }
+    onError: (err) => toast.error(`Error: ${err.message}`),
+    onFinish: () => window.dispatchEvent(new CustomEvent('chat-history-updated')),
   });
+
+  const isLoading = status === 'submitted' || status === 'streaming';
+  const isRetriable = false;
+
+  // Normalize AI SDK UI messages to simple { role, content } for existing UI
+  const normalizedMessages: Message[] = React.useMemo(() => {
+    return (messages as any[]).map((m: any) => {
+      let text = '';
+      if (Array.isArray(m.parts)) {
+        text = m.parts
+          .filter((p: any) => p?.type === 'text')
+          .map((p: any) => p?.text || '')
+          .join('');
+      } else if (typeof m.content === 'string') {
+        text = m.content;
+      }
+      return { id: m.id, role: m.role, content: text } as Message;
+    });
+  }, [messages]);
 
   const clearChat = React.useCallback(() => {
     // Trigger clear chat event for sessions context to handle
@@ -90,9 +141,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
-    messages,
+    messages: normalizedMessages,
     input,
-    setInput,
+    setInput: (val: string) => handleInputChange({ target: { value: val } } as any),
     handleInputChange,
     handleSubmit,
     isLoading,
