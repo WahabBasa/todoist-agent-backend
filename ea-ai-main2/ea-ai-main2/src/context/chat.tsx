@@ -67,24 +67,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [activeConversation?.messages]);
 
   // Auth header for Convex httpAction
-  const { getToken, isSignedIn } = useAuth();
-  const [authHeader, setAuthHeader] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        if (isSignedIn) {
-          const token = await getToken({ template: 'convex' });
-          if (mounted && token) setAuthHeader(`Bearer ${token}`);
-        } else {
-          setAuthHeader(null);
-        }
-      } catch (e) {
-        console.warn('[CHAT] Failed to get auth token', e);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [isSignedIn, getToken]);
+  const { getToken } = useAuth();
 
   const resolvedChatApi = React.useMemo(() => {
     const explicitOrigin = import.meta.env.VITE_CONVEX_HTTP_ORIGIN as string | undefined;
@@ -124,13 +107,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const transport = React.useMemo(() => {
     return new DefaultChatTransport({
       api: resolvedChatApi,
-      prepareSendMessagesRequest: ({ messages }) => ({
-        // Ensure auth header is sent per-request (hook-level headers are ignored in AI SDK)
-        headers: authHeader ? { Authorization: authHeader } : undefined,
-        body: { sessionId: currentSessionId ?? undefined, id: currentSessionId ?? undefined, messages },
-      }),
+      prepareSendMessagesRequest: async ({ messages }) => {
+        const token = await getToken({ template: 'convex' });
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+        return {
+          headers,
+          body: { sessionId: currentSessionId ?? undefined, id: currentSessionId ?? undefined, messages },
+        };
+      },
     });
-  }, [resolvedChatApi, authHeader, currentSessionId]);
+  }, [resolvedChatApi, currentSessionId, getToken]);
 
   const {
     messages,
@@ -150,21 +137,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const isLoading = status === 'submitted' || status === 'streaming';
   const isRetriable = false;
 
-  // Debug status transitions to verify loading lifecycle
-  React.useEffect(() => {
-    try { console.debug('[CHAT] status:', status); } catch {}
-  }, [status]);
-
   // Local input state managed here to avoid SDK API differences
   const [localInput, setLocalInput] = React.useState('');
-
-  // Debug input updates to trace controlled component behavior
-  React.useEffect(() => {
-    try {
-      const v = localInput ?? '';
-      console.debug('[CHAT] input len=', v.length, 'preview=', JSON.stringify(v.slice(0, 50)));
-    } catch {}
-  }, [localInput]);
 
   // Normalize AI SDK UI messages to simple { role, content } for existing UI
   const normalizedMessages: Message[] = React.useMemo(() => {
@@ -197,7 +171,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Our own input change handler (SDK-agnostic)
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const next = e?.target?.value ?? '';
-    try { console.debug('[CHAT] handleInputChange len=', next.length); } catch {}
     setLocalInput(next);
   }, []);
 
