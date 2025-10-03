@@ -74,7 +74,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         if (isSignedIn) {
-          const token = await getToken();
+          const token = await getToken({ template: 'convex' });
           if (mounted && token) setAuthHeader(`Bearer ${token}`);
         } else {
           setAuthHeader(null);
@@ -89,7 +89,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const resolvedChatApi = React.useMemo(() => {
     const explicitOrigin = import.meta.env.VITE_CONVEX_HTTP_ORIGIN as string | undefined;
     if (explicitOrigin) {
-      return `${explicitOrigin.replace(/\/$/, '')}/chat`;
+      try {
+        const u = new URL(explicitOrigin);
+        const siteHost = u.hostname.endsWith('.convex.cloud')
+          ? u.hostname.replace('.convex.cloud', '.convex.site')
+          : u.hostname;
+        return `${u.protocol}//${siteHost}${u.port ? `:${u.port}` : ''}/chat`;
+      } catch {
+        return `${explicitOrigin.replace(/\/$/, '').replace('.convex.cloud', '.convex.site')}/chat`;
+      }
     }
 
     const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;

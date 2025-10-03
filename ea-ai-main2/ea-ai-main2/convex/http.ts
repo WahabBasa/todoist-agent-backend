@@ -253,11 +253,55 @@ http.route({
         userAgent,
         timestamp,
       });
-      return new Response("ok", { status: 200 });
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response("ok", {
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          Vary: "origin",
+        },
+      });
     } catch (e) {
       console.error("[TELEMETRY][OAUTH] error:", e);
-      return new Response("err", { status: 500 });
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response("err", {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          Vary: "origin",
+        },
+      });
     }
+  }),
+});
+
+// Telemetry preflight
+http.route({
+  path: "/telemetry/oauth-callback",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => {
+    const h = request.headers;
+    const isPreflight = h.get("Origin") && h.get("Access-Control-Request-Method");
+    if (isPreflight) {
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+    return new Response(null, { status: 204 });
   }),
 });
 
@@ -266,4 +310,28 @@ http.route({
   path: "/chat",
   method: "POST",
   handler: streamChat,
+});
+
+// CORS preflight for chat
+http.route({
+  path: "/chat",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => {
+    const h = request.headers;
+    const isPreflight = h.get("Origin") && h.get("Access-Control-Request-Method");
+    if (isPreflight) {
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+    return new Response(null, { status: 204 });
+  }),
 });

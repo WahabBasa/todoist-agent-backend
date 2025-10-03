@@ -11,6 +11,18 @@ import { createModeToolRegistry } from "./toolRegistry";
 import { createEmbeddedMessage } from "./messageSchemas";
 import { Id } from "../_generated/dataModel";
 
+function corsHeadersFor(request: Request): Headers {
+  const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+  const h = new Headers({
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    Vary: "origin",
+  });
+  if (origin !== "*") h.set("Access-Control-Allow-Credentials", "true");
+  return h;
+}
+
 export const chat = httpAction(async (ctx, request) => {
   try {
     const body = await request.json().catch(() => ({}));
@@ -20,7 +32,7 @@ export const chat = httpAction(async (ctx, request) => {
 
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      return new Response("Unauthorized", { status: 401 });
+      return new Response("Unauthorized", { status: 401, headers: corsHeadersFor(request) });
     }
     const userId = identity.tokenIdentifier;
 
@@ -38,20 +50,26 @@ export const chat = httpAction(async (ctx, request) => {
 
     const modelName: string | undefined = globalConfig?.activeModelId || userConfig?.activeModelId;
     if (!modelName) {
-      return new Response("No model selected. Please choose a model in the Admin Dashboard.", { status: 400 });
+      return new Response("No model selected. Please choose a model in the Admin Dashboard.", {
+        status: 400,
+        headers: corsHeadersFor(request),
+      });
     }
 
     const provider = userConfig?.apiProvider || globalConfig?.apiProvider || "openrouter";
     if (provider !== "openrouter") {
       return new Response(
         "The streaming endpoint currently supports the OpenRouter provider. Switch to OpenRouter in settings.",
-        { status: 400 }
+        { status: 400, headers: corsHeadersFor(request) }
       );
     }
 
     const apiKey = userConfig?.openRouterApiKey || globalConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      return new Response("Missing OpenRouter API key. Add one in the Admin Dashboard.", { status: 400 });
+      return new Response("Missing OpenRouter API key. Add one in the Admin Dashboard.", {
+        status: 400,
+        headers: corsHeadersFor(request),
+      });
     }
 
     const baseURL = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
@@ -118,10 +136,15 @@ export const chat = httpAction(async (ctx, request) => {
       },
     });
 
-    return result.toUIMessageStreamResponse();
+    const resp = result.toUIMessageStreamResponse();
+    const mergedHeaders = corsHeadersFor(request);
+    resp.headers.forEach((value, key) => {
+      mergedHeaders.set(key, value);
+    });
+    return new Response(resp.body, { status: resp.status, headers: mergedHeaders });
   } catch (error) {
     console.error("[STREAM] Unexpected error:", error);
-    return new Response("Streaming endpoint error", { status: 500 });
+    return new Response("Streaming endpoint error", { status: 500, headers: corsHeadersFor(request) });
   }
 });
 
