@@ -140,6 +140,16 @@ export function Chat() {
     clearChat() // Use context's clearChat
   }
 
+  // Log input lifecycle at UI level
+  useEffect(() => {
+    try { console.debug('[UI] isLoading =', isLoading); } catch {}
+  }, [isLoading]);
+
+  const onChangeDebug = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    try { console.debug('[UI] onChange, isLoading=', isLoading, 'len=', e?.target?.value?.length); } catch {}
+    handleInputChange(e);
+  }, [isLoading, handleInputChange]);
+
   return (
     <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
       {/* Messages Container - ChatHub Pattern */}
@@ -192,7 +202,7 @@ export function Chat() {
           <ChatInput
             ref={inputRef}
             value={input}
-            onChange={handleInputChange}
+            onChange={onChangeDebug}
             onSubmit={handleFormSubmit}
             onClear={handleClearChat}
             onCompositionStart={handleCompositionStart}
@@ -202,6 +212,7 @@ export function Chat() {
             placeholder="Ask a question..."
             showClearButton={conversationTurns.length > 0}
             onKeyDown={e => {
+              try { console.debug('[UI] onKeyDown key=', e.key, 'isLoading=', isLoading); } catch {}
               if (
                 e.key === 'Enter' &&
                 !e.shiftKey &&

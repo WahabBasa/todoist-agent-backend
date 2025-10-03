@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef } from 'react'
+import React, { useRef, forwardRef, useEffect } from 'react'
 import { ArrowUp, Square, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
@@ -35,6 +35,10 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
 }, ref) => {
   const formRef = useRef<HTMLFormElement>(null)
 
+  useEffect(() => {
+    try { console.debug('[UI] <ChatInput> disabled=', disabled, 'isLoading=', isLoading, 'valueLen=', value?.length); } catch {}
+  }, [disabled, isLoading, value]);
+
   return (
     <div className={cn("w-full transition-all duration-300 ease-in-out", className)}>
       <form
@@ -55,6 +59,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               tabIndex={0}
               onCompositionStart={onCompositionStart}
               onCompositionEnd={onCompositionEnd}
+              onFocus={() => { try { console.debug('[UI] <ChatInput> focused'); } catch {} }}
               placeholder={placeholder}
               spellCheck={false}
               value={value}

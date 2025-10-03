@@ -88,24 +88,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const resolvedChatApi = '/convex-http/chat';
 
+  // Memoize transport to prevent re-instantiating useChat on each render
+  const transport = React.useMemo(() => {
+    return new DefaultChatTransport({
+      api: resolvedChatApi,
+      prepareSendMessagesRequest: ({ messages }) => ({
+        // Ensure auth header is sent per-request (hook-level headers are ignored in AI SDK)
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+        body: { id: currentSessionId, messages },
+      }),
+    });
+  }, [resolvedChatApi, authHeader, currentSessionId]);
+
   const {
     messages,
-    input,
-    handleInputChange,
-    handleSubmit,
+    sendMessage,
     status,
     stop,
     reload,
     setMessages,
     error
   } = useVercelChat({
-    transport: new DefaultChatTransport({
-      api: resolvedChatApi,
-      prepareSendMessagesRequest: ({ messages }) => ({
-        body: { id: currentSessionId, messages },
-      }),
-    }),
-    headers: () => authHeader ? { Authorization: authHeader } : {},
+    transport,
     initialMessages,
     onError: (err) => toast.error(`Error: ${err.message}`),
     onFinish: () => window.dispatchEvent(new CustomEvent('chat-history-updated')),
@@ -113,6 +117,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const isLoading = status === 'submitted' || status === 'streaming';
   const isRetriable = false;
+
+  // Debug status transitions to verify loading lifecycle
+  React.useEffect(() => {
+    try { console.debug('[CHAT] status:', status); } catch {}
+  }, [status]);
+
+  // Local input state managed here to avoid SDK API differences
+  const [localInput, setLocalInput] = React.useState('');
+
+  // Debug input updates to trace controlled component behavior
+  React.useEffect(() => {
+    try {
+      const v = localInput ?? '';
+      console.debug('[CHAT] input len=', v.length, 'preview=', JSON.stringify(v.slice(0, 50)));
+    } catch {}
+  }, [localInput]);
 
   // Normalize AI SDK UI messages to simple { role, content } for existing UI
   const normalizedMessages: Message[] = React.useMemo(() => {
@@ -130,8 +150,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }, [messages]);
 
-  // Ensure input is always a string to avoid undefined.trim() crashes
-  const safeInput = input ?? "";
+  // Ensure input is always a string to avoid trim() issues
+  const safeInput = localInput ?? "";
 
   const clearChat = React.useCallback(() => {
     // Trigger clear chat event for sessions context to handle
@@ -142,13 +162,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Fresh session detection
   const isFreshSession = messages.length === 0 && !isLoading;
 
+  // Our own input change handler (SDK-agnostic)
+  const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const next = e?.target?.value ?? '';
+    try { console.debug('[CHAT] handleInputChange len=', next.length); } catch {}
+    setLocalInput(next);
+  }, []);
+
+  // Our own submit handler using sendMessage
+  const handleSubmitCompat = React.useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const content = (localInput || '').trim();
+    if (!content || isLoading) return;
+    setLocalInput('');
+    try {
+      if (typeof sendMessage === 'function') {
+        sendMessage({ text: content });
+      } else {
+        console.warn('[CHAT] sendMessage not available on useChat return');
+      }
+    } catch (err) {
+      console.error('[CHAT] sendMessage failed:', err);
+    }
+  }, [localInput, isLoading, sendMessage]);
+
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
     messages: normalizedMessages,
     input: safeInput,
-    setInput: (val: string) => handleInputChange({ target: { value: val } } as any),
+    setInput: (val: string) => setLocalInput(val),
     handleInputChange,
-    handleSubmit,
+    handleSubmit: handleSubmitCompat,
     isLoading,
     error,
     isRetriable,
