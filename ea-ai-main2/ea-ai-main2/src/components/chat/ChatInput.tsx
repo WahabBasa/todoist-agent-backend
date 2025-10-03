@@ -102,7 +102,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                   "btn-blue-primary",
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
-                disabled={(value.trim().length === 0 && !isLoading) || disabled}
+                disabled={(((value?.trim?.().length ?? 0) === 0) && !isLoading) || disabled}
               >
                 <ArrowUp size={16} />
               </Button>

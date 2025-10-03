@@ -130,6 +130,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }, [messages]);
 
+  // Ensure input is always a string to avoid undefined.trim() crashes
+  const safeInput = input ?? "";
+
   const clearChat = React.useCallback(() => {
     // Trigger clear chat event for sessions context to handle
     window.dispatchEvent(new CustomEvent('clear-chat-requested'));
@@ -142,7 +145,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
     messages: normalizedMessages,
-    input,
+    input: safeInput,
     setInput: (val: string) => handleInputChange({ target: { value: val } } as any),
     handleInputChange,
     handleSubmit,

@@ -208,7 +208,7 @@ export function Chat() {
                 !isComposing &&
                 !enterDisabled
               ) {
-                if (input.trim().length === 0) {
+                if ((input ?? "").trim().length === 0) {
                   e.preventDefault()
                   return
                 }
