@@ -124,13 +124,15 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     });
   }, [sessions, isLoadingSessions]);
 
-  // Validate persisted session on app startup
+  // Validate persisted session only once after first sessions load
+  const didValidateRef = React.useRef(false);
   useEffect(() => {
-    if (isLoadingSessions || !currentSessionId) return;
-    
-    // Check if the persisted session still exists in the database
+    if (didValidateRef.current) return;
+    if (isLoadingSessions) return; // wait for initial load
+    didValidateRef.current = true;  // run once per app load
+    if (!currentSessionId) return;  // nothing to validate
+
     const sessionExists = sessions.some(session => session._id === currentSessionId);
-    
     if (!sessionExists) {
       console.warn('🗑️ Persisted session no longer exists, clearing:', currentSessionId);
       setCurrentSessionId(null);

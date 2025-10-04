@@ -105,14 +105,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [currentSessionId, sessions]);
   
   // Load messages for current session from Convex
-  // Guard against stale session IDs from a previous user by validating against current sessions
-  const isValidSession = React.useMemo(() => {
-    return !!currentSessionId && sessions.some(s => s._id === currentSessionId);
-  }, [currentSessionId, sessions]);
-
   const activeConversation = useQuery(
     api.conversations.getConversationBySession,
-    isValidSession ? { sessionId: currentSessionId! } : "skip"
+    currentSessionId ? { sessionId: currentSessionId } : "skip"
   );
 
   const canonicalHistoryVersion = React.useMemo(() => {
@@ -345,6 +340,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setRehydrationKey((k) => k + 1);
     }
   }, [status, canonicalHistoryVersion]);
+
+  // On session change, force a safe remount when idle to ensure initial messages hydrate
+  React.useEffect(() => {
+    if (status === 'ready') {
+      setRehydrationKey((k) => k + 1);
+      prevVersionRef.current = canonicalHistoryVersion;
+    }
+  }, [chatId, status, canonicalHistoryVersion]);
+
+  // If SDK has initial messages but hook shows none, remount once when idle
+  React.useEffect(() => {
+    if (status === 'ready' && normalizedMessages.length === 0 && initialSdkMessages.length > 0) {
+      setRehydrationKey((k) => k + 1);
+    }
+  }, [status, normalizedMessages.length, initialSdkMessages.length]);
 
   React.useEffect(() => {
     setLocalInput('');
