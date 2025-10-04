@@ -259,7 +259,7 @@ http.route({
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
           ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
           Vary: "origin",
         },
@@ -272,7 +272,7 @@ http.route({
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
           ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
           Vary: "origin",
         },
@@ -295,7 +295,7 @@ http.route({
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
           ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
           "Access-Control-Max-Age": "86400",
         },
@@ -326,7 +326,7 @@ http.route({
         headers: {
           "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
           ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
           "Access-Control-Max-Age": "86400",
         },

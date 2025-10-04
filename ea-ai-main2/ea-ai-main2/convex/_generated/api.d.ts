@@ -87,6 +87,7 @@ import type * as migrations_backfillSessionTimestamps from "../migrations/backfi
 import type * as providers_openrouter from "../providers/openrouter.js";
 import type * as providers_openrouterDetailed from "../providers/openrouterDetailed.js";
 import type * as providers_unified from "../providers/unified.js";
+import type * as sessionLocks from "../sessionLocks.js";
 import type * as todoist_BatchTodoistHandler from "../todoist/BatchTodoistHandler.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
@@ -176,6 +177,7 @@ declare const fullApi: ApiFromModules<{
   "providers/openrouter": typeof providers_openrouter;
   "providers/openrouterDetailed": typeof providers_openrouterDetailed;
   "providers/unified": typeof providers_unified;
+  sessionLocks: typeof sessionLocks;
   "todoist/BatchTodoistHandler": typeof todoist_BatchTodoistHandler;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;

@@ -235,6 +235,12 @@ const applicationTables = {
       })),
     }).index("by_lastFetched", ["lastFetched"]),
 
+  sessionLocks: defineTable({
+    sessionId: v.id("chatSessions"),
+    requestId: v.string(),
+    expiresAt: v.number(),
+  }).index("by_session", ["sessionId"]),
+
     cachedDetailedOpenrouterModels: defineTable({
       lastFetched: v.number(),
       models: v.array(v.object({
