@@ -40,6 +40,7 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   // Session context - get current session from centralized state
   const { currentSessionId, sessions } = useSessions();
+  const chatId = currentSessionId ?? "default";
   
   // Load messages for current session from Convex
   // Guard against stale session IDs from a previous user by validating against current sessions
@@ -117,7 +118,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         };
       },
     });
-  }, [resolvedChatApi, currentSessionId, getToken]);
+  }, [resolvedChatApi, chatId, currentSessionId, getToken]);
 
   const {
     messages,
@@ -128,6 +129,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages,
     error
   } = useVercelChat({
+    id: chatId,
     transport,
     initialMessages,
     onError: (err) => toast.error(`Error: ${err.message}`),
@@ -190,6 +192,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('[CHAT] sendMessage failed:', err);
     }
   }, [localInput, isLoading, sendMessage]);
+
+  React.useEffect(() => {
+    setMessages(initialMessages as any);
+  }, [chatId, initialMessages, setMessages]);
+
+  React.useEffect(() => {
+    setLocalInput('');
+  }, [chatId]);
 
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
