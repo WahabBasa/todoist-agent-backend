@@ -430,7 +430,8 @@ export const chatWithAI = action({
       // Add user message to conversation (use sanitized version)
       const updatedHistory = addMessageToConversation(history, {
         role: "user",
-        content: sanitizedMessage
+        content: sanitizedMessage,
+        timestamp: Date.now(),
       });
 
       // Simple conversation optimization

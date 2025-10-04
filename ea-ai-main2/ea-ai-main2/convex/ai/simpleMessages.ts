@@ -13,7 +13,7 @@ import { ModelMessage, convertToModelMessages, type UIMessage } from "ai";
 
 // Convex native message format (simplified)
 export interface ConvexMessage {
-  role: "user" | "assistant" | "tool";
+  role: "user" | "assistant" | "system" | "tool";
   content?: string;
   toolCalls?: {
     name: string;
@@ -22,10 +22,10 @@ export interface ConvexMessage {
   }[];
   toolResults?: {
     toolCallId: string;
-    toolName?: string;
+    toolName: string;
     result: any;
   }[];
-  timestamp?: number;
+  timestamp: number;
   mode?: string;
   metadata?: any;
 }

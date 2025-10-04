@@ -6,9 +6,8 @@ import { api } from "../_generated/api";
 import { streamText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
-import { optimizeConversation, type ConvexMessage, convertConvexToModelMessages } from "./simpleMessages";
+import { convertConvexToModelMessages, type ConvexMessage } from "./simpleMessages";
 import { createModeToolRegistry } from "./toolRegistry";
-import { createEmbeddedMessage } from "./messageSchemas";
 import { Id } from "../_generated/dataModel";
 
 const LOCK_TTL_MS = 15_000;
@@ -161,24 +160,56 @@ export const chat = httpAction(async (ctx, request) => {
       sessionId ? (sessionId as Id<"chatSessions">) : undefined
     ).catch(() => undefined);
 
-    const storedConversation = sessionConvexId
-      ? await ctx.runQuery(api.conversations.getConversationBySession, {
-          sessionId: sessionConvexId,
-        })
-      : null;
+    let canonicalHistory: ConvexMessage[] = [];
+    let appendedUser = false;
+    let dbCountBefore = 0;
+    let historyVersionAfterUser = 0;
 
-    const storedHistory = Array.isArray(storedConversation?.messages)
-      ? (storedConversation!.messages as ConvexMessage[])
-      : [];
+    if (sessionConvexId) {
+      const appendResult = await ctx.runMutation(api.conversations.appendUserMessage, {
+        sessionId: sessionConvexId,
+        content: latestUserMessage,
+        historyVersion: historyVersion ?? undefined,
+      });
 
-    const { history: canonicalHistory, appended } = appendUserMessage(storedHistory, latestUserMessage, currentMode);
+      if (appendResult.status === "conflict") {
+        if (releaseLock) {
+          await releaseLock();
+        }
+        const headers = corsHeadersFor(request);
+        headers.set("Content-Type", "application/json");
+        return new Response(
+          JSON.stringify({
+            error: "history_conflict",
+            version: appendResult.version,
+          }),
+          { status: 409, headers }
+        );
+      }
+
+      canonicalHistory = appendResult.messages;
+      appendedUser = appendResult.status === "appended";
+      dbCountBefore = appendResult.previousVersion;
+      historyVersionAfterUser = appendResult.version;
+    } else {
+      canonicalHistory = [
+        {
+          role: "user",
+          content: latestUserMessage,
+          timestamp: Date.now(),
+        },
+      ];
+      appendedUser = true;
+      dbCountBefore = 0;
+      historyVersionAfterUser = canonicalHistory.length;
+    }
 
     console.log("[STREAM][start]", {
       sessionId: sessionId ?? null,
       requestId,
       historyVersion,
-      dbCountBefore: storedHistory.length,
-      appendedUser: appended,
+      dbCountBefore,
+      appendedUser,
       fallbackUsed: usedFallback,
     });
 
@@ -198,38 +229,35 @@ export const chat = httpAction(async (ctx, request) => {
       },
       onFinish: async (finish) => {
         try {
-          let history: ConvexMessage[] = [...canonicalHistory];
           const assistantText =
             extractAssistantResponse(finish?.response?.messages) ||
             extractFinishText(finish?.response);
 
-          if (assistantText) {
-            history = [
-              ...history,
-              createEmbeddedMessage(
-                {
-                  role: "assistant",
-                  content: assistantText,
-                  timestamp: Date.now(),
-                },
-                { mode: currentMode }
-              ),
-            ];
+          if (sessionConvexId) {
+            const persistResult = await ctx.runMutation(api.conversations.appendAssistantMessage, {
+              sessionId: sessionConvexId,
+              content: assistantText,
+              historyVersion: historyVersionAfterUser,
+            });
+
+            if (persistResult.status === "conflict") {
+              console.warn("[STREAM][finish] History conflict when appending assistant message", {
+                sessionId,
+                requestId,
+                providedVersion: historyVersionAfterUser,
+                version: persistResult.version,
+              });
+            } else {
+              console.log("[STREAM][finish]", {
+                sessionId: sessionId ?? null,
+                requestId,
+                historyVersion,
+                dbCountBefore: persistResult.previousVersion,
+                dbCountAfter: persistResult.version,
+                persisted: persistResult.status === "appended",
+              });
+            }
           }
-
-          const compacted = optimizeConversation(history, 50);
-          await ctx.runMutation(api.conversations.upsertConversation, {
-            sessionId: sessionId ? (sessionId as Id<"chatSessions">) : undefined,
-            messages: compacted as any[],
-          });
-
-          console.log("[STREAM][finish]", {
-            sessionId: sessionId ?? null,
-            requestId,
-            historyVersion,
-            dbCountBefore: storedHistory.length,
-            dbCountAfter: history.length,
-          });
         } catch (persistError) {
           console.error("[STREAM][persist] Failed to store conversation:", {
             error: persistError,
@@ -387,37 +415,4 @@ function extractTextFromParts(parts: any[]): string {
     })
     .join("")
     .trim();
-}
-
-function appendUserMessage(
-  storedHistory: ConvexMessage[],
-  content: string,
-  mode: string,
-): { history: ConvexMessage[]; appended: boolean } {
-  const baseHistory = Array.isArray(storedHistory) ? [...storedHistory] : [];
-
-  const userMessage = createEmbeddedMessage(
-    {
-      role: "user" as const,
-      content,
-      timestamp: Date.now(),
-    },
-    { mode },
-  ) as ConvexMessage;
-
-  if (shouldAppendMessage(baseHistory, userMessage)) {
-    baseHistory.push(userMessage);
-    return { history: baseHistory, appended: true };
-  }
-
-  return { history: baseHistory, appended: false };
-}
-
-function shouldAppendMessage(history: ConvexMessage[], candidate: ConvexMessage): boolean {
-  if (history.length === 0) {
-    return true;
-  }
-
-  const last = history[history.length - 1];
-  return !(last.role === candidate.role && last.content === candidate.content);
 }
