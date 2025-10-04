@@ -70,7 +70,7 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
         }
         
         // Add tool calls if present
-        if (message.toolCalls && message.toolCalls.length > 0) {
+        if (Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
           for (const toolCall of message.toolCalls) {
             parts.push({
               type: `tool-${toolCall.name}` as `tool-${string}`,
@@ -93,7 +93,7 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
       
       // Handle tool results - skip separate tool messages as they should be integrated into conversation flow
       // Tool results are handled by the AI SDK's convertToModelMessages function
-      if (message.role === "tool" && message.toolResults && message.toolResults.length > 0) {
+      if (message.role === "tool" && Array.isArray(message.toolResults) && message.toolResults.length > 0) {
         // Skip tool result messages - these will be handled by the conversion process
         console.debug(`[SimpleMessages] Skipping tool result message ${i}: will be handled by convertToModelMessages`);
         continue;
@@ -146,19 +146,27 @@ export function optimizeConversation(messages: ConvexMessage[], maxMessages = 50
 
 /**\n * Clean up message content to prevent AI SDK issues\n */
 export function sanitizeMessages(messages: ConvexMessage[]): ConvexMessage[] {
-  return messages.map(msg => ({
-    ...msg,
-    content: msg.content?.trim() || undefined,
-    toolCalls: msg.toolCalls?.filter(tc => tc.toolCallId && tc.name),
-    toolResults: msg.toolResults?.filter(tr => tr.toolCallId && tr.result)
-  })).filter(msg => 
-    msg.content || 
-    (msg.toolCalls && msg.toolCalls.length > 0) || 
-    (msg.toolResults && msg.toolResults.length > 0)
-  ).map(msg => ({
-    ...msg,
-    content: msg.content ? msg.content.replace(/<[^>]*>/g, '').trim() : undefined
-  }));
+  return messages
+    .map(msg => {
+      const safeToolCalls = Array.isArray(msg.toolCalls)
+        ? msg.toolCalls.filter(tc => tc && tc.toolCallId && tc.name)
+        : undefined;
+      const safeToolResults = Array.isArray(msg.toolResults)
+        ? msg.toolResults.filter(tr => tr && tr.toolCallId && tr.result)
+        : undefined;
+      const cleaned = (msg.content ?? "").toString().trim();
+      return {
+        ...msg,
+        content: cleaned || undefined,
+        toolCalls: safeToolCalls,
+        toolResults: safeToolResults,
+      } as ConvexMessage;
+    })
+    .filter(msg => Boolean(msg.content) || (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) || (Array.isArray(msg.toolResults) && msg.toolResults.length > 0))
+    .map(msg => ({
+      ...msg,
+      content: msg.content ? msg.content.replace(/<[^>]*>/g, '').trim() : undefined,
+    }));
 }
 
 /**

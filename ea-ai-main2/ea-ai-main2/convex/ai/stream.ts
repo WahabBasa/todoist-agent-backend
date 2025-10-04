@@ -24,20 +24,41 @@ function corsHeadersFor(request: Request): Headers {
   return h;
 }
 
+// Telemetry toggle and logger (privacy-safe, no message bodies)
+const TRACE = (() => {
+  const v = process.env.ENABLE_CHAT_TRACE as string | undefined;
+  return v === "1" || v === "true";
+})();
+
+function tlog(event: string, data: Record<string, any>) {
+  if (!TRACE) return;
+  try {
+    console.log("[CHAT]", { event, ...data });
+  } catch {
+    // ignore logging errors
+  }
+}
+
+function sanitizeUserText(s: string): string {
+  return (s ?? "").replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+}
+
 export const chat = httpAction(async (ctx, request) => {
   let releaseLock: (() => Promise<void>) | null = null;
   let streamStarted = false;
 
   try {
+    const startedAt = Date.now();
     const body = await request.json().catch(() => ({}));
     const rawMessages = Array.isArray(body?.messages) ? (body.messages as UIMessage[]) : [];
     const sessionIdRaw = body?.sessionId ?? body?.id;
     const sessionId = typeof sessionIdRaw === "string" && sessionIdRaw.length > 0 ? sessionIdRaw : undefined;
     const requestId = typeof body?.requestId === "string" ? body.requestId.trim() : "";
-    let latestUserMessage = typeof body?.latestUserMessage === "string" ? body.latestUserMessage.trim() : "";
+    let latestUserMessage = typeof body?.latestUserMessage === "string" ? body.latestUserMessage : "";
     const historyVersion = typeof body?.historyVersion === "number" ? body.historyVersion : null;
 
     if (!requestId) {
+      tlog("bad_request", { requestId: null, reason: "missing_requestId" });
       return new Response("Missing requestId", { status: 400, headers: corsHeadersFor(request) });
     }
 
@@ -46,8 +67,12 @@ export const chat = httpAction(async (ctx, request) => {
       latestUserMessage = extractLastUserContent(rawMessages);
     }
 
+    latestUserMessage = sanitizeUserText(latestUserMessage);
     if (!latestUserMessage) {
-      return new Response("Missing latest user message", { status: 400, headers: corsHeadersFor(request) });
+      const headers = corsHeadersFor(request);
+      headers.set("Content-Type", "application/json");
+      tlog("bad_request", { requestId, reason: "latestUserMessage_empty" });
+      return new Response(JSON.stringify({ error: "latestUserMessage_empty" }), { status: 400, headers });
     }
 
     const identity = await ctx.auth.getUserIdentity();
@@ -95,6 +120,16 @@ export const chat = httpAction(async (ctx, request) => {
     const baseURL = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
     const openrouter = createOpenRouter({ apiKey, baseURL });
 
+    // Start telemetry once model/provider are known
+    tlog("start", {
+      requestId,
+      sessionId: sessionId ?? null,
+      historyVersion,
+      usedFallback,
+      model: modelName,
+      provider,
+    });
+
     const sessionConvexId = sessionId ? (sessionId as Id<"chatSessions">) : undefined;
     let lockAcquired = false;
     let lockReleased = false;
@@ -128,6 +163,15 @@ export const chat = httpAction(async (ctx, request) => {
       if (lockResult.status === "busy") {
         const headers = corsHeadersFor(request);
         headers.set("Content-Type", "application/json");
+        const ttlMs = ("expiresAt" in lockResult && typeof lockResult.expiresAt === "number")
+          ? Math.max(0, (lockResult as any).expiresAt - Date.now())
+          : undefined;
+        tlog("lock_busy", {
+          requestId,
+          sessionId,
+          ownerRequestId: (lockResult as any).ownerRequestId,
+          ttlMs,
+        });
         return new Response(
           JSON.stringify({
             error: "session_locked",
@@ -178,6 +222,12 @@ export const chat = httpAction(async (ctx, request) => {
         }
         const headers = corsHeadersFor(request);
         headers.set("Content-Type", "application/json");
+        tlog("history_conflict", {
+          requestId,
+          sessionId,
+          providedVersion: historyVersion,
+          actualVersion: appendResult.version,
+        });
         return new Response(
           JSON.stringify({
             error: "history_conflict",
@@ -223,6 +273,7 @@ export const chat = httpAction(async (ctx, request) => {
       maxRetries: 2,
       onError: ({ error }) => {
         console.error("[STREAM] Provider error:", error);
+        tlog("provider_error", { requestId, sessionId, message: String((error as any)?.message || "") });
         if (releaseLock) {
           void releaseLock();
         }
@@ -247,6 +298,16 @@ export const chat = httpAction(async (ctx, request) => {
                 providedVersion: historyVersionAfterUser,
                 version: persistResult.version,
               });
+              const durationMs = Date.now() - startedAt;
+              tlog("finish", {
+                requestId,
+                sessionId,
+                durationMs,
+                dbBefore: persistResult.previousVersion,
+                dbAfter: persistResult.version,
+                persisted: false,
+                conflict: true,
+              });
             } else {
               console.log("[STREAM][finish]", {
                 sessionId: sessionId ?? null,
@@ -256,7 +317,20 @@ export const chat = httpAction(async (ctx, request) => {
                 dbCountAfter: persistResult.version,
                 persisted: persistResult.status === "appended",
               });
+              const durationMs = Date.now() - startedAt;
+              tlog("finish", {
+                requestId,
+                sessionId,
+                durationMs,
+                dbBefore: persistResult.previousVersion,
+                dbAfter: persistResult.version,
+                persisted: persistResult.status === "appended",
+              });
             }
+          }
+          if (!sessionConvexId) {
+            const durationMs = Date.now() - startedAt;
+            tlog("finish", { requestId, sessionId: null, durationMs, persisted: false });
           }
         } catch (persistError) {
           console.error("[STREAM][persist] Failed to store conversation:", {
@@ -264,6 +338,8 @@ export const chat = httpAction(async (ctx, request) => {
             sessionId,
             requestId,
           });
+          const durationMs = Date.now() - startedAt;
+          tlog("persist_error", { requestId, sessionId, durationMs, message: String((persistError as any)?.message || "") });
         } finally {
           if (releaseLock) {
             await releaseLock();
@@ -288,6 +364,7 @@ export const chat = httpAction(async (ctx, request) => {
     return new Response(resp.body, { status: resp.status, headers: mergedHeaders });
   } catch (error) {
     console.error("[STREAM] Unexpected error:", error);
+    tlog("unexpected_error", { message: String((error as any)?.message || error || ""), where: "chat_handler" });
     if (releaseLock && !streamStarted) {
       try {
         await releaseLock();

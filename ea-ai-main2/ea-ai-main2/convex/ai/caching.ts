@@ -11,6 +11,7 @@ export namespace MessageCaching {
    * Prioritizes system prompts and substantial content for maximum cache benefit
    */
   export function applyCaching(messages: ModelMessage[], modelName: string): ModelMessage[] {
+    if (!Array.isArray(messages)) return [] as ModelMessage[];
     // Only apply to Claude models
     if (!modelName.includes("claude")) {
       return messages;
@@ -78,6 +79,7 @@ export namespace MessageCaching {
    * Keeps conversation manageable while preserving context
    */
   export function optimizeForCaching(messages: ModelMessage[]): ModelMessage[] {
+    if (!Array.isArray(messages)) return [] as ModelMessage[];
     const systemMessages = messages.filter(msg => msg.role === "system");
     const conversationMessages = messages.filter(msg => msg.role !== "system");
 

@@ -90,6 +90,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { currentSessionId, sessions } = useSessions();
   const chatId = currentSessionId ?? "default";
 
+  // Phase 4: guarded rehydration key to remount the chat hook safely when DB history changes
+  const [rehydrationKey, setRehydrationKey] = React.useState(0);
+  const hookId = React.useMemo(() => `${chatId}:${rehydrationKey}`,[chatId, rehydrationKey]);
+
+  // Track last user text for retries and guard against duplicate retries
+  const lastUserTextRef = React.useRef("");
+  const pendingRetryRef = React.useRef(false);
+  const queuedRetryRef = React.useRef(false);
+
   const currentSessionMeta = React.useMemo(() => {
     if (!currentSessionId) return null;
     return sessions.find((session) => session._id === currentSessionId) ?? null;
@@ -115,6 +124,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     return 0;
   }, [currentSessionMeta, activeConversation?.messages]);
+
+  // Remember last seen canonical version to decide when to remount
+  const prevVersionRef = React.useRef<number>(canonicalHistoryVersion);
 
   // Convert Convex messages to our Message format
   const initialSdkMessages = React.useMemo<UIMessage[]>(() => {
@@ -223,14 +235,36 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     reload,
     error
   } = useVercelChat({
-    id: chatId,
+    id: hookId,
     transport,
     initialMessages: initialSdkMessages,
     onError: (err) => {
-      if (err instanceof Error && err.message === "latestUserMessage_missing") {
+      // Ignore validation error for empty text
+      if (err instanceof Error && err.message === "latestUserMessage_missing") return;
+
+      const msg = String((err as any)?.message ?? "");
+      const isLocked = /409|session_locked/i.test(msg);
+      const isConflict = /history_conflict/i.test(msg);
+
+      if (isLocked) {
+        toast.message("Assistant is busy, retrying…");
+        if (!pendingRetryRef.current && lastUserTextRef.current) {
+          pendingRetryRef.current = true;
+          queuedRetryRef.current = true;
+          // Small backoff; actual send occurs via effect when status is ready
+          setTimeout(() => { pendingRetryRef.current = false; }, 800);
+        }
         return;
       }
-      toast.error(`Error: ${err.message}`);
+
+      if (isConflict) {
+        // Refresh from DB and retry once
+        setRehydrationKey((k) => k + 1);
+        queuedRetryRef.current = true;
+        return;
+      }
+
+      toast.error(`Error: ${msg}`);
     },
     onFinish: () => window.dispatchEvent(new CustomEvent('chat-history-updated')),
   });
@@ -280,6 +314,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const content = (localInput || '').trim();
     if (!content || isLoading) return;
     setLocalInput('');
+    lastUserTextRef.current = content;
     try {
       if (typeof sendMessage === 'function') {
         void sendMessage({ text: content });
@@ -290,6 +325,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('[CHAT] sendMessage failed:', err);
     }
   }, [localInput, isLoading, sendMessage]);
+
+  // Retry queued message once we're idle/ready
+  React.useEffect(() => {
+    if (queuedRetryRef.current && status === 'ready' && lastUserTextRef.current) {
+      queuedRetryRef.current = false;
+      try {
+        if (typeof sendMessage === 'function') {
+          void sendMessage({ text: lastUserTextRef.current });
+        }
+      } catch {}
+    }
+  }, [status, sendMessage]);
+
+  // Guarded rehydration: only when not streaming
+  React.useEffect(() => {
+    if (status === 'ready' && canonicalHistoryVersion !== prevVersionRef.current) {
+      prevVersionRef.current = canonicalHistoryVersion;
+      setRehydrationKey((k) => k + 1);
+    }
+  }, [status, canonicalHistoryVersion]);
 
   React.useEffect(() => {
     setLocalInput('');
