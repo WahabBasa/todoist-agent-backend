@@ -3,10 +3,10 @@
 
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
-import { optimizeConversation, type ConvexMessage } from "./simpleMessages";
+import { optimizeConversation, type ConvexMessage, convertConvexToModelMessages } from "./simpleMessages";
 import { createModeToolRegistry } from "./toolRegistry";
 import { createEmbeddedMessage } from "./messageSchemas";
 import { Id } from "../_generated/dataModel";
@@ -94,8 +94,19 @@ export const chat = httpAction(async (ctx, request) => {
       sessionId ? (sessionId as Id<"chatSessions">) : undefined
     ).catch(() => undefined);
 
-    const snapshot = uiMessagesToConvex(rawMessages);
-    const modelMessages = convertToModelMessages(rawMessages);
+    const storedConversation = sessionId
+      ? await ctx.runQuery(api.conversations.getConversationBySession, {
+          sessionId: sessionId as Id<"chatSessions">,
+        })
+      : null;
+
+    const storedHistory = Array.isArray(storedConversation?.messages)
+      ? (storedConversation!.messages as ConvexMessage[])
+      : [];
+
+    const combinedHistory = buildCanonicalHistory(storedHistory, rawMessages);
+
+    const modelMessages = convertConvexToModelMessages(combinedHistory);
 
     const result = streamText({
       model: openrouter.chat(modelName, { usage: { include: true } }),
@@ -108,7 +119,7 @@ export const chat = httpAction(async (ctx, request) => {
       },
       onFinish: async (finish) => {
         try {
-          let history: ConvexMessage[] = [...snapshot];
+          let history: ConvexMessage[] = [...combinedHistory];
           const assistantText = extractAssistantResponse(finish?.response?.messages);
 
           if (assistantText) {
@@ -180,53 +191,6 @@ function extractText(message: UIMessage): string {
   return "";
 }
 
-function uiMessagesToConvex(messages: UIMessage[]): ConvexMessage[] {
-  const results: ConvexMessage[] = [];
-  const baseTime = Date.now() - messages.length;
-  let offset = 0;
-
-  for (const message of messages) {
-    const content = extractText(message);
-    if (!content) {
-      continue;
-    }
-
-    const anyMessage = message as any;
-    const timestamp = typeof anyMessage.timestamp === "number"
-      ? anyMessage.timestamp
-      : typeof anyMessage.createdAt === "number"
-        ? anyMessage.createdAt
-        : baseTime + offset++;
-
-    const role: "user" | "assistant" = message.role === "assistant" ? "assistant" : "user";
-
-    const metadata = typeof anyMessage.metadata === "object" && anyMessage.metadata !== null ? anyMessage.metadata : undefined;
-    const mode = typeof anyMessage.mode === "string"
-      ? anyMessage.mode
-      : metadata && typeof metadata.mode === "string"
-        ? metadata.mode
-        : undefined;
-
-    const convexMessage: ConvexMessage = {
-      role,
-      content,
-      timestamp,
-    };
-
-    if (mode) {
-      convexMessage.mode = mode;
-    }
-
-    if (metadata) {
-      convexMessage.metadata = metadata;
-    }
-
-    results.push(convexMessage);
-  }
-
-  return results;
-}
-
 function extractAssistantResponse(responseMessages: any): string {
   if (!Array.isArray(responseMessages)) {
     return "";
@@ -256,4 +220,73 @@ function extractAssistantResponse(responseMessages: any): string {
   }
 
   return "";
+}
+
+function buildCanonicalHistory(storedHistory: ConvexMessage[], uiMessages: UIMessage[]): ConvexMessage[] {
+  const history = Array.isArray(storedHistory) ? [...storedHistory] : [];
+  const latestUserMessage = extractLastUserConvexMessage(uiMessages);
+
+  if (latestUserMessage && shouldAppendMessage(history, latestUserMessage)) {
+    history.push(latestUserMessage);
+  }
+
+  return history;
+}
+
+function extractLastUserConvexMessage(messages: UIMessage[]): ConvexMessage | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.role !== "user") {
+      continue;
+    }
+
+    const content = extractText(message);
+    if (!content) {
+      continue;
+    }
+
+    const anyMessage = message as any;
+    const timestamp = typeof anyMessage.timestamp === "number"
+      ? anyMessage.timestamp
+      : typeof anyMessage.createdAt === "number"
+        ? anyMessage.createdAt
+        : Date.now();
+
+    const metadata = typeof anyMessage.metadata === "object" && anyMessage.metadata !== null
+      ? anyMessage.metadata
+      : undefined;
+
+    const mode = typeof anyMessage.mode === "string"
+      ? anyMessage.mode
+      : metadata && typeof metadata.mode === "string"
+        ? metadata.mode
+        : undefined;
+
+    const convexMessage: ConvexMessage = {
+      role: "user",
+      content,
+      timestamp,
+    };
+
+    if (mode) {
+      convexMessage.mode = mode;
+    }
+
+    if (metadata) {
+      convexMessage.metadata = metadata;
+    }
+
+    return convexMessage;
+  }
+
+  return null;
+}
+
+function shouldAppendMessage(history: ConvexMessage[], candidate: ConvexMessage): boolean {
+  if (history.length === 0) {
+    return true;
+  }
+
+  const last = history[history.length - 1];
+  return !(last.role === candidate.role && last.content === candidate.content);
 }

@@ -435,7 +435,11 @@ export const chatWithAI = action({
 
       // Simple conversation optimization
       const optimizedHistory = optimizeConversation(updatedHistory, 50);
-      const cleanHistory = sanitizeMessages(optimizedHistory);
+      const sanitizedMessages = sanitizeMessages(optimizedHistory);
+      const cleanHistory = Array.isArray(sanitizedMessages) ? sanitizedMessages : [];
+      if (!Array.isArray(sanitizedMessages)) {
+        logError(new Error("Clean history is not an array"), "History shape invalid");
+      }
       
       // Fetch previous mode for prompt injection
       const previousMode = sessionId ? ModeController.getPreviousMode(sessionId) : null;
@@ -554,8 +558,16 @@ export const chatWithAI = action({
 
       // Get final result from AI SDK - properly await promises
       const finalText: string = await result.text;
-      const finalToolCalls: any[] = await result.toolCalls;
-      const finalToolResults: any[] = await result.toolResults;
+      const rawToolCalls = await result.toolCalls;
+      const rawToolResults = await result.toolResults;
+      if (!Array.isArray(rawToolCalls)) {
+        logError(new Error("Tool calls result was not an array"), "Stream shape invalid");
+      }
+      if (!Array.isArray(rawToolResults)) {
+        logError(new Error("Tool results result was not an array"), "Stream shape invalid");
+      }
+      const finalToolCalls: any[] = Array.isArray(rawToolCalls) ? rawToolCalls : [];
+      const finalToolResults: any[] = Array.isArray(rawToolResults) ? rawToolResults : [];
       const finalUsage = await result.usage;
       
       console.log('✅ [BACKEND DEBUG] AI SDK result:', {
@@ -651,6 +663,9 @@ export const chatWithAI = action({
 
 
       // Build final conversation history using simple approach
+     if (!Array.isArray(cleanHistory)) {
+       logError(new Error("Final history source not array"), "History shape invalid");
+     }
      let finalHistory = [...cleanHistory];
 
      // Debug: Log the current conversation state

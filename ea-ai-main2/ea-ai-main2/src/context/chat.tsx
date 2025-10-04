@@ -8,6 +8,7 @@ import { useSessions } from './sessions';
 import { useChat as useVercelChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
+import type { UIMessage } from '@ai-sdk/ui-utils';
 
 // Minimal message shape expected by UI components
 export interface Message {
@@ -54,17 +55,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   // Convert Convex messages to our Message format
-  const initialMessages: Message[] = React.useMemo(() => {
+  const initialSdkMessages = React.useMemo<UIMessage[]>(() => {
     if (!activeConversation?.messages) return [];
-    
+
     return activeConversation.messages
       .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
-      .map((msg: any, index: number) => ({
-        id: `${msg.timestamp}-${index}`,
-        role: msg.role as 'user' | 'assistant',
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        createdAt: new Date(msg.timestamp)
-      }));
+      .map((msg: any, index: number) => {
+        const baseContent = typeof msg.content === 'string'
+          ? msg.content
+          : JSON.stringify(msg.content ?? '');
+
+        const metadata = typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : undefined;
+
+        return {
+          id: `${msg.timestamp}-${index}`,
+          role: msg.role,
+          content: baseContent,
+          metadata,
+          createdAt: msg.timestamp,
+          mode: msg.mode,
+        } as UIMessage;
+      });
   }, [activeConversation?.messages]);
 
   // Auth header for Convex httpAction
@@ -124,14 +135,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages,
     sendMessage,
     status,
-    stop,
     reload,
-    setMessages,
     error
   } = useVercelChat({
     id: chatId,
     transport,
-    initialMessages,
+    initialMessages: initialSdkMessages,
     onError: (err) => toast.error(`Error: ${err.message}`),
     onFinish: () => window.dispatchEvent(new CustomEvent('chat-history-updated')),
   });
@@ -192,10 +201,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('[CHAT] sendMessage failed:', err);
     }
   }, [localInput, isLoading, sendMessage]);
-
-  React.useEffect(() => {
-    setMessages(initialMessages as any);
-  }, [chatId, initialMessages, setMessages]);
 
   React.useEffect(() => {
     setLocalInput('');

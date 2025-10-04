@@ -193,8 +193,12 @@ export const cacheDetailedModelInfo = mutation({
     const existing = results[0];
     
     if (existing) {
+      if (!Array.isArray(existing.models)) {
+        console.warn(`⚠️ [OpenRouter] Corrupt cached detailed model entry detected (id=${existing._id}). Resetting models array.`);
+      }
+      const currentModels = Array.isArray(existing.models) ? existing.models : [];
       // Update existing entry - add or replace the model info
-      const updatedModels = existing.models.filter((m: any) => m.id !== modelId);
+      const updatedModels = currentModels.filter((m: any) => m.id !== modelId);
       updatedModels.push(detailedInfo);
       await ctx.db.patch(existing._id, { lastFetched, models: updatedModels });
     } else {
