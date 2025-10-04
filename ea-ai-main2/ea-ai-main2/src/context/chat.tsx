@@ -9,6 +9,7 @@ import { useChat as useVercelChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
 import type { UIMessage } from '@ai-sdk/ui-utils';
+import { useChatStore } from '../store/chatStore';
 
 // Minimal message shape expected by UI components
 export interface Message {
@@ -85,12 +86,48 @@ function extractLatestUserMessage(messages: UIMessage[]): string {
   return '';
 }
 
+const isDev = typeof import.meta !== "undefined" ? !!import.meta.env?.DEV : false;
+
+function mapConvexMessagesToSdk(messages: any[] | undefined): UIMessage[] {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
+    .map((msg: any, index: number) => {
+      const baseContent = typeof msg.content === 'string'
+        ? msg.content
+        : JSON.stringify(msg.content ?? '');
+
+      const metadata = typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : undefined;
+
+      return {
+        id: `${msg.timestamp}-${index}`,
+        role: msg.role,
+        content: baseContent,
+        metadata,
+        createdAt: msg.timestamp,
+        mode: msg.mode,
+      } as UIMessage;
+    });
+}
+
+function messagesEqual(a: UIMessage[], b: UIMessage[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]?.id !== b[i]?.id) return false;
+    if (a[i]?.role !== b[i]?.role) return false;
+    if (a[i]?.content !== b[i]?.content) return false;
+  }
+  return true;
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   // Session context - get current session from centralized state
   const { currentSessionId, sessions } = useSessions();
   const chatId = currentSessionId ?? "default";
 
-  // Phase 4: guarded rehydration key to remount the chat hook safely when DB history changes
+  // Phase 4: guarded rehydration key to remount the chat hook safely when needed (e.g., on session switch)
   const [rehydrationKey, setRehydrationKey] = React.useState(0);
   const hookId = React.useMemo(() => `${chatId}:${rehydrationKey}`,[chatId, rehydrationKey]);
 
@@ -111,41 +148,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 
   const canonicalHistoryVersion = React.useMemo(() => {
-    if (currentSessionMeta?.messageCount != null) {
-      return currentSessionMeta.messageCount;
-    }
+    // Prefer live conversation length (reactive) to avoid staleness; fallback to sessions meta
     if (Array.isArray(activeConversation?.messages)) {
       return activeConversation.messages.length;
     }
+    if (currentSessionMeta?.messageCount != null) {
+      return currentSessionMeta.messageCount;
+    }
     return 0;
   }, [currentSessionMeta, activeConversation?.messages]);
+  
+  // (zustand) No remount/rehydration tracking needed
 
-  // Remember last seen canonical version to decide when to remount
-  const prevVersionRef = React.useRef<number>(canonicalHistoryVersion);
-
-  // Convert Convex messages to our Message format
-  const initialSdkMessages = React.useMemo<UIMessage[]>(() => {
-    if (!activeConversation?.messages) return [];
-
-    return activeConversation.messages
-      .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
-      .map((msg: any, index: number) => {
-        const baseContent = typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content ?? '');
-
-        const metadata = typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : undefined;
-
-        return {
-          id: `${msg.timestamp}-${index}`,
-          role: msg.role,
-          content: baseContent,
-          metadata,
-          createdAt: msg.timestamp,
-          mode: msg.mode,
-        } as UIMessage;
-      });
-  }, [activeConversation?.messages]);
+  // Zustand store for UI state per session
+  const {
+    instances,
+    setInput: setInputStore,
+    setStatus: setStatusStore,
+    replaceFromDb,
+    appendUser,
+    ensureAssistantPlaceholder,
+    updateAssistant,
+    clear: clearStore,
+  } = useChatStore();
+  const currentInstance = instances[chatId] ?? { input: '', messages: [], status: 'ready' };
 
   // Auth header for Convex httpAction
   const { getToken } = useAuth();
@@ -223,16 +249,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }, [resolvedChatApi, prepareSendMessagesRequest]);
 
+  // Track last sent version to gate retries until DB catches up
+  const lastSentVersionRef = React.useRef<number>(0);
+
   const {
     messages,
     sendMessage,
-    status,
+    status: hookStatus,
     reload,
     error
   } = useVercelChat({
     id: hookId,
     transport,
-    initialMessages: initialSdkMessages,
+    // We no longer render from the hook's internal state; store is our source of truth
     onError: (err) => {
       // Ignore validation error for empty text
       if (err instanceof Error && err.message === "latestUserMessage_missing") return;
@@ -253,64 +282,97 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       if (isConflict) {
-        // Refresh from DB and retry once
-        setRehydrationKey((k) => k + 1);
+        // DB is canonical; rely on Convex reactivity and retry once when idle
         queuedRetryRef.current = true;
         return;
       }
 
       toast.error(`Error: ${msg}`);
     },
-    onFinish: () => window.dispatchEvent(new CustomEvent('chat-history-updated')),
+    onFinish: () => {
+      setStatusStore(chatId, 'ready');
+      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+    },
   });
-
-  const isLoading = status === 'submitted' || status === 'streaming';
+  const isLoading = currentInstance.status === 'submitted' || currentInstance.status === 'streaming';
   const isRetriable = false;
 
-  // Local input state managed here to avoid SDK API differences
-  const [localInput, setLocalInput] = React.useState('');
-
-  // Normalize AI SDK UI messages to simple { role, content } for existing UI
-  const normalizedMessages: Message[] = React.useMemo(() => {
-    return messages.map((m: any) => {
+  // Stream sync: mirror hook streaming into store assistant placeholder
+  React.useEffect(() => {
+    if (hookStatus === 'streaming') {
+      // derive assistant text from hook messages
+      const last = messages[messages.length - 1] as any;
       let text = '';
-      if (Array.isArray(m.parts)) {
-        text = collectTextFromParts(m.parts);
-      } else if (typeof m.content === 'string') {
-        text = m.content;
-      } else if (Array.isArray(m.content)) {
-        text = collectTextFromParts(m.content);
+      if (last) {
+        if (Array.isArray(last.parts)) text = collectTextFromParts(last.parts);
+        else if (typeof last.content === 'string') text = last.content;
+        else if (Array.isArray(last.content)) text = collectTextFromParts(last.content);
       }
-      return { id: m.id, role: m.role, content: text };
+      setStatusStore(chatId, 'streaming');
+      ensureAssistantPlaceholder(chatId);
+      updateAssistant(chatId, text);
+    }
+  }, [hookStatus, messages, chatId, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
+
+  // Normalize DB (Convex) messages to store shape and replace when idle/ready
+  React.useEffect(() => {
+    if (activeConversation === undefined) return; // loading
+    // Only replace from DB when store is idle to avoid flicker
+    if (currentInstance.status !== 'ready') return;
+    const mapped = mapConvexMessagesToSdk(activeConversation?.messages);
+    const dbMsgs: Message[] = mapped.map((m: any, idx: number) => {
+      let text = '';
+      if (Array.isArray(m.parts)) text = collectTextFromParts(m.parts);
+      else if (typeof m.content === 'string') text = m.content;
+      else if (Array.isArray(m.content)) text = collectTextFromParts(m.content);
+      return { id: m.id ?? String(idx), role: m.role, content: text };
     });
-  }, [messages]);
+    // Avoid regressions: only swap if DB has at least as many messages
+    if (dbMsgs.length >= currentInstance.messages.length) {
+      replaceFromDb(chatId, dbMsgs);
+    }
+  }, [activeConversation, chatId, currentInstance.status, currentInstance.messages.length, replaceFromDb]);
 
   // Ensure input is always a string to avoid trim() issues
-  const safeInput = localInput ?? "";
+  const safeInput = currentInstance.input ?? "";
 
   const clearChat = React.useCallback(() => {
-    // Trigger clear chat event for sessions context to handle
+    clearStore(chatId);
     window.dispatchEvent(new CustomEvent('clear-chat-requested'));
     toast.success("Chat cleared");
-  }, []);
+  }, [chatId, clearStore]);
 
-  // Fresh session detection
-  const isFreshSession = messages.length === 0 && !isLoading;
+  // Fresh session detection: prefer sessions meta; else conversation; allow initial loading to show greeting for new sessions
+  const isFreshSession = React.useMemo(() => {
+    if (currentInstance.status !== 'ready') return false; // avoid greeting during streaming/submitted
+    if (typeof currentSessionMeta?.messageCount === 'number') {
+      return currentSessionMeta.messageCount === 0;
+    }
+    if (activeConversation === undefined) return true; // loading: favor greeting for empty new chat
+    if (Array.isArray(activeConversation?.messages)) {
+      return activeConversation.messages.length === 0;
+    }
+    return false;
+  }, [currentInstance.status, currentSessionMeta, activeConversation]);
 
   // Our own input change handler (SDK-agnostic)
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const next = e?.target?.value ?? '';
-    setLocalInput(next);
-  }, []);
+    setInputStore(chatId, next);
+  }, [chatId, setInputStore]);
 
   // Our own submit handler using sendMessage
   const handleSubmitCompat = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    const content = (localInput || '').trim();
+    const content = (currentInstance.input || '').trim();
     if (!content || isLoading) return;
-    setLocalInput('');
+    setInputStore(chatId, '');
     lastUserTextRef.current = content;
+    lastSentVersionRef.current = canonicalHistoryVersion;
     try {
+      setStatusStore(chatId, 'submitted');
+      appendUser(chatId, content);
+      ensureAssistantPlaceholder(chatId);
       if (typeof sendMessage === 'function') {
         void sendMessage({ text: content });
       } else {
@@ -319,56 +381,50 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('[CHAT] sendMessage failed:', err);
     }
-  }, [localInput, isLoading, sendMessage]);
+  }, [currentInstance.input, isLoading, sendMessage, canonicalHistoryVersion, chatId, setInputStore, setStatusStore, appendUser, ensureAssistantPlaceholder]);
 
   // Retry queued message once we're idle/ready
   React.useEffect(() => {
-    if (queuedRetryRef.current && status === 'ready' && lastUserTextRef.current) {
-      queuedRetryRef.current = false;
-      try {
-        if (typeof sendMessage === 'function') {
-          void sendMessage({ text: lastUserTextRef.current });
-        }
-      } catch {}
-    }
-  }, [status, sendMessage]);
+    if (!queuedRetryRef.current) return;
+    if (hookStatus !== 'ready') return;
+    // Wait until DB version advances beyond the version when we last sent
+    if (canonicalHistoryVersion <= lastSentVersionRef.current) return;
+    queuedRetryRef.current = false;
+    try {
+      if (typeof sendMessage === 'function' && lastUserTextRef.current) {
+        void sendMessage({ text: lastUserTextRef.current });
+      }
+    } catch {}
+  }, [hookStatus, sendMessage, canonicalHistoryVersion]);
 
-  // Guarded rehydration: only when not streaming
+  const prevChatIdRef = React.useRef(chatId);
   React.useEffect(() => {
-    if (status === 'ready' && canonicalHistoryVersion !== prevVersionRef.current) {
-      prevVersionRef.current = canonicalHistoryVersion;
-      setRehydrationKey((k) => k + 1);
+    if (prevChatIdRef.current === chatId) return;
+    prevChatIdRef.current = chatId;
+    if (isDev) {
+      console.debug('[CHAT] session switched', { chatId, canonicalHistoryVersion });
     }
-  }, [status, canonicalHistoryVersion]);
-
-  // On session change, force a safe remount when idle to ensure initial messages hydrate
-  React.useEffect(() => {
-    if (status === 'ready') {
-      setRehydrationKey((k) => k + 1);
-      prevVersionRef.current = canonicalHistoryVersion;
-    }
-  }, [chatId, status, canonicalHistoryVersion]);
-
-  // If SDK has initial messages but hook shows none, remount once when idle
-  React.useEffect(() => {
-    if (status === 'ready' && normalizedMessages.length === 0 && initialSdkMessages.length > 0) {
-      setRehydrationKey((k) => k + 1);
-    }
-  }, [status, normalizedMessages.length, initialSdkMessages.length]);
+  }, [chatId, canonicalHistoryVersion]);
 
   React.useEffect(() => {
-    setLocalInput('');
-  }, [chatId]);
+    setInputStore(chatId, '');
+  }, [chatId, setInputStore]);
 
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
-    messages: normalizedMessages,
+    messages: currentInstance.messages,
     input: safeInput,
-    setInput: (val: string) => setLocalInput(val),
+    setInput: (val: string) => setInputStore(chatId, val),
     handleInputChange,
     handleSubmit: handleSubmitCompat,
     isLoading,
-    error,
+    // Filter benign errors from surfacing in the chat bubbles
+    error: React.useMemo(() => {
+      if (!error) return null;
+      const msg = String(error.message || '').toLowerCase();
+      if (msg.includes('history_conflict') || msg.includes('session_locked')) return null;
+      return error;
+    }, [error]),
     isRetriable,
     clearChat,
     reload,
