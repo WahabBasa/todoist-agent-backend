@@ -60,32 +60,54 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
       // Handle assistant messages
       if (message.role === "assistant") {
         const parts: UIMessage["parts"] = [];
-        
-        // Add text content if present
+
         if (message.content?.trim()) {
           parts.push({
             type: "text",
             text: message.content.trim()
           });
         }
-        
-        // Add tool calls if present
-        if (Array.isArray(message.toolCalls) && message.toolCalls.length > 0) {
+
+        const toolResultsById = new Map(
+          Array.isArray(message.toolResults)
+            ? message.toolResults
+                .filter((result) => result && typeof result.toolCallId === "string")
+                .map((result) => [result.toolCallId, result])
+            : []
+        );
+
+        if (Array.isArray(message.toolCalls)) {
           for (const toolCall of message.toolCalls) {
+            if (!toolCall || !toolCall.toolCallId || !toolCall.name) {
+              continue;
+            }
+
+            const matchingResult = toolResultsById.get(toolCall.toolCallId);
+            if (!matchingResult) {
+              if (process.env.NODE_ENV !== "production") {
+                console.debug("[SimpleMessages] Skipping tool call without result", {
+                  toolCallId: toolCall.toolCallId,
+                  toolName: toolCall.name,
+                });
+              }
+              continue;
+            }
+
             parts.push({
               type: `tool-${toolCall.name}` as `tool-${string}`,
               toolCallId: toolCall.toolCallId,
-              state: "input-available",
-              input: toolCall.args
+              state: "output-available",
+              input: toolCall.args,
+              output: matchingResult.result,
             });
           }
         }
-        
+
         if (parts.length > 0) {
           uiMessages.push({
             id: `${i}`,
             role: "assistant",
-            parts
+            parts,
           });
         }
         continue;

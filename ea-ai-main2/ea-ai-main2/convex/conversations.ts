@@ -255,6 +255,11 @@ export const appendAssistantMessage = mutation({
     const previousVersion = messages.length;
 
     if (args.historyVersion !== undefined && args.historyVersion !== previousVersion) {
+      console.warn('[BACKEND DEBUG] Assistant append conflict detected', {
+        sessionId: args.sessionId,
+        providedVersion: args.historyVersion,
+        previousVersion,
+      });
       return {
         status: "conflict",
         messages,
@@ -268,6 +273,10 @@ export const appendAssistantMessage = mutation({
     const hasTools = Boolean(args.toolCalls?.length || args.toolResults?.length);
 
     if (!hasContent && !hasTools) {
+      console.log('[BACKEND DEBUG] Assistant append noop (no content/tools)', {
+        sessionId: args.sessionId,
+        previousVersion,
+      });
       return {
         status: "noop",
         messages,
@@ -325,12 +334,20 @@ export const appendAssistantMessage = mutation({
       messageCount: optimized.length,
     });
 
-    return {
+    const result: AppendResult = {
       status: "appended",
       messages: optimized,
       version: optimized.length,
       previousVersion,
     };
+    console.log('[BACKEND DEBUG] Assistant append success', {
+      sessionId: args.sessionId,
+      previousVersion,
+      nextVersion: result.version,
+      contentLength: trimmedContent.length,
+      hasTools,
+    });
+    return result;
   },
 });
 
@@ -371,10 +388,16 @@ export const getConversationBySession = query({
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .first();
       
+    const lastMessage = conversation?.messages?.length
+      ? conversation.messages[conversation.messages.length - 1]
+      : null;
     console.log('📚 [BACKEND DEBUG] Fetched conversation from database:', {
       sessionId: args.sessionId,
       conversationExists: !!conversation,
       messageCount: conversation?.messages?.length || 0,
+      lastMessageRole: lastMessage?.role || null,
+      lastMessageContentLength: typeof lastMessage?.content === 'string' ? lastMessage.content.length : null,
+      lastMessageHasTools: Array.isArray((lastMessage as any)?.toolCalls) && !!(lastMessage as any)?.toolCalls?.length,
       messagesPreview: conversation?.messages?.slice(-2).map(msg => ({
         role: msg.role,
         contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'

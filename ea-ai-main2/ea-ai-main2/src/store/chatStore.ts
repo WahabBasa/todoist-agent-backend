@@ -26,6 +26,7 @@ export interface ChatStore {
   ensureAssistantPlaceholder: (id: string) => string
   updateAssistant: (id: string, content: string) => void
   clear: (id: string) => void
+  resetStatuses: () => void
 }
 
 function getDefaultInstance(): ChatInstance {
@@ -35,6 +36,15 @@ function getDefaultInstance(): ChatInstance {
 function genId(prefix: string): string {
   const rnd = Math.random().toString(36).slice(2, 8)
   return `${prefix}-${Date.now()}-${rnd}`
+}
+
+const isDev = typeof import.meta !== 'undefined' ? Boolean((import.meta as any).env?.DEV) : false
+
+function devLog(event: string, data: Record<string, unknown>) {
+  if (!isDev) return
+  try {
+    console.debug(`[CHAT_STORE] ${event}`, data)
+  } catch {}
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -55,6 +65,13 @@ export const useChatStore = create<ChatStore>()(
       replaceFromDb: (id, msgs) => {
         const instances = get().instances
         const inst = instances[id] ?? getDefaultInstance()
+        devLog('replaceFromDb', {
+          id,
+          prevCount: inst.messages.length,
+          nextCount: msgs.length,
+          prevLastRole: inst.messages[inst.messages.length - 1]?.role ?? null,
+          nextLastRole: msgs[msgs.length - 1]?.role ?? null,
+        })
         set({ instances: { ...instances, [id]: { ...inst, messages: msgs } } })
       },
       appendUser: (id, text) => {
@@ -108,6 +125,24 @@ export const useChatStore = create<ChatStore>()(
       clear: (id) => {
         const instances = get().instances
         set({ instances: { ...instances, [id]: getDefaultInstance() } })
+      },
+      resetStatuses: () => {
+        const instances = get().instances
+        const next: Record<string, ChatInstance> = {}
+        let mutated = false
+        for (const key of Object.keys(instances)) {
+          const inst = instances[key]
+          if (inst.status !== 'ready') {
+            mutated = true
+            next[key] = { ...inst, status: 'ready' }
+            devLog('resetStatus', { id: key, previousStatus: inst.status })
+          } else {
+            next[key] = inst
+          }
+        }
+        if (mutated) {
+          set({ instances: { ...instances, ...next } })
+        }
       }
     }),
     { name: 'chat-store' }

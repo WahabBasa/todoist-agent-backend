@@ -9,6 +9,7 @@ import { SystemPrompt } from "./system";
 import { convertConvexToModelMessages, type ConvexMessage } from "./simpleMessages";
 import { createModeToolRegistry } from "./toolRegistry";
 import { Id } from "../_generated/dataModel";
+import { logToolCalls } from "./logger";
 
 const LOCK_TTL_MS = 15_000;
 
@@ -46,6 +47,10 @@ function sanitizeUserText(s: string): string {
 export const chat = httpAction(async (ctx, request) => {
   let releaseLock: (() => Promise<void>) | null = null;
   let streamStarted = false;
+  let streamChunkCount = 0;
+  let streamBytes = 0;
+  let firstChunkDeltaMs: number | null = null;
+  let lastChunkDeltaMs: number | null = null;
 
   try {
     const startedAt = Date.now();
@@ -283,11 +288,31 @@ export const chat = httpAction(async (ctx, request) => {
           const assistantText =
             extractAssistantResponse(finish?.response?.messages) ||
             extractFinishText(finish?.response);
+          const { toolCalls: normalizedToolCalls, toolResults: normalizedToolResults } = collectToolPayloads(
+            finish
+          );
+
+          if (normalizedToolCalls.length) {
+            logToolCalls(normalizedToolCalls.map((call) => ({ name: call.name, args: call.args })));
+          }
+
+          console.log("[STREAM][persist_attempt]", {
+            sessionId: sessionId ?? null,
+            requestId,
+            historyVersion,
+            assistantLength: assistantText.length,
+            chunkCount: streamChunkCount,
+            streamBytes,
+            toolCallCount: normalizedToolCalls.length,
+            toolResultCount: normalizedToolResults.length,
+          });
 
           if (sessionConvexId) {
             const persistResult = await ctx.runMutation(api.conversations.appendAssistantMessage, {
               sessionId: sessionConvexId,
               content: assistantText,
+              toolCalls: normalizedToolCalls.length ? normalizedToolCalls : undefined,
+              toolResults: normalizedToolResults.length ? normalizedToolResults : undefined,
               historyVersion: historyVersionAfterUser,
             });
 
@@ -309,6 +334,15 @@ export const chat = httpAction(async (ctx, request) => {
                 conflict: true,
               });
             } else {
+              if (persistResult.status !== "appended") {
+                console.warn("[STREAM][finish] Assistant append skipped", {
+                  sessionId: sessionId ?? null,
+                  requestId,
+                  status: persistResult.status,
+                  previousVersion: persistResult.previousVersion,
+                  nextVersion: persistResult.version,
+                });
+              }
               console.log("[STREAM][finish]", {
                 sessionId: sessionId ?? null,
                 requestId,
@@ -316,6 +350,13 @@ export const chat = httpAction(async (ctx, request) => {
                 dbCountBefore: persistResult.previousVersion,
                 dbCountAfter: persistResult.version,
                 persisted: persistResult.status === "appended",
+                status: persistResult.status,
+                chunkCount: streamChunkCount,
+                streamBytes,
+                firstChunkMs: firstChunkDeltaMs,
+                lastChunkMs: lastChunkDeltaMs,
+                toolCallCount: normalizedToolCalls.length,
+                toolResultCount: normalizedToolResults.length,
               });
               const durationMs = Date.now() - startedAt;
               tlog("finish", {
@@ -325,6 +366,10 @@ export const chat = httpAction(async (ctx, request) => {
                 dbBefore: persistResult.previousVersion,
                 dbAfter: persistResult.version,
                 persisted: persistResult.status === "appended",
+                chunkCount: streamChunkCount,
+                streamBytes,
+                toolCallCount: normalizedToolCalls.length,
+                toolResultCount: normalizedToolResults.length,
               });
             }
           }
@@ -356,12 +401,66 @@ export const chat = httpAction(async (ctx, request) => {
       });
     }
 
-    const resp = result.toUIMessageStreamResponse();
+    const baseResponse = result.toUIMessageStreamResponse();
     const mergedHeaders = corsHeadersFor(request);
-    resp.headers.forEach((value, key) => {
+    baseResponse.headers.forEach((value, key) => {
       mergedHeaders.set(key, value);
     });
-    return new Response(resp.body, { status: resp.status, headers: mergedHeaders });
+
+    const originalBody = baseResponse.body;
+    if (!originalBody) {
+      return new Response(null, { status: baseResponse.status, headers: mergedHeaders });
+    }
+
+    const reader = originalBody.getReader();
+    const instrumentedStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const pump = (): void => {
+          reader
+            .read()
+            .then(({ done, value }) => {
+              if (done) {
+                try {
+                  reader.releaseLock?.();
+                } catch {}
+                controller.close();
+                return;
+              }
+
+              if (!value) {
+                pump();
+                return;
+              }
+
+              streamChunkCount += 1;
+              streamBytes += value.byteLength ?? value.length ?? 0;
+              const delta = Date.now() - startedAt;
+              if (streamChunkCount === 1) {
+                firstChunkDeltaMs = delta;
+                console.log("[STREAM][chunk:first]", {
+                  sessionId: sessionId ?? null,
+                  requestId,
+                  msSinceStart: delta,
+                  bytes: streamBytes,
+                });
+              }
+              lastChunkDeltaMs = delta;
+
+              controller.enqueue(value);
+              pump();
+            })
+            .catch((err) => {
+              console.error("[STREAM][chunk:error]", { err, sessionId, requestId });
+              try {
+                controller.error(err);
+              } catch {}
+            });
+        };
+        pump();
+      },
+    });
+
+    return new Response(instrumentedStream, { status: baseResponse.status, headers: mergedHeaders });
   } catch (error) {
     console.error("[STREAM] Unexpected error:", error);
     tlog("unexpected_error", { message: String((error as any)?.message || error || ""), where: "chat_handler" });
@@ -461,6 +560,274 @@ function extractFinishText(response: any): string {
   }
 
   return "";
+}
+
+type NormalizedToolCall = {
+  name: string;
+  args: any;
+  toolCallId: string;
+};
+
+type NormalizedToolResult = {
+  toolCallId: string;
+  toolName: string;
+  result: any;
+};
+
+function collectToolPayloads(finish: any): {
+  toolCalls: NormalizedToolCall[];
+  toolResults: NormalizedToolResult[];
+} {
+  if (!finish) {
+    return { toolCalls: [], toolResults: [] };
+  }
+
+  const steps = Array.isArray(finish.steps) ? finish.steps : [];
+  const responseMessages = Array.isArray(finish.response?.messages) ? finish.response.messages : [];
+
+  const rawToolCalls = [
+    ...(Array.isArray(finish.toolCalls) ? finish.toolCalls : []),
+    ...(Array.isArray(finish.response?.toolCalls) ? finish.response.toolCalls : []),
+    ...steps.flatMap((step: any) => (Array.isArray(step?.toolCalls) ? step.toolCalls : [])),
+    ...responseMessages.flatMap(extractToolCallsFromMessage),
+  ];
+
+  const rawToolResults = [
+    ...(Array.isArray(finish.toolResults) ? finish.toolResults : []),
+    ...(Array.isArray(finish.response?.toolResults) ? finish.response.toolResults : []),
+    ...steps.flatMap((step: any) => (Array.isArray(step?.toolResults) ? step.toolResults : [])),
+    ...responseMessages.flatMap(extractToolResultsFromMessage),
+  ];
+
+  const normalizedCalls = dedupeToolCalls(
+    rawToolCalls
+      .map((call) => normalizeToolCall(call))
+      .filter((call): call is NormalizedToolCall => !!call)
+  );
+
+  const normalizedResults = dedupeToolResults(
+    rawToolResults
+      .map((result) => normalizeToolResult(result))
+      .filter((result): result is NormalizedToolResult => !!result)
+  );
+
+  return {
+    toolCalls: normalizedCalls,
+    toolResults: normalizedResults,
+  };
+}
+
+function normalizeToolCall(call: any): NormalizedToolCall | null {
+  if (!call) return null;
+
+  const toolCallId = pickString(call?.toolCallId, call?.id, call?.callId);
+  const name = pickString(call?.toolName, call?.name, call?.function, call?.tool);
+
+  if (!toolCallId || !name) {
+    return null;
+  }
+
+  const args =
+    call?.args !== undefined
+      ? call.args
+      : call?.input !== undefined
+        ? call.input
+        : call?.parameters !== undefined
+          ? call.parameters
+          : call?.arguments !== undefined
+            ? call.arguments
+            : {};
+
+  return {
+    name,
+    toolCallId,
+    args,
+  };
+}
+
+function normalizeToolResult(result: any): NormalizedToolResult | null {
+  if (!result) return null;
+
+  const toolCallId = pickString(result?.toolCallId, result?.callId, result?.id);
+  const toolName = pickString(result?.toolName, result?.name, result?.tool);
+
+  if (!toolCallId || !toolName) {
+    return null;
+  }
+
+  const payload =
+    result?.result !== undefined
+      ? result.result
+      : result?.output !== undefined
+        ? result.output
+        : result?.data !== undefined
+          ? result.data
+          : result?.value !== undefined
+            ? result.value
+            : result?.toolResult !== undefined
+              ? result.toolResult
+              : result?.content !== undefined
+                ? result.content
+                : result?.response !== undefined
+                  ? result.response
+                  : null;
+
+  return {
+    toolCallId,
+    toolName,
+    result: payload,
+  };
+}
+
+function dedupeToolCalls(calls: NormalizedToolCall[]): NormalizedToolCall[] {
+  const map = new Map<string, NormalizedToolCall>();
+
+  for (const call of calls) {
+    const existing = map.get(call.toolCallId);
+    if (!existing) {
+      map.set(call.toolCallId, {
+        name: call.name,
+        toolCallId: call.toolCallId,
+        args: call.args === undefined ? {} : call.args,
+      });
+      continue;
+    }
+
+    const mergedName = existing.name || call.name;
+    const shouldReplaceArgs = !hasMeaningfulValue(existing.args) && hasMeaningfulValue(call.args);
+    map.set(call.toolCallId, {
+      name: mergedName,
+      toolCallId: call.toolCallId,
+      args: shouldReplaceArgs ? call.args : existing.args,
+    });
+  }
+
+  return Array.from(map.values()).map((call) => ({
+    name: call.name,
+    toolCallId: call.toolCallId,
+    args: call.args === undefined ? {} : call.args,
+  }));
+}
+
+function dedupeToolResults(results: NormalizedToolResult[]): NormalizedToolResult[] {
+  const map = new Map<string, NormalizedToolResult>();
+
+  for (const result of results) {
+    const existing = map.get(result.toolCallId);
+    if (!existing) {
+      map.set(result.toolCallId, result);
+      continue;
+    }
+
+    const mergedName = existing.toolName || result.toolName;
+    const mergedResult = result.result !== undefined ? result.result : existing.result;
+    map.set(result.toolCallId, {
+      toolCallId: result.toolCallId,
+      toolName: mergedName,
+      result: mergedResult,
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+function extractToolCallsFromMessage(message: any): any[] {
+  if (!message) return [];
+
+  const collected: any[] = [];
+  if (Array.isArray(message?.toolCalls)) {
+    collected.push(...message.toolCalls);
+  }
+  if (Array.isArray(message?.toolInvocations)) {
+    collected.push(...message.toolInvocations);
+  }
+
+  const parts = getMessageParts(message);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.type === "tool-call" || part.type === "tool_call") {
+      collected.push(part);
+    } else if (Array.isArray(part?.toolInvocations)) {
+      collected.push(...part.toolInvocations);
+    } else if (part.type === "toolInvocations" && Array.isArray(part?.value)) {
+      collected.push(...part.value);
+    }
+  }
+
+  if (message?.type === "tool-call" || message?.type === "tool_call") {
+    collected.push(message);
+  }
+
+  return collected;
+}
+
+function extractToolResultsFromMessage(message: any): any[] {
+  if (!message) return [];
+
+  const collected: any[] = [];
+  if (Array.isArray(message?.toolResults)) {
+    collected.push(...message.toolResults);
+  }
+
+  const parts = getMessageParts(message);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.type === "tool-result" || part.type === "tool_result") {
+      collected.push(part);
+    } else if (Array.isArray(part?.toolResults)) {
+      collected.push(...part.toolResults);
+    }
+  }
+
+  if (message?.type === "tool-result" || message?.type === "tool_result") {
+    collected.push(message);
+  }
+
+  return collected;
+}
+
+function getMessageParts(message: any): any[] {
+  if (Array.isArray(message?.content)) {
+    return message.content;
+  }
+  if (Array.isArray(message?.parts)) {
+    return message.parts;
+  }
+  if (Array.isArray(message?.toolInvocations)) {
+    return message.toolInvocations;
+  }
+  return [];
+}
+
+function hasMeaningfulValue(value: any): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (isPlainObject(value)) {
+    return Object.keys(value).length > 0;
+  }
+  return true;
+}
+
+function isPlainObject(value: any): value is Record<string, any> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function pickString(...candidates: Array<unknown>): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
 }
 
 function extractTextFromParts(parts: any[]): string {

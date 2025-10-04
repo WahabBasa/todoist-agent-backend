@@ -10,6 +10,7 @@ import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
 import type { UIMessage } from '@ai-sdk/ui-utils';
 import { useChatStore } from '../store/chatStore';
+import type { UiStatus } from '../store/chatStore';
 
 // Minimal message shape expected by UI components
 export interface Message {
@@ -88,6 +89,19 @@ function extractLatestUserMessage(messages: UIMessage[]): string {
 }
 
 const isDev = typeof import.meta !== "undefined" ? !!import.meta.env?.DEV : false;
+
+function areUiMessagesEqual(a: Message[], b: Message[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (!left || !right) return false;
+    if (left.role !== right.role) return false;
+    if (left.content !== right.content) return false;
+  }
+  return true;
+}
 
 function mapConvexMessagesToSdk(messages: any[] | undefined): UIMessage[] {
   if (!Array.isArray(messages)) return [];
@@ -181,6 +195,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ensureAssistantPlaceholder,
     updateAssistant,
     clear: clearStore,
+    resetStatuses,
   } = useChatStore();
   const currentInstance = instances[chatId] ?? { input: '', messages: [], status: 'ready' };
 
@@ -295,6 +310,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!pendingRetryRef.current && lastUserTextRef.current) {
           pendingRetryRef.current = true;
           queuedRetryRef.current = true;
+          if (isDev) {
+            console.debug('[CHAT] scheduling retry due to history conflict', {
+              chatId,
+              canonicalVersion: canonicalHistoryVersionRef.current,
+            });
+          }
           setTimeout(() => { pendingRetryRef.current = false; }, 500);
         }
         return;
@@ -308,6 +329,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           pendingRetryRef.current = true;
           queuedRetryRef.current = true;
           const backoff = 400 * Math.pow(2, n - 1); // 400, 800, 1600ms
+          if (isDev) {
+            console.debug('[CHAT] scheduling retry due to session lock', { chatId, backoff, attempt: n });
+          }
           setTimeout(() => { pendingRetryRef.current = false; }, backoff);
         }
         try { toast.message("Assistant is busy, retrying…"); } catch {}
@@ -318,9 +342,60 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       try { toast.error(`Error: ${msg}`); } catch {}
     },
     onFinish: () => {
-      setStatusStore(chatId, 'ready');
+      const last = messages[messages.length - 1] as any;
+      let text = '';
+      let hasToolPart = false;
+      if (last) {
+        if (Array.isArray(last?.parts)) {
+          text = collectTextFromParts(last.parts);
+          hasToolPart = last.parts.some((part: any) => typeof part?.type === 'string' && part.type.startsWith('tool-'));
+        } else if (typeof last?.content === 'string') {
+          text = last.content;
+        } else if (Array.isArray(last?.content)) {
+          text = collectTextFromParts(last.content);
+        }
+      }
+
+      const nextStatus: UiStatus = !text.trim() && hasToolPart ? 'streaming' : 'ready';
+
+      if (!text.trim() && hasToolPart) {
+        ensureAssistantPlaceholder(chatId);
+        updateAssistant(chatId, 'Working on tool response…');
+      }
+
+      if (isDev) {
+        console.debug('[CHAT] onFinish from transport', {
+          chatId,
+          hookMessages: messages.length,
+          hasToolPart,
+          textPreview: text.slice(0, 80),
+          nextStatus,
+        });
+      }
+
+      setStatusStore(chatId, nextStatus);
       lockRetryCountRef.current = 0;
-      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+      if (isDev) {
+        const storeStatus = useChatStore.getState().instances[chatId]?.status;
+        console.debug('[CHAT] status after finish', {
+          chatId,
+          storeStatus,
+        });
+      }
+      window.dispatchEvent(new CustomEvent('chat-history-updated'));
+      try {
+        if (typeof reload === 'function') {
+          if (isDev) {
+            console.debug('[CHAT] triggering reload after finish', { chatId });
+          }
+          reload();
+          if (isDev) {
+            console.debug('[CHAT] reload returned', { chatId });
+          }
+        }
+      } catch (err) {
+        console.warn('[CHAT] reload after finish failed', err);
+      }
     },
   });
   const isLoading = currentInstance.status === 'submitted' || currentInstance.status === 'streaming';
@@ -328,6 +403,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Stream sync: mirror hook streaming into store assistant placeholder
   React.useEffect(() => {
+    if (isDev) {
+      console.debug('[CHAT] hookStatus change', {
+        chatId,
+        hookStatus,
+        storeStatus: currentInstance.status,
+        hookMessages: messages.length,
+      });
+    }
     if (hookStatus === 'streaming') {
       // derive assistant text from hook messages
       const last = messages[messages.length - 1] as any;
@@ -342,6 +425,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateAssistant(chatId, text);
     }
   }, [hookStatus, messages, chatId, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
+
+  const prevHookStatusRef = React.useRef(hookStatus);
+  React.useEffect(() => {
+    const prev = prevHookStatusRef.current;
+    prevHookStatusRef.current = hookStatus;
+
+    let mappedStatus: UiStatus;
+    if (hookStatus === 'streaming' || hookStatus === 'submitted') {
+      mappedStatus = hookStatus as UiStatus;
+    } else {
+      const last = messages[messages.length - 1] as any;
+      let text = '';
+      let hasToolPart = false;
+      if (last) {
+        if (Array.isArray(last?.parts)) {
+          text = collectTextFromParts(last.parts);
+          hasToolPart = last.parts.some((part: any) => typeof part?.type === 'string' && part.type.startsWith('tool-'));
+        } else if (typeof last?.content === 'string') {
+          text = last.content;
+        } else if (Array.isArray(last?.content)) {
+          text = collectTextFromParts(last.content);
+        }
+      }
+
+      mappedStatus = !text.trim() && hasToolPart ? 'streaming' : 'ready';
+    }
+
+    setStatusStore(chatId, mappedStatus);
+
+    if (hookStatus === 'ready' && prev !== 'ready') {
+      const last = messages[messages.length - 1] as any;
+      let text = '';
+      if (last) {
+        if (Array.isArray(last?.parts)) text = collectTextFromParts(last.parts);
+        else if (typeof last?.content === 'string') text = last.content;
+        else if (Array.isArray(last?.content)) text = collectTextFromParts(last.content);
+      }
+
+      if (text) {
+        updateAssistant(chatId, text);
+      }
+
+      if (isDev) {
+        console.debug('[CHAT] stream finished', {
+          chatId,
+          assistantPreview: text.slice(0, 80),
+          canonicalVersion: canonicalHistoryVersionRef.current,
+        });
+      }
+    }
+  }, [chatId, hookStatus, messages, setStatusStore, updateAssistant]);
   
   // FIX: Add timeout recovery for hung streams
   React.useEffect(() => {
@@ -351,6 +485,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.warn('[CHAT] Stream timeout - resetting status');
       setStatusStore(chatId, 'ready');
       toast.error('Response timeout. Please try again.');
+      queuedRetryRef.current = false;
+      pendingRetryRef.current = false;
     }, 30000); // 30 second timeout
     
     return () => clearTimeout(timeoutId);
@@ -358,9 +494,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Normalize DB (Convex) messages to store shape and replace when idle/ready
   React.useEffect(() => {
-    if (activeConversation === undefined) return; // loading
-    // Only replace from DB when store is idle to avoid flicker
-    if (currentInstance.status !== 'ready') return;
+    if (activeConversation === undefined) return;
     const mapped = mapConvexMessagesToSdk(activeConversation?.messages);
     const dbMsgs: Message[] = mapped.map((m: any, idx: number) => {
       let text = '';
@@ -369,11 +503,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       else if (Array.isArray(m.content)) text = collectTextFromParts(m.content);
       return { id: m.id ?? String(idx), role: m.role, content: text };
     });
-    // Avoid regressions: only swap if DB has at least as many messages
-    if (dbMsgs.length >= currentInstance.messages.length) {
-      replaceFromDb(chatId, dbMsgs);
+
+    const localMsgs = currentInstance.messages;
+    const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
+
+    if (isDev) {
+      const lastLocal = localMsgs[localMsgs.length - 1];
+      const lastDb = dbMsgs[dbMsgs.length - 1];
+      console.debug('[CHAT] hydration check', {
+        chatId,
+        localCount: localMsgs.length,
+        dbCount: dbMsgs.length,
+        isEqual,
+        localLastRole: lastLocal?.role ?? null,
+        dbLastRole: lastDb?.role ?? null,
+        storeStatus: currentInstance.status,
+      });
     }
-  }, [activeConversation, chatId, currentInstance.status, currentInstance.messages.length, replaceFromDb]);
+
+    if (!isEqual) {
+      replaceFromDb(chatId, dbMsgs);
+      if (isDev) {
+        console.debug('[CHAT] store replaced from Convex', {
+          chatId,
+          nextCount: dbMsgs.length,
+        });
+      }
+    }
+
+    const lastAssistant = dbMsgs.slice().reverse().find((msg) => msg.role === 'assistant');
+    if (lastAssistant && lastAssistant.content.trim()) {
+      setStatusStore(chatId, 'ready');
+      queuedRetryRef.current = false;
+      pendingRetryRef.current = false;
+      if (isDev) {
+        console.debug('[CHAT] status reset after Convex hydration', {
+          chatId,
+          assistantPreview: lastAssistant.content.slice(0, 80),
+        });
+      }
+    }
+  }, [activeConversation, chatId, currentInstance.messages, currentInstance.status, replaceFromDb, setStatusStore]);
 
   // Ensure input is always a string to avoid trim() issues
   const safeInput = currentInstance.input ?? "";
@@ -442,6 +612,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (typeof sendMessage === 'function' && lastUserTextRef.current) {
         setStatusStore(chatId, 'submitted');
         ensureAssistantPlaceholder(chatId);
+        if (isDev) {
+          console.debug('[CHAT] retrying queued message', {
+            chatId,
+            textLength: lastUserTextRef.current.length,
+          });
+        }
         void sendMessage({ text: lastUserTextRef.current });
       }
     } catch {}
@@ -459,6 +635,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     setInputStore(chatId, '');
   }, [chatId, setInputStore]);
+
+  React.useEffect(() => {
+    resetStatuses();
+  }, [resetStatuses]);
 
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
