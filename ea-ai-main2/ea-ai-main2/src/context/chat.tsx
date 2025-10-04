@@ -35,6 +35,7 @@ interface ChatContextType {
   clearChat: () => void;
   reload: () => void;
   isFreshSession: boolean;
+  forceResetStatus: () => void; // FIX: Manual recovery for stuck states
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -135,6 +136,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const lastUserTextRef = React.useRef("");
   const pendingRetryRef = React.useRef(false);
   const queuedRetryRef = React.useRef(false);
+  const skipVersionOnceRef = React.useRef(false);
+  const lockRetryCountRef = React.useRef(0);
+  
+  // FIX: Use ref for canonicalHistoryVersion to stabilize transport during streaming
+  const canonicalHistoryVersionRef = React.useRef(0);
 
   const currentSessionMeta = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -157,6 +163,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     return 0;
   }, [currentSessionMeta, activeConversation?.messages]);
+  
+  // FIX: Keep ref updated with latest version
+  React.useEffect(() => {
+    canonicalHistoryVersionRef.current = canonicalHistoryVersion;
+  }, [canonicalHistoryVersion]);
   
   // (zustand) No remount/rehydration tracking needed
 
@@ -228,18 +239,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       headers["X-Session-Id"] = currentSessionId;
     }
 
-    return {
-      headers,
-      body: {
-        sessionId: currentSessionId ?? undefined,
-        id: currentSessionId ?? undefined,
-        requestId,
-        latestUserMessage,
-        historyVersion: canonicalHistoryVersion,
-        messages,
-      },
+    const body: any = {
+      sessionId: currentSessionId ?? undefined,
+      id: currentSessionId ?? undefined,
+      requestId,
+      latestUserMessage,
+      messages,
     };
-  }, [getToken, currentSessionId, canonicalHistoryVersion]);
+
+    // Send historyVersion unless a one-time skip is requested after a conflict
+    if (!skipVersionOnceRef.current) {
+      body.historyVersion = canonicalHistoryVersionRef.current; // FIX: Use ref instead of closure
+    }
+    // consume the flag
+    skipVersionOnceRef.current = false;
+
+    return { headers, body };
+  }, [getToken, currentSessionId]); // FIX: Removed canonicalHistoryVersion from dependencies to stabilize transport
 
   // Memoize transport to prevent re-instantiating useChat on each render
   const transport = React.useMemo(() => {
@@ -263,6 +279,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     transport,
     // We no longer render from the hook's internal state; store is our source of truth
     onError: (err) => {
+      // FIX: Always reset status first to prevent stuck states
+      setStatusStore(chatId, 'ready');
+      
       // Ignore validation error for empty text
       if (err instanceof Error && err.message === "latestUserMessage_missing") return;
 
@@ -270,27 +289,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const isLocked = /409|session_locked/i.test(msg);
       const isConflict = /history_conflict/i.test(msg);
 
-      if (isLocked) {
-        toast.message("Assistant is busy, retrying…");
+      if (isConflict) {
+        // Canonical history mismatch: skip version once, then retry quickly
+        skipVersionOnceRef.current = true;
         if (!pendingRetryRef.current && lastUserTextRef.current) {
           pendingRetryRef.current = true;
           queuedRetryRef.current = true;
-          // Small backoff; actual send occurs via effect when status is ready
-          setTimeout(() => { pendingRetryRef.current = false; }, 800);
+          setTimeout(() => { pendingRetryRef.current = false; }, 500);
         }
         return;
       }
 
-      if (isConflict) {
-        // DB is canonical; rely on Convex reactivity and retry once when idle
-        queuedRetryRef.current = true;
+      if (isLocked) {
+        // Session locked: retry with bounded exponential backoff
+        const n = Math.min(lockRetryCountRef.current + 1, 3);
+        lockRetryCountRef.current = n;
+        if (!pendingRetryRef.current && lastUserTextRef.current && n <= 3) {
+          pendingRetryRef.current = true;
+          queuedRetryRef.current = true;
+          const backoff = 400 * Math.pow(2, n - 1); // 400, 800, 1600ms
+          setTimeout(() => { pendingRetryRef.current = false; }, backoff);
+        }
+        try { toast.message("Assistant is busy, retrying…"); } catch {}
         return;
       }
 
-      toast.error(`Error: ${msg}`);
+      // Non-retriable errors surface to the user
+      try { toast.error(`Error: ${msg}`); } catch {}
     },
     onFinish: () => {
       setStatusStore(chatId, 'ready');
+      lockRetryCountRef.current = 0;
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
     },
   });
@@ -313,6 +342,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateAssistant(chatId, text);
     }
   }, [hookStatus, messages, chatId, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
+  
+  // FIX: Add timeout recovery for hung streams
+  React.useEffect(() => {
+    if (currentInstance.status !== 'streaming') return;
+    
+    const timeoutId = setTimeout(() => {
+      console.warn('[CHAT] Stream timeout - resetting status');
+      setStatusStore(chatId, 'ready');
+      toast.error('Response timeout. Please try again.');
+    }, 30000); // 30 second timeout
+    
+    return () => clearTimeout(timeoutId);
+  }, [currentInstance.status, chatId, setStatusStore]);
 
   // Normalize DB (Convex) messages to store shape and replace when idle/ready
   React.useEffect(() => {
@@ -341,6 +383,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new CustomEvent('clear-chat-requested'));
     toast.success("Chat cleared");
   }, [chatId, clearStore]);
+  
+  // FIX: Add manual recovery for stuck states
+  const forceResetStatus = React.useCallback(() => {
+    setStatusStore(chatId, 'ready');
+    lockRetryCountRef.current = 0;
+    console.log('[CHAT] Manual status reset');
+  }, [chatId, setStatusStore]);
 
   // Fresh session detection: prefer sessions meta; else conversation; allow initial loading to show greeting for new sessions
   const isFreshSession = React.useMemo(() => {
@@ -369,6 +418,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setInputStore(chatId, '');
     lastUserTextRef.current = content;
     lastSentVersionRef.current = canonicalHistoryVersion;
+    lockRetryCountRef.current = 0;
     try {
       setStatusStore(chatId, 'submitted');
       appendUser(chatId, content);
@@ -387,15 +437,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     if (!queuedRetryRef.current) return;
     if (hookStatus !== 'ready') return;
-    // Wait until DB version advances beyond the version when we last sent
-    if (canonicalHistoryVersion <= lastSentVersionRef.current) return;
     queuedRetryRef.current = false;
     try {
       if (typeof sendMessage === 'function' && lastUserTextRef.current) {
+        setStatusStore(chatId, 'submitted');
+        ensureAssistantPlaceholder(chatId);
         void sendMessage({ text: lastUserTextRef.current });
       }
     } catch {}
-  }, [hookStatus, sendMessage, canonicalHistoryVersion]);
+  }, [hookStatus, sendMessage, chatId, setStatusStore, ensureAssistantPlaceholder]);
 
   const prevChatIdRef = React.useRef(chatId);
   React.useEffect(() => {
@@ -429,6 +479,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     clearChat,
     reload,
     isFreshSession,
+    forceResetStatus, // FIX: Manual recovery for stuck states
   };
 
   return (
