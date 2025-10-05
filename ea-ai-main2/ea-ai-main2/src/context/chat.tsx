@@ -11,6 +11,7 @@ import { useAuth } from '@clerk/clerk-react';
 import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@ai-sdk/ui-utils';
 import { useChatStore } from '../store/chatStore';
 import type { UiStatus, UiMsg } from '../store/chatStore';
+import { logChatEvent } from '../utils/chatLogger';
 
 // Simple chat context interface - much cleaner than before
 interface ChatContextType {
@@ -79,9 +80,6 @@ function extractLatestUserMessage(messages: UIMessage[]): string {
   }
   return '';
 }
-
-const isDev = typeof import.meta !== "undefined" ? !!import.meta.env?.DEV : false;
-
 type UiPart = UIMessage['parts'][number];
 
 function partsEqual(a: UiPart[] | undefined, b: UiPart[] | undefined): boolean {
@@ -266,6 +264,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [rehydrationKey, setRehydrationKey] = React.useState(0);
   const hookId = React.useMemo(() => `${chatId}:${rehydrationKey}`,[chatId, rehydrationKey]);
 
+  const [uiError, setUiError] = React.useState<Error | null>(null);
+
   // Track last user text for retries and guard against duplicate retries
   const lastUserTextRef = React.useRef("");
   const pendingRetryRef = React.useRef(false);
@@ -407,8 +407,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages,
     sendMessage,
     status: hookStatus,
-    reload,
-    error
+    reload
   } = useVercelChat({
     id: hookId,
     transport,
@@ -416,6 +415,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     onError: (err) => {
       // FIX: Always reset status first to prevent stuck states
       setStatusStore(chatId, 'ready');
+      setUiError(null);
       
       // Ignore validation error for empty text
       if (err instanceof Error && err.message === "latestUserMessage_missing") return;
@@ -430,12 +430,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!pendingRetryRef.current && lastUserTextRef.current) {
           pendingRetryRef.current = true;
           queuedRetryRef.current = true;
-          if (isDev) {
-            console.debug('[CHAT] scheduling retry due to history conflict', {
-              chatId,
-              canonicalVersion: canonicalHistoryVersionRef.current,
-            });
-          }
+          logChatEvent(chatId, 'retry_scheduled_conflict', {
+            canonicalVersion: canonicalHistoryVersionRef.current,
+          });
           setTimeout(() => { pendingRetryRef.current = false; }, 500);
         }
         return;
@@ -449,9 +446,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           pendingRetryRef.current = true;
           queuedRetryRef.current = true;
           const backoff = 400 * Math.pow(2, n - 1); // 400, 800, 1600ms
-          if (isDev) {
-            console.debug('[CHAT] scheduling retry due to session lock', { chatId, backoff, attempt: n });
-          }
+          logChatEvent(chatId, 'retry_scheduled_lock', { backoff, attempt: n });
           setTimeout(() => { pendingRetryRef.current = false; }, backoff);
         }
         try { toast.message("Assistant is busy, retrying…"); } catch {}
@@ -460,8 +455,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       // Non-retriable errors surface to the user
       try { toast.error(`Error: ${msg}`); } catch {}
+      const displayError = err instanceof Error ? err : new Error(msg || 'Unknown error');
+      setUiError(displayError);
     },
     onFinish: () => {
+      setUiError(null);
       const last = messages[messages.length - 1] as UIMessage | undefined;
       const rawParts = Array.isArray(last?.parts)
         ? last?.parts
@@ -484,35 +482,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ensureAssistantPlaceholder(chatId);
       updateAssistant(chatId, { content: text, parts });
 
-      if (isDev) {
-        console.debug('[CHAT] onFinish from transport', {
-          chatId,
-          hookMessages: messages.length,
-          hasToolPart,
-          textPreview: text.slice(0, 80),
-          nextStatus,
-        });
-      }
+      logChatEvent(chatId, 'transport_finish', {
+        hookMessages: messages.length,
+        hasToolPart,
+        textPreview: text.slice(0, 80),
+        nextStatus,
+      });
 
       setStatusStore(chatId, nextStatus);
       lockRetryCountRef.current = 0;
-      if (isDev) {
-        const storeStatus = useChatStore.getState().instances[chatId]?.status;
-        console.debug('[CHAT] status after finish', {
-          chatId,
-          storeStatus,
-        });
-      }
+      const storeStatus = useChatStore.getState().instances[chatId]?.status;
+      logChatEvent(chatId, 'status_after_finish', { storeStatus });
       window.dispatchEvent(new CustomEvent('chat-history-updated'));
       try {
         if (typeof reload === 'function') {
-          if (isDev) {
-            console.debug('[CHAT] triggering reload after finish', { chatId });
-          }
+          logChatEvent(chatId, 'reload_triggered');
           reload();
-          if (isDev) {
-            console.debug('[CHAT] reload returned', { chatId });
-          }
+          logChatEvent(chatId, 'reload_completed');
         }
       } catch (err) {
         console.warn('[CHAT] reload after finish failed', err);
@@ -522,14 +508,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const isLoading = currentInstance.status === 'submitted' || currentInstance.status === 'streaming';
   const isRetriable = false;
 
+  const lastStatusLogRef = React.useRef({ hookStatus, storeStatus: currentInstance.status });
+
   // Stream sync: mirror hook streaming into store assistant placeholder
   React.useEffect(() => {
-    if (isDev) {
-      console.debug('[CHAT] hookStatus change', {
-        chatId,
+    const prev = lastStatusLogRef.current;
+    if (prev.hookStatus !== hookStatus || prev.storeStatus !== currentInstance.status) {
+      lastStatusLogRef.current = { hookStatus, storeStatus: currentInstance.status };
+      logChatEvent(chatId, 'status_change', {
         hookStatus,
         storeStatus: currentInstance.status,
-        hookMessages: messages.length,
       });
     }
     if (hookStatus === 'streaming') {
@@ -554,7 +542,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ensureAssistantPlaceholder(chatId);
       updateAssistant(chatId, { content: text, parts });
     }
-  }, [hookStatus, messages, chatId, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
+  }, [hookStatus, messages, chatId, currentInstance.status, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
 
   const prevHookStatusRef = React.useRef(hookStatus);
   React.useEffect(() => {
@@ -609,13 +597,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       updateAssistant(chatId, { content: text, parts });
 
-      if (isDev) {
-        console.debug('[CHAT] stream finished', {
-          chatId,
-          assistantPreview: text.slice(0, 80),
-          canonicalVersion: canonicalHistoryVersionRef.current,
-        });
-      }
+      logChatEvent(chatId, 'stream_finished', {
+        assistantPreview: text.slice(0, 80),
+        canonicalVersion: canonicalHistoryVersionRef.current,
+      });
     }
   }, [chatId, hookStatus, messages, setStatusStore, updateAssistant]);
   
@@ -625,6 +610,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     
     const timeoutId = setTimeout(() => {
       console.warn('[CHAT] Stream timeout - resetting status');
+      logChatEvent(chatId, 'stream_timeout');
       setStatusStore(chatId, 'ready');
       toast.error('Response timeout. Please try again.');
       queuedRetryRef.current = false;
@@ -641,28 +627,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const localMsgs = currentInstance.messages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
 
-    if (isDev) {
-      const lastLocal = localMsgs[localMsgs.length - 1];
-      const lastDb = dbMsgs[dbMsgs.length - 1];
-      console.debug('[CHAT] hydration check', {
-        chatId,
-        localCount: localMsgs.length,
-        dbCount: dbMsgs.length,
-        isEqual,
-        localLastRole: lastLocal?.role ?? null,
-        dbLastRole: lastDb?.role ?? null,
-        storeStatus: currentInstance.status,
-      });
-    }
-
     if (!isEqual) {
       replaceFromDb(chatId, dbMsgs);
-      if (isDev) {
-        console.debug('[CHAT] store replaced from Convex', {
-          chatId,
-          nextCount: dbMsgs.length,
-        });
-      }
+      logChatEvent(chatId, 'store_replaced_from_convex', {
+        nextCount: dbMsgs.length,
+      });
     }
 
     const lastAssistant = dbMsgs.slice().reverse().find((msg) => msg.role === 'assistant');
@@ -673,12 +642,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setStatusStore(chatId, 'ready');
       queuedRetryRef.current = false;
       pendingRetryRef.current = false;
-      if (isDev) {
-        console.debug('[CHAT] status reset after Convex hydration', {
-          chatId,
-          assistantPreview: assistantText.slice(0, 80),
-        });
-      }
+      logChatEvent(chatId, 'status_reset_after_hydration', {
+        assistantPreview: assistantText.slice(0, 80),
+      });
     }
   }, [activeConversation, chatId, currentInstance.messages, currentInstance.status, replaceFromDb, setStatusStore]);
 
@@ -695,7 +661,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const forceResetStatus = React.useCallback(() => {
     setStatusStore(chatId, 'ready');
     lockRetryCountRef.current = 0;
-    console.log('[CHAT] Manual status reset');
+    logChatEvent(chatId, 'manual_status_reset');
   }, [chatId, setStatusStore]);
 
   // Fresh session detection: prefer sessions meta; else conversation; allow initial loading to show greeting for new sessions
@@ -726,8 +692,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     lastUserTextRef.current = content;
     lastSentVersionRef.current = canonicalHistoryVersion;
     lockRetryCountRef.current = 0;
+    setUiError(null);
     try {
       setStatusStore(chatId, 'submitted');
+      logChatEvent(chatId, 'user_submitted', {
+        textPreview: content.slice(0, 80),
+        length: content.length,
+      });
       appendUser(chatId, content);
       ensureAssistantPlaceholder(chatId);
       if (typeof sendMessage === 'function') {
@@ -749,12 +720,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (typeof sendMessage === 'function' && lastUserTextRef.current) {
         setStatusStore(chatId, 'submitted');
         ensureAssistantPlaceholder(chatId);
-        if (isDev) {
-          console.debug('[CHAT] retrying queued message', {
-            chatId,
-            textLength: lastUserTextRef.current.length,
-          });
-        }
+        logChatEvent(chatId, 'retrying_queued_message', {
+          textLength: lastUserTextRef.current.length,
+        });
         void sendMessage({ text: lastUserTextRef.current });
       }
     } catch {}
@@ -764,9 +732,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   React.useEffect(() => {
     if (prevChatIdRef.current === chatId) return;
     prevChatIdRef.current = chatId;
-    if (isDev) {
-      console.debug('[CHAT] session switched', { chatId, canonicalHistoryVersion });
-    }
+    logChatEvent(chatId, 'session_changed', { canonicalHistoryVersion });
   }, [chatId, canonicalHistoryVersion]);
 
   React.useEffect(() => {
@@ -787,11 +753,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isLoading,
     // Filter benign errors from surfacing in the chat bubbles
     error: React.useMemo(() => {
-      if (!error) return null;
-      const msg = String(error.message || '').toLowerCase();
+      if (!uiError) return null;
+      const msg = String(uiError.message || '').toLowerCase();
       if (msg.includes('history_conflict') || msg.includes('session_locked')) return null;
-      return error;
-    }, [error]),
+      return uiError;
+    }, [uiError]),
     isRetriable,
     clearChat,
     reload,

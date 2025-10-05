@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { UIMessage } from '@ai-sdk/ui-utils'
+import { logChatEvent } from '../utils/chatLogger'
 
 export type UiStatus = 'ready' | 'submitted' | 'streaming'
 export type UiRole = 'user' | 'assistant'
@@ -40,15 +41,6 @@ function genId(prefix: string): string {
   return `${prefix}-${Date.now()}-${rnd}`
 }
 
-const isDev = typeof import.meta !== 'undefined' ? Boolean((import.meta as any).env?.DEV) : false
-
-function devLog(event: string, data: Record<string, unknown>) {
-  if (!isDev) return
-  try {
-    console.debug(`[CHAT_STORE] ${event}`, data)
-  } catch {}
-}
-
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
@@ -67,8 +59,7 @@ export const useChatStore = create<ChatStore>()(
       replaceFromDb: (id, msgs) => {
         const instances = get().instances
         const inst = instances[id] ?? getDefaultInstance()
-        devLog('replaceFromDb', {
-          id,
+        logChatEvent(id, 'store_replace_from_db', {
           prevCount: inst.messages.length,
           nextCount: msgs.length,
           prevLastRole: inst.messages[inst.messages.length - 1]?.role ?? null,
@@ -163,7 +154,7 @@ export const useChatStore = create<ChatStore>()(
           if (inst.status !== 'ready') {
             mutated = true
             next[key] = { ...inst, status: 'ready' }
-            devLog('resetStatus', { id: key, previousStatus: inst.status })
+            logChatEvent(key, 'store_reset_status', { previousStatus: inst.status })
           } else {
             next[key] = inst
           }

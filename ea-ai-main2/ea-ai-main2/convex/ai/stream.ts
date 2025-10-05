@@ -284,6 +284,10 @@ export const chat = httpAction(async (ctx, request) => {
       }
     }
 
+    let streamedAssistantText = "";
+    let pendingSseText = "";
+    const textDecoder = new TextDecoder();
+
     const result = streamText({
       model: openrouter.chat(modelName, { usage: { include: true } }),
       system: systemPrompt,
@@ -299,12 +303,26 @@ export const chat = httpAction(async (ctx, request) => {
       },
       onFinish: async (finish) => {
         try {
+          if (pendingSseText) {
+            const flush = extractTextFromSseBuffer(`${pendingSseText}\n`);
+            pendingSseText = flush.remainder;
+            if (flush.text) {
+              streamedAssistantText += flush.text;
+            }
+          }
+
+          const assistantTextFromChunks = (streamedAssistantText || "").trim();
           const assistantText =
+            assistantTextFromChunks ||
             extractAssistantResponse(finish?.response?.messages) ||
             extractFinishText(finish?.response);
           const { toolCalls: normalizedToolCalls, toolResults: normalizedToolResults } = collectToolPayloads(
             finish
           );
+
+          const finalAssistantText = assistantText.trim().length
+            ? assistantText.trim()
+            : synthesizeAssistantSummary(normalizedToolResults, currentMode);
 
           if (normalizedToolCalls.length) {
             logToolCalls(normalizedToolCalls.map((call) => ({ name: call.name, args: call.args })));
@@ -314,7 +332,7 @@ export const chat = httpAction(async (ctx, request) => {
             sessionId: sessionId ?? null,
             requestId,
             historyVersion,
-            assistantLength: assistantText.length,
+            assistantLength: finalAssistantText.length,
             chunkCount: streamChunkCount,
             streamBytes,
             toolCallCount: normalizedToolCalls.length,
@@ -344,7 +362,7 @@ export const chat = httpAction(async (ctx, request) => {
             const persistResult = await ctx.runMutation(api.conversations.finishAssistantTurn, {
               sessionId: sessionConvexId,
               requestId,
-              content: assistantText,
+              content: finalAssistantText,
               metadata: { mode: currentMode, requestId },
             });
 
@@ -380,6 +398,7 @@ export const chat = httpAction(async (ctx, request) => {
                 lastChunkMs: lastChunkDeltaMs,
                 toolCallCount: normalizedToolCalls.length,
                 toolResultCount: normalizedToolResults.length,
+                assistantPreview: finalAssistantText.slice(0, 120),
               });
               const durationMs = Date.now() - startedAt;
               tlog("finish", {
@@ -469,6 +488,24 @@ export const chat = httpAction(async (ctx, request) => {
               }
               lastChunkDeltaMs = delta;
 
+              try {
+                const textChunk = decodeStreamChunkToText(value, textDecoder);
+                if (textChunk) {
+                  pendingSseText += textChunk;
+                  const consumed = extractTextFromSseBuffer(pendingSseText);
+                  pendingSseText = consumed.remainder;
+                  if (consumed.text) {
+                    streamedAssistantText += consumed.text;
+                  }
+                }
+              } catch (chunkErr) {
+                console.warn("[STREAM][chunk:decode_failed]", {
+                  error: chunkErr,
+                  sessionId,
+                  requestId,
+                });
+              }
+
               controller.enqueue(value);
               pump();
             })
@@ -554,6 +591,219 @@ function extractAssistantResponse(responseMessages: any): string {
         return text;
       }
     }
+  }
+
+  return "";
+}
+
+function synthesizeAssistantSummary(
+  toolResults: NormalizedToolResult[],
+  mode: string
+): string {
+  if (!Array.isArray(toolResults) || toolResults.length === 0) {
+    return mode === "primary"
+      ? "I reviewed your request but didn’t produce any additional summary."
+      : "No additional information was generated.";
+  }
+
+  const summaries: string[] = [];
+  for (const result of toolResults) {
+    const normalizedText = normalizeToolResultForSummary(result);
+    if (normalizedText) {
+      summaries.push(normalizedText);
+    }
+  }
+
+  if (summaries.length === 0) {
+    return `Here is what I found:
+${JSON.stringify(toolResults.map((r) => r.result), null, 2)}`;
+  }
+
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  return summaries.map((summary, idx) => `${idx + 1}. ${summary}`).join("\n");
+}
+
+function normalizeToolResultForSummary(result: NormalizedToolResult): string {
+  if (!result || typeof result !== "object") return "";
+  const toolName = result.toolName ? result.toolName.trim() : "Tool";
+  const payload = result.result;
+
+  if (payload == null) {
+    return `${toolName} completed without returning additional details.`;
+  }
+
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    if (!trimmed) {
+      return `${toolName} completed without returning additional details.`;
+    }
+    if (/^{\s*"?[\w\s-]+"?\s*:/i.test(trimmed) || trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return summarizeStructuredPayload(toolName, parsed) ?? `${toolName} result: ${trimmed}`;
+      } catch {
+        return `${toolName} result: ${trimmed}`;
+      }
+    }
+    return `${toolName}: ${trimmed}`;
+  }
+
+  if (Array.isArray(payload)) {
+    if (payload.length === 0) {
+      return `${toolName} returned no results.`;
+    }
+    const formatted = payload
+      .slice(0, 5)
+      .map((entry, idx) => {
+        if (typeof entry === "string") {
+          return `- ${entry}`;
+        }
+        if (entry && typeof entry === "object") {
+          const text = summarizableFields(entry);
+          return text ? `- ${text}` : `- Item ${idx + 1}`;
+        }
+        return `- ${String(entry)}`;
+      })
+      .join("\n");
+    const suffix = payload.length > 5 ? "\n…" : "";
+    return `${toolName} results:\n${formatted}${suffix}`;
+  }
+
+  if (typeof payload === "object") {
+    const text = summarizeStructuredPayload(toolName, payload);
+    if (text) return text;
+    try {
+      return `${toolName} result: ${JSON.stringify(payload, null, 2)}`;
+    } catch {
+      return `${toolName} result available.`;
+    }
+  }
+
+  return `${toolName} result: ${String(payload)}`;
+}
+
+function summarizeStructuredPayload(toolName: string, data: any): string | null {
+  if (!data || typeof data !== "object") return null;
+
+  if (toolName === "getCurrentTime" && typeof data.localTime === "string") {
+    const tz = typeof data.userTimezone === "string" ? data.userTimezone : "local time";
+    return `It is currently ${data.localTime} in ${tz}.`;
+  }
+
+  if (Array.isArray((data as any).events) && (data as any).events.length > 0) {
+    const events = (data as any).events.slice(0, 5).map((event: any, idx: number) => {
+      const title = typeof event?.title === "string" && event.title.trim() ? event.title.trim() : `Event ${idx + 1}`;
+      const start = typeof event?.start === "string" ? event.start : event?.startTime;
+      const when = start ? formatDateLike(start) : "unscheduled time";
+      return `• ${title} — ${when}`;
+    });
+    const suffix = (data as any).events.length > 5 ? "\n…" : "";
+    return `${toolName} summary:\n${events.join("\n")}${suffix}`;
+  }
+
+  const display = summarizableFields(data);
+  return display ? `${toolName}: ${display}` : null;
+}
+
+function summarizableFields(value: Record<string, any>): string {
+  const fields = ["title", "summary", "content", "due", "localTime", "currentTime"];
+  for (const key of fields) {
+    if (typeof value?.[key] === "string" && value[key].trim()) {
+      return value[key].trim();
+    }
+  }
+
+  if (typeof value?.start === "string") {
+    return formatDateLike(value.start);
+  }
+
+  if (typeof value?.startTime === "string") {
+    return formatDateLike(value.startTime);
+  }
+
+  if (typeof value?.description === "string" && value.description.trim()) {
+    return value.description.trim();
+  }
+
+  return "";
+}
+
+function formatDateLike(raw: string): string {
+  try {
+    const date = new Date(raw);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleString();
+    }
+  } catch {}
+  return raw;
+}
+
+function decodeStreamChunkToText(chunk: Uint8Array, decoder: TextDecoder): string {
+  if (!(chunk instanceof Uint8Array)) {
+    return "";
+  }
+  return decoder.decode(chunk, { stream: true });
+}
+
+function extractTextFromSseBuffer(buffer: string): { text: string; remainder: string } {
+  if (!buffer) return { text: "", remainder: "" };
+  let accumulated = "";
+
+  const endsWithNewline = /\r?\n$/.test(buffer);
+  const lines = buffer.split(/\r?\n/);
+  let remainder = "";
+
+  if (!endsWithNewline) {
+    remainder = lines.pop() ?? "";
+  }
+
+  for (const line of lines) {
+    if (!line || !line.startsWith("data:")) continue;
+    const dataStr = line.slice(5).trim();
+    if (!dataStr || dataStr === "[DONE]") continue;
+    try {
+      const payload = JSON.parse(dataStr);
+      const text = extractTextFromSsePayload(payload);
+      if (text) accumulated += text;
+    } catch {
+      // ignore malformed lines; they will be retried when remainder completes
+    }
+  }
+
+  return { text: accumulated, remainder };
+}
+
+function extractTextFromSsePayload(payload: any): string {
+  if (!payload || typeof payload !== "object") return "";
+
+  if (typeof payload.text === "string") {
+    return payload.text;
+  }
+
+  if (payload.type === "response.delta" && payload.delta?.type === "text-delta" && typeof payload.delta.text === "string") {
+    return payload.delta.text;
+  }
+
+  if (payload.type === "message.delta" && typeof payload.delta?.text === "string") {
+    return payload.delta.text;
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data
+      .map((entry: any) => extractTextFromSsePayload(entry))
+      .filter(Boolean)
+      .join("");
+  }
+
+  if (typeof payload.delta?.value === "string") {
+    return payload.delta.value;
+  }
+
+  if (typeof payload.delta?.text === "string") {
+    return payload.delta.text;
   }
 
   return "";

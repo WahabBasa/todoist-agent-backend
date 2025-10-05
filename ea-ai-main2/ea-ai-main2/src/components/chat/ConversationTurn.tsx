@@ -59,7 +59,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   const isEmptyResponse = (!aiMessage || aiMessage.trim() === '') && !hasToolParts;
   
   // Check if we should show retry button (error state on last message with no AI response and retriable error)
-  const shouldShowRetry = isLast && error && isEmptyResponse && !thinkingState && isRetriable && onRetry;
+  const shouldShowRetry = Boolean(isLast && error && isEmptyResponse && !thinkingState && isRetriable && onRetry);
 
   const handleCopy = () => {
     if (!aiMessage || isEmptyResponse) return
@@ -153,25 +153,24 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
                 <span className="text-tertiary text-xs ml-2">Thinking...</span>
               </div>
             ) : isEmptyResponse ? (
-              /* Empty Response State with optional retry */
-              <div className="flex items-center gap-3 text-destructive">
-                <AlertCircle size={16} />
-                <span className="text-sm">
-                  {error ? `Error: ${error.message}` : 'No response was generated. Please try again.'}
-                </span>
-                {shouldShowRetry && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetry}
-                    className="ml-2 h-7 px-3 text-xs"
-                    aria-label="Retry message"
-                  >
-                    <RotateCcw size={12} className="mr-1" />
-                    Retry
-                  </Button>
-                )}
-              </div>
+              error ? (
+                <div className="flex items-center gap-3 text-destructive">
+                  <AlertCircle size={16} />
+                  <span className="text-sm">{`Error: ${error.message}`}</span>
+                  {shouldShowRetry && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRetry}
+                      className="ml-2 h-7 px-3 text-xs"
+                      aria-label="Retry message"
+                    >
+                      <RotateCcw size={12} className="mr-1" />
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              ) : null
             ) : (
               /* AI Response */
               <div className="flex flex-col gap-4 text-primary">

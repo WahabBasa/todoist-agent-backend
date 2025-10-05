@@ -86,6 +86,7 @@ const applicationTables = {
       metadata: v.optional(v.object({ // New: Embedded OpenCode-style metadata
         mode: v.optional(v.string()),
         toolStates: v.optional(v.record(v.string(), v.union(v.literal("pending"), v.literal("running"), v.literal("completed")))),
+        requestId: v.optional(v.string()),
         delegation: v.optional(v.object({
           target: v.string(),
           status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
