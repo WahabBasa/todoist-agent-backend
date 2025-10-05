@@ -3,7 +3,7 @@
 
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
-import { streamText, type UIMessage } from "ai";
+import { streamText, stepCountIs, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
 import { convertConvexToModelMessages, type ConvexMessage } from "./simpleMessages";
@@ -294,6 +294,8 @@ export const chat = httpAction(async (ctx, request) => {
       messages: modelMessages,
       tools,
       maxRetries: 2,
+      // Allow multi-step tool calling and follow-up synthesis in one turn
+      stopWhen: stepCountIs(8),
       onError: ({ error }) => {
         console.error("[STREAM] Provider error:", error);
         tlog("provider_error", { requestId, sessionId, message: String((error as any)?.message || "") });
@@ -425,6 +427,58 @@ export const chat = httpAction(async (ctx, request) => {
     });
 
     streamStarted = true;
+
+    // Incremental processing of tool events to keep the turn stateful
+    (async () => {
+      if (!sessionConvexId) return;
+      const incrementalToolStates: Record<string, "pending" | "running" | "completed"> = {};
+      const incCalls: NormalizedToolCall[] = [];
+      const incResults: NormalizedToolResult[] = [];
+      try {
+        for await (const part of (result as any).fullStream) {
+          switch (part.type) {
+            case 'tool-input-start': {
+              incrementalToolStates[part.toolCallId] = 'pending';
+              await ctx.runMutation(api.conversations.updateAssistantTurn, {
+                sessionId: sessionConvexId,
+                requestId,
+                patch: { metadata: { toolStates: incrementalToolStates, requestId, mode: currentMode } },
+              });
+              break;
+            }
+            case 'tool-call': {
+              incrementalToolStates[part.toolCallId] = 'running';
+              const call: NormalizedToolCall = { name: part.toolName, toolCallId: part.toolCallId, args: part.input } as any;
+              // de-dupe by toolCallId
+              if (!incCalls.some(c => c.toolCallId === call.toolCallId)) incCalls.push(call);
+              await ctx.runMutation(api.conversations.updateAssistantTurn, {
+                sessionId: sessionConvexId,
+                requestId,
+                patch: { toolCalls: incCalls, metadata: { toolStates: incrementalToolStates, requestId, mode: currentMode } },
+              });
+              break;
+            }
+            case 'tool-result': {
+              incrementalToolStates[part.toolCallId] = 'completed';
+              const res: NormalizedToolResult = { toolCallId: part.toolCallId, toolName: part.toolName, result: part.output } as any;
+              // replace existing or append
+              const idx = incResults.findIndex(r => r.toolCallId === res.toolCallId);
+              if (idx >= 0) incResults[idx] = res; else incResults.push(res);
+              await ctx.runMutation(api.conversations.updateAssistantTurn, {
+                sessionId: sessionConvexId,
+                requestId,
+                patch: { toolResults: incResults, metadata: { toolStates: incrementalToolStates, requestId, mode: currentMode } },
+              });
+              break;
+            }
+            default:
+              break;
+          }
+        }
+      } catch (e) {
+        // ignore background stream processing errors (onFinish will still persist)
+      }
+    })();
 
     if (lockAcquired && releaseLock) {
       void result.finishReason.finally(() => {
@@ -598,8 +652,7 @@ function synthesizeAssistantSummary(
   }
 
   if (summaries.length === 0) {
-    return `Here is what I found:
-${JSON.stringify(toolResults.map((r) => r.result), null, 2)}`;
+    return `Here's what I found:\n${JSON.stringify(toolResults.map((r) => r.result), null, 2)}`;
   }
 
   if (summaries.length === 1) {
@@ -611,32 +664,42 @@ ${JSON.stringify(toolResults.map((r) => r.result), null, 2)}`;
 
 function normalizeToolResultForSummary(result: NormalizedToolResult): string {
   if (!result || typeof result !== "object") return "";
-  const toolName = result.toolName ? result.toolName.trim() : "Tool";
+  const toolName = (result.toolName || "").trim();
   const payload = result.result;
 
   if (payload == null) {
-    return `${toolName} completed without returning additional details.`;
+    return "I completed the requested operation.";
   }
 
   if (typeof payload === "string") {
     const trimmed = payload.trim();
     if (!trimmed) {
-      return `${toolName} completed without returning additional details.`;
+      return "I completed the requested operation.";
     }
+    // If this looks like JSON, try to summarize it
     if (/^{\s*"?[\w\s-]+"?\s*:/i.test(trimmed) || trimmed.startsWith("{")) {
       try {
         const parsed = JSON.parse(trimmed);
-        return summarizeStructuredPayload(toolName, parsed) ?? `${toolName} result: ${trimmed}`;
+        return summarizeStructuredPayload(toolName, parsed) ?? `Here's what I found: ${trimmed}`;
       } catch {
-        return `${toolName} result: ${trimmed}`;
+        return `Here's what I found: ${trimmed}`;
       }
     }
-    return `${toolName}: ${trimmed}`;
+    // Special-case known tools with plain-string output
+    if (toolName.toLowerCase() === "getcurrenttime") {
+      // Expect formats like: "10/5/2025, 3:35:39 PM (America/Los_Angeles)"
+      const m = trimmed.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
+      const t = m?.[1]?.trim();
+      const tz = m?.[2]?.trim();
+      return tz ? `It’s currently ${t} in ${tz}.` : `It’s currently ${t}.`;
+    }
+    // Generic string payload → natural phrasing without tool labels
+    return `Here's what I found: ${trimmed}`;
   }
 
   if (Array.isArray(payload)) {
     if (payload.length === 0) {
-      return `${toolName} returned no results.`;
+      return "No results.";
     }
     const formatted = payload
       .slice(0, 5)
@@ -652,24 +715,35 @@ function normalizeToolResultForSummary(result: NormalizedToolResult): string {
       })
       .join("\n");
     const suffix = payload.length > 5 ? "\n…" : "";
-    return `${toolName} results:\n${formatted}${suffix}`;
+    return `Here are the results:\n${formatted}${suffix}`;
   }
 
   if (typeof payload === "object") {
     const text = summarizeStructuredPayload(toolName, payload);
     if (text) return text;
     try {
-      return `${toolName} result: ${JSON.stringify(payload, null, 2)}`;
+      return `Here's what I found:\n${JSON.stringify(payload, null, 2)}`;
     } catch {
-      return `${toolName} result available.`;
+      return "I completed the requested operation.";
     }
   }
 
-  return `${toolName} result: ${String(payload)}`;
+  return `Here's what I found: ${String(payload)}`;
 }
 
 function summarizeStructuredPayload(toolName: string, data: any): string | null {
   if (!data || typeof data !== "object") return null;
+  // If tool returned an object with `output` text, prefer that as the human-facing summary
+  if (typeof (data as any).output === "string" && (data as any).output.trim()) {
+    const out = (data as any).output.trim();
+    if (toolName && toolName.toLowerCase() === "getcurrenttime") {
+      const m = out.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
+      const t = m?.[1]?.trim();
+      const tz = m?.[2]?.trim();
+      return tz ? `It is currently ${t} in ${tz}.` : `It is currently ${t}.`;
+    }
+    return `Here's what I found: ${out}`;
+  }
 
   if (toolName === "getCurrentTime" && typeof data.localTime === "string") {
     const tz = typeof data.userTimezone === "string" ? data.userTimezone : "local time";
@@ -684,11 +758,11 @@ function summarizeStructuredPayload(toolName: string, data: any): string | null 
       return `• ${title} — ${when}`;
     });
     const suffix = (data as any).events.length > 5 ? "\n…" : "";
-    return `${toolName} summary:\n${events.join("\n")}${suffix}`;
+    return `Here's a summary:\n${events.join("\n")}${suffix}`;
   }
 
   const display = summarizableFields(data);
-  return display ? `${toolName}: ${display}` : null;
+  return display ? `${display}` : null;
 }
 
 function summarizableFields(value: Record<string, any>): string {

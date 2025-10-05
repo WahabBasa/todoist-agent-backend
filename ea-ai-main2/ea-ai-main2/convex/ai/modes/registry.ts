@@ -112,9 +112,9 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       updateCalendarEvent: false,
       deleteCalendarEvent: false,
       
-      // DISABLED: No direct planning or information gathering
+      // Read-only tools permitted in primary for context gathering
       Write: false,
-      Read: false,
+      Read: true,
       researchTask: false,
       analyzeCode: false,
       planTask: false,
