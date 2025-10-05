@@ -270,6 +270,20 @@ export const chat = httpAction(async (ctx, request) => {
 
     const modelMessages = convertConvexToModelMessages(canonicalHistory);
 
+    // OpenCode-style: start an assistant turn placeholder so we never end with a noop
+    if (sessionConvexId) {
+      try {
+        await ctx.runMutation(api.conversations.beginAssistantTurn, {
+          sessionId: sessionConvexId,
+          requestId,
+          historyVersion: historyVersionAfterUser,
+          metadata: { mode: currentMode, toolStates: {}, requestId },
+        });
+      } catch (e) {
+        console.warn("[STREAM][beginAssistantTurn] failed", { sessionId, requestId, error: String((e as any)?.message || e) });
+      }
+    }
+
     const result = streamText({
       model: openrouter.chat(modelName, { usage: { include: true } }),
       system: systemPrompt,
@@ -308,12 +322,30 @@ export const chat = httpAction(async (ctx, request) => {
           });
 
           if (sessionConvexId) {
-            const persistResult = await ctx.runMutation(api.conversations.appendAssistantMessage, {
+            // Update tool states and payloads first
+            try {
+              const toolStates: Record<string, "running" | "completed"> = {};
+              for (const c of normalizedToolCalls) toolStates[c.toolCallId] = "running";
+              for (const r of normalizedToolResults) toolStates[r.toolCallId] = "completed";
+
+              await ctx.runMutation(api.conversations.updateAssistantTurn, {
+                sessionId: sessionConvexId,
+                requestId,
+                patch: {
+                  toolCalls: normalizedToolCalls.length ? normalizedToolCalls : undefined,
+                  toolResults: normalizedToolResults.length ? normalizedToolResults : undefined,
+                  metadata: Object.keys(toolStates).length ? { toolStates, requestId, mode: currentMode } : { requestId, mode: currentMode },
+                },
+              });
+            } catch (updateErr) {
+              console.warn("[STREAM][updateAssistantTurn] failed", { sessionId, requestId, error: String((updateErr as any)?.message || updateErr) });
+            }
+
+            const persistResult = await ctx.runMutation(api.conversations.finishAssistantTurn, {
               sessionId: sessionConvexId,
+              requestId,
               content: assistantText,
-              toolCalls: normalizedToolCalls.length ? normalizedToolCalls : undefined,
-              toolResults: normalizedToolResults.length ? normalizedToolResults : undefined,
-              historyVersion: historyVersionAfterUser,
+              metadata: { mode: currentMode, requestId },
             });
 
             if (persistResult.status === "conflict") {
@@ -334,15 +366,6 @@ export const chat = httpAction(async (ctx, request) => {
                 conflict: true,
               });
             } else {
-              if (persistResult.status !== "appended") {
-                console.warn("[STREAM][finish] Assistant append skipped", {
-                  sessionId: sessionId ?? null,
-                  requestId,
-                  status: persistResult.status,
-                  previousVersion: persistResult.previousVersion,
-                  nextVersion: persistResult.version,
-                });
-              }
               console.log("[STREAM][finish]", {
                 sessionId: sessionId ?? null,
                 requestId,
