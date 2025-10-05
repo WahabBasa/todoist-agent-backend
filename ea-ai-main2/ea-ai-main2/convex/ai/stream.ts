@@ -324,7 +324,7 @@ export const chat = httpAction(async (ctx, request) => {
 
           const finalAssistantText = assistantText.trim().length
             ? assistantText.trim()
-            : synthesizeAssistantSummary(normalizedToolResults, currentMode);
+            : "I've got it.";
 
           if (normalizedToolCalls.length) {
             logToolCalls(normalizedToolCalls.map((call) => ({ name: call.name, args: call.args })));
