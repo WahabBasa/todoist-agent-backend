@@ -5,6 +5,9 @@ import { api } from "./_generated/api";
 import { chat as streamChat } from "./ai/stream";
 import type { WebhookEvent } from "@clerk/backend";
 
+// Debug logging control
+const ENABLE_DEBUG_LOGS = process.env.ENABLE_DEBUG_LOGS === "true";
+
 const http = httpRouter();
 
 http.route({
@@ -243,16 +246,19 @@ http.route({
     try {
       const body = await request.json().catch(() => ({}));
       const { phase, search, hash, href, error, email, userAgent, timestamp } = body || {};
-      console.log("[TELEMETRY][OAUTH]", {
-        phase: phase || "callback",
-        href,
-        search,
-        hash,
-        error,
-        email,
-        userAgent,
-        timestamp,
-      });
+      
+      if (ENABLE_DEBUG_LOGS) {
+        console.log("[TELEMETRY][OAUTH]", {
+          phase: phase || "callback",
+          href,
+          search,
+          hash,
+          error,
+          email,
+          userAgent,
+          timestamp,
+        });
+      }
       const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
       return new Response("ok", {
         status: 200,

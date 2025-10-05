@@ -6,6 +6,9 @@ import { Id } from "./_generated/dataModel";
 import { createEmbeddedMessage } from "./ai/messageSchemas";
 import { optimizeConversation, type ConvexMessage } from "./ai/simpleMessages";
 
+// Debug logging control
+const ENABLE_DEBUG_LOGS = process.env.ENABLE_DEBUG_LOGS === "true";
+
 // Helper function for consistent authentication (tokenIdentifier pattern)
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
@@ -23,28 +26,21 @@ async function getTokenIdentifier(ctx: QueryCtx): Promise<string | null> {
 
 // Helper function for schema migration: Convert legacy format to new format
 function migrateConversationSchema(conversation: any) {
-  console.log('🔄 [BACKEND DEBUG] Checking conversation schema migration:', {
-    conversationExists: !!conversation,
-    hasSchemaVersion: !!conversation?.schemaVersion,
-    schemaVersion: conversation?.schemaVersion,
-    hasMessages: !!conversation?.messages,
-    hasMessage: !!conversation?.message
-  });
-  
   if (!conversation) {
-    console.log('⚠️ [BACKEND DEBUG] No conversation to migrate');
     return null;
   }
   
   // If already migrated or has new format, return as-is
   if (conversation.schemaVersion === 2 || conversation.messages) {
-    console.log('✅ [BACKEND DEBUG] Conversation already in new format, no migration needed');
     return conversation;
   }
   
   // Legacy format detected - convert to new format
   if (conversation.message) {
-    console.log('🔄 [BACKEND DEBUG] Migrating legacy conversation format');
+    if (ENABLE_DEBUG_LOGS) {
+      console.log('🔄 [MIGRATION] Converting legacy conversation format');
+    }
+    
     const migratedMessages = [];
     
     // Add user message
@@ -60,7 +56,7 @@ function migrateConversationSchema(conversation: any) {
         role: "assistant" as const,
         content: conversation.response,
         toolCalls: conversation.toolCalls || undefined,
-        timestamp: (conversation.timestamp || Date.now()) + 1, // Slightly after user message
+        timestamp: (conversation.timestamp || Date.now()) + 1,
       });
     }
     
@@ -71,18 +67,16 @@ function migrateConversationSchema(conversation: any) {
       schemaVersion: 2,
     };
     
-    console.log('✅ [BACKEND DEBUG] Migration completed:', {
-      messageCount: result.messages.length,
-      messagesPreview: result.messages.map((msg: any) => ({
-        role: msg.role,
-        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
-      }))
-    });
+    if (ENABLE_DEBUG_LOGS) {
+      console.log('✅ [MIGRATION] Completed:', { messageCount: result.messages.length });
+    }
     
     return result;
   }
   
-  console.log('⚠️ [BACKEND DEBUG] Unknown conversation format, returning as-is');
+  if (ENABLE_DEBUG_LOGS) {
+    console.warn('⚠️ [MIGRATION] Unknown conversation format');
+  }
   return conversation;
 }
 
@@ -631,12 +625,9 @@ export const getConversationBySession = query({
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.tokenIdentifier !== tokenIdentifier) {
-      console.log('🔒 [BACKEND DEBUG] Session not found or unauthorized:', {
-        sessionId: args.sessionId,
-        sessionExists: !!session,
-        sessionTokenIdentifier: session?.tokenIdentifier,
-        userTokenIdentifier: tokenIdentifier
-      });
+      if (ENABLE_DEBUG_LOGS) {
+        console.log('🔒 [AUTH] Session not found or unauthorized:', { sessionId: args.sessionId });
+      }
       return null; // Big-brain pattern: return null instead of throwing
     }
 
@@ -645,31 +636,9 @@ export const getConversationBySession = query({
       .withIndex("by_tokenIdentifier_and_session", (q) => 
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .first();
-      
-    const lastMessage = conversation?.messages?.length
-      ? conversation.messages[conversation.messages.length - 1]
-      : null;
-    console.log('📚 [BACKEND DEBUG] Fetched conversation from database:', {
-      sessionId: args.sessionId,
-      conversationExists: !!conversation,
-      messageCount: conversation?.messages?.length || 0,
-      lastMessageRole: lastMessage?.role || null,
-      lastMessageContentLength: typeof lastMessage?.content === 'string' ? lastMessage.content.length : null,
-      lastMessageHasTools: Array.isArray((lastMessage as any)?.toolCalls) && !!(lastMessage as any)?.toolCalls?.length,
-      messagesPreview: conversation?.messages?.slice(-2).map(msg => ({
-        role: msg.role,
-        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
-      })) || 'no messages'
-    });
 
     // Apply schema migration if needed
     const migratedConversation = migrateConversationSchema(conversation);
-    
-    console.log('📚 [BACKEND DEBUG] Migrated conversation:', {
-      originalExists: !!conversation,
-      migratedExists: !!migratedConversation,
-      messageCount: migratedConversation?.messages?.length || 0
-    });
     
     return migratedConversation;
   },

@@ -328,17 +328,6 @@ export const chat = httpAction(async (ctx, request) => {
             logToolCalls(normalizedToolCalls.map((call) => ({ name: call.name, args: call.args })));
           }
 
-          console.log("[STREAM][persist_attempt]", {
-            sessionId: sessionId ?? null,
-            requestId,
-            historyVersion,
-            assistantLength: finalAssistantText.length,
-            chunkCount: streamChunkCount,
-            streamBytes,
-            toolCallCount: normalizedToolCalls.length,
-            toolResultCount: normalizedToolResults.length,
-          });
-
           if (sessionConvexId) {
             // Update tool states and payloads first
             try {
@@ -479,12 +468,6 @@ export const chat = httpAction(async (ctx, request) => {
               const delta = Date.now() - startedAt;
               if (streamChunkCount === 1) {
                 firstChunkDeltaMs = delta;
-                console.log("[STREAM][chunk:first]", {
-                  sessionId: sessionId ?? null,
-                  requestId,
-                  msSinceStart: delta,
-                  bytes: streamBytes,
-                });
               }
               lastChunkDeltaMs = delta;
 

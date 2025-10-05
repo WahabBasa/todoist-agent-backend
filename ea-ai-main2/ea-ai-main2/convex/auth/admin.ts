@@ -1,6 +1,9 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 
+// Debug logging control
+const ENABLE_DEBUG_LOGS = process.env.ENABLE_DEBUG_LOGS === "true";
+
 // Secure admin authentication using environment variables
 // No hardcoded secrets, supports multiple verification methods
 export const isAdminUser = query({
@@ -21,7 +24,9 @@ export const isCurrentUserAdmin = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      console.log(`🔐 [Admin] No authenticated user found`);
+      if (ENABLE_DEBUG_LOGS) {
+        console.log(`🔐 [Admin] No authenticated user found`);
+      }
       return false;
     }
 
@@ -30,14 +35,15 @@ export const isCurrentUserAdmin = query({
     const adminEmail = process.env.ADMIN_EMAIL;
     
     // Dual security check: User ID AND Email verification
-    const isUserIdMatch = identity.subject === adminUserId; // ensure boolean
-    const isEmailMatch = identity.email === adminEmail;     // ensure boolean
+    const isUserIdMatch = identity.subject === adminUserId;
+    const isEmailMatch = identity.email === adminEmail;
     const isPublicMetadataAdmin = (identity.publicMetadata as any)?.isAdmin === true;
     
     const isAdmin = !!(isUserIdMatch || isEmailMatch || isPublicMetadataAdmin);
     
-    console.log(`🔐 [Admin] Auth check for user: ${identity.subject?.slice(0, 20)}... (${identity.email})`);
-    console.log(`🔐 [Admin] User ID match: ${isUserIdMatch}, Email match: ${isEmailMatch}, Result: ${isAdmin}`);
+    if (ENABLE_DEBUG_LOGS) {
+      console.log(`🔐 [Admin] Check: ${identity.subject?.slice(0, 20)}... (${identity.email}) → ${isAdmin}`);
+    }
     
     return isAdmin;
   }
