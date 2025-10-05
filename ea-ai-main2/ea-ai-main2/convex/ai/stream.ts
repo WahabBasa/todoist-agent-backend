@@ -836,15 +836,9 @@ function extractTextFromSseBuffer(buffer: string): { text: string; remainder: st
 function extractTextFromSsePayload(payload: any): string {
   if (!payload || typeof payload !== "object") return "";
 
-  if (typeof payload.text === "string") {
-    return payload.text;
-  }
-
+  // Only accumulate assistant text, not user/input echoes.
+  // The UI stream emits assistant text as response.delta → text-delta.
   if (payload.type === "response.delta" && payload.delta?.type === "text-delta" && typeof payload.delta.text === "string") {
-    return payload.delta.text;
-  }
-
-  if (payload.type === "message.delta" && typeof payload.delta?.text === "string") {
     return payload.delta.text;
   }
 
@@ -853,14 +847,6 @@ function extractTextFromSsePayload(payload: any): string {
       .map((entry: any) => extractTextFromSsePayload(entry))
       .filter(Boolean)
       .join("");
-  }
-
-  if (typeof payload.delta?.value === "string") {
-    return payload.delta.value;
-  }
-
-  if (typeof payload.delta?.text === "string") {
-    return payload.delta.text;
   }
 
   return "";
