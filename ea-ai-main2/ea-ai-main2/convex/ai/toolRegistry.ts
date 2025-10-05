@@ -199,10 +199,9 @@ export async function createSimpleToolRegistry(
           let output = result.output || "Operation completed";
           output = output.replace(/<[^>]*>/g, '').trim();
           
-          return {
-            type: "text",
-            value: output,
-          };
+          // Return plain string so AI can synthesize naturally
+          // Don't wrap in { type, value } structure as that causes AI to echo it
+          return output;
         }
       });
       

@@ -103,12 +103,20 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
           }
         }
 
-        if (parts.length > 0) {
+        // Only push assistant messages if they have actual text content
+        // Tool-only messages without text can confuse the model about roles
+        const hasTextContent = parts.some(p => p.type === 'text' && (p as any).text?.trim());
+        
+        if (hasTextContent || parts.length > 1) {
+          // Either has text content OR multiple parts (text + tools)
           uiMessages.push({
             id: `${i}`,
             role: "assistant",
             parts,
           });
+        } else if (parts.length > 0) {
+          // If we only have tool parts without text, skip to prevent role confusion
+          console.debug(`[SimpleMessages] Skipping tool-only assistant message without text at index ${i}`);
         }
         continue;
       }

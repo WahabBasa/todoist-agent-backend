@@ -179,17 +179,46 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
         const eventCount = result?.length || 0;
         const timeRangeDesc = args.timeRange || "next 7 days";
         
+        // Return selective summary instead of full list
+        if (eventCount === 0) {
+          return {
+            title: `Calendar Events Listed (0 events)`,
+            metadata: { eventCount: 0, timeRange: timeRangeDesc },
+            output: `No events found for ${timeRangeDesc}.`
+          };
+        }
+        
+        // For many events, provide summary with key highlights
+        if (eventCount > 5) {
+          // Filter out routine events (sleep, morning routine, etc.) to find highlights
+          const routineKeywords = ['sleep', 'morning routine', 'routine', 'daily'];
+          const highlights = result?.filter((event: any) => 
+            !routineKeywords.some(keyword => 
+              event.title?.toLowerCase().includes(keyword)
+            )
+          ) || [];
+          
+          if (highlights.length > 0) {
+            const keyEvents = highlights.slice(0, 3).map((event: any) => 
+              `${event.title} on ${new Date(event.start).toLocaleDateString()}`
+            ).join(', ');
+            return {
+              title: `Calendar Events Listed (${eventCount} events)`,
+              metadata: { eventCount, timeRange: timeRangeDesc, highlights: highlights.length },
+              output: `${eventCount} events scheduled for ${timeRangeDesc}. Key events: ${keyEvents}.`
+            };
+          }
+        }
+        
+        // For 5 or fewer events, list them all
+        const eventList = result?.slice(0, 5).map((event: any) => 
+          `${event.title} on ${new Date(event.start).toLocaleDateString()}${event.isAllDay ? ' (all day)' : ` at ${new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}`
+        ).join(', ') || '';
+        
         return {
           title: `Calendar Events Listed (${eventCount} events)`,
-          metadata: {
-            eventCount,
-            timeRange: timeRangeDesc,
-            timeMin,
-            timeMax
-          },
-          output: `📅 Found ${eventCount} events for ${timeRangeDesc}:\n\n${result?.map((event: any) => 
-            `• ${event.title || 'Untitled'} - ${new Date(event.start).toLocaleString()}${event.isAllDay ? ' (All Day)' : ''}`
-          ).join('\n') || 'No events found for this time period.'}`
+          metadata: { eventCount, timeRange: timeRangeDesc },
+          output: `${eventCount} events for ${timeRangeDesc}: ${eventList}.`
         };
       } catch (error: any) {
         const errorMessage = error.message || "Unknown error listing calendar events";
@@ -245,7 +274,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
             timezone: timeContext.userTimezone,
             timestamp: timeContext.timestamp
           },
-          output: `🕐 Current time: ${timeContext.localTime} (${timeContext.userTimezone})\nTimestamp: ${timeContext.timestamp}\nSource: ${timeContext.source || "user_browser"}`
+          output: `${timeContext.localTime} (${timeContext.userTimezone})`
         };
       } else {
         // Fallback to server time if no context provided
@@ -259,7 +288,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
             timezone: "UTC",
             timestamp: now.getTime()
           },
-          output: `🕐 Current time: ${now.toISOString()} (UTC)\nTimestamp: ${now.getTime()}\nSource: Server fallback (no browser time context provided)`
+          output: now.toLocaleString()
         };
       }
     }

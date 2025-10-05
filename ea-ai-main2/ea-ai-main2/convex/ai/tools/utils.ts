@@ -62,7 +62,7 @@ export const getCurrentTime: ToolDefinition = {
       return {
         title: "Current Time Retrieved",
         metadata: { source: "user_browser", timezone: currentTimeContext.userTimezone },
-        output: JSON.stringify(result)
+        output: `${result.localTime} (${result.userTimezone})`
       };
     } else {
       // Fallback to server time if no browser context provided
@@ -86,7 +86,7 @@ export const getCurrentTime: ToolDefinition = {
       return {
         title: "Current Time Retrieved (Fallback)",
         metadata: { source: "server_fallback" },
-        output: JSON.stringify(fallback)
+        output: `${fallback.localTime} (${fallback.userTimezone})`
       };
     }
   }
@@ -132,7 +132,7 @@ export const getSystemStatus: ToolDefinition = {
       return {
         title: "System Status",
         metadata: { health: "operational" },
-        output: JSON.stringify(status)
+        output: `System operational. All services running normally.`
       };
     } catch (error) {
       const errorStatus = {
@@ -144,7 +144,7 @@ export const getSystemStatus: ToolDefinition = {
       return {
         title: "System Status (Error)",
         metadata: { health: "degraded" },
-        output: JSON.stringify(errorStatus)
+        output: `System experiencing issues: ${errorStatus.error}`
       };
     }
   }
@@ -238,10 +238,11 @@ export const validateInput: ToolDefinition = {
 
       // Metadata handled by tool registry bridge
 
+      const suggestionText = suggestions.length > 0 ? ` Suggestions: ${suggestions.join('; ')}` : '';
       return {
         title: `Input Validation: ${type}`,
         metadata: { type, isValid },
-        output: JSON.stringify(result)
+        output: `${message}.${suggestionText}`
       };
     } catch (error) {
       const errorResult = {
@@ -254,7 +255,7 @@ export const validateInput: ToolDefinition = {
       return {
         title: "Validation Error",
         metadata: { isValid: false },
-        output: JSON.stringify(errorResult)
+        output: `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
   }
@@ -317,6 +318,14 @@ export const listTools: ToolDefinition = {
 
       // Metadata handled by tool registry bridge
 
+      // Create a clean summary of tools
+      const toolSummary = Object.entries(toolsByCategory)
+        .map(([category, tools]: [string, any]) => {
+          const toolNames = tools.map((t: any) => t.name).join(', ');
+          return `${category}: ${toolNames}`;
+        })
+        .join('\n');
+
       return {
         title: "Available Tools Listed",
         metadata: { 
@@ -324,7 +333,7 @@ export const listTools: ToolDefinition = {
           count: filteredTools.length,
           batchToolsFound: batchTools.length
         },
-        output: JSON.stringify(result, null, 2)
+        output: `${filteredTools.length} tools available.\n\n${toolSummary}`
       };
     } catch (error) {
       const errorResult = {
@@ -336,7 +345,7 @@ export const listTools: ToolDefinition = {
       return {
         title: "Tool Listing Error",
         metadata: { error: true },
-        output: JSON.stringify(errorResult)
+        output: `Failed to list tools: ${errorResult.error}`
       };
     }
   }

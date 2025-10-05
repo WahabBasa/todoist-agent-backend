@@ -2,7 +2,6 @@ import React from 'react'
 import { User, Bot, Copy, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
 import type { UIMessage, ToolInvocationUIPart } from '@ai-sdk/ui-utils'
-import { ToolInvocationCard } from './ToolInvocationCard'
 
 interface ConversationTurnProps {
   id: string
@@ -151,23 +150,15 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
                 </div>
               ) : null
             ) : (
-              /* AI Response */
+              /* AI Response - Clean conversational display only */
               <div className="flex flex-col gap-4 text-primary">
                 {aiMessage && aiMessage.trim() && (
                   <div className="whitespace-pre-wrap break-words leading-relaxed hyphens-auto space-y-3">
                     {aiMessage}
                   </div>
                 )}
-                {hasToolParts && (
-                  <div className="flex flex-col gap-3">
-                    {toolParts.map((part) => (
-                      <ToolInvocationCard
-                        key={part.toolInvocation.toolCallId}
-                        invocation={part.toolInvocation}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* Tool cards removed - EA provides clean conversational responses
+                    Tool execution happens transparently in the background */}
               </div>
             )}
           </div>
