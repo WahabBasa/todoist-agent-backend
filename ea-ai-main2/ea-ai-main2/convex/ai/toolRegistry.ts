@@ -147,7 +147,7 @@ export async function createSimpleToolRegistry(
       
       // Create AI SDK tool with direct execution
       const toolConfig: any = {
-        type: 'function',
+
         description: simpleTool.description,
         // AI SDK v5+ API
         parameters: simpleTool.inputSchema,
@@ -177,8 +177,15 @@ export async function createSimpleToolRegistry(
               userId: context.userId
             });
             
-            // Return the full result object for proper AI SDK tool tracking
-            return result;
+            // CRITICAL FIX: Return content string directly for AI SDK
+            // This becomes the 'content' field in tool messages sent to the API
+            if (typeof result?.output === 'string') {
+              return result.output;
+            } else if (result?.output !== undefined) {
+              return JSON.stringify(result.output);
+            } else {
+              return JSON.stringify(result);
+            }
           } catch (error) {
             const executionTime = Date.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -195,7 +202,7 @@ export async function createSimpleToolRegistry(
             throw error; // Let AI SDK handle the error
           }
         },
-        experimental_toToolResultContent: (result: any) => {
+        /* experimental_toToolResultContent: (result: any) => {
           const redact = (key: string, value: unknown) =>
             /(token|secret|key|password|auth)/i.test(key) ? "[redacted]" : value;
 
@@ -232,7 +239,8 @@ export async function createSimpleToolRegistry(
         }
       };
 
-      tools[key] = (aiTool as any)(toolConfig);
+      // Use AI SDK tool function directly with proper typing
+      tools[key] = aiTool(toolConfig);
       
     } catch (error) {
       console.warn(`[SimpleToolRegistry] Failed to convert tool ${key}:`, error);

@@ -115,28 +115,53 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
               continue;
             }
 
+            // Structure output for AI SDK v5 compatibility
+            // Tool results must be properly formatted for convertToModelMessages
             parts.push({
               type: `tool-${toolCall.name}` as `tool-${string}`,
               toolCallId: toolCall.toolCallId,
               state: "output-available",
               input: toolCall.args,
-              output: matchingResult.result,
+              output: {
+                type: 'json',
+                value: matchingResult.result
+              }
             });
           }
         }
 
+        // Safety validation: Ensure all tool parts have properly structured output
+        // This prevents API rejections due to undefined content in tool messages
+        const validatedParts = parts.map(part => {
+          if (part.type.startsWith('tool-') && 'output' in part) {
+            const toolPart = part as any;
+            // Check if output is already structured
+            if (typeof toolPart.output !== 'object' || !toolPart.output || !('type' in toolPart.output)) {
+              // Restructure plain values into proper format
+              return {
+                ...toolPart,
+                output: {
+                  type: 'json',
+                  value: toolPart.output
+                }
+              };
+            }
+          }
+          return part;
+        });
+
         // Only push assistant messages if they have actual text content
         // Tool-only messages without text can confuse the model about roles
-        const hasTextContent = parts.some(p => p.type === 'text' && (p as any).text?.trim());
+        const hasTextContent = validatedParts.some(p => p.type === 'text' && (p as any).text?.trim());
         
-        if (hasTextContent || parts.length > 1) {
+        if (hasTextContent || validatedParts.length > 1) {
           // Either has text content OR multiple parts (text + tools)
           uiMessages.push({
             id: `${i}`,
             role: "assistant",
-            parts,
+            parts: validatedParts,
           });
-        } else if (parts.length > 0) {
+        } else if (validatedParts.length > 0) {
           // If we only have tool parts without text, skip to prevent role confusion
           console.debug(`[SimpleMessages] Skipping tool-only assistant message without text at index ${i}`);
         }
