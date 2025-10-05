@@ -51,6 +51,64 @@
 - **Logical Dependencies** - Plan tasks that build on each other naturally
 - **Independent Testing** - Each change should be testable on its own
 
+## 📝 Devlog Writing Guidelines
+
+**Writing Style: Semi-Formal Technical Documentation**
+- Write as a senior engineer documenting their work session
+- Use conversational but professional tone (avoid slang, maintain technical precision)
+- Balance readability with technical depth
+
+**Entry Structure (Required Elements):**
+1. **Header**: `## Session Title - (HH:MM)` with clear description
+2. **Status Line**: `**Status**: ✅/⚠️/❌ One-line summary of outcome`
+3. **Context** (optional for small changes): Brief problem statement or goal
+4. **Changes Made**: Bullet points with file paths and line numbers (`file.ts:42-56`)
+5. **Result**: What works now that didn't before
+
+**Length Guidelines - Scale with Work Done:**
+- **Quick fixes** (5-15 lines): Single issue, file change, result
+- **Feature work** (20-35 lines): Multiple files, architectural decisions, testing notes  
+- **Major sessions** (35-40 lines MAX): Complex integrations, migrations, full context
+- **Never exceed 40 lines** - split into separate entries if needed
+
+**Technical Specificity Requirements:**
+- ✅ Always include file paths: `convex/auth/admin.ts:24-30`
+- ✅ Reference actual code patterns: "Added `ENABLE_DEBUG_LOGS` env var"
+- ✅ Explain architectural decisions: Why this approach vs alternatives
+- ✅ Document debugging process: What failed, what worked, lesson learned
+- ❌ Avoid vague descriptions: "fixed bug", "updated code", "made changes"
+
+**Tone Examples:**
+
+**Too Informal (Avoid):**
+```
+Yo so I was messing around with the logs and they were super annoying lol. 
+Fixed it tho - just threw in some if statements and boom, clean terminal! 🎉
+```
+
+**Semi-Formal (Target):**
+```
+Cleaned up repetitive backend logging that was cluttering terminal output. 
+Added ENABLE_DEBUG_LOGS environment variable to gate debug logs across 
+conversations.ts, auth/admin.ts, and stream.ts. Terminal output reduced 
+from ~30 lines to ~8 lines per message while preserving error visibility.
+```
+
+**Too Formal (Avoid):**
+```
+This session involved the implementation of a comprehensive logging 
+reduction strategy utilizing environment-based conditional execution 
+patterns to minimize console verbosity whilst maintaining operational 
+visibility of critical system errors and warnings.
+```
+
+**Writing Process:**
+1. Start with what you tried to accomplish
+2. Document exact changes made (files + line numbers)
+3. Note results and any remaining issues
+4. Keep it digestible - reader should grasp it in < 60 seconds
+5. Match length to actual work done (don't pad, don't over-compress)
+
 ## 🔧 Code Analysis Tools - Standard Development Workflow
 
 **Primary Code Analysis**: Use standard Claude Code tools for understanding and modifying the codebase.
