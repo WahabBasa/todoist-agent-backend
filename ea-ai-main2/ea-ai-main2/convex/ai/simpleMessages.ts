@@ -40,6 +40,18 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
   // First convert to UIMessage format, then use AI SDK's convertToModelMessages
   const uiMessages: UIMessage[] = [];
   
+  // Pass 1: collect tool results from separate tool messages so we can pair them with prior assistant tool calls
+  const globalToolResultsById = new Map<string, { toolName: string; result: any }>();
+  for (const msg of convexMessages) {
+    if (msg?.role === 'tool' && Array.isArray(msg.toolResults)) {
+      for (const tr of msg.toolResults) {
+        if (tr && typeof tr.toolCallId === 'string') {
+          globalToolResultsById.set(tr.toolCallId, { toolName: tr.toolName, result: tr.result });
+        }
+      }
+    }
+  }
+  
   for (let i = 0; i < convexMessages.length; i++) {
     const message = convexMessages[i];
     
@@ -82,7 +94,17 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
               continue;
             }
 
-            const matchingResult = toolResultsById.get(toolCall.toolCallId);
+            let matchingResult = toolResultsById.get(toolCall.toolCallId);
+            if (!matchingResult) {
+              const globalMatch = globalToolResultsById.get(toolCall.toolCallId);
+              if (globalMatch) {
+                matchingResult = {
+                  toolCallId: toolCall.toolCallId,
+                  toolName: globalMatch.toolName,
+                  result: globalMatch.result,
+                } as any;
+              }
+            }
             if (!matchingResult) {
               if (process.env.NODE_ENV !== "production") {
                 console.debug("[SimpleMessages] Skipping tool call without result", {
@@ -121,13 +143,7 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
         continue;
       }
       
-      // Handle tool results - skip separate tool messages as they should be integrated into conversation flow
-      // Tool results are handled by the AI SDK's convertToModelMessages function
-      if (message.role === "tool" && Array.isArray(message.toolResults) && message.toolResults.length > 0) {
-        // Skip tool result messages - these will be handled by the conversion process
-        console.debug(`[SimpleMessages] Skipping tool result message ${i}: will be handled by convertToModelMessages`);
-        continue;
-      }
+      // Tool messages are collected in the first pass and paired with assistant tool calls; skip emitting standalone tool UI messages
       
       // Skip messages that don't fit standard patterns
       console.debug(`[SimpleMessages] Skipping message ${i}: no content or unhandled format`);

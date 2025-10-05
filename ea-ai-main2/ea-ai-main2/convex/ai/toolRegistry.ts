@@ -193,15 +193,105 @@ export async function createSimpleToolRegistry(
         },
         // Control what the AI model sees while preserving structured tool results
         toModelOutput(result: any) {
-          // For the primary mode, keep responses extremely concise
-          // Only return the output, not the title or metadata
-          // Remove any XML tags from the output to prevent them from being returned to the user
-          let output = result.output || "Operation completed";
-          output = output.replace(/<[^>]*>/g, '').trim();
-          
-          // Return plain string so AI can synthesize naturally
-          // Don't wrap in { type, value } structure as that causes AI to echo it
-          return output;
+          // Central guard: prevent large/raw JSON from leaking into the model context
+          const stripTags = (s: string) => s.replace(/<[^>]*>/g, "");
+
+          const redact = (key: string, value: unknown) =>
+            /(token|secret|key|password|auth)/i.test(key) ? "[redacted]" : value;
+
+          const summarizeArray = (arr: any[], maxChars: number) => {
+            const n = arr.length;
+            const sampleCount = Math.min(3, n);
+            const pickFields = (obj: Record<string, any>) => {
+              const preferred = [
+                "name",
+                "title",
+                "content",
+                "id",
+                "_id",
+                "projectId",
+                "project",
+                "due",
+                "dueDate",
+                "status",
+                "priority",
+              ];
+              const out: Record<string, any> = {};
+              for (const k of preferred) if (k in obj) out[k] = redact(k, obj[k]);
+              if (Object.keys(out).length === 0) {
+                // fallback: include first 2 keys
+                for (const k of Object.keys(obj).slice(0, 2)) out[k] = redact(k, obj[k]);
+              }
+              return out;
+            };
+            const examples = arr
+              .slice(0, sampleCount)
+              .map((item) => {
+                if (item && typeof item === "object") return pickFields(item as any);
+                return item;
+              });
+            let text = `${n} items`;
+            if (examples.length) {
+              const ex = JSON.stringify(examples);
+              text += `; examples: ${ex}`;
+            }
+            return text.length > maxChars ? text.slice(0, maxChars) + "… (truncated)" : text;
+          };
+
+          const summarizeObject = (obj: Record<string, any>, maxChars: number) => {
+            const keys = Object.keys(obj);
+            const parts: string[] = [];
+            parts.push(`${keys.length} keys: ${keys.slice(0, 6).join(", ")}${keys.length > 6 ? ", …" : ""}`);
+            for (const k of keys.slice(0, 6)) {
+              const v = obj[k];
+              if (Array.isArray(v)) {
+                parts.push(`${k}: ${v.length} items`);
+                // Try to include a couple representative names
+                const names = v
+                  .slice(0, 2)
+                  .map((it) => (it && typeof it === "object" ? (it.name || it.title || it.content || it.id || it._id) : undefined))
+                  .filter(Boolean);
+                if (names.length) parts.push(`${k} examples: ${names.join(", ")}`);
+              } else if (v && typeof v === "object") {
+                const subKeys = Object.keys(v);
+                parts.push(`${k}: object(${subKeys.slice(0, 3).join(", ")}${subKeys.length > 3 ? ", …" : ""})`);
+              } else if (typeof v === "string") {
+                const val = String(v);
+                parts.push(`${k}: ${val.length > 60 ? val.slice(0, 60) + "…" : val}`);
+              } else {
+                try {
+                  parts.push(`${k}: ${JSON.stringify(redact(k, v))}`);
+                } catch {
+                  parts.push(`${k}: [unavailable]`);
+                }
+              }
+            }
+            const text = parts.join("; ");
+            return text.length > maxChars ? text.slice(0, maxChars) + "… (truncated)" : text;
+          };
+
+          const MAX = 800;
+          let raw = (result?.output ?? "Operation completed");
+          if (typeof raw !== "string") {
+            try {
+              raw = JSON.stringify(raw);
+            } catch {
+              raw = String(raw);
+            }
+          }
+          raw = stripTags(raw).trim();
+
+          // Try JSON-aware summarization
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return summarizeArray(parsed, MAX);
+            if (parsed && typeof parsed === "object") return summarizeObject(parsed as Record<string, any>, MAX);
+          } catch {
+            // Not JSON, fall through
+          }
+
+          // Non-JSON string: length-guard
+          return raw.length > MAX ? raw.slice(0, MAX) + "… (truncated)" : raw;
         }
       });
       
