@@ -109,6 +109,100 @@ visibility of critical system errors and warnings.
 4. Keep it digestible - reader should grasp it in < 60 seconds
 5. Match length to actual work done (don't pad, don't over-compress)
 
+**Real Examples by Length:**
+
+**Quick Fix (5-15 lines):**
+```markdown
+## Backend logging cleanup (15:52)
+
+**Status**: ✅ Clean, focused terminal showing only active chat execution
+
+Removed verbose debug logs cluttering terminal output:
+- `📚 [BACKEND DEBUG]` conversation fetching logs (conversations.ts)
+- `🔄 [BACKEND DEBUG]` migration check logs (conversations.ts)
+- `🔐 [Admin]` auth check logs (auth/admin.ts:24-30)
+- `[STREAM][chunk:first]` and `[STREAM][persist_attempt]` noise (stream.ts:471-482)
+- `[TELEMETRY][OAUTH]` page load logs (http.ts:246-260)
+
+Added `ENABLE_DEBUG_LOGS` environment variable to gate debug logs across all files.
+Terminal output reduced from ~30-40 lines to ~8-12 lines per message while 
+preserving error visibility.
+```
+
+**Feature Work (20-35 lines):**
+```markdown
+## OAuth Authentication & API Context Fixes (11:30)
+
+**Status**: ✅ Both OAuth and API integration issues resolved
+
+### Problem & Solution
+Faced two blocking issues preventing Todoist integration:
+1. **OAuth Error**: "User not authenticated" during callback - serverless auth gap
+2. **API Context Error**: "Cannot read properties of undefined" - action/query mismatch
+
+### Implementation
+**OAuth Fix**: Used OAuth `state` parameter to bridge authentication across redirect.
+- `convex/todoist/auth.ts:generateOAuthURL` - Encoded userId into state (`userId_random`)
+- `convex/todoist/auth.ts:storeTodoistTokenForUser` - Created mutation accepting userId
+- `convex/todoist/auth.ts:exchangeCodeForToken` - Decode userId from state, call storage
+- `convex/http.ts:64` - Updated route from `runMutation` to `runAction`
+
+**API Context Fix**: Separated actions (external calls) from queries (database ops).
+- `convex/todoist/auth.ts:getTodoistTokenForUser` - Created internal query
+- `convex/todoist/api.ts:todoistRequest` - Fixed to use `ctx.runQuery()` pattern
+- Added TypeScript annotations to resolve compilation errors
+
+### Result
+Complete OAuth → Token Storage → API Integration flow working. Live tested with 
+task creation across projects, priority setting, and real-time AI tool execution.
+
+**Insight**: OAuth `state` parameter technique essential for serverless architectures 
+where session state doesn't persist across redirects.
+```
+
+**Major Session (35-40 lines MAX):**
+```markdown
+## Schema Migration & User Activity Tracking (Evening)
+
+**Status**: ✅ Migrated to Firebase-only schema with comprehensive analytics
+
+### Schema Evolution
+Migrated from mixed Clerk/Firebase to clean Firebase-only architecture. Old schema 
+at `convex/schema.ts:5-17` had legacy `clerkId`, `firstName`, `lastName` fields 
+we weren't using after Firebase migration.
+
+Two-phase approach: made fields optional for migration, cleaned old data via dashboard, 
+then enforced clean schema. New structure: `firebaseUid`, `displayName`, `photoUrl`, 
+`email` with proper indexes `by_firebase_uid` and `by_email` at lines 16-17.
+
+### User Activity Analytics
+Built comprehensive tracking without exposing private messages. New `userActivity` 
+table in `convex/schema.ts:27-45` captures:
+- `totalMessages`, `totalToolCalls` - engagement metrics
+- Todoist operations: `todosCreated`, `todosCompleted`, `todosUpdated`, `todosDeleted`
+- Preferred AI model usage patterns
+- Daily activity tracking with automatic resets
+
+### Implementation Details
+Added `updateUserActivity` mutation at `convex/agents.ts:115-181` called after each 
+conversation. Intelligently counts tool usage by parsing `result.toolCalls` array 
+and categorizing by tool name. Extracts from `result.toolCalls?.map(call => 
+call.toolName)` at line 456 and filters by specific types like `createTask`, 
+`completeTask`.
+
+Created `getUserActivitySummary` query at `convex/agents.ts:99-112` returning 
+activity sorted by last active. Dashboard now shows productivity metrics instead 
+of private conversations.
+
+User creation logic at `convex/agents.ts:32-66` handles Firebase identity extraction 
+and creates/updates user records seamlessly. Each conversation isolated by `userId` 
+(Firebase UID) with aggregate analytics maintaining privacy.
+
+### Architecture Impact
+Removed all Clerk dependencies and indexes. System now production-ready with proper 
+user separation and meaningful usage insights without compromising privacy.
+```
+
 ## 🔧 Code Analysis Tools - Standard Development Workflow
 
 **Primary Code Analysis**: Use standard Claude Code tools for understanding and modifying the codebase.
