@@ -7,12 +7,14 @@ import { ConversationTurn } from './ConversationTurn'
 import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
 import { useChat } from '../../context/chat'
+import type { UiMsg } from '../../store/chatStore'
 
 // Helper interface for conversation turn
 interface ConversationTurnData {
   id: string;
   userMessage: string;
   aiMessage?: string;
+  aiParts?: UiMsg['parts'];
   isThinking: boolean;
 }
 
@@ -47,12 +49,17 @@ export function Chat() {
       if (currentMessage.role === 'user') {
         // Look for the next assistant message
         const assistantMessage = messages[i + 1];
+        const aiParts = assistantMessage?.role === 'assistant' ? assistantMessage.parts : undefined;
+        const hasActiveTool = Array.isArray(aiParts)
+          ? aiParts.some((part) => part?.type === 'tool-invocation' && (part as any).toolInvocation?.state !== 'result')
+          : false;
         
         turns.push({
           id: currentMessage.id,
           userMessage: currentMessage.content,
           aiMessage: (assistantMessage?.role === 'assistant') ? assistantMessage.content : undefined,
-          isThinking: false
+          aiParts,
+          isThinking: hasActiveTool
         });
         
         // Skip the assistant message if we found one
@@ -65,7 +72,10 @@ export function Chat() {
     // Add thinking state for loading
     if (isLoading && turns.length > 0) {
       const lastTurn = turns[turns.length - 1];
-      if (!lastTurn.aiMessage) {
+      const hasCompletedTool = Array.isArray(lastTurn.aiParts)
+        ? lastTurn.aiParts.some((part) => part?.type === 'tool-invocation' && (part as any).toolInvocation?.state === 'result')
+        : false;
+      if ((!lastTurn.aiMessage || !lastTurn.aiMessage.trim()) && !hasCompletedTool) {
         lastTurn.isThinking = true;
       }
     }
@@ -172,6 +182,7 @@ export function Chat() {
                 id={turn.id}
                 userMessage={turn.userMessage}
                 aiMessage={turn.aiMessage}
+                aiParts={turn.aiParts}
                 isThinking={turn.isThinking}
                 isLast={index === conversationTurns.length - 1}
                 error={error}

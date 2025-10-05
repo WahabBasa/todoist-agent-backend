@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { UIMessage } from '@ai-sdk/ui-utils'
 
 export type UiStatus = 'ready' | 'submitted' | 'streaming'
 export type UiRole = 'user' | 'assistant'
@@ -8,6 +9,7 @@ export interface UiMsg {
   id: string
   role: UiRole
   content: string
+  parts?: UIMessage['parts']
   createdAt?: Date
 }
 
@@ -24,7 +26,7 @@ export interface ChatStore {
   replaceFromDb: (id: string, msgs: UiMsg[]) => void
   appendUser: (id: string, text: string) => string
   ensureAssistantPlaceholder: (id: string) => string
-  updateAssistant: (id: string, content: string) => void
+  updateAssistant: (id: string, patch: Partial<Pick<UiMsg, 'content' | 'parts'>>) => void
   clear: (id: string) => void
   resetStatuses: () => void
 }
@@ -80,7 +82,16 @@ export const useChatStore = create<ChatStore>()(
         const userId = genId('user')
         const next: ChatInstance = {
           ...inst,
-          messages: [...inst.messages, { id: userId, role: 'user', content: text, createdAt: new Date() }]
+          messages: [
+            ...inst.messages,
+            {
+              id: userId,
+              role: 'user',
+              content: text,
+              parts: text ? [{ type: 'text', text } as UIMessage['parts'][number]] : [],
+              createdAt: new Date(),
+            },
+          ]
         }
         set({ instances: { ...instances, [id]: next } })
         return userId
@@ -93,19 +104,30 @@ export const useChatStore = create<ChatStore>()(
         const asstId = genId('assistant')
         const next: ChatInstance = {
           ...inst,
-          messages: [...inst.messages, { id: asstId, role: 'assistant', content: '', createdAt: new Date() }]
+          messages: [
+            ...inst.messages,
+            {
+              id: asstId,
+              role: 'assistant',
+              content: '',
+              parts: [],
+              createdAt: new Date(),
+            },
+          ]
         }
         set({ instances: { ...instances, [id]: next } })
         return asstId
       },
-      updateAssistant: (id, content) => {
+      updateAssistant: (id, patch) => {
         const instances = get().instances
         const inst = instances[id] ?? getDefaultInstance()
         if (inst.messages.length === 0) {
           // create placeholder then update
           const asstId = get().ensureAssistantPlaceholder(id)
           const current = get().instances[id] ?? getDefaultInstance()
-          const updated = current.messages.map((m) => (m.id === asstId ? { ...m, content } : m))
+          const updated = current.messages.map((m) =>
+            m.id === asstId ? { ...m, ...patch, parts: patch.parts ?? m.parts } : m
+          )
           set({ instances: { ...get().instances, [id]: { ...current, messages: updated } } })
           return
         }
@@ -114,12 +136,18 @@ export const useChatStore = create<ChatStore>()(
         if (last.role !== 'assistant') {
           const asstId = get().ensureAssistantPlaceholder(id)
           const current = get().instances[id] ?? getDefaultInstance()
-          const updated = current.messages.map((m) => (m.id === asstId ? { ...m, content } : m))
+          const updated = current.messages.map((m) =>
+            m.id === asstId ? { ...m, ...patch, parts: patch.parts ?? m.parts } : m
+          )
           set({ instances: { ...get().instances, [id]: { ...current, messages: updated } } })
           return
         }
         const msgs = inst.messages.slice()
-        msgs[idx] = { ...last, content }
+        msgs[idx] = {
+          ...last,
+          ...patch,
+          parts: patch.parts ?? last.parts,
+        }
         set({ instances: { ...instances, [id]: { ...inst, messages: msgs } } })
       },
       clear: (id) => {

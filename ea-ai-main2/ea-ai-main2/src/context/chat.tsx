@@ -8,22 +8,14 @@ import { useSessions } from './sessions';
 import { useChat as useVercelChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
-import type { UIMessage } from '@ai-sdk/ui-utils';
+import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@ai-sdk/ui-utils';
 import { useChatStore } from '../store/chatStore';
-import type { UiStatus } from '../store/chatStore';
-
-// Minimal message shape expected by UI components
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  createdAt?: Date;
-}
+import type { UiStatus, UiMsg } from '../store/chatStore';
 
 // Simple chat context interface - much cleaner than before
 interface ChatContextType {
   // State from useConvexChat hook
-  messages: Message[];
+  messages: UiMsg[];
   input: string;
   setInput: (input: string) => void;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -48,7 +40,7 @@ function generateRequestId() {
   return `req_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 }
 
-function collectTextFromParts(parts: any[]): string {
+function collectTextFromParts(parts: ReadonlyArray<any> | undefined): string {
   if (!Array.isArray(parts)) return '';
 
   return parts
@@ -90,7 +82,41 @@ function extractLatestUserMessage(messages: UIMessage[]): string {
 
 const isDev = typeof import.meta !== "undefined" ? !!import.meta.env?.DEV : false;
 
-function areUiMessagesEqual(a: Message[], b: Message[]): boolean {
+type UiPart = UIMessage['parts'][number];
+
+function partsEqual(a: UiPart[] | undefined, b: UiPart[] | undefined): boolean {
+  const left = Array.isArray(a) ? a : [];
+  const right = Array.isArray(b) ? b : [];
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    const aa = left[i];
+    const bb = right[i];
+    if (!aa || !bb) return false;
+    if (aa.type !== bb.type) return false;
+    if (aa.type === 'text') {
+      if ((aa as TextUIPart).text !== (bb as TextUIPart).text) return false;
+      continue;
+    }
+    if (aa.type === 'tool-invocation') {
+      const aTool = (aa as ToolInvocationUIPart).toolInvocation;
+      const bTool = (bb as ToolInvocationUIPart).toolInvocation;
+      if (aTool.state !== bTool.state) return false;
+      if (aTool.toolCallId !== bTool.toolCallId) return false;
+      if (aTool.toolName !== bTool.toolName) return false;
+      const aArgs = JSON.stringify(aTool.args ?? null);
+      const bArgs = JSON.stringify(bTool.args ?? null);
+      if (aArgs !== bArgs) return false;
+      const aResult = JSON.stringify((aTool as any).result ?? null);
+      const bResult = JSON.stringify((bTool as any).result ?? null);
+      if (aResult !== bResult) return false;
+      continue;
+    }
+    if (JSON.stringify(aa) !== JSON.stringify(bb)) return false;
+  }
+  return true;
+}
+
+function areUiMessagesEqual(a: UiMsg[], b: UiMsg[]): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -99,42 +125,136 @@ function areUiMessagesEqual(a: Message[], b: Message[]): boolean {
     if (!left || !right) return false;
     if (left.role !== right.role) return false;
     if (left.content !== right.content) return false;
+    if (!partsEqual(left.parts, right.parts)) return false;
   }
   return true;
 }
 
-function mapConvexMessagesToSdk(messages: any[] | undefined): UIMessage[] {
+function cloneParts(parts: UIMessage['parts'] | undefined): UiPart[] {
+  if (!Array.isArray(parts) || parts.length === 0) return [];
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(parts) as UiPart[];
+    } catch {}
+  }
+  try {
+    return JSON.parse(JSON.stringify(parts));
+  } catch {
+    return parts.map((part) => ({ ...part })) as UiPart[];
+  }
+}
+
+function mapConvexMessagesToUi(messages: any[] | undefined): UiMsg[] {
   if (!Array.isArray(messages)) return [];
 
   return messages
-    .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
+    .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg: any, index: number) => {
+      const timestamp = typeof msg.timestamp === 'number' ? new Date(msg.timestamp) : undefined;
       const baseContent = typeof msg.content === 'string'
         ? msg.content
-        : JSON.stringify(msg.content ?? '');
+        : typeof msg.content === 'number'
+          ? String(msg.content)
+          : '';
 
-      const metadata = typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : undefined;
+      const parts = buildUiPartsFromConvexMessage(msg);
+      const textFromParts = collectTextFromParts(parts);
 
       return {
-        id: `${msg.timestamp}-${index}`,
+        id: `${msg.timestamp ?? Date.now()}-${index}`,
         role: msg.role,
-        content: baseContent,
-        metadata,
-        createdAt: msg.timestamp,
-        mode: msg.mode,
-      } as UIMessage;
+        content: textFromParts || baseContent || '',
+        parts,
+        createdAt: timestamp,
+      } satisfies UiMsg;
     });
 }
 
-function messagesEqual(a: UIMessage[], b: UIMessage[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i]?.id !== b[i]?.id) return false;
-    if (a[i]?.role !== b[i]?.role) return false;
-    if (a[i]?.content !== b[i]?.content) return false;
+function buildUiPartsFromConvexMessage(msg: any): UiPart[] {
+  if (!msg || (msg.role !== 'user' && msg.role !== 'assistant')) return [];
+
+  const parts: UiPart[] = [];
+  const appendText = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) {
+      parts.push({ type: 'text', text: value } as TextUIPart);
+    }
+  };
+
+  if (typeof msg.content === 'string') {
+    appendText(msg.content);
+  } else if (Array.isArray(msg.content)) {
+    for (const entry of msg.content) {
+      if (typeof entry?.text === 'string') {
+        appendText(entry.text);
+      }
+    }
   }
-  return true;
+
+  if (msg.role !== 'assistant') {
+    return parts;
+  }
+
+  const toolStates: Record<string, string> | undefined =
+    typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata.toolStates : undefined;
+
+  const toolCalls = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
+  const toolResults = Array.isArray(msg.toolResults) ? msg.toolResults : [];
+
+  const callMap = new Map<string, any>();
+  for (const call of toolCalls) {
+    if (call && typeof call.toolCallId === 'string') {
+      callMap.set(call.toolCallId, call);
+    }
+  }
+
+  const resultMap = new Map<string, any>();
+  for (const result of toolResults) {
+    if (result && typeof result.toolCallId === 'string') {
+      resultMap.set(result.toolCallId, result);
+    }
+  }
+
+  const ids = new Set<string>();
+  for (const key of callMap.keys()) ids.add(key);
+  for (const key of resultMap.keys()) ids.add(key);
+  if (toolStates) {
+    for (const key of Object.keys(toolStates)) {
+      ids.add(key);
+    }
+  }
+
+  for (const toolCallId of ids) {
+    const call = callMap.get(toolCallId) ?? null;
+    const result = resultMap.get(toolCallId) ?? null;
+    const toolName = result?.toolName || call?.name || toolCallId;
+
+    let state: ToolInvocationUIPart['toolInvocation']['state'] = 'call';
+    const stateFromMetadata = toolStates?.[toolCallId];
+    if (result) {
+      state = 'result';
+    } else if (stateFromMetadata === 'pending') {
+      state = 'partial-call';
+    } else if (stateFromMetadata === 'running') {
+      state = 'call';
+    }
+
+    const toolInvocation: ToolInvocationUIPart['toolInvocation'] = {
+      state,
+      toolCallId,
+      toolName,
+    };
+
+    if (call?.args !== undefined) {
+      toolInvocation.args = call.args;
+    }
+    if (result?.result !== undefined) {
+      (toolInvocation as any).result = result.result;
+    }
+
+    parts.push({ type: 'tool-invocation', toolInvocation } as ToolInvocationUIPart);
+  }
+
+  return parts;
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -342,26 +462,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       try { toast.error(`Error: ${msg}`); } catch {}
     },
     onFinish: () => {
-      const last = messages[messages.length - 1] as any;
-      let text = '';
-      let hasToolPart = false;
-      if (last) {
-        if (Array.isArray(last?.parts)) {
-          text = collectTextFromParts(last.parts);
-          hasToolPart = last.parts.some((part: any) => typeof part?.type === 'string' && part.type.startsWith('tool-'));
-        } else if (typeof last?.content === 'string') {
-          text = last.content;
-        } else if (Array.isArray(last?.content)) {
-          text = collectTextFromParts(last.content);
-        }
-      }
-
+      const last = messages[messages.length - 1] as UIMessage | undefined;
+      const rawParts = Array.isArray(last?.parts)
+        ? last?.parts
+        : Array.isArray((last as any)?.content)
+          ? (last as any).content
+          : undefined;
+      const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
+      const text = last
+        ? Array.isArray(last.parts)
+          ? collectTextFromParts(last.parts)
+          : typeof last.content === 'string'
+            ? last.content
+            : Array.isArray((last as any)?.content)
+              ? collectTextFromParts((last as any).content)
+              : ''
+        : '';
+      const hasToolPart = parts.some((part) => part?.type === 'tool-invocation');
       const nextStatus: UiStatus = !text.trim() && hasToolPart ? 'streaming' : 'ready';
 
-      if (!text.trim() && hasToolPart) {
-        ensureAssistantPlaceholder(chatId);
-        updateAssistant(chatId, 'Working on tool response…');
-      }
+      ensureAssistantPlaceholder(chatId);
+      updateAssistant(chatId, { content: text, parts });
 
       if (isDev) {
         console.debug('[CHAT] onFinish from transport', {
@@ -413,16 +534,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     if (hookStatus === 'streaming') {
       // derive assistant text from hook messages
-      const last = messages[messages.length - 1] as any;
-      let text = '';
-      if (last) {
-        if (Array.isArray(last.parts)) text = collectTextFromParts(last.parts);
-        else if (typeof last.content === 'string') text = last.content;
-        else if (Array.isArray(last.content)) text = collectTextFromParts(last.content);
-      }
+      const last = messages[messages.length - 1] as UIMessage | undefined;
+      const rawParts = Array.isArray(last?.parts)
+        ? last?.parts
+        : Array.isArray((last as any)?.content)
+          ? (last as any).content
+          : undefined;
+      const text = last
+        ? Array.isArray(last?.parts)
+          ? collectTextFromParts(last.parts)
+          : typeof last?.content === 'string'
+            ? last.content
+            : Array.isArray((last as any)?.content)
+              ? collectTextFromParts((last as any).content)
+              : ''
+        : '';
+      const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
       setStatusStore(chatId, 'streaming');
       ensureAssistantPlaceholder(chatId);
-      updateAssistant(chatId, text);
+      updateAssistant(chatId, { content: text, parts });
     }
   }, [hookStatus, messages, chatId, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
 
@@ -435,37 +565,49 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (hookStatus === 'streaming' || hookStatus === 'submitted') {
       mappedStatus = hookStatus as UiStatus;
     } else {
-      const last = messages[messages.length - 1] as any;
-      let text = '';
-      let hasToolPart = false;
-      if (last) {
-        if (Array.isArray(last?.parts)) {
-          text = collectTextFromParts(last.parts);
-          hasToolPart = last.parts.some((part: any) => typeof part?.type === 'string' && part.type.startsWith('tool-'));
-        } else if (typeof last?.content === 'string') {
-          text = last.content;
-        } else if (Array.isArray(last?.content)) {
-          text = collectTextFromParts(last.content);
-        }
-      }
+      const last = messages[messages.length - 1] as UIMessage | undefined;
+      const rawParts = Array.isArray(last?.parts)
+        ? last?.parts
+        : Array.isArray((last as any)?.content)
+          ? (last as any).content
+          : undefined;
+      const text = last
+        ? Array.isArray(last?.parts)
+          ? collectTextFromParts(last.parts)
+          : typeof last?.content === 'string'
+            ? last.content
+            : Array.isArray((last as any)?.content)
+              ? collectTextFromParts((last as any).content)
+              : ''
+        : '';
+      const toolParts = Array.isArray(rawParts)
+        ? rawParts.filter((part: any) => part?.type === 'tool-invocation')
+        : [];
 
-      mappedStatus = !text.trim() && hasToolPart ? 'streaming' : 'ready';
+      mappedStatus = !text.trim() && toolParts.length > 0 ? 'streaming' : 'ready';
     }
 
     setStatusStore(chatId, mappedStatus);
 
     if (hookStatus === 'ready' && prev !== 'ready') {
-      const last = messages[messages.length - 1] as any;
-      let text = '';
-      if (last) {
-        if (Array.isArray(last?.parts)) text = collectTextFromParts(last.parts);
-        else if (typeof last?.content === 'string') text = last.content;
-        else if (Array.isArray(last?.content)) text = collectTextFromParts(last.content);
-      }
+      const last = messages[messages.length - 1] as UIMessage | undefined;
+      const rawParts = Array.isArray(last?.parts)
+        ? last?.parts
+        : Array.isArray((last as any)?.content)
+          ? (last as any).content
+          : undefined;
+      const text = last
+        ? Array.isArray(last?.parts)
+          ? collectTextFromParts(last.parts)
+          : typeof last?.content === 'string'
+            ? last.content
+            : Array.isArray((last as any)?.content)
+              ? collectTextFromParts((last as any).content)
+              : ''
+        : '';
+      const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
 
-      if (text) {
-        updateAssistant(chatId, text);
-      }
+      updateAssistant(chatId, { content: text, parts });
 
       if (isDev) {
         console.debug('[CHAT] stream finished', {
@@ -495,15 +637,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Normalize DB (Convex) messages to store shape and replace when idle/ready
   React.useEffect(() => {
     if (activeConversation === undefined) return;
-    const mapped = mapConvexMessagesToSdk(activeConversation?.messages);
-    const dbMsgs: Message[] = mapped.map((m: any, idx: number) => {
-      let text = '';
-      if (Array.isArray(m.parts)) text = collectTextFromParts(m.parts);
-      else if (typeof m.content === 'string') text = m.content;
-      else if (Array.isArray(m.content)) text = collectTextFromParts(m.content);
-      return { id: m.id ?? String(idx), role: m.role, content: text };
-    });
-
+    const dbMsgs = mapConvexMessagesToUi(activeConversation?.messages);
     const localMsgs = currentInstance.messages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
 
@@ -532,14 +666,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     const lastAssistant = dbMsgs.slice().reverse().find((msg) => msg.role === 'assistant');
-    if (lastAssistant && lastAssistant.content.trim()) {
+    const assistantText = lastAssistant
+      ? lastAssistant.content || collectTextFromParts(lastAssistant.parts)
+      : '';
+    if (lastAssistant && assistantText.trim()) {
       setStatusStore(chatId, 'ready');
       queuedRetryRef.current = false;
       pendingRetryRef.current = false;
       if (isDev) {
         console.debug('[CHAT] status reset after Convex hydration', {
           chatId,
-          assistantPreview: lastAssistant.content.slice(0, 80),
+          assistantPreview: assistantText.slice(0, 80),
         });
       }
     }
