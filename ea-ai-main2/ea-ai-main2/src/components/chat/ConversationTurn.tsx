@@ -2,6 +2,7 @@ import React from 'react'
 import { User, Bot, Copy, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
 import type { UIMessage, ToolInvocationUIPart } from '@ai-sdk/ui-utils'
+import { ToolInvocationCard } from './ToolInvocationCard'
 
 interface ConversationTurnProps {
   id: string
@@ -76,28 +77,6 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   const handleRetry = () => {
     if (onRetry) {
       onRetry();
-    }
-  }
-
-  const describeState = (state: ToolInvocationUIPart['toolInvocation']['state']) => {
-    switch (state) {
-      case 'result':
-        return 'Completed';
-      case 'partial-call':
-        return 'Queued';
-      case 'call':
-      default:
-        return 'Running';
-    }
-  }
-
-  const formatStructured = (value: unknown) => {
-    if (value == null) return ''
-    if (typeof value === 'string') return value
-    try {
-      return JSON.stringify(value, null, 2)
-    } catch {
-      return String(value)
     }
   }
 
@@ -181,34 +160,12 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
                 )}
                 {hasToolParts && (
                   <div className="flex flex-col gap-3">
-                    {toolParts.map((part) => {
-                      const { toolInvocation } = part
-                      const args = toolInvocation.args
-                      const result = (toolInvocation as any).result
-                      return (
-                        <div
-                          key={toolInvocation.toolCallId}
-                          className="rounded-design-md border border-border/60 bg-muted/40 p-3 space-y-2"
-                        >
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium text-primary">{toolInvocation.toolName || 'Tool'}</span>
-                            <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                              {describeState(toolInvocation.state)}
-                            </span>
-                          </div>
-                          {args !== undefined && (
-                            <pre className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words bg-background/60 rounded-md p-2 border border-border/50">
-                              {formatStructured(args)}
-                            </pre>
-                          )}
-                          {result !== undefined && (
-                            <pre className="text-sm whitespace-pre-wrap break-words border border-border/50 bg-background rounded-md p-3">
-                              {typeof result === 'string' ? result : formatStructured(result)}
-                            </pre>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {toolParts.map((part) => (
+                      <ToolInvocationCard
+                        key={part.toolInvocation.toolCallId}
+                        invocation={part.toolInvocation}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
