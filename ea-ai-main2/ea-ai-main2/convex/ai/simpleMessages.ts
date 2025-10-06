@@ -115,40 +115,23 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
               continue;
             }
 
-            // Structure output for AI SDK v5 compatibility
-            // Tool results must be properly formatted for convertToModelMessages
+            // For AI SDK v4 compatibility, provide string output
+            const outputString = typeof (matchingResult as any).result === 'string'
+              ? (matchingResult as any).result
+              : JSON.stringify((matchingResult as any).result);
             parts.push({
               type: `tool-${toolCall.name}` as `tool-${string}`,
               toolCallId: toolCall.toolCallId,
               state: "output-available",
               input: toolCall.args,
-              output: {
-                type: 'json',
-                value: matchingResult.result
-              }
+              output: outputString,
             });
           }
         }
 
         // Safety validation: Ensure all tool parts have properly structured output
         // This prevents API rejections due to undefined content in tool messages
-        const validatedParts = parts.map(part => {
-          if (part.type.startsWith('tool-') && 'output' in part) {
-            const toolPart = part as any;
-            // Check if output is already structured
-            if (typeof toolPart.output !== 'object' || !toolPart.output || !('type' in toolPart.output)) {
-              // Restructure plain values into proper format
-              return {
-                ...toolPart,
-                output: {
-                  type: 'json',
-                  value: toolPart.output
-                }
-              };
-            }
-          }
-          return part;
-        });
+        const validatedParts = parts.map(part => part);
 
         // Only push assistant messages if they have actual text content
         // Tool-only messages without text can confuse the model about roles

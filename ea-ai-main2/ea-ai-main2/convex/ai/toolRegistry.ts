@@ -202,41 +202,26 @@ export async function createSimpleToolRegistry(
             throw error; // Let AI SDK handle the error
           }
         },
-        /* experimental_toToolResultContent: (result: any) => {
-          const redact = (key: string, value: unknown) =>
-            /(token|secret|key|password|auth)/i.test(key) ? "[redacted]" : value;
-
-          let out: string;
-          if (typeof result?.output === "string") {
-            out = result.output;
-          } else {
-            try {
-              out = JSON.stringify(result?.output ?? "", (k, v) => redact(k, v as unknown));
-            } catch {
-              out = String(result?.output ?? "");
+        // Ensure provider-facing tool messages always include text content.
+        // Works for both v4 and v5 by normalizing any execute() result.
+        toModelOutput: (result: any) => {
+          try {
+            let out: string;
+            if (typeof result === 'string') {
+              out = result;
+            } else if (typeof result?.output === 'string') {
+              out = result.output;
+            } else if (result?.output !== undefined) {
+              out = JSON.stringify(result.output);
+            } else {
+              out = JSON.stringify(result);
             }
+            if (!out || typeof out !== 'string') out = '';
+            return { type: 'text', value: out } as const;
+          } catch {
+            return { type: 'text', value: '' } as const;
           }
-
-          out = (out ?? "").toString().trim() || "OK";
-          return [{ type: "text", text: out }];
         },
-        // Legacy API mapping for model-visible output
-        toModelOutput(result: any) {
-          const redact = (key: string, value: unknown) =>
-            /(token|secret|key|password|auth)/i.test(key) ? "[redacted]" : value;
-          let out: string;
-          if (typeof result?.output === "string") {
-            out = result.output;
-          } else {
-            try {
-              out = JSON.stringify(result?.output ?? "", (k, v) => redact(k, v as unknown));
-            } catch {
-              out = String(result?.output ?? "");
-            }
-          }
-          out = (out ?? "").toString().trim() || "OK";
-          return out;
-        }
       };
 
       // Use AI SDK tool function directly with proper typing
