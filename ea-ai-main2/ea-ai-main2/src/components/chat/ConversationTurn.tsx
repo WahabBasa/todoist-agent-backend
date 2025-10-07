@@ -1,6 +1,7 @@
 import React from 'react'
 import { User, Bot, Copy, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
+import { Response } from '@/components/ai-elements/response'
 import type { UIMessage, ToolInvocationUIPart } from '@ai-sdk/ui-utils'
 
 interface ConversationTurnProps {
@@ -35,23 +36,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
   const activeTool = toolParts.some((part) => part.toolInvocation.state !== 'result')
   const thinkingState = isThinking || activeTool
 
-  // Debug: Log what's being passed to this component
-  React.useEffect(() => {
-    console.log('🔄 [FRONTEND DEBUG] ConversationTurn component rendered:', {
-      id,
-      userMessagePreview: userMessage.substring(0, 50) + '...',
-      hasAiMessage: !!aiMessage,
-      aiMessagePreview: aiMessage ? aiMessage.substring(0, 50) + '...' : null,
-      isThinking: thinkingState,
-      isLast,
-      isEmptyResponse: (!aiMessage || aiMessage.trim() === '') && !hasToolParts,
-      toolParts: toolParts.map((part) => ({
-        id: part.toolInvocation.toolCallId,
-        state: part.toolInvocation.state,
-        name: part.toolInvocation.toolName,
-      })),
-    });
-  }, [id, userMessage, aiMessage, thinkingState, isLast, hasToolParts, toolParts]);
+  // Debug logging removed to reduce render overhead
   
   const [copied, setCopied] = React.useState(false)
   
@@ -150,15 +135,13 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
                 </div>
               ) : null
             ) : (
-              /* AI Response - Clean conversational display only */
+              /* AI Response - Markdown-rendered conversational display */
               <div className="flex flex-col gap-4 text-primary">
                 {aiMessage && aiMessage.trim() && (
-                  <div className="whitespace-pre-wrap break-words leading-relaxed hyphens-auto space-y-3">
-                    {aiMessage}
+                  <div className="markdown">
+                    <Response className="leading-relaxed hyphens-auto space-y-3">{aiMessage}</Response>
                   </div>
                 )}
-                {/* Tool cards removed - EA provides clean conversational responses
-                    Tool execution happens transparently in the background */}
               </div>
             )}
           </div>

@@ -337,6 +337,14 @@ export const Response = memo(
         ? parseIncompleteMarkdown(children)
         : children;
 
+    // hardened-react-markdown requires defaultOrigin when allowed*Prefixes are provided.
+    // Provide a safe default that works in both browser and SSR contexts.
+    const origin =
+      defaultOrigin ??
+      (typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost');
+
     return (
       <div
         className={cn(
@@ -349,7 +357,7 @@ export const Response = memo(
           allowedImagePrefixes={allowedImagePrefixes ?? []}
           allowedLinkPrefixes={allowedLinkPrefixes ?? ['https://', 'http://', '/']}
           components={components}
-          defaultOrigin={defaultOrigin}
+          defaultOrigin={origin}
           remarkPlugins={[remarkGfm]}
           {...options}
         >

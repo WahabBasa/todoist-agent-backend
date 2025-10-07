@@ -1,3 +1,4 @@
+import { Response } from '@/components/ai-elements/response'
 interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -45,8 +46,8 @@ export function RenderMessage({
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="max-w-none">
-        <div className="text-primary whitespace-pre-wrap break-words">
-          {message.content}
+        <div className="markdown">
+          <Response className="text-primary">{message.content}</Response>
         </div>
       </div>
     </div>

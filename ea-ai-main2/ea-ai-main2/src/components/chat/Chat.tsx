@@ -3,24 +3,17 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { cn } from "@/lib/utils"
 import { Id } from "../../../convex/_generated/dataModel"
-import { ConversationTurn } from './ConversationTurn'
+import { AssistantMessage } from './AssistantMessage'
 import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
 import { useChat } from '../../context/chat'
 import type { UiMsg } from '../../store/chatStore'
+import { useAutoScroll } from '../../hooks/use-auto-scroll'
 
-// Helper interface for conversation turn
-interface ConversationTurnData {
-  id: string;
-  userMessage: string;
-  aiMessage?: string;
-  aiParts?: UiMsg['parts'];
-  isThinking: boolean;
-}
+// Separate-row rendering; no turn grouping
 
 export function Chat() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const messagesAreaRef = useRef<HTMLDivElement>(null)
   
   // Get simplified chat state from new context
   const {
@@ -37,97 +30,26 @@ export function Chat() {
     reload
   } = useChat()
 
-  // Convert messages to conversation turns for compatibility
-  const conversationTurns = React.useMemo((): ConversationTurnData[] => {
-    const turns: ConversationTurnData[] = [];
-    
-    // Group messages into user-assistant pairs
-    let i = 0;
-    while (i < messages.length) {
-      const currentMessage = messages[i];
-      
-      if (currentMessage.role === 'user') {
-        // Look for the next assistant message
-        const assistantMessage = messages[i + 1];
-        const aiParts = assistantMessage?.role === 'assistant' ? assistantMessage.parts : undefined;
-        const hasActiveTool = Array.isArray(aiParts)
-          ? aiParts.some((part) => part?.type === 'tool-invocation' && (part as any).toolInvocation?.state !== 'result')
-          : false;
-        
-        turns.push({
-          id: currentMessage.id,
-          userMessage: currentMessage.content,
-          aiMessage: (assistantMessage?.role === 'assistant') ? assistantMessage.content : undefined,
-          aiParts,
-          isThinking: hasActiveTool
-        });
-        
-        // Skip the assistant message if we found one
-        i += (assistantMessage?.role === 'assistant') ? 2 : 1;
-      } else {
-        i++;
-      }
-    }
-    
-    // Add thinking state for loading
-    if (isLoading && turns.length > 0) {
-      const lastTurn = turns[turns.length - 1];
-      const hasCompletedTool = Array.isArray(lastTurn.aiParts)
-        ? lastTurn.aiParts.some((part) => part?.type === 'tool-invocation' && (part as any).toolInvocation?.state === 'result')
-        : false;
-      if ((!lastTurn.aiMessage || !lastTurn.aiMessage.trim()) && !hasCompletedTool) {
-        lastTurn.isThinking = true;
-      }
-    }
-    
-    return turns;
-  }, [messages, isLoading])
-  
-  // Debug: Log conversation turns
-  React.useEffect(() => {
-    console.log('💬 [FRONTEND DEBUG] Conversation turns updated:', {
-      count: conversationTurns.length,
-      turns: conversationTurns.map(turn => ({
-        id: turn.id,
-        userMessage: turn.userMessage.substring(0, 30) + '...',
-        hasAiMessage: !!turn.aiMessage,
-        aiMessagePreview: turn.aiMessage ? turn.aiMessage.substring(0, 30) + '...' : null,
-        isThinking: turn.isThinking
-      }))
-    });
-  }, [conversationTurns]);
+  const {
+    containerRef: messagesAreaRef,
+    handleScroll,
+    handleTouchStart,
+    scrollToBottom,
+    shouldAutoScroll,
+  } = useAutoScroll([messages, isLoading])
+
+  // No turn grouping; render rows directly
   
   // UI state (composition and enter key handling)
   const [isComposing, setIsComposing] = useState(false)
   const [enterDisabled, setEnterDisabled] = useState(false)
-  
-  // Fixed: Simplified transition state management
-  const [isContentVisible, setIsContentVisible] = useState(true)
 
-  // No session management needed - handled by SessionsContext
-
-  // Fixed: Simplified transition logic that ensures content becomes visible
+  // Auto-scroll when messages or loading change
   useEffect(() => {
-    // Always ensure content is visible after a short delay
-    // This prevents the content from being hidden indefinitely
-    const timer = setTimeout(() => {
-      setIsContentVisible(true)
-    }, 100)
-    
-    return () => clearTimeout(timer)
-  }, [conversationTurns, isLoading])
-
-  // Auto-scroll when messages change
-  useEffect(() => {
-    const scrollArea = messagesAreaRef.current
-    if (!scrollArea) return
-    
-    if (conversationTurns.length > 0 || isLoading) {
-      requestAnimationFrame(() => {
-        scrollArea.scrollTop = scrollArea.scrollHeight
-      })
+    if (shouldAutoScroll && (messages.length > 0 || isLoading)) {
+      scrollToBottom()
     }
-  }, [conversationTurns, isLoading])
+  }, [messages, isLoading, shouldAutoScroll, scrollToBottom])
 
   // Wrapper for form submission to match ChatInput interface
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -139,10 +61,7 @@ export function Chat() {
 
   const handleCompositionEnd = () => {
     setIsComposing(false)
-    setEnterDisabled(true)
-    setTimeout(() => {
-      setEnterDisabled(false)
-    }, 300)
+    setEnterDisabled(false)
   }
 
   const handleClearChat = () => {
@@ -150,52 +69,47 @@ export function Chat() {
     clearChat() // Use context's clearChat
   }
 
-  // Log input lifecycle at UI level
-  useEffect(() => {
-    try { console.debug('[UI] isLoading =', isLoading); } catch {}
-  }, [isLoading]);
-
-  const onChangeDebug = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    try { console.debug('[UI] onChange, isLoading=', isLoading, 'len=', e?.target?.value?.length); } catch {}
-    handleInputChange(e);
-  }, [isLoading, handleInputChange]);
-
   return (
     <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
       {/* Messages Container - ChatHub Pattern */}
       <div
         className={cn(
-          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto no-scrollbar scroll-smooth pt-12 pb-32",
-          "transition-all duration-500 ease-out",
-          !isContentVisible && "opacity-0",
-          isContentVisible && "opacity-100"
+          "flex flex-col w-full items-center h-[100dvh] overflow-y-auto scrollbar-hide scroll-smooth pt-12 pb-32"
         )}
         ref={messagesAreaRef}
+        onScroll={handleScroll}
+        onTouchStart={handleTouchStart}
         id="chat-container"
       >
-        <div className="w-full md:w-[740px] lg:w-[760px] px-8 py-2 flex flex-1 flex-col gap-8">
-          <div className="flex flex-col gap-8 w-full items-start">
-            {/* Conversation Turns - Original Layout */}
-            {conversationTurns.map((turn, index) => (
-              <ConversationTurn
-                key={turn.id}
-                id={turn.id}
-                userMessage={turn.userMessage}
-                aiMessage={turn.aiMessage}
-                aiParts={turn.aiParts}
-                isThinking={turn.isThinking}
-                isLast={index === conversationTurns.length - 1}
-                error={error}
-                isRetriable={isRetriable}
-                onRetry={reload}
-              />
-            ))}
+        <div className="w-full md:w-[740px] lg:w-[760px] px-8 py-2 flex flex-1 flex-col gap-4">
+          <div className="flex flex-col gap-4 w-full items-start">
+            {messages.map((m, idx) => {
+              if (m.role === 'user') {
+                return (
+                  <div key={m.id} className="flex justify-start">
+                    <div className="flex items-start gap-3 max-w-[92%]">
+                      <div className="message-bubble-user"><div className="whitespace-normal break-words">{(m.content ?? '').trimStart()}</div></div>
+                    </div>
+                  </div>
+                )
+              }
+              const isLast = idx === messages.length - 1
+              const streaming = isLoading && isLast
+              return (
+                <AssistantMessage
+                  key={m.id}
+                  content={m.content}
+                  parts={m.parts}
+                  streaming={streaming}
+                />
+              )
+            })}
           </div>
         </div>
       </div>
 
       {/* Background mask to hide text that scrolls behind input area */}
-      <div className="absolute bottom-0 left-0 h-32 bg-background z-5 pointer-events-none" style={{ right: '20px' }} />
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-background z-[5] pointer-events-none" />
       
       {/* Chat Input - ChatHub Simple Positioning Pattern */}
       <div
@@ -213,7 +127,7 @@ export function Chat() {
           <ChatInput
             ref={inputRef}
             value={input}
-            onChange={onChangeDebug}
+            onChange={handleInputChange}
             onSubmit={handleFormSubmit}
             onClear={handleClearChat}
             onCompositionStart={handleCompositionStart}
@@ -221,9 +135,8 @@ export function Chat() {
             isLoading={isLoading}
             disabled={isLoading}
             placeholder="Ask a question..."
-            showClearButton={conversationTurns.length > 0}
+            showClearButton={messages.length > 0}
             onKeyDown={e => {
-              try { console.debug('[UI] onKeyDown key=', e.key, 'isLoading=', isLoading); } catch {}
               if (
                 e.key === 'Enter' &&
                 !e.shiftKey &&

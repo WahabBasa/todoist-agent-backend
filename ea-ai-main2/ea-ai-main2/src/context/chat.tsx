@@ -494,15 +494,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const storeStatus = useChatStore.getState().instances[chatId]?.status;
       logChatEvent(chatId, 'status_after_finish', { storeStatus });
       window.dispatchEvent(new CustomEvent('chat-history-updated'));
-      try {
-        if (typeof reload === 'function') {
-          logChatEvent(chatId, 'reload_triggered');
-          reload();
-          logChatEvent(chatId, 'reload_completed');
-        }
-      } catch (err) {
-        console.warn('[CHAT] reload after finish failed', err);
-      }
+      // Avoid calling reload() here to prevent finish-time flicker; live Convex query will reconcile
     },
   });
   const isLoading = currentInstance.status === 'submitted' || currentInstance.status === 'streaming';
@@ -511,6 +503,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const lastStatusLogRef = React.useRef({ hookStatus, storeStatus: currentInstance.status });
 
   // Stream sync: mirror hook streaming into store assistant placeholder
+  const lastStreamUpdateRef = React.useRef(0);
+  const streamTimeoutRef = React.useRef<number | null>(null);
   React.useEffect(() => {
     const prev = lastStatusLogRef.current;
     if (prev.hookStatus !== hookStatus || prev.storeStatus !== currentInstance.status) {
@@ -528,7 +522,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         : Array.isArray((last as any)?.content)
           ? (last as any).content
           : undefined;
-      const text = last
+      const textRaw = last
         ? Array.isArray(last?.parts)
           ? collectTextFromParts(last.parts)
           : typeof last?.content === 'string'
@@ -537,10 +531,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               ? collectTextFromParts((last as any).content)
               : ''
         : '';
+      // Sanitize leading/trailing whitespace to avoid initial blank line and trailing spaces
+      const text = textRaw.replace(/^\n{1,2}/, '').replace(/\s+$/, '');
       const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
       setStatusStore(chatId, 'streaming');
       ensureAssistantPlaceholder(chatId);
-      updateAssistant(chatId, { content: text, parts });
+      // Throttle streaming updates to reduce render churn and flicker
+      const now = Date.now();
+      const elapsed = now - lastStreamUpdateRef.current;
+      const applyUpdate = () => {
+        updateAssistant(chatId, { content: text, parts });
+        lastStreamUpdateRef.current = Date.now();
+      };
+      if (elapsed < 60) {
+        if (streamTimeoutRef.current) {
+          clearTimeout(streamTimeoutRef.current);
+        }
+        streamTimeoutRef.current = window.setTimeout(applyUpdate, 60 - elapsed);
+      } else {
+        applyUpdate();
+      }
     }
   }, [hookStatus, messages, chatId, currentInstance.status, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
 
@@ -627,11 +637,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const localMsgs = currentInstance.messages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
 
+    // Preserve optimistic UI during submit/streaming; only replace if DB is ahead
     if (!isEqual) {
-      replaceFromDb(chatId, dbMsgs);
-      logChatEvent(chatId, 'store_replaced_from_convex', {
-        nextCount: dbMsgs.length,
-      });
+      const dbIsAhead = dbMsgs.length > localMsgs.length;
+      if (currentInstance.status !== 'ready' && !dbIsAhead) {
+        // Skip replacement to avoid clobbering optimistic user/assistant placeholder
+      } else {
+        replaceFromDb(chatId, dbMsgs);
+        logChatEvent(chatId, 'store_replaced_from_convex', {
+          nextCount: dbMsgs.length,
+        });
+      }
     }
 
     const lastAssistant = dbMsgs.slice().reverse().find((msg) => msg.role === 'assistant');

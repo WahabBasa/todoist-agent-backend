@@ -35,9 +35,6 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
 }, ref) => {
   const formRef = useRef<HTMLFormElement>(null)
 
-  useEffect(() => {
-    try { console.debug('[UI] <ChatInput> disabled=', disabled, 'isLoading=', isLoading, 'valueLen=', value?.length); } catch {}
-  }, [disabled, isLoading, value]);
 
   return (
     <div className={cn("w-full transition-all duration-300 ease-in-out", className)}>
@@ -68,7 +65,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 "w-full min-h-8 text-sm md:text-base max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
                 "resize-none border-0 bg-transparent",
                 "text-foreground placeholder:text-muted-foreground",
-                "no-scrollbar leading-relaxed"
+                "scrollbar-hide leading-relaxed"
               )}
               onChange={onChange}
               onKeyDown={onKeyDown}
