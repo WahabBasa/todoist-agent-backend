@@ -6,12 +6,22 @@ import { logChatEvent } from '../utils/chatLogger'
 export type UiStatus = 'ready' | 'submitted' | 'streaming'
 export type UiRole = 'user' | 'assistant'
 
+export interface UiMsgMetrics {
+  sentAt?: number
+  sentAtPerf?: number
+  firstRenderAt?: number
+  firstRenderAtPerf?: number
+  renderDeltaMs?: number
+  sessionId?: string
+}
+
 export interface UiMsg {
   id: string
   role: UiRole
   content: string
   parts?: UIMessage['parts']
   createdAt?: Date
+  metrics?: UiMsgMetrics
 }
 
 export interface ChatInstance {
@@ -39,6 +49,26 @@ function getDefaultInstance(): ChatInstance {
 function genId(prefix: string): string {
   const rnd = Math.random().toString(36).slice(2, 8)
   return `${prefix}-${Date.now()}-${rnd}`
+}
+
+function partsEqual(a?: UIMessage['parts'], b?: UIMessage['parts']): boolean {
+  const left = Array.isArray(a) ? a : []
+  const right = Array.isArray(b) ? b : []
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i++) {
+    const la = left[i]
+    const rb = right[i]
+    if (!la || !rb) return false
+    if (la.type !== rb.type) return false
+    if (la.type === 'text') {
+      if ((la as any).text !== (rb as any).text) {
+        return false
+      }
+      continue
+    }
+    if (JSON.stringify(la) !== JSON.stringify(rb)) return false
+  }
+  return true
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -71,6 +101,10 @@ export const useChatStore = create<ChatStore>()(
         const instances = get().instances
         const inst = instances[id] ?? getDefaultInstance()
         const userId = genId('user')
+        const sentAt = Date.now()
+        const sentAtPerf = typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : undefined
         const next: ChatInstance = {
           ...inst,
           messages: [
@@ -81,6 +115,11 @@ export const useChatStore = create<ChatStore>()(
               content: text,
               parts: text ? [{ type: 'text', text } as UIMessage['parts'][number]] : [],
               createdAt: new Date(),
+              metrics: {
+                sentAt,
+                sentAtPerf,
+                sessionId: id,
+              },
             },
           ]
         }
@@ -133,11 +172,20 @@ export const useChatStore = create<ChatStore>()(
           set({ instances: { ...get().instances, [id]: { ...current, messages: updated } } })
           return
         }
+        const nextContent = patch.content ?? last.content
+        const nextParts = patch.parts ?? last.parts
+        if (last.content === nextContent && partsEqual(last.parts, nextParts)) {
+          logChatEvent(id, 'store_update_skipped_no_change', { 
+            contentLength: nextContent.length 
+          })
+          return
+        }
         const msgs = inst.messages.slice()
         msgs[idx] = {
           ...last,
           ...patch,
-          parts: patch.parts ?? last.parts,
+          content: nextContent,
+          parts: nextParts,
         }
         set({ instances: { ...instances, [id]: { ...inst, messages: msgs } } })
       },

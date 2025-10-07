@@ -501,12 +501,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const isRetriable = false;
 
   const lastStatusLogRef = React.useRef({ hookStatus, storeStatus: currentInstance.status });
+  const lastAssistantContentRef = React.useRef('');
+  const lastAssistantPartsRef = React.useRef<UiPart[] | undefined>(undefined);
 
-  // Stream sync: mirror hook streaming into store assistant placeholder
-  const lastStreamEndTimeRef = React.useRef(0); // Track when stream ends for logging
-  const rafRef = React.useRef<number | null>(null); // RequestAnimationFrame for smooth throttling
+  // MERGED EFFECT: Stream sync + Status management (reduces cascade from 2 effects to 1)
+  const lastStreamEndTimeRef = React.useRef(0);
+  const rafRef = React.useRef<number | null>(null);
+  const prevHookStatusRef = React.useRef(hookStatus);
+  
   React.useEffect(() => {
     const prev = lastStatusLogRef.current;
+    const prevStatus = prevHookStatusRef.current;
+    prevHookStatusRef.current = hookStatus;
+    
+    // Log status changes
     if (prev.hookStatus !== hookStatus || prev.storeStatus !== currentInstance.status) {
       lastStatusLogRef.current = { hookStatus, storeStatus: currentInstance.status };
       logChatEvent(chatId, 'status_change', {
@@ -514,115 +522,94 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         storeStatus: currentInstance.status,
       });
     }
+
+    // Extract last message data ONCE (used by all states)
+    const last = messages[messages.length - 1] as UIMessage | undefined;
+    const rawParts = Array.isArray(last?.parts)
+      ? last?.parts
+      : Array.isArray((last as any)?.content)
+        ? (last as any).content
+        : undefined;
+    const textRaw = last
+      ? Array.isArray(last?.parts)
+        ? collectTextFromParts(last.parts)
+        : typeof last?.content === 'string'
+          ? last.content
+          : Array.isArray((last as any)?.content)
+            ? collectTextFromParts((last as any).content)
+            : ''
+      : '';
+    const text = textRaw.replace(/^\n{1,2}/, '').replace(/\s+$/, '');
+    const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
+
+    // Handle streaming state
     if (hookStatus === 'streaming') {
-      // derive assistant text from hook messages
-      const last = messages[messages.length - 1] as UIMessage | undefined;
-      const rawParts = Array.isArray(last?.parts)
-        ? last?.parts
-        : Array.isArray((last as any)?.content)
-          ? (last as any).content
-          : undefined;
-      const textRaw = last
-        ? Array.isArray(last?.parts)
-          ? collectTextFromParts(last.parts)
-          : typeof last?.content === 'string'
-            ? last.content
-            : Array.isArray((last as any)?.content)
-              ? collectTextFromParts((last as any).content)
-              : ''
-        : '';
-      // Sanitize leading/trailing whitespace to avoid initial blank line and trailing spaces
-      const text = textRaw.replace(/^\n{1,2}/, '').replace(/\s+$/, '');
-      const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
       setStatusStore(chatId, 'streaming');
       ensureAssistantPlaceholder(chatId);
       
-      // Throttle with requestAnimationFrame for smooth 60fps streaming
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
       }
+
+      const hasChanged =
+        lastAssistantContentRef.current !== text ||
+        !partsEqual(lastAssistantPartsRef.current, parts);
       
-      rafRef.current = requestAnimationFrame(() => {
+      if (hasChanged) {
+        rafRef.current = requestAnimationFrame(() => {
+          updateAssistant(chatId, { content: text, parts });
+          lastAssistantContentRef.current = text;
+          lastAssistantPartsRef.current = parts;
+          rafRef.current = null;
+          logChatEvent(chatId, 'stream_chunk_rendered', { textLength: text.length });
+        });
+      }
+      return () => {
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+      };
+    }
+
+    // Handle submitted state
+    if (hookStatus === 'submitted') {
+      setStatusStore(chatId, 'submitted');
+      return;
+    }
+
+    // Handle ready state (stream completed or idle)
+    const toolParts = Array.isArray(rawParts)
+      ? rawParts.filter((part: any) => part?.type === 'tool-invocation')
+      : [];
+    const mappedStatus: UiStatus = !text.trim() && toolParts.length > 0 ? 'streaming' : 'ready';
+    setStatusStore(chatId, mappedStatus);
+
+    // Update assistant content when stream finishes
+    if (hookStatus === 'ready' && prevStatus !== 'ready') {
+      const currentContent = currentInstance.messages[currentInstance.messages.length - 1]?.content;
+      if (currentContent !== text) {
         updateAssistant(chatId, { content: text, parts });
-        rafRef.current = null;
+        lastAssistantContentRef.current = text;
+        lastAssistantPartsRef.current = parts;
+        logChatEvent(chatId, 'stream_final_update', { textLength: text.length });
+      }
+      
+      lastStreamEndTimeRef.current = Date.now();
+      logChatEvent(chatId, 'stream_finished', {
+        assistantPreview: text.slice(0, 80),
+        canonicalVersion: canonicalHistoryVersionRef.current,
       });
     }
-    
-    // Cleanup: cancel pending animation frame on unmount or status change
+
+    // Cleanup
     return () => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
     };
-  }, [hookStatus, messages, chatId, currentInstance.status, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
-
-  const prevHookStatusRef = React.useRef(hookStatus);
-  React.useEffect(() => {
-    const prev = prevHookStatusRef.current;
-    prevHookStatusRef.current = hookStatus;
-
-    let mappedStatus: UiStatus;
-    if (hookStatus === 'streaming' || hookStatus === 'submitted') {
-      mappedStatus = hookStatus as UiStatus;
-    } else {
-      const last = messages[messages.length - 1] as UIMessage | undefined;
-      const rawParts = Array.isArray(last?.parts)
-        ? last?.parts
-        : Array.isArray((last as any)?.content)
-          ? (last as any).content
-          : undefined;
-      const text = last
-        ? Array.isArray(last?.parts)
-          ? collectTextFromParts(last.parts)
-          : typeof last?.content === 'string'
-            ? last.content
-            : Array.isArray((last as any)?.content)
-              ? collectTextFromParts((last as any).content)
-              : ''
-        : '';
-      const toolParts = Array.isArray(rawParts)
-        ? rawParts.filter((part: any) => part?.type === 'tool-invocation')
-        : [];
-
-      mappedStatus = !text.trim() && toolParts.length > 0 ? 'streaming' : 'ready';
-    }
-
-    setStatusStore(chatId, mappedStatus);
-
-    if (hookStatus === 'ready' && prev !== 'ready') {
-      const last = messages[messages.length - 1] as UIMessage | undefined;
-      const rawParts = Array.isArray(last?.parts)
-        ? last?.parts
-        : Array.isArray((last as any)?.content)
-          ? (last as any).content
-          : undefined;
-      const text = last
-        ? Array.isArray(last?.parts)
-          ? collectTextFromParts(last.parts)
-          : typeof last?.content === 'string'
-            ? last.content
-            : Array.isArray((last as any)?.content)
-              ? collectTextFromParts((last as any).content)
-              : ''
-        : '';
-      const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
-
-      // Only update if content actually changed to avoid redundant store updates
-      const currentContent = currentInstance.messages[currentInstance.messages.length - 1]?.content;
-      if (currentContent !== text) {
-        updateAssistant(chatId, { content: text, parts });
-      }
-      
-      // Mark when stream ended to prevent immediate DB replacement flicker
-      lastStreamEndTimeRef.current = Date.now();
-
-      logChatEvent(chatId, 'stream_finished', {
-        assistantPreview: text.slice(0, 80),
-        canonicalVersion: canonicalHistoryVersionRef.current,
-      });
-    }
-  }, [chatId, hookStatus, messages, setStatusStore, updateAssistant, currentInstance.messages]);
+  }, [hookStatus, messages, chatId, currentInstance.status, currentInstance.messages, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
   
   // FIX: Add timeout recovery for hung streams
   React.useEffect(() => {
@@ -648,17 +635,57 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const localMsgs = currentInstance.messages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
 
-    // Preserve optimistic UI during submit/streaming; only replace if DB is ahead
+    // Smart DB Sync: Allow user messages immediately, preserve streaming assistant
     if (!isEqual) {
       const dbIsAhead = dbMsgs.length > localMsgs.length;
-      if (currentInstance.status !== 'ready' && !dbIsAhead) {
-        // Skip replacement to avoid clobbering optimistic user/assistant placeholder
-        return;
-      } else {
-        replaceFromDb(chatId, dbMsgs);
-        logChatEvent(chatId, 'store_replaced_from_convex', {
-          nextCount: dbMsgs.length,
+      const isActivelySyncingFromHook = hookStatus === 'streaming' || hookStatus === 'submitted';
+
+      // Allow immediate user message display even during submit
+      if (dbIsAhead && currentInstance.status === 'submitted') {
+        // User message landed in DB while status still 'submitted'
+        const lastLocal = localMsgs[localMsgs.length - 1];
+        if (lastLocal?.role === 'user') {
+          // Replace with DB version which includes the user message
+          replaceFromDb(chatId, dbMsgs);
+          logChatEvent(chatId, 'store_sync_user_message_immediate', {
+            dbCount: dbMsgs.length,
+            localCount: localMsgs.length,
+          });
+          return;
+        }
+      }
+
+      // Preserve streaming assistant during active sync
+      if (isActivelySyncingFromHook && localMsgs[localMsgs.length - 1]?.role === 'assistant') {
+        if (dbIsAhead) {
+          // Merge: take DB messages except last, keep local streaming assistant
+          const mergedMsgs = [...dbMsgs.slice(0, -1), localMsgs[localMsgs.length - 1]];
+          replaceFromDb(chatId, mergedMsgs);
+          logChatEvent(chatId, 'store_sync_merged_during_streaming', {
+            dbCount: dbMsgs.length,
+            localCount: localMsgs.length,
+            mergedCount: mergedMsgs.length,
+          });
+          return;
+        }
+        // DB behind, keep local optimistic state
+        logChatEvent(chatId, 'store_skip_replace_preserving_stream', {
+          hookStatus,
+          status: currentInstance.status,
+          dbCount: dbMsgs.length,
+          localCount: localMsgs.length,
         });
+        return;
+      }
+
+      // Only block sync if we're not ready and DB isn't ahead
+      if (currentInstance.status !== 'ready' && !dbIsAhead) {
+        logChatEvent(chatId, 'store_skip_replace_not_ready', {
+          status: currentInstance.status,
+          dbCount: dbMsgs.length,
+          localCount: localMsgs.length,
+        });
+        return;
       }
     }
 
@@ -727,8 +754,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         textPreview: content.slice(0, 80),
         length: content.length,
       });
-      appendUser(chatId, content);
+      const appendedId = appendUser(chatId, content);
       ensureAssistantPlaceholder(chatId);
+      lastAssistantContentRef.current = '';
+      lastAssistantPartsRef.current = undefined;
+      const appendedMessage = useChatStore.getState().instances[chatId]?.messages.find((msg) => msg.id === appendedId);
+      if (appendedMessage?.metrics) {
+        logChatEvent(chatId, 'user_message_sent_timing', {
+          messageId: appendedMessage.id,
+          sentAt: appendedMessage.metrics.sentAt ?? null,
+          sentAtIso: appendedMessage.metrics.sentAt ? new Date(appendedMessage.metrics.sentAt).toISOString() : null,
+          sentAtPerf: appendedMessage.metrics.sentAtPerf ?? null,
+          textLength: content.length,
+        }, { dedupe: false });
+      }
       if (typeof sendMessage === 'function') {
         void sendMessage({ text: content });
       } else {

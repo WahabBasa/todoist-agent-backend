@@ -36,10 +36,10 @@ export const AssistantMessage = React.memo<AssistantMessageProps>(
           {/* Bot icon removed per user request */}
           
           {/* Message Content - Simple, fast rendering */}
-          <div className="flex-1">
+          <div className="flex-1 ml-1">
             {showThinking ? (
-              // Thinking animation - moved to the right, no text
-              <div className="flex items-center justify-start ml-4">
+              // Thinking animation - aligned with AI response start position
+              <div className="flex items-center justify-start ml-0">
                 <div className="flex gap-1">
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce" />
                   <div className="w-2 h-2 bg-muted-foreground rounded-full animate-typing-dot-bounce" style={{ animationDelay: '0.2s' }} />

@@ -9,6 +9,50 @@ import { ChatGreeting } from './ChatGreeting'
 import { useChat } from '../../context/chat'
 import type { UiMsg } from '../../store/chatStore'
 import { useAutoScroll } from '../../hooks/use-auto-scroll'
+import { logChatEvent } from '../../utils/chatLogger'
+
+const UserMessageRow = React.memo(({ message }: { message: UiMsg }) => {
+  const loggedRef = React.useRef(false)
+
+  useEffect(() => {
+    if (loggedRef.current) return
+    const renderAt = Date.now()
+    const renderAtPerf = typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : undefined
+    const sentAt = message.metrics?.sentAt
+    const sentAtPerf = message.metrics?.sentAtPerf
+    const deltaPerf = typeof sentAtPerf === 'number' && typeof renderAtPerf === 'number'
+      ? renderAtPerf - sentAtPerf
+      : null
+    const deltaWall = typeof sentAt === 'number'
+      ? renderAt - sentAt
+      : null
+    logChatEvent(message.metrics?.sessionId ?? null, 'user_message_rendered_timing', {
+      messageId: message.id,
+      renderAt,
+      renderAtIso: new Date(renderAt).toISOString(),
+      renderAtPerf,
+      sentAt: sentAt ?? null,
+      sentAtIso: sentAt ? new Date(sentAt).toISOString() : null,
+      sentAtPerf: sentAtPerf ?? null,
+      deltaMsPerf: deltaPerf,
+      deltaMsWall: deltaWall,
+      textLength: message.content?.length ?? 0,
+    }, { dedupe: false })
+    loggedRef.current = true
+  }, [message])
+
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-start gap-3 w-full">
+        <div className="message-bubble-user"><div className="whitespace-normal break-words">{(message.content ?? '').trimStart()}</div></div>
+      </div>
+    </div>
+  )
+})
+
+UserMessageRow.displayName = 'UserMessageRow'
 
 // Separate-row rendering; no turn grouping
 
@@ -86,11 +130,7 @@ export function Chat() {
             {messages.map((m, idx) => {
               if (m.role === 'user') {
                 return (
-                  <div key={m.id} className="flex justify-start">
-                    <div className="flex items-start gap-3 w-full">
-                      <div className="message-bubble-user"><div className="whitespace-normal break-words">{(m.content ?? '').trimStart()}</div></div>
-                    </div>
-                  </div>
+                  <UserMessageRow key={m.id} message={m} />
                 )
               }
               const isLast = idx === messages.length - 1
