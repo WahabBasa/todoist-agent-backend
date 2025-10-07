@@ -87,7 +87,7 @@ export function Chat() {
               if (m.role === 'user') {
                 return (
                   <div key={m.id} className="flex justify-start">
-                    <div className="flex items-start gap-3 max-w-[92%]">
+                    <div className="flex items-start gap-3 w-full">
                       <div className="message-bubble-user"><div className="whitespace-normal break-words">{(m.content ?? '').trimStart()}</div></div>
                     </div>
                   </div>

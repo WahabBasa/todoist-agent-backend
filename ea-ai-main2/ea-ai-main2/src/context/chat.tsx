@@ -503,8 +503,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const lastStatusLogRef = React.useRef({ hookStatus, storeStatus: currentInstance.status });
 
   // Stream sync: mirror hook streaming into store assistant placeholder
-  const lastStreamUpdateRef = React.useRef(0);
-  const streamTimeoutRef = React.useRef<number | null>(null);
+  const lastStreamEndTimeRef = React.useRef(0); // Track when stream ends for logging
+  const rafRef = React.useRef<number | null>(null); // RequestAnimationFrame for smooth throttling
   React.useEffect(() => {
     const prev = lastStatusLogRef.current;
     if (prev.hookStatus !== hookStatus || prev.storeStatus !== currentInstance.status) {
@@ -536,22 +536,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
       setStatusStore(chatId, 'streaming');
       ensureAssistantPlaceholder(chatId);
-      // Throttle streaming updates to reduce render churn and flicker
-      const now = Date.now();
-      const elapsed = now - lastStreamUpdateRef.current;
-      const applyUpdate = () => {
-        updateAssistant(chatId, { content: text, parts });
-        lastStreamUpdateRef.current = Date.now();
-      };
-      if (elapsed < 60) {
-        if (streamTimeoutRef.current) {
-          clearTimeout(streamTimeoutRef.current);
-        }
-        streamTimeoutRef.current = window.setTimeout(applyUpdate, 60 - elapsed);
-      } else {
-        applyUpdate();
+      
+      // Throttle with requestAnimationFrame for smooth 60fps streaming
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
       }
+      
+      rafRef.current = requestAnimationFrame(() => {
+        updateAssistant(chatId, { content: text, parts });
+        rafRef.current = null;
+      });
     }
+    
+    // Cleanup: cancel pending animation frame on unmount or status change
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, [hookStatus, messages, chatId, currentInstance.status, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
 
   const prevHookStatusRef = React.useRef(hookStatus);
@@ -605,14 +608,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         : '';
       const parts = cloneParts(rawParts as UIMessage['parts'] | undefined);
 
-      updateAssistant(chatId, { content: text, parts });
+      // Only update if content actually changed to avoid redundant store updates
+      const currentContent = currentInstance.messages[currentInstance.messages.length - 1]?.content;
+      if (currentContent !== text) {
+        updateAssistant(chatId, { content: text, parts });
+      }
+      
+      // Mark when stream ended to prevent immediate DB replacement flicker
+      lastStreamEndTimeRef.current = Date.now();
 
       logChatEvent(chatId, 'stream_finished', {
         assistantPreview: text.slice(0, 80),
         canonicalVersion: canonicalHistoryVersionRef.current,
       });
     }
-  }, [chatId, hookStatus, messages, setStatusStore, updateAssistant]);
+  }, [chatId, hookStatus, messages, setStatusStore, updateAssistant, currentInstance.messages]);
   
   // FIX: Add timeout recovery for hung streams
   React.useEffect(() => {
@@ -633,6 +643,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Normalize DB (Convex) messages to store shape and replace when idle/ready
   React.useEffect(() => {
     if (activeConversation === undefined) return;
+    
     const dbMsgs = mapConvexMessagesToUi(activeConversation?.messages);
     const localMsgs = currentInstance.messages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
@@ -642,6 +653,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const dbIsAhead = dbMsgs.length > localMsgs.length;
       if (currentInstance.status !== 'ready' && !dbIsAhead) {
         // Skip replacement to avoid clobbering optimistic user/assistant placeholder
+        return;
       } else {
         replaceFromDb(chatId, dbMsgs);
         logChatEvent(chatId, 'store_replaced_from_convex', {

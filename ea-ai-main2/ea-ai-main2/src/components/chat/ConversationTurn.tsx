@@ -68,7 +68,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
     <div className="flex flex-col gap-8 w-full border-l-2 border-transparent hover:border-muted transition-colors">
       {/* User Message - Left aligned with avatar + bubble */}
       <div className="flex justify-start">
-        <div className="flex items-start gap-3 max-w-[92%]">
+        <div className="flex items-start gap-3 w-full">
           {/* User Avatar */}
           <div
             className="flex-shrink-0 w-10 h-10 rounded-full bg-muted border-2 border-border shadow-sm flex items-center justify-center"
@@ -86,7 +86,7 @@ export const ConversationTurn: React.FC<ConversationTurnProps> = ({
 
       {/* AI Response Area - Left aligned, no bubble (original clean design) */}
       <div className="flex justify-start group">
-        <div className="flex items-start gap-3 max-w-[92%] w-full">
+        <div className="flex items-start gap-3 w-full w-full">
           {/* AI Avatar */}
           <div
             className={`flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground border-2 border-primary shadow-sm flex items-center justify-center ${
