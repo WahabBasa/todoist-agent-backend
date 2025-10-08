@@ -1,5 +1,7 @@
 "use client";
 
+// Claude-inspired collapsible sidebar with blue accents and smooth transitions
+
 import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import {
@@ -12,7 +14,7 @@ import { ChatHistory } from "../chat/ChatHistory";
 import { cn } from "@/lib/utils";
 import { useSessions } from "../../context/sessions";
 
-// No props needed - everything from contexts
+// Claude-style sidebar with blue accents and smooth transitions
 
 interface SidebarMenuItemProps {
   icon: React.ReactNode;
@@ -29,20 +31,24 @@ function SidebarMenuItem({
   onClick, 
   collapsed, 
   className,
-  children 
+  children
 }: SidebarMenuItemProps) {
   return (
     <div className={cn("relative", className)}>
       <Button
         variant="ghost"
         className={cn(
-          "w-full justify-start gap-3 h-10 sidebar-item hover:bg-accent/50 transition-colors",
+          "w-full justify-start gap-3 h-10 hover:bg-white/10 transition-colors",
           collapsed ? "w-10 px-0 justify-center" : "px-3"
         )}
         onClick={onClick}
       >
-        <div className="shrink-0">{icon}</div>
-        {!collapsed && <span className="text-sm font-sans font-medium text-foreground">{label}</span>}
+        <div className="shrink-0" style={{ color: "var(--neutral-stone)" }}>{icon}</div>
+        {!collapsed && (
+          <span className="text-sm font-medium transition-opacity duration-150 delay-150">
+            {label}
+          </span>
+        )}
       </Button>
       {children}
     </div>
@@ -81,60 +87,102 @@ export function CollapsibleSidebar() {
     await createNewSession();
   };
 
-  const sidebarWidth = collapsed ? "w-12" : "w-80";
+  // Claude-style dimensions: 48px collapsed, 246px expanded (safer fit for buttons)
+  const sidebarWidth = collapsed ? "w-[48px]" : "w-[246px]";
 
   return (
-    <div
+    <aside
       className={cn(
-        "flex flex-col bg-muted/30 border-r border-border transition-all duration-300 ease-in-out",
+        "flex flex-col shrink-0 transition-all ease-in-out py-1.5",
+        collapsed ? "px-0" : "px-2",
         sidebarWidth
       )}
+      style={{
+        backgroundColor: "var(--dark-charcoal)",
+        borderRight: "1px solid var(--color-border)",
+        transitionDuration: "300ms"
+      }}
     >
       {/* Header with Toggle Button */}
-      <div className="p-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleCollapsed}
-          className={cn("mx-auto h-10 w-10")}
-        >
-          {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-        </Button>
-      </div>
+      <div className="shrink-0">
+        <div className={cn(
+          "mb-3 flex w-full",
+          collapsed ? "justify-center" : "justify-start"
+        )}>
+          <Button
+            variant="ghost"
+            className={cn(
+              "hover:bg-white/10 transition-colors",
+              collapsed ? "p-0 w-full justify-center" : "p-1 justify-start"
+            )}
+            onClick={toggleCollapsed}
+          >
+            <PanelLeftClose 
+              className="w-[15px] h-[15px]" 
+              style={{ color: "var(--neutral-stone)" }}
+            />
+          </Button>
+        </div>
 
-      {/* Main Actions */}
-      <div className="flex flex-col px-2 pb-3">
-        <SidebarMenuItem
-          icon={<Plus size={20} />}
-          label="New Chat"
-          onClick={handleNewChat}
-          collapsed={collapsed}
-        />
-      </div>
-
-      {/* Chat History - Only in expanded state */}
-      {!collapsed && (
-        <div className="flex-1 min-h-0 flex flex-col transition-opacity duration-300 ease-in-out">
-          <div className="px-3 py-2 shrink-0">
-            <div className="text-xs font-sans font-medium text-muted-foreground px-2 py-1">
-              Recents
-            </div>
+        {/* New Chat Button - Direct Render for Better Visibility */}
+        <div className={cn(
+          "flex items-center w-full mb-3",
+          collapsed ? "justify-center" : "justify-start"
+        )}>
+          <div
+            className="w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center shrink-0 transition-all cursor-pointer"
+            style={{ backgroundColor: "var(--primary-blue)" }}
+            onClick={handleNewChat}
+          >
+            <Plus className="w-4 h-4 text-white" />
           </div>
-          <div className="flex-1 min-h-0 px-3">
-            <ChatHistory className="h-full" />
+          {!collapsed && (
+            <span 
+              className="ml-2 text-sm font-medium whitespace-nowrap transition-opacity duration-150"
+              style={{ color: "var(--soft-off-white)" }}
+            >
+              New chat
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Recents Section - Only in expanded state */}
+      <div className="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden">
+        <div className="mt-4 w-full">
+          <h3
+            className={cn(
+              "px-2 text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-opacity duration-150",
+              collapsed ? "opacity-0" : "opacity-100 delay-150"
+            )}
+            style={{ color: "var(--neutral-stone)" }}
+          >
+            Recents
+          </h3>
+          <div
+            className={cn(
+              "mt-2 space-y-1 transition-opacity duration-150",
+              collapsed ? "opacity-0" : "opacity-100 delay-150"
+            )}
+          >
+            {!collapsed && (
+              <div className="px-0">
+                <ChatHistory className="h-full text-sm" />
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Footer with User Profile */}
-      <div className="mt-auto shrink-0 p-3">
+      <div className="mt-auto w-full shrink-0">
         <UserProfile
           onOpenSettings={() => setActiveView("settings")}
-        onOpenAdmin={isAdmin ? () => setActiveView("admin") : undefined}
-        isAdmin={isAdmin}
+          onOpenAdmin={isAdmin ? () => setActiveView("admin") : undefined}
+          isAdmin={isAdmin}
           collapsed={collapsed}
         />
       </div>
-    </div>
+    </aside>
   );
 }

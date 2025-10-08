@@ -31,7 +31,7 @@ export const AssistantMessage = React.memo<AssistantMessageProps>(
     const showThinking = streaming && !safeContent
 
     return (
-      <div className="flex justify-start mb-6 group">
+      <div className="flex justify-start group">
         <div className="flex items-start gap-3 w-full">
           {/* Bot icon removed per user request */}
           

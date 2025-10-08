@@ -50,8 +50,13 @@ interface SettingsHeaderProps {
 function SettingsHeader({ title, description }: SettingsHeaderProps) {
   return (
     <div className="space-y-2">
-      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-      <p className="text-muted-foreground">{description}</p>
+      <h1 
+        className="text-lg font-semibold"
+        style={{ color: "var(--soft-off-white)" }}
+      >
+        {title}
+      </h1>
+      <p style={{ color: "var(--neutral-stone)" }}>{description}</p>
     </div>
   );
 }
@@ -68,12 +73,29 @@ function SettingsSwitch({ label, description, badge, defaultChecked }: SettingsS
     <div className="flex items-center justify-between py-1.5">
       <div className="space-y-2 flex-1">
         <div className="flex items-center gap-2">
-          <Label className="text-foreground font-medium">{label}</Label>
+          <Label 
+            className="font-medium"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            {label}
+          </Label>
           {badge && (
-            <Badge variant="secondary" className="text-xs">{badge}</Badge>
+            <Badge 
+              variant="secondary" 
+              className="text-xs"
+              style={{ 
+                backgroundColor: "var(--primary-blue)", 
+                color: "var(--pure-white)" 
+              }}
+            >
+              {badge}
+            </Badge>
           )}
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed">
+        <p 
+          className="text-sm leading-relaxed"
+          style={{ color: "var(--neutral-stone)" }}
+        >
           {description}
         </p>
       </div>
@@ -95,11 +117,27 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
   return (
     <Button 
       variant="outline" 
-      className={`w-full justify-start gap-3 h-10 ${
-        isDestructive 
-          ? 'text-destructive border-destructive/50 hover:bg-destructive/10 hover:border-destructive'
-          : 'bg-background hover:bg-muted border-border'
-      }`}
+      className="w-full justify-start gap-3 h-10 transition-colors"
+      style={{
+        backgroundColor: isDestructive ? "transparent" : "var(--medium-dark)",
+        borderColor: isDestructive ? "#ef4444" : "var(--color-border)",
+        color: isDestructive ? "#ef4444" : "var(--soft-off-white)"
+      }}
+      onMouseEnter={(e) => {
+        if (isDestructive) {
+          e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+          e.currentTarget.style.borderColor = "#ef4444";
+        } else {
+          e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (isDestructive) {
+          e.currentTarget.style.backgroundColor = "transparent";
+        } else {
+          e.currentTarget.style.backgroundColor = "var(--medium-dark)";
+        }
+      }}
       onClick={onClick}
     >
       <Icon className="h-4 w-4" />
@@ -150,23 +188,35 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
   };
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full" style={{ backgroundColor: "var(--dark-charcoal)" }}>
       {/* Back to Chat Button - Top Left */}
       <Button 
         variant="ghost" 
         size="sm" 
         onClick={onBackToChat}
-        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2"
+        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2 hover:bg-white/10 transition-colors"
+        style={{ color: "var(--soft-off-white)" }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Chat
       </Button>
       
       {/* Left Navigation Sidebar */}
-      <div className="w-[250px] bg-secondary border-r border-border">
+      <div 
+        className="w-[250px] border-r" 
+        style={{ 
+          backgroundColor: "var(--medium-dark)", 
+          borderColor: "var(--color-border)" 
+        }}
+      >
         {/* Header */}
-        <div className="p-6 pt-16 border-b border-border/30">
-          <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+        <div className="p-6 pt-16 border-b" style={{ borderColor: "var(--color-border)" }}>
+          <h2 
+            className="text-xl font-semibold" 
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            Settings
+          </h2>
         </div>
         
         {/* Navigation */}
@@ -177,11 +227,23 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-design-md transition-colors ${
-                  activeSection === section.id
-                    ? 'bg-muted/30 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm rounded-md transition-colors"
+                style={{
+                  backgroundColor: activeSection === section.id ? "rgba(255, 255, 255, 0.1)" : "transparent",
+                  color: activeSection === section.id ? "var(--soft-off-white)" : "var(--neutral-stone)"
+                }}
+                onMouseEnter={(e) => {
+                  if (activeSection !== section.id) {
+                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+                    e.currentTarget.style.color = "var(--soft-off-white)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeSection !== section.id) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--neutral-stone)";
+                  }
+                }}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate text-left">{section.label}</span>
@@ -265,8 +327,13 @@ function PersonalizationSettings() {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-lg font-semibold text-foreground">Personalization</h1>
-        <p className="text-muted-foreground">
+        <h1 
+          className="text-lg font-semibold"
+          style={{ color: "var(--soft-off-white)" }}
+        >
+          Personalization
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
           Customize your TaskAI experience.
         </p>
       </div>
@@ -274,12 +341,26 @@ function PersonalizationSettings() {
       {/* Settings */}
       <div className="space-y-4">
         <div className="space-y-3">
-          <Label htmlFor="ai-style" className="text-foreground font-medium">AI response style</Label>
+          <Label 
+            htmlFor="ai-style" 
+            className="font-medium"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            AI response style
+          </Label>
           <Select defaultValue="professional">
-            <SelectTrigger id="ai-style" className="bg-input border-border">
+            <SelectTrigger 
+              id="ai-style" 
+              className="border"
+              style={{
+                backgroundColor: "var(--medium-dark)",
+                borderColor: "var(--color-border)",
+                color: "var(--soft-off-white)"
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent style={{ backgroundColor: "var(--medium-dark)" }}>
               <SelectItem value="professional">Professional</SelectItem>
               <SelectItem value="casual">Casual</SelectItem>
               <SelectItem value="detailed">Detailed</SelectItem>
@@ -289,12 +370,26 @@ function PersonalizationSettings() {
         </div>
         
         <div className="space-y-3">
-          <Label htmlFor="task-priority" className="text-foreground font-medium">Default task priority</Label>
+          <Label 
+            htmlFor="task-priority" 
+            className="font-medium"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            Default task priority
+          </Label>
           <Select defaultValue="normal">
-            <SelectTrigger id="task-priority" className="bg-input border-border">
+            <SelectTrigger 
+              id="task-priority" 
+              className="border"
+              style={{
+                backgroundColor: "var(--medium-dark)",
+                borderColor: "var(--color-border)",
+                color: "var(--soft-off-white)"
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent style={{ backgroundColor: "var(--medium-dark)" }}>
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="normal">Normal</SelectItem>
@@ -673,8 +768,13 @@ function ConnectedAppsSettings({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-primary mb-2">Connected Apps</h1>
-        <p className="text-tertiary">
+        <h1 
+          className="text-lg font-semibold mb-2"
+          style={{ color: "var(--soft-off-white)" }}
+        >
+          Connected Apps
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
           Connect external services to enhance your AI assistant with additional capabilities and data sources.
         </p>
       </div>
@@ -682,14 +782,33 @@ function ConnectedAppsSettings({
       
       {/* Todoist Account Conflict Dialog */}
       {todoistConflictData && (
-        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-design-lg">
+        <div 
+          className="p-4 border rounded-lg"
+          style={{
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            borderColor: "rgba(239, 68, 68, 0.3)"
+          }}
+        >
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <h3 className="font-semibold text-foreground mb-2">Todoist Account Already Connected</h3>
-              <p className="text-muted-foreground text-sm mb-3">{todoistConflictData.message}</p>
+              <h3 
+                className="font-semibold mb-2"
+                style={{ color: "var(--soft-off-white)" }}
+              >
+                Todoist Account Already Connected
+              </h3>
+              <p 
+                className="text-sm mb-3"
+                style={{ color: "var(--neutral-stone)" }}
+              >
+                {todoistConflictData.message}
+              </p>
               
-              <div className="text-sm text-muted-foreground mb-4">
+              <div 
+                className="text-sm mb-4"
+                style={{ color: "var(--neutral-stone)" }}
+              >
                 <p className="font-medium mb-1">To connect a different account:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   {todoistConflictData.instructions.map((instruction, index) => (
@@ -703,7 +822,11 @@ function ConnectedAppsSettings({
                   variant="outline" 
                   size="sm"
                   onClick={() => handleTodoistConflictInfo(todoistConflictData)}
-                  className="bg-background hover:bg-muted"
+                  style={{
+                    backgroundColor: "var(--medium-dark)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--soft-off-white)"
+                  }}
                 >
                   Show Instructions
                 </Button>
@@ -711,7 +834,11 @@ function ConnectedAppsSettings({
                   variant="outline" 
                   size="sm"
                   onClick={retryTodoistConnection}
-                  className="bg-background hover:bg-muted"
+                  style={{
+                    backgroundColor: "var(--medium-dark)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--soft-off-white)"
+                  }}
                 >
                   Try Again
                 </Button>
@@ -719,7 +846,7 @@ function ConnectedAppsSettings({
                   variant="ghost" 
                   size="sm"
                   onClick={() => setTodoistConflictData(null)}
-                  className="text-muted-foreground hover:text-foreground"
+                  style={{ color: "var(--neutral-stone)" }}
                 >
                   Cancel
                 </Button>
@@ -808,18 +935,44 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
       />
       
       {/* User Profile */}
-      <div className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card/30 max-w-md">
+      <div 
+        className="flex items-center gap-4 p-3 border rounded-lg max-w-md"
+        style={{
+          backgroundColor: "var(--medium-dark)",
+          borderColor: "var(--color-border)"
+        }}
+      >
         <Avatar className="h-16 w-16">
-          <AvatarFallback className="bg-muted text-foreground text-2xl font-semibold">
+          <AvatarFallback 
+            className="text-2xl font-semibold"
+            style={{
+              backgroundColor: "var(--primary-blue)",
+              color: "var(--pure-white)"
+            }}
+          >
             {clerkUser?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "U"}
           </AvatarFallback>
         </Avatar>
         <div className="space-y-2">
-          <div className="font-semibold text-base text-foreground">{clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}</div>
-          <div className="text-muted-foreground">
+          <div 
+            className="font-semibold text-base"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            {clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}
+          </div>
+          <div style={{ color: "var(--neutral-stone)" }}>
             Member since {new Date().toLocaleDateString()}
           </div>
-          <Badge variant="default" className="mt-2 bg-primary/20 text-primary-foreground hover:bg-primary/30">Active</Badge>
+          <Badge 
+            variant="default" 
+            className="mt-2"
+            style={{
+              backgroundColor: "var(--primary-blue)",
+              color: "var(--pure-white)"
+            }}
+          >
+            Active
+          </Badge>
         </div>
       </div>
       
@@ -844,7 +997,10 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
           Delete Account
         </SettingsActionButton>
         
-        <p className="text-muted-foreground text-sm leading-relaxed pt-2">
+        <p 
+          className="text-sm leading-relaxed pt-2"
+          style={{ color: "var(--neutral-stone)" }}
+        >
           This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
         </p>
       </div>

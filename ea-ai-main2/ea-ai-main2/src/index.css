@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -8,6 +8,7 @@
   --default-transition: all 0.2s ease;
   --chat-position-transition: all 0.5s ease-in-out;
   --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --greeting-font-family: 'Lora', serif;
   
   /* UX-Driven Typography System - Attention Flow Based */
   /* PRIMARY ATTENTION ZONE - Active interaction areas (chat input, main actions) */
@@ -74,51 +75,66 @@
   --spacing-utility-y: 0.25rem;   /* 4px vertical padding */
   --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
   
-  /* HSL White Intensity Text System - Attention Based */
-  --color-text-primary: hsl(0, 0%, 100%);     /* PRIMARY attention - Pure white */
-  --color-text-secondary: hsl(0, 0%, 90%);    /* SECONDARY attention - 90% white */
-  --color-text-tertiary: hsl(0, 0%, 75%);     /* TERTIARY attention - 75% white */
-  --color-text-utility: hsl(0, 0%, 60%);      /* UTILITY attention - 60% white */
+  /* Claude Color System - Blue-Accented Dark Theme */
+  --dark-charcoal: #2d2d2d;      /* Main background */
+  --medium-dark: #3a3a3a;        /* Sidebar & input containers */
+  --user-message-bg: #2a2a2a;    /* User message background - darker than medium-dark */
+  --primary-blue: #5b9fc4;       /* Accents & buttons */
+  --neutral-stone: #a5adb4;      /* Secondary text */
+  --soft-off-white: #f0f3f5;     /* Primary text */
+  --pure-white: #ffffff;         /* Highlights */
 
-  /* Colors - ChatGPT Grey Theme (Legacy) */
-  --color-background: #212121;
-  --color-foreground: hsl(0, 0%, 100%);       /* Uses primary white */
-  --color-card: #2f2f2f;
-  --color-card-foreground: hsl(0, 0%, 100%);
-  --color-popover: #2f2f2f;
-  --color-popover-foreground: hsl(0, 0%, 100%);
-  --color-primary: #404040;
-  --color-primary-foreground: hsl(0, 0%, 100%);
-  --color-secondary: #1a1a1a;
-  --color-secondary-foreground: hsl(0, 0%, 100%);
-  --color-muted: #353535;
-  --color-muted-foreground: hsl(0, 0%, 75%);   /* Uses tertiary intensity */
-  --color-accent: #353535;
-  --color-accent-foreground: hsl(0, 0%, 100%);
+  /* Text System - Claude Approach with Attention Levels */
+  --color-text-primary: var(--soft-off-white);    /* PRIMARY attention */
+  --color-text-secondary: var(--neutral-stone);   /* SECONDARY attention */
+  --color-text-tertiary: #8b9297;                 /* TERTIARY attention - slightly muted stone */
+  --color-text-utility: #6b7280;                  /* UTILITY attention - more muted */
+
+  /* Core Theme Colors - Claude Style */
+  --color-background: var(--dark-charcoal);
+  --color-foreground: var(--soft-off-white);
+  --color-card: var(--medium-dark);
+  --color-card-foreground: var(--soft-off-white);
+  --color-popover: var(--medium-dark);
+  --color-popover-foreground: var(--soft-off-white);
+  --color-primary: var(--primary-blue);
+  --color-primary-foreground: var(--pure-white);
+  --color-secondary: var(--medium-dark);
+  --color-secondary-foreground: var(--soft-off-white);
+  --color-muted: var(--medium-dark);
+  --color-muted-foreground: var(--neutral-stone);
+  --color-accent: var(--primary-blue);
+  --color-accent-foreground: var(--pure-white);
   --color-destructive: #ef4444;
-  --color-destructive-foreground: hsl(0, 0%, 100%);
-  --color-border: #404040;
-  --color-input: #353535;
-  --color-ring: #404040;
+  --color-destructive-foreground: var(--pure-white);
+  --color-border: #4a4a4a;                        /* Slightly lighter than medium-dark */
+  --color-input: var(--medium-dark);
+  --color-ring: var(--primary-blue);
   
-  /* Custom colors - updated for grey theme */
-  --color-sidebar-background: #1a1a1a;
-  --color-sidebar-foreground: #ffffff;
-  --color-sidebar-primary: #404040;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #353535;
-  --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: #404040;
-  --color-sidebar-ring: #404040;
+  /* Sidebar Colors - Claude Style */
+  --color-sidebar-background: var(--medium-dark);
+  --color-sidebar-foreground: var(--soft-off-white);
+  --color-sidebar-primary: var(--primary-blue);
+  --color-sidebar-primary-foreground: var(--pure-white);
+  --color-sidebar-accent: var(--medium-dark);
+  --color-sidebar-accent-foreground: var(--soft-off-white);
+  --color-sidebar-border: #4a4a4a;
+  --color-sidebar-ring: var(--primary-blue);
   
-  --color-accent-blue: #1e3a8a;
-  --color-accent-blue-foreground: #60a5fa;
-  --color-accent-blue-border: #1e40af;
+  /* Blue Accent System */
+  --color-accent-blue: var(--primary-blue);
+  --color-accent-blue-foreground: var(--pure-white);
+  --color-accent-blue-border: var(--primary-blue);
   
-  /* Primary Blue Button - Chat Submit Button */
-  --color-blue-primary: #60a5fa;        /* Nice blue background */
-  --color-blue-primary-foreground: #ffffff;  /* White text/icons */
-  --color-blue-primary-hover: #3b82f6;  /* Slightly darker blue on hover */
+  /* Primary Blue Button - Updated for Claude */
+  --color-blue-primary: var(--primary-blue);
+  --color-blue-primary-foreground: var(--pure-white);
+  --color-blue-primary-hover: #4a8cb0;             /* Slightly darker blue */
+  
+  /* Claude Transition System */
+  --claude-sidebar-transition: width 300ms ease-in-out;
+  --claude-opacity-transition: opacity 150ms ease-in-out;
+  --claude-opacity-delay: 150ms;
   
   /* Radius */
   --radius: 0.5rem;
@@ -503,7 +519,7 @@
 
   /* User Message Bubble System - For left-aligned avatar layout */
   .message-bubble-user {
-    background-color: var(--color-primary);
+    background-color: var(--user-message-bg);
     color: var(--color-text-primary);
     border-radius: var(--radius-lg);
     padding: 0.75rem 1rem;

@@ -49,15 +49,15 @@ export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin, is
 
   return (
     <div className={cn(
-      "flex items-center transition-all",
-      collapsed ? "justify-center" : "justify-between gap-2 px-1"
+      "flex items-center transition-all w-full",
+      collapsed ? "justify-center px-0" : "justify-between gap-3 px-2"
     )}>
       {!collapsed && (
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-sm font-sans font-medium text-foreground truncate">
+          <span className="text-sm font-medium text-foreground truncate">
             {user.firstName || user.username || "User"}
           </span>
-          <span className="text-xs font-sans text-muted-foreground truncate">
+          <span className="text-xs text-muted-foreground truncate">
             {user.primaryEmailAddress?.emailAddress}
           </span>
         </div>
@@ -65,10 +65,13 @@ export function UserProfile({ collapsed = false, onOpenSettings, onOpenAdmin, is
       
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-10 w-10 p-0 rounded-full">
-            <Avatar className={cn("h-8 w-8")}>
+          <Button variant="ghost" className={cn(
+            "rounded-full transition-all shrink-0",
+            collapsed ? "h-[35px] w-[35px] p-0" : "h-[43px] w-[43px] p-0"
+          )}>
+            <Avatar className={cn(collapsed ? "h-[26px] w-[26px]" : "h-[35px] w-[35px]")}>
               <AvatarImage src={user.imageUrl} alt={user.firstName || "User"} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {userInitials}
               </AvatarFallback>
             </Avatar>

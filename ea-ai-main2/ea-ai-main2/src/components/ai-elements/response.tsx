@@ -351,6 +351,13 @@ export const Response = memo(
           'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           className
         )}
+        style={{ 
+          fontFamily: "var(--greeting-font-family)",
+          fontSize: "16px",
+          fontWeight: "553",
+          lineHeight: "1.6",
+          ...((props as any).style || {})
+        }}
         {...props}
       >
         <HardenedMarkdown

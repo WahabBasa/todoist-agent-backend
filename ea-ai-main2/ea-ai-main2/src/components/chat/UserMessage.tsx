@@ -9,7 +9,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
   content
 }) => {
   return (
-    <div className="flex justify-start mb-6">
+    <div className="flex justify-start">
       <div className="flex items-start gap-3 max-w-[88%]">
         {/* User Avatar */}
         <div 

@@ -4,6 +4,8 @@ import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
 
+// Claude-inspired clean input design with blue accents
+
 interface ChatInputProps {
   value: string
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void

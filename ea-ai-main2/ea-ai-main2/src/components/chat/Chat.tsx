@@ -125,8 +125,8 @@ export function Chat() {
         onTouchStart={handleTouchStart}
         id="chat-container"
       >
-        <div className="w-full md:w-[740px] lg:w-[760px] px-8 py-2 flex flex-1 flex-col gap-4">
-          <div className="flex flex-col gap-4 w-full items-start">
+        <div className="w-full md:w-[740px] lg:w-[760px] px-8 py-2 flex flex-1 flex-col gap-6">
+          <div className="flex flex-col gap-6 w-full items-start">
             {messages.map((m, idx) => {
               if (m.role === 'user') {
                 return (
