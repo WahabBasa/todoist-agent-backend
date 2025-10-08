@@ -20,8 +20,11 @@ export const UserMessage: React.FC<UserMessageProps> = ({
         </div>
         
         {/* Message Card */}
-        <div className="bg-secondary border border-border rounded-design-lg px-4 py-3 shadow-sm">
-          <p className="text-primary whitespace-pre-wrap break-words">
+        <div 
+          className="border border-border rounded-design-lg px-4 py-3 shadow-sm"
+          style={{ backgroundColor: '#000000' }}
+        >
+          <p className="text-primary whitespace-pre-wrap break-words" style={{ fontSize: '17px' }}>
             {content}
           </p>
         </div>

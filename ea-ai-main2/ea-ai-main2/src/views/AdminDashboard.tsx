@@ -1024,8 +1024,14 @@ export function AdminDashboard() {
                         className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                           config.activeModelId === model.id
                             ? "border-primary bg-primary/10"
-                            : "border-border hover:bg-muted/50"
+                            : "border-border transition-colors"
                         }`}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '';
+                        }}
                         onClick={() => handleModelSelect(model.id)}
                       >
                         <div className="flex items-start justify-between">

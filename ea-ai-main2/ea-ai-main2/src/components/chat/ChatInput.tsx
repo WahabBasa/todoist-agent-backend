@@ -1,5 +1,5 @@
 import React, { useRef, forwardRef, useEffect } from 'react'
-import { ArrowUp, Square, Trash2 } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
@@ -73,24 +73,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               onKeyDown={onKeyDown}
             />
 
-            {/* Buttons row - only show when not loading */}
-            {!isLoading && (
-              <div className="flex items-center gap-1 ml-2">
-                {/* Clear Button */}
-                {showClearButton && onClear && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 rounded-design-md"
-                    onClick={onClear}
-                    disabled={disabled || isLoading}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                )}
-              </div>
-            )}
+
           </div>
           
           {/* Bottom row with submit button */}

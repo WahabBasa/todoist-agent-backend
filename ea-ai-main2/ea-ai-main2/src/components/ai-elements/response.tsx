@@ -354,7 +354,7 @@ export const Response = memo(
         style={{ 
           fontFamily: "var(--greeting-font-family)",
           fontSize: "16px",
-          fontWeight: "553",
+          fontWeight: "599",
           lineHeight: "1.6",
           ...((props as any).style || {})
         }}

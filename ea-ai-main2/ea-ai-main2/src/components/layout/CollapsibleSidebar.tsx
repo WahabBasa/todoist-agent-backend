@@ -38,10 +38,16 @@ function SidebarMenuItem({
       <Button
         variant="ghost"
         className={cn(
-          "w-full justify-start gap-3 h-10 hover:bg-white/10 transition-colors",
+          "w-full justify-start gap-3 h-10 transition-colors",
           collapsed ? "w-10 px-0 justify-center" : "px-3"
         )}
         onClick={onClick}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '';
+        }}
       >
         <div className="shrink-0" style={{ color: "var(--neutral-stone)" }}>{icon}</div>
         {!collapsed && (
@@ -112,10 +118,16 @@ export function CollapsibleSidebar() {
           <Button
             variant="ghost"
             className={cn(
-              "hover:bg-white/10 transition-colors",
+              "transition-colors",
               collapsed ? "p-0 w-full justify-center" : "p-1 justify-start"
             )}
             onClick={toggleCollapsed}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '';
+            }}
           >
             <PanelLeftClose 
               className="w-[15px] h-[15px]" 

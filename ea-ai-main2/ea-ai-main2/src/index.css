@@ -76,9 +76,9 @@
   --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
   
   /* Claude Color System - Blue-Accented Dark Theme */
-  --dark-charcoal: #2d2d2d;      /* Main background */
-  --medium-dark: #3a3a3a;        /* Sidebar & input containers */
-  --user-message-bg: #2a2a2a;    /* User message background - darker than medium-dark */
+  --dark-charcoal: #242424;      /* Main background - darkened */
+  --medium-dark: #303030;        /* Sidebar & input containers - darkened */
+  --user-message-bg: #1a1a1a;    /* User message background - darker than main bg but not pure black */
   --primary-blue: #5b9fc4;       /* Accents & buttons */
   --neutral-stone: #a5adb4;      /* Secondary text */
   --soft-off-white: #f0f3f5;     /* Primary text */
@@ -103,8 +103,8 @@
   --color-secondary-foreground: var(--soft-off-white);
   --color-muted: var(--medium-dark);
   --color-muted-foreground: var(--neutral-stone);
-  --color-accent: var(--primary-blue);
-  --color-accent-foreground: var(--pure-white);
+  --color-accent: var(--user-message-bg);
+  --color-accent-foreground: var(--soft-off-white);
   --color-destructive: #ef4444;
   --color-destructive-foreground: var(--pure-white);
   --color-border: #4a4a4a;                        /* Slightly lighter than medium-dark */
@@ -500,20 +500,20 @@
     animation: typing-dot-bounce 1.25s ease-out infinite;
   }
   
-  /* Blue primary button for chat submit - force override */
+  /* Consistent button styling matching chat input */
   .btn-blue-primary {
-    background-color: var(--color-blue-primary) !important;
-    color: var(--color-blue-primary-foreground) !important;
-    border-color: var(--color-blue-primary) !important;
+    background-color: var(--medium-dark) !important;
+    color: var(--soft-off-white) !important;
+    border-color: var(--medium-dark) !important;
   }
   
   .btn-blue-primary:hover {
-    background-color: var(--color-blue-primary-hover) !important;
-    border-color: var(--color-blue-primary-hover) !important;
+    background-color: var(--user-message-bg) !important;
+    border-color: var(--medium-dark) !important;
   }
   
   .btn-blue-primary:disabled {
-    background-color: var(--color-blue-primary) !important;
+    background-color: var(--medium-dark) !important;
     opacity: 0.5;
   }
 
@@ -521,7 +521,7 @@
   .message-bubble-user {
     background-color: var(--user-message-bg);
     color: var(--color-text-primary);
-    border-radius: var(--radius-lg);
+    border-radius: 10px;
     padding: 0.75rem 1rem;
     word-wrap: break-word;
     hyphens: auto;

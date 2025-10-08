@@ -13,8 +13,8 @@ import { Label } from "../components/ui/label";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { ConnectedAppItem } from "../components/settings/ConnectedAppItem";
 import { 
-  User, Settings, Bell, Palette, Link, Shield, 
-  AlertTriangle, Download, Trash2, LogOut, ArrowLeft
+  User, Plug, 
+  AlertTriangle, Trash2, LogOut, ArrowLeft
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,43 +23,15 @@ interface SettingsViewProps {
 }
 
 type SettingsSection = 
-  | "general" 
-  | "notifications" 
-  | "personalization" 
   | "connected-apps" 
-  | "data-controls" 
-  | "security" 
   | "account";
 
 const SETTINGS_SECTIONS = [
-  { id: "general" as const, label: "General", icon: Settings },
-  { id: "notifications" as const, label: "Notifications", icon: Bell },
-  { id: "personalization" as const, label: "Personalization", icon: Palette },
-  { id: "connected-apps" as const, label: "Connected apps", icon: Link },
-  { id: "data-controls" as const, label: "Data controls", icon: Shield },
-  { id: "security" as const, label: "Security", icon: Shield },
+  { id: "connected-apps" as const, label: "Connected Apps", icon: Plug },
   { id: "account" as const, label: "Account", icon: User },
 ];
 
-// Reusable Settings Components
-interface SettingsHeaderProps {
-  title: string;
-  description: string;
-}
 
-function SettingsHeader({ title, description }: SettingsHeaderProps) {
-  return (
-    <div className="space-y-2">
-      <h1 
-        className="text-lg font-semibold"
-        style={{ color: "var(--soft-off-white)" }}
-      >
-        {title}
-      </h1>
-      <p style={{ color: "var(--neutral-stone)" }}>{description}</p>
-    </div>
-  );
-}
 
 interface SettingsSwitchProps {
   label: string;
@@ -128,7 +100,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
           e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
           e.currentTarget.style.borderColor = "#ef4444";
         } else {
-          e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+          e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
         }
       }}
       onMouseLeave={(e) => {
@@ -147,7 +119,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 }
 
 export function SettingsView({ onBackToChat }: SettingsViewProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("connected-apps");
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
@@ -159,12 +131,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 
   const renderContent = () => {
     switch (activeSection) {
-      case "general":
-        return <GeneralSettings clerkUser={clerkUser} />;
-      case "notifications":
-        return <NotificationsSettings />;
-      case "personalization":
-        return <PersonalizationSettings />;
       case "connected-apps":
         return <ConnectedAppsSettings 
           clerkUser={clerkUser} 
@@ -176,14 +142,19 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
           isConnecting={isConnecting}
           setIsConnecting={setIsConnecting}
         />;
-      case "data-controls":
-        return <DataControlsSettings />;
-      case "security":
-        return <SecuritySettings />;
       case "account":
         return <AccountSettings clerkUser={clerkUser} signOut={signOut} />;
       default:
-        return <GeneralSettings clerkUser={clerkUser} />;
+        return <ConnectedAppsSettings 
+          clerkUser={clerkUser} 
+          signOut={signOut} 
+          activeSection={activeSection}
+          hasTodoistConnection={hasTodoistConnection}
+          generateOAuthURL={generateOAuthURL}
+          removeTodoistConnection={removeTodoistConnection}
+          isConnecting={isConnecting}
+          setIsConnecting={setIsConnecting}
+        />;
     }
   };
 
@@ -194,7 +165,13 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
         variant="ghost" 
         size="sm" 
         onClick={onBackToChat}
-        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2 hover:bg-white/10 transition-colors"
+        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2 transition-colors"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '';
+        }}
         style={{ color: "var(--soft-off-white)" }}
       >
         <ArrowLeft className="h-4 w-4" />
@@ -203,14 +180,13 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
       
       {/* Left Navigation Sidebar */}
       <div 
-        className="w-[250px] border-r" 
+        className="w-[250px]" 
         style={{ 
-          backgroundColor: "var(--medium-dark)", 
-          borderColor: "var(--color-border)" 
+          backgroundColor: "var(--dark-charcoal)"
         }}
       >
         {/* Header */}
-        <div className="p-6 pt-16 border-b" style={{ borderColor: "var(--color-border)" }}>
+        <div className="p-6 pt-16">
           <h2 
             className="text-xl font-semibold" 
             style={{ color: "var(--soft-off-white)" }}
@@ -220,7 +196,7 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
         </div>
         
         {/* Navigation */}
-        <nav className="p-4">
+        <nav className="p-4 space-y-3">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             return (
@@ -229,12 +205,12 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
                 onClick={() => setActiveSection(section.id)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm rounded-md transition-colors"
                 style={{
-                  backgroundColor: activeSection === section.id ? "rgba(255, 255, 255, 0.1)" : "transparent",
+                  backgroundColor: activeSection === section.id ? "var(--user-message-bg)" : "transparent",
                   color: activeSection === section.id ? "var(--soft-off-white)" : "var(--neutral-stone)"
                 }}
                 onMouseEnter={(e) => {
                   if (activeSection !== section.id) {
-                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+                    e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
                     e.currentTarget.style.color = "var(--soft-off-white)";
                   }
                 }}
@@ -266,141 +242,10 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 }
 
 
-function GeneralSettings({ clerkUser }: { clerkUser: any }) {
-  void clerkUser; // Remove unused parameter warning
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="General"
-        description="These settings apply to all workspaces you're a part of."
-      />
-      
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Email notifications"
-          description="Get notified about task deadlines and project updates"
-          badge="Recommended"
-          defaultChecked={true}
-        />
-        
-        <SettingsSwitch 
-          label="Desktop notifications"
-          description="Show browser notifications for important updates"
-        />
-        
-        <SettingsSwitch 
-          label="AI suggestions"
-          description="Let AI help optimize your workflow and suggest improvements"
-          defaultChecked={true}
-        />
-      </div>
-    </div>
-  );
-}
 
-function NotificationsSettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Notifications"
-        description="Choose what updates you receive and how."
-      />
-      
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Task reminders"
-          description="Get reminded about upcoming deadlines"
-          defaultChecked={true}
-        />
-        
-        <SettingsSwitch 
-          label="Daily summaries"
-          description="Receive a daily summary of your tasks and progress"
-        />
-      </div>
-    </div>
-  );
-}
 
-function PersonalizationSettings() {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 
-          className="text-lg font-semibold"
-          style={{ color: "var(--soft-off-white)" }}
-        >
-          Personalization
-        </h1>
-        <p style={{ color: "var(--neutral-stone)" }}>
-          Customize your TaskAI experience.
-        </p>
-      </div>
-      
-      {/* Settings */}
-      <div className="space-y-4">
-        <div className="space-y-3">
-          <Label 
-            htmlFor="ai-style" 
-            className="font-medium"
-            style={{ color: "var(--soft-off-white)" }}
-          >
-            AI response style
-          </Label>
-          <Select defaultValue="professional">
-            <SelectTrigger 
-              id="ai-style" 
-              className="border"
-              style={{
-                backgroundColor: "var(--medium-dark)",
-                borderColor: "var(--color-border)",
-                color: "var(--soft-off-white)"
-              }}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent style={{ backgroundColor: "var(--medium-dark)" }}>
-              <SelectItem value="professional">Professional</SelectItem>
-              <SelectItem value="casual">Casual</SelectItem>
-              <SelectItem value="detailed">Detailed</SelectItem>
-              <SelectItem value="concise">Concise</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-3">
-          <Label 
-            htmlFor="task-priority" 
-            className="font-medium"
-            style={{ color: "var(--soft-off-white)" }}
-          >
-            Default task priority
-          </Label>
-          <Select defaultValue="normal">
-            <SelectTrigger 
-              id="task-priority" 
-              className="border"
-              style={{
-                backgroundColor: "var(--medium-dark)",
-                borderColor: "var(--color-border)",
-                color: "var(--soft-off-white)"
-              }}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent style={{ backgroundColor: "var(--medium-dark)" }}>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
 
 
 interface ConnectedAppsSettingsProps {
@@ -769,7 +614,7 @@ function ConnectedAppsSettings({
       {/* Header */}
       <div>
         <h1 
-          className="text-lg font-semibold mb-2"
+          className="text-2xl font-bold mb-2"
           style={{ color: "var(--soft-off-white)" }}
         >
           Connected Apps
@@ -878,61 +723,25 @@ function ConnectedAppsSettings({
   );
 }
 
-function DataControlsSettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Data controls"
-        description="Manage your data and privacy settings."
-      />
-      
-      {/* Actions */}
-      <div className="space-y-4">
-        <SettingsActionButton icon={Download}>
-          Export my data
-        </SettingsActionButton>
-        
-        <SettingsActionButton icon={Trash2}>
-          Clear conversation history
-        </SettingsActionButton>
-      </div>
-    </div>
-  );
-}
 
-function SecuritySettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Security"
-        description="Keep your account secure."
-      />
-      
-      {/* Settings */}
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Two-factor authentication"
-          description="Add an extra layer of security to your account"
-        />
-        
-        <div className="pt-4">
-          <SettingsActionButton icon={Shield}>
-            Change password
-          </SettingsActionButton>
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
 
 
 function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   return (
     <div className="space-y-6">
-      <SettingsHeader 
-        title="Account"
-        description="Manage your account settings."
-      />
+      <div className="space-y-2">
+        <h1 
+          className="text-2xl font-bold"
+          style={{ color: "var(--soft-off-white)" }}
+        >
+          Account
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
+          Manage your account settings.
+        </p>
+      </div>
       
       {/* User Profile */}
       <div 
@@ -977,7 +786,13 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
       </div>
       
       {/* Actions */}
-      <div className="space-y-4 pt-4">
+      <div 
+        className="space-y-4 pt-4 p-4 rounded-xl"
+        style={{ 
+          backgroundColor: "transparent",
+          border: "1px solid var(--color-border)"
+        }}
+      >
         <SettingsActionButton 
           icon={LogOut}
           variant="destructive"

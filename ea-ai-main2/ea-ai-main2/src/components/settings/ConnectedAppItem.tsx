@@ -49,14 +49,14 @@ export function ConnectedAppItem({
     <div 
       className="flex items-center justify-between p-4 border rounded-md transition-colors"
       style={{
-        backgroundColor: "var(--medium-dark)",
+        backgroundColor: "transparent",
         borderColor: "var(--color-border)"
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+        e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "var(--medium-dark)";
+        e.currentTarget.style.backgroundColor = "transparent";
       }}
     >
       <div className="flex items-center gap-4">
@@ -89,9 +89,9 @@ export function ConnectedAppItem({
         }}
         onMouseEnter={(e) => {
           if (isConnected) {
-            e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+            e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
           } else {
-            e.currentTarget.style.backgroundColor = "rgba(91, 159, 196, 0.9)";
+            e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
           }
         }}
         onMouseLeave={(e) => {

@@ -30,9 +30,26 @@ function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: C
         "group flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
-          : "hover:bg-accent/50 text-foreground",
+          : "hover:text-foreground text-foreground",
         isLoading && "opacity-70"
       )}
+      style={{
+        ...(isActive ? {} : {
+          ':hover': {
+            backgroundColor: 'var(--user-message-bg)'
+          }
+        })
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive && !isLoading) {
+          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive && !isLoading) {
+          e.currentTarget.style.backgroundColor = '';
+        }
+      }}
       onClick={isLoading ? undefined : onSelect}
     >
       <div className="flex-1 min-w-0">

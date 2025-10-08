@@ -1,5 +1,5 @@
 import React, { useRef, forwardRef, useEffect } from 'react'
-import { ArrowUp, Square, Trash2 } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
@@ -79,21 +79,6 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
           
           {/* Right side buttons */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Clear Button */}
-            {showClearButton && onClear && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-md hover:bg-white/10 transition-colors"
-                style={{ color: "var(--neutral-stone)" }}
-                onClick={onClear}
-                disabled={disabled || isLoading}
-              >
-                <Trash2 size={16} />
-              </Button>
-            )}
-            
             {/* Submit Button */}
             {!isLoading ? (
               <Button
