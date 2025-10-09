@@ -89,7 +89,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
   return (
     <Button 
       variant="outline" 
-      className="w-full justify-start gap-3 h-10 transition-colors"
+      className="w-auto justify-start gap-2 h-9 text-sm transition-colors"
       style={{
         backgroundColor: isDestructive ? "transparent" : "var(--medium-dark)",
         borderColor: isDestructive ? "#ef4444" : "var(--color-border)",
@@ -478,6 +478,8 @@ function ConnectedAppsSettings({
         : "Connect your Google Calendar to enable scheduling and availability features.",
       iconBgColor: "bg-green-600",
       iconText: "G",
+      gradientFrom: undefined,
+      gradientTo: undefined,
       isConnected: gcalConnected,
       canConnect: true,
       isConnecting: isConnecting === 'Google Calendar' || gcalTesting,
@@ -490,38 +492,14 @@ function ConnectedAppsSettings({
       }
     },
     {
-      appName: "Google Drive",
-      description: "Upload Google Docs, Sheets, Slides and other files.",
-      iconBgColor: "",
-      iconText: "G",
-      gradientFrom: "blue-500",
-      gradientTo: "green-500",
-      isConnected: false,
-      canConnect: false,
-    },
-    {
-      appName: "Microsoft OneDrive (personal)",
-      description: "Upload Microsoft Word, Excel, PowerPoint and other files.",
-      iconBgColor: "bg-blue-600",
-      iconText: "O",
-      isConnected: false,
-      canConnect: false,
-    },
-    {
-      appName: "Microsoft OneDrive (work/school)",
-      description: "Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.",
-      iconBgColor: "bg-blue-700",
-      iconText: "O",
-      isConnected: false,
-      canConnect: false,
-    },
-    {
       appName: "Todoist",
       description: todoistConflictData 
         ? "Account conflict detected. Please resolve the conflict to connect Todoist."
         : "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
       iconBgColor: "bg-red-500",
       iconText: "T",
+      gradientFrom: undefined,
+      gradientTo: undefined,
       isConnected: hasTodoistConnection ?? false,
       canConnect: !todoistConflictData, // Disable connection button when there's a conflict
     },
@@ -772,22 +750,12 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
           <div style={{ color: "var(--neutral-stone)" }}>
             Member since {new Date().toLocaleDateString()}
           </div>
-          <Badge 
-            variant="default" 
-            className="mt-2"
-            style={{
-              backgroundColor: "var(--primary-blue)",
-              color: "var(--pure-white)"
-            }}
-          >
-            Active
-          </Badge>
         </div>
       </div>
       
       {/* Actions */}
       <div 
-        className="space-y-4 pt-4 p-4 rounded-xl"
+        className="pt-4 p-4 rounded-xl flex flex-col gap-3 items-start"
         style={{ 
           backgroundColor: "transparent",
           border: "1px solid var(--color-border)"
@@ -811,13 +779,6 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
         >
           Delete Account
         </SettingsActionButton>
-        
-        <p 
-          className="text-sm leading-relaxed pt-2"
-          style={{ color: "var(--neutral-stone)" }}
-        >
-          This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
-        </p>
       </div>
     </div>
   );

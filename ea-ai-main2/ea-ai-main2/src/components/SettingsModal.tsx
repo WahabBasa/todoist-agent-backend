@@ -86,7 +86,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
   return (
     <Button 
       variant="outline" 
-      className={`w-full justify-start gap-3 h-10 ${
+      className={`w-auto justify-start gap-2 h-9 text-sm ${
         isDestructive 
           ? 'text-destructive border-destructive/50 hover:bg-destructive/10 hover:border-destructive'
           : 'bg-background hover:bg-muted border-border'
@@ -607,12 +607,11 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
           <div className="text-muted-foreground">
             Member since {new Date().toLocaleDateString()}
           </div>
-          <Badge variant="default" className="mt-2 bg-primary/20 text-primary-foreground hover:bg-primary/30">Active</Badge>
         </div>
       </div>
       
       {/* Actions */}
-      <div className="space-y-4 pt-4">
+      <div className="pt-4 flex flex-col gap-3 items-start">
         <SettingsActionButton 
           icon={LogOut}
           variant="destructive"
@@ -631,10 +630,6 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
         >
           Delete Account
         </SettingsActionButton>
-        
-        <p className="text-muted-foreground text-sm leading-relaxed pt-2">
-          This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
-        </p>
       </div>
     </div>
   );
