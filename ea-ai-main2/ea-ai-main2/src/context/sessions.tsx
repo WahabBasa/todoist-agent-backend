@@ -262,14 +262,23 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     console.log('🗑️ Deleting session:', sessionId);
     
     try {
-      await deleteChatSession({ sessionId });
+      const target = useSessionStore.getState().sessionMap[sessionId];
+      if (!target) {
+        console.warn('Delete requested for missing session id, ignoring:', sessionId);
+        return;
+      }
+      const result = await deleteChatSession({ sessionId });
       console.log('✅ Session deleted - Convex reactivity will update UI');
       removeSessionAction(sessionId);
       
       // Clear current session if it was the deleted one
       if (currentSessionId === sessionId) {
-        const nextSession = useSessionStore.getState().sessionList[0] ?? null;
-        setCurrentSessionAction(nextSession?._id ?? null);
+        if (result?.newSessionId) {
+          setCurrentSessionAction(result.newSessionId as Id<"chatSessions">);
+        } else {
+          const nextSession = useSessionStore.getState().sessionList[0] ?? null;
+          setCurrentSessionAction(nextSession?._id ?? null);
+        }
       }
     } catch (error) {
       console.error("Failed to delete chat session:", error);

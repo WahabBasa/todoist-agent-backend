@@ -8,6 +8,8 @@ import { ChatMenuItem } from './ChatMenuItem'
 import { ChatHistorySkeleton } from './ChatHistorySkeleton'
 import { ClearHistoryAction } from './ClearHistoryAction'
 import { useSessions } from '../../context/sessions'
+import { useSessionStore } from '../../store/sessionStore'
+import { useChatStore } from '../../store/chatStore'
 
 interface ChatHistoryClientProps {
   onChatSelect?: (sessionId: Id<"chatSessions">) => void
@@ -17,6 +19,8 @@ interface ChatHistoryClientProps {
 export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistoryClientProps) {
   const { sessions, currentSessionId: storeCurrentId, selectSession, deleteSession, isLoadingSessions } = useSessions()
   const clearAllChats = useMutation(api.chatSessions.clearAllChatSessions)
+  const clearBySession = useMutation(api.conversations.clearConversationsBySession)
+  const updateSessionMeta = useMutation(api.chatSessions.updateChatSession)
 
   const [deletingIds, setDeletingIds] = useState<Set<Id<"chatSessions">>>(new Set())
 
@@ -41,6 +45,23 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
       console.error('Failed to delete chat:', error)
       setDeletingIds((prev) => { const next = new Set(prev); next.delete(sessionId); return next })
       toast.error('Failed to delete chat')
+    }
+  }
+
+  const handleClearChat = async (sessionId: Id<"chatSessions">) => {
+    try {
+      await clearBySession({ sessionId })
+      await updateSessionMeta({ sessionId, messageCount: 0, lastMessageAt: Date.now() })
+      useSessionStore.getState().actions.setHasMessages(sessionId, false)
+      useSessionStore.getState().actions.bumpSessionStats(sessionId, { setMessageCount: 0, lastMessageAt: Date.now() })
+      if (activeSessionId === sessionId) {
+        useChatStore.getState().clear(String(sessionId))
+      }
+      toast.success('Chat messages cleared')
+      window.dispatchEvent(new CustomEvent('chat-history-updated'))
+    } catch (error) {
+      console.error('Failed to clear messages:', error)
+      toast.error('Failed to clear messages')
     }
   }
 
@@ -88,6 +109,8 @@ export function ChatHistoryClient({ onChatSelect, currentSessionId }: ChatHistor
                 isActive={activeSessionId === chat._id}
                 onSelect={() => handleChatSelect(chat._id)}
                 onDelete={() => void handleDeleteChat(chat._id)}
+                onClear={() => void handleClearChat(chat._id)}
+                canDelete={true}
                 isDeleting={deletingIds.has(chat._id)}
               />
             ))}

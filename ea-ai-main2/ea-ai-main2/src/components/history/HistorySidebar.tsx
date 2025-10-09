@@ -14,6 +14,10 @@ import {
 } from "../ui/sheet";
 import { ChatMenuItem } from "../sidebar/ChatMenuItem";
 import { useSessions } from "../../context/sessions";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { useSessionStore } from "../../store/sessionStore";
+import { useChatStore } from "../../store/chatStore";
 
 interface HistorySidebarProps {
   currentSessionId?: Id<"chatSessions"> | null;
@@ -27,6 +31,8 @@ export const HistorySidebar = ({
   const [open, setOpen] = useState(false);
   const { sessions, currentSessionId: storeCurrentId, selectSession, deleteSession } = useSessions();
   const [deletingIds, setDeletingIds] = useState<Set<Id<"chatSessions">>>(new Set());
+  const clearBySession = useMutation(api.conversations.clearConversationsBySession);
+  const updateSessionMeta = useMutation(api.chatSessions.updateChatSession);
 
   const activeSessionId = currentSessionId ?? storeCurrentId;
 
@@ -58,6 +64,25 @@ export const HistorySidebar = ({
       console.error("Failed to delete chat:", error);
       setDeletingIds(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
       toast.error("Failed to delete chat. Please try again.");
+    }
+  };
+
+  const handleClearChat = async (sessionId: Id<"chatSessions">) => {
+    try {
+      await clearBySession({ sessionId });
+      await updateSessionMeta({ sessionId, messageCount: 0, lastMessageAt: Date.now() });
+      // Update local stores for immediate UX
+      useSessionStore.getState().actions.setHasMessages(sessionId, false);
+      useSessionStore.getState().actions.bumpSessionStats(sessionId, { setMessageCount: 0, lastMessageAt: Date.now() });
+      // If clearing the active session, clear chat UI instance as well
+      if (activeSessionId === sessionId) {
+        useChatStore.getState().clear(String(sessionId));
+      }
+      toast.success("Chat messages cleared");
+      window.dispatchEvent(new CustomEvent('chat-history-updated'));
+    } catch (error) {
+      console.error("Failed to clear chat messages:", error);
+      toast.error("Failed to clear messages. Please try again.");
     }
   };
 
@@ -103,6 +128,8 @@ export const HistorySidebar = ({
                   onSelect={() => handleChatSelect(session._id)}
                   onDelete={() => handleDeleteChat(session._id)}
                   isDeleting={deletingIds.has(session._id)}
+                  onClear={() => handleClearChat(session._id)}
+                  canDelete={true}
                 />
               ))}
             </AnimatePresence>

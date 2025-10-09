@@ -348,7 +348,7 @@ export const deleteChatSession = mutation({
     // ChatHub pattern: Idempotent operations like local storage filter()
     if (!session) {
       // Session already deleted or never existed - succeed silently like filter() would
-      return { success: true, alreadyDeleted: true };
+      return { success: true, alreadyDeleted: true } as { success: true; alreadyDeleted?: boolean; deleted?: boolean; newSessionId?: any };
     }
     
     // Still check authorization for existing sessions
@@ -356,9 +356,33 @@ export const deleteChatSession = mutation({
       throw new ConvexError("Chat session not found or unauthorized");
     }
 
-    // Don't allow deleting default session
+    let replacementSessionId: typeof args.sessionId | undefined;
+    // If deleting the default session, select or create a replacement default
     if (session.isDefault) {
-      throw new ConvexError("Cannot delete default chat session");
+      // Find another primary session for this user (excluding subagent and current)
+      const others = await ctx.db
+        .query("chatSessions")
+        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+        .collect();
+      const candidate = others.find((s) => s._id !== args.sessionId && s.sessionType !== "subagent");
+      if (candidate) {
+        await ctx.db.patch(candidate._id, { isDefault: true });
+        replacementSessionId = candidate._id as typeof args.sessionId;
+      } else {
+        // Create a fresh default session to keep UX consistent
+        const now = Date.now();
+        const newId = await ctx.db.insert("chatSessions", {
+          tokenIdentifier,
+          title: "New Chat",
+          createdAt: now,
+          lastMessageAt: now,
+          messageCount: 0,
+          isDefault: true,
+          sessionType: "primary",
+          primaryMode: "primary",
+        } as any);
+        replacementSessionId = newId as typeof args.sessionId;
+      }
     }
 
     // Delete all conversations for this session (optimized batch deletion)
@@ -374,7 +398,7 @@ export const deleteChatSession = mutation({
 
     // Delete the session
     await ctx.db.delete(args.sessionId);
-    return { success: true, deleted: true };
+    return { success: true, deleted: true, newSessionId: replacementSessionId } as { success: true; deleted: true; newSessionId?: typeof args.sessionId };
   },
 });
 

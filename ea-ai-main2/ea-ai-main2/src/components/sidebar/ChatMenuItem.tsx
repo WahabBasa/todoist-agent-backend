@@ -40,10 +40,13 @@ interface ChatMenuItemProps {
   onSelect: () => void
   onDelete: () => void
   isDeleting?: boolean
-  
+  // New: clear messages for this chat (used when default/only session)
+  onClear?: () => void
+  // New: whether deletion is allowed (e.g., not default and not only session)
+  canDelete?: boolean
 }
 
-export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting }: ChatMenuItemProps) {
+export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, onClear, canDelete = !chat.isDefault }: ChatMenuItemProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const updateSession = useMutation(api.chatSessions.updateChatSession)
   const [isEditing, setIsEditing] = useState(false)
@@ -136,44 +139,53 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting }:
           )}
         </div>
 
-        {/* Menu button - only show on hover or when active */}
+        {/* Menu button - show on hover/active; includes Clear/Delete actions */}
         <div className={cn(
           "flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200",
           isActive && "opacity-100"
         )}>
-          {!chat.isDefault && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-utility hover:text-secondary rounded-design-sm"
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="Chat options"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-design-md">
-                <DropdownMenuItem
-                  className="text-tertiary"
-                  onClick={handleRenameStart}
-                >
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive text-tertiary"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowDeleteDialog(true)
-                  }}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete chat
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-utility hover:text-secondary rounded-design-sm"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Chat options"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-design-md">
+              <DropdownMenuItem
+                className="text-tertiary"
+                onClick={handleRenameStart}
+              >
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-tertiary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onClear) onClear();
+                }}
+              >
+                Clear messages
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive text-tertiary"
+                disabled={!canDelete}
+                onClick={(e) => {
+                  if (!canDelete) return;
+                  e.stopPropagation();
+                  setShowDeleteDialog(true)
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {canDelete ? 'Delete chat' : 'Delete chat (disabled)'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </motion.div>
 
