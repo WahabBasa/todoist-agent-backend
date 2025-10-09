@@ -746,9 +746,11 @@ export const generateChatTitleWithAI = action({
     const tokenIdentifier = identity.tokenIdentifier || identity.subject;
 
     // Load provider configuration (user then global)
-    const [userCfg, globalCfg] = await Promise.all([
+    const [userCfg, globalCfg, session, conversation] = await Promise.all([
       ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier }),
-      ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {})
+      ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {}),
+      ctx.runQuery(api.chatSessions.getChatSession, { sessionId }),
+      ctx.runQuery(api.conversations.getConversationBySession, { sessionId })
     ]);
 
     const provider = (userCfg?.apiProvider || globalCfg?.apiProvider || "openrouter") as string;
@@ -759,19 +761,106 @@ export const generateChatTitleWithAI = action({
     const baseURL = userCfg?.openRouterBaseUrl || globalCfg?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
     const modelId = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano";
 
+    // Build compact context from recent conversation
+    const mode = (session?.activeMode || session?.primaryMode || "primary") as string;
+    const msgArr: any[] = Array.isArray((conversation as any)?.messages) ? ((conversation as any).messages as any[]) : [];
+    // Use the FIRST two user messages in the conversation for title context
+    const userMsgs = msgArr.filter(m => m?.role === "user");
+    if (!Array.isArray(userMsgs) || userMsgs.length < 2) {
+      // Not enough context yet; wait until 2 user messages are present
+      return;
+    }
+    const firstUserMsg = userMsgs[0]?.content ?? "";
+    const secondUserMsg = userMsgs[1]?.content ?? "";
+    const lastAssistant = [...msgArr].reverse().find(m => m?.role === "assistant");
+
+    const trimText = (s: unknown, max = 250) => {
+      const t = typeof s === "string" ? s : "";
+      return t.replace(/[\r\n]+/g, " ").trim().slice(0, max);
+    };
+
+    const u0 = trimText(firstUserMsg, 250);
+    const u1 = trimText(secondUserMsg, 250);
+    const a0 = trimText(lastAssistant?.content ?? "", 200);
+
+    // Short, safe hint for the current mode (no identities/vendors/tools)
+    const primaryHint = "You act as a neutral task assistant; keep titles short and descriptive.";
+    const planningHint = "Planning conversations organize tasks and priorities concisely.";
+    const modeHint = mode === "planning" ? planningHint : primaryHint;
+
+    // If user text is too generic, prefer a deterministic fallback later
+    const genericUser = (u1 || "").toLowerCase();
+    const isGeneric = genericUser.length < 3 || ["hi", "hello", "help", "hey"].some(w => genericUser === w);
+
     try {
       const openrouter = createOpenRouter({ apiKey, baseURL });
-      const res = await generateText({
-        model: openrouter.chat(modelId),
-        system: "You generate a very short, descriptive chat title (max 6 words).",
-        messages: [{ role: "user", content: (prompt || "").trim() }]
-      });
-      const title = (res.text || "").trim();
-      if (title) {
-        await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title });
+      const system = [
+        "You are a title generator.",
+        "Return ONLY a concise 2–6 word neutral title summarizing this conversation.",
+        "No prefixes or labels (e.g., 'Chat Title:'), no emojis, no first-person statements, and no vendor/model names.",
+        "Output just the title."
+      ].join(" ");
+
+      const userContent = [
+        `Mode: ${mode}`,
+        `PrimaryPromptHint: ${modeHint}`,
+        u0 ? `FirstUser: ${u0}` : undefined,
+        u1 ? `SecondUser: ${u1}` : undefined,
+        a0 ? `Assistant: ${a0}` : undefined,
+        "Return only the title."
+      ].filter(Boolean).join("\n");
+
+      const res = isGeneric
+        ? { text: "" }
+        : await generateText({
+            model: openrouter.chat(modelId),
+            system,
+            messages: [{ role: "user", content: userContent }],
+            // Tighter generation for deterministic short outputs (best-effort options)
+            temperature: 0.2 as any,
+            maxTokens: 16 as any,
+          } as any);
+
+      const raw = (res?.text || "").trim();
+      const cleaned = sanitizeTitle(raw, u1 || prompt || "New Chat");
+      if (cleaned && cleaned.toLowerCase() !== "new chat") {
+        await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title: cleaned });
       }
     } catch (_err) {
       // Fail silently; title generation is best-effort
     }
   }
 });
+
+// Helper: sanitize and normalize model output to a safe short title
+function sanitizeTitle(raw: string, fallbackSource: string): string {
+  const fallback = deriveFallbackTitle(fallbackSource);
+  if (!raw || !raw.trim()) return fallback;
+
+  let t = raw.replace(/[\r\n]+/g, " ").trim();
+  // Remove common prefixes and first-person/vendor bits
+  t = t.replace(/^\s*(chat\s*title\s*:\s*)/i, "");
+  t = t.replace(/^i\s+am\s+[^].*$/i, (m) => m.replace(/^i\s+am\s+/i, ""));
+  t = t.replace(/^i\'?m\s+[^].*$/i, (m) => m.replace(/^i\'?m\s+/i, ""));
+  // Drop vendor/model words if they appear as standalone tokens
+  t = t.replace(/\b(grok|xai|openai|anthropic|llama|mistral)\b/gi, "");
+  // Strip wrapping quotes/punctuation
+  t = t.replace(/^['"\-:;\s]+|['"\-:;\s]+$/g, "").trim();
+  // Collapse whitespace and limit to 6 words
+  const words = t.split(/\s+/).filter(Boolean).slice(0, 6);
+  t = words.join(" ");
+  if (!t) return fallback;
+  // Capitalize first letter (light touch to avoid SHOUTING)
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function deriveFallbackTitle(src: string): string {
+  const s = (src || "").replace(/[\r\n]+/g, " ").trim();
+  if (!s) return "New Chat";
+  // Take first sentence-ish, keep alphanumerics/spaces, limit to 6 words
+  const first = s.split(/[.!?]/)[0] || s;
+  const cleaned = first.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 6);
+  const t = words.join(" ");
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New Chat";
+}
