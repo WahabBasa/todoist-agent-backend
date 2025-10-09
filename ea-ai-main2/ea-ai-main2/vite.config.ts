@@ -8,6 +8,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Optional: absolute alias to the Convex generated directory to avoid mis-imports
+      "~convex": path.resolve(__dirname, "./convex"),
     },
   },
   server: {

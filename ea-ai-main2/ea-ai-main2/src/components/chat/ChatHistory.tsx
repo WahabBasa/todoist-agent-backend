@@ -1,78 +1,15 @@
 "use client";
 
-import { MessageSquare, Trash2 } from "lucide-react";
-import { Button } from "../ui/button";
+import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useSessions } from "../../context/sessions";
 import { useState } from "react";
+import { ChatMenuItem } from "../sidebar/ChatMenuItem";
+import { SidebarMenu } from "../ui/sidebar";
 
 interface ChatHistoryProps {
   className?: string;
-}
-
-interface ChatSessionItemProps {
-  session: {
-    _id: string;
-    title: string;
-    lastMessageAt: number;
-    messageCount: number;
-  };
-  isActive: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-}
-
-function ChatSessionItem({ session, isActive, onSelect, onDelete, isLoading }: ChatSessionItemProps & { isLoading?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "group flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition-colors",
-        isActive
-          ? "bg-accent text-accent-foreground"
-          : "hover:text-foreground text-foreground",
-        isLoading && "opacity-70"
-      )}
-      style={{
-        ...(isActive ? {} : {
-          ':hover': {
-            backgroundColor: 'var(--user-message-bg)'
-          }
-        })
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive && !isLoading) {
-          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive && !isLoading) {
-          e.currentTarget.style.backgroundColor = '';
-        }
-      }}
-      onClick={isLoading ? undefined : onSelect}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center">
-          <span className="text-base font-sans font-medium text-muted-foreground truncate">{session.title}</span>
-        </div>
-      </div>
-      
-      {!isLoading && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 size={12} />
-        </Button>
-      )}
-    </div>
-  );
 }
 
 export function ChatHistory({ className }: ChatHistoryProps) {
@@ -104,17 +41,20 @@ export function ChatHistory({ className }: ChatHistoryProps) {
     <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground">Chat history unavailable</div>}>
       <div className={cn("flex flex-col h-full min-h-0", className)}>
         {/* Sessions List */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-0 scrollbar-dark pb-2">
-          {sessions?.map((session) => (
-            <ChatSessionItem
-              key={session._id}
-              session={session}
-              isActive={currentSessionId === session._id}
-              onSelect={() => void handleChatSelect(session._id)}
-              onDelete={() => void handleDeleteChat(session._id)}
-              isLoading={switchingSessionId === session._id}
-            />
-          ))}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-dark pb-2">
+          <SidebarMenu className="space-y-1">
+            {sessions?.map((session) => (
+              <ChatMenuItem
+                key={session._id}
+                chat={session as any}
+                isActive={currentSessionId === session._id}
+                onSelect={() => void handleChatSelect(session._id)}
+                onDelete={() => void handleDeleteChat(session._id)}
+                isDeleting={switchingSessionId === session._id}
+                canDelete={true}
+              />
+            ))}
+          </SidebarMenu>
           
           {sessions?.length === 0 && (
             <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground">
