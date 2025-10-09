@@ -764,13 +764,13 @@ export const applyTitleInternal = internalMutation({
 // Action: generate a concise chat title using the configured OpenRouter model
 export const generateChatTitleWithAI = action({
   args: { sessionId: v.id("chatSessions"), prompt: v.string() },
-  handler: async (ctx, { sessionId, prompt }) => {
+  handler: async (ctx, { sessionId, prompt }): Promise<void> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return;
     const tokenIdentifier = identity.tokenIdentifier || identity.subject;
 
     // Load provider configuration (user then global)
-    const [userCfg, globalCfg, session, conversation] = await Promise.all([
+    const [userCfg, globalCfg, session, conversation]: [any, any, any, any] = await Promise.all([
       ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier }),
       ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {}),
       ctx.runQuery(api.chatSessions.getChatSession, { sessionId }),
@@ -783,7 +783,7 @@ export const generateChatTitleWithAI = action({
     const apiKey = userCfg?.openRouterApiKey || globalCfg?.openRouterApiKey || (process.env.OPENROUTER_API_KEY as string | undefined);
     if (!apiKey) return;
     const baseURL = userCfg?.openRouterBaseUrl || globalCfg?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
-    const modelId = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano";
+    const modelId: string = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano";
 
     // Build compact context from recent conversation
     const mode = (session?.activeMode || session?.primaryMode || "primary") as string;
@@ -834,7 +834,7 @@ export const generateChatTitleWithAI = action({
         "Return only the title."
       ].filter(Boolean).join("\n");
 
-      const res = isGeneric
+      const res: any = isGeneric
         ? { text: "" }
         : await generateText({
             model: openrouter.chat(modelId),
@@ -845,7 +845,7 @@ export const generateChatTitleWithAI = action({
             maxTokens: 16 as any,
           } as any);
 
-      const raw = (res?.text || "").trim();
+      const raw: string = (res?.text || "").trim();
       const cleaned = sanitizeTitle(raw, u1 || prompt || "New Chat");
       if (cleaned && cleaned.toLowerCase() !== "new chat") {
         await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title: cleaned });
@@ -916,13 +916,13 @@ function fallbackGreeting(lastName: string, localHour?: number): string {
 // Action: generate a concise greeting using ONLY last name and time-of-day (no DB writes)
 export const generateGreetingForUser = action({
   args: { sessionId: v.id("chatSessions"), lastName: v.string(), localHour: v.optional(v.number()) },
-  handler: async (ctx, { sessionId, lastName, localHour }) => {
+  handler: async (ctx, { sessionId, lastName, localHour }): Promise<string> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return fallbackGreeting(lastName, localHour)
     const tokenIdentifier = identity.tokenIdentifier || identity.subject
 
     // Load provider configuration (user then global)
-    const [userCfg, globalCfg] = await Promise.all([
+    const [userCfg, globalCfg]: [any, any] = await Promise.all([
       ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier }),
       ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {})
     ])
@@ -933,7 +933,7 @@ export const generateGreetingForUser = action({
     const apiKey = userCfg?.openRouterApiKey || globalCfg?.openRouterApiKey || (process.env.OPENROUTER_API_KEY as string | undefined)
     if (!apiKey) return fallbackGreeting(lastName, localHour)
     const baseURL = userCfg?.openRouterBaseUrl || globalCfg?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
-    const modelId = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano"
+    const modelId: string = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano"
 
     try {
       const openrouter = createOpenRouter({ apiKey, baseURL })
@@ -950,7 +950,7 @@ export const generateGreetingForUser = action({
         "Return only the greeting."
       ].filter(Boolean).join("\n")
 
-      const res = await generateText({
+      const res: any = await generateText({
         model: openrouter.chat(modelId),
         system,
         messages: [{ role: "user", content: userContent }],
@@ -958,7 +958,7 @@ export const generateGreetingForUser = action({
         maxTokens: 24 as any
       } as any)
 
-      const raw = (res?.text || "").trim()
+      const raw: string = (res?.text || "").trim()
       return sanitizeGreeting(raw, lastName, localHour)
     } catch (_err) {
       return fallbackGreeting(lastName, localHour)

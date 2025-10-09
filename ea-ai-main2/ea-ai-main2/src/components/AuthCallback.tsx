@@ -9,6 +9,7 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let navigated = false;
+    const isPopup = typeof window !== 'undefined' && !!window.opener && !window.opener.closed;
     (async () => {
       try {
         await handleRedirectCallback(
@@ -18,22 +19,34 @@ export default function AuthCallback() {
           },
           async (to: string) => {
             navigated = true;
-            window.location.replace(to || '/');
+            if (isPopup) {
+              try {
+                window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*');
+              } catch {}
+              window.close();
+            } else {
+              window.location.replace(to || '/');
+            }
           }
         );
       } catch (e: any) {
         setError(e?.message || 'Failed to complete sign in');
       } finally {
         try {
-          if (typeof window !== 'undefined') {
+          if (!isPopup && typeof window !== 'undefined') {
             const hasClerkParams = window.location.search.includes('__clerk') || window.location.hash.includes('__clerk');
             if (hasClerkParams) {
               window.history.replaceState(null, '', window.location.pathname);
             }
           }
         } catch {}
-        if (!navigated && typeof window !== 'undefined') {
-          window.location.replace('/');
+        if (!navigated) {
+          if (isPopup) {
+            try { window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*'); } catch {}
+            if (typeof window !== 'undefined') window.close();
+          } else if (typeof window !== 'undefined') {
+            window.location.replace('/');
+          }
         }
       }
     })();

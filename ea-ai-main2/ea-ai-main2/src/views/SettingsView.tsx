@@ -301,8 +301,10 @@ function ConnectedAppsSettings({
   const { user } = useUser();
   const { signIn } = useSignIn();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const generateGoogleOAuthURL = useAction(api.googleCalendar.auth.generateGoogleOAuthURL);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  const setGoogleCalendarEnabled = useAction(api.googleCalendar.tokens.setGoogleCalendarEnabled);
 
   const [gcalConnected, setGcalConnected] = useState<boolean>(false);
   const [gcalTesting, setGcalTesting] = useState<boolean>(false);
@@ -348,27 +350,30 @@ function ConnectedAppsSettings({
     telemetry('connect_start');
     setIsConnecting('Google Calendar');
     try {
-      // Prefer createExternalAccount when available
-      const u: any = user as any;
-      if (u && typeof u.createExternalAccount === 'function') {
-        await u.createExternalAccount({
-          strategy: 'oauth_google',
-          redirectUrl: '/sso-callback',
-          redirectUrlComplete: '/',
-          additionalScopes: GCAL_SCOPES,
-        });
-        return; // Will redirect
+      const redirectUrl = `${window.location.origin}/sso-callback`;
+      const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+
+      let verificationUrl: string | undefined;
+      if (extAcc && typeof extAcc.reauthorize === 'function') {
+        const updated: any = await extAcc.reauthorize({ additionalScopes: GCAL_SCOPES, redirectUrl });
+        verificationUrl = updated?.verification?.externalVerificationRedirectURL;
+      } else {
+        const created: any = await user?.createExternalAccount?.({ strategy: 'oauth_google', redirectUrl });
+        verificationUrl = created?.verification?.externalVerificationRedirectURL;
       }
-      // Fallback to signIn.authenticateWithRedirect with additionalScopes
-      const si: any = signIn as any;
-      await si?.authenticateWithRedirect({
-        strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/',
-        additionalScopes: GCAL_SCOPES,
-      });
+
+      if (!verificationUrl) throw new Error('Failed to get Google verification URL from Clerk');
+
+      const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
+      if (!popup) throw new Error('Popup blocked');
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          setTimeout(() => { void refreshGcalStatus(); setIsConnecting(null); }, 500);
+        }
+      }, 600);
     } catch (e) {
-      console.error('[Settings] Google Calendar connect failed', e);
+      console.error('[Settings] Google Calendar connect failed (Clerk flow)', e);
       telemetry('connect_error', { error: String(e) });
       alert('Failed to start Google Calendar connection. Please try again.');
       setIsConnecting(null);
@@ -437,6 +442,12 @@ function ConnectedAppsSettings({
         setTodoistConflictData(event.data.data);
         setIsConnecting(null); // Clear connecting state
         console.log("🚨 [Settings] Conflict dialog should now be visible");
+      } else if (event.data?.type === 'GCAL_CONNECTED') {
+        console.log('✅ [Settings] Google Calendar connected message received');
+        setIsConnecting(null);
+        // Enable calendar in backend to reflect soft connection
+        setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
+        void refreshGcalStatus();
       } else {
         console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
       }
@@ -691,9 +702,9 @@ function ConnectedAppsSettings({
             gradientFrom={app.gradientFrom}
             gradientTo={app.gradientTo}
             isConnected={app.isConnected}
-            isConnecting={isConnecting === app.appName}
+            isConnecting={app.isConnecting ?? (isConnecting === app.appName)}
             canConnect={app.canConnect}
-            onConnect={() => void handleConnect(app.appName)}
+            onConnect={app.onConnect ?? (() => void handleConnect(app.appName))}
           />
         ))}
       </div>

@@ -114,7 +114,22 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
   // Google Calendar integration now uses Clerk OAuth tokens directly
-  // No database storage needed - Clerk manages all token lifecycle
+  // Storage for Google Calendar OAuth (separate from Clerk SSO)
+  googleCalendarTokens: defineTable({
+    tokenIdentifier: v.string(),
+    refreshToken: v.string(),
+    scope: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+
+  // Google Calendar per-user settings (soft enable/disable without breaking SSO)
+  googleCalendarSettings: defineTable({
+    tokenIdentifier: v.string(),
+    enabled: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
   // AI Mode Internal Todos - Session-scoped task management for complex workflows
   aiInternalTodos: defineTable({
