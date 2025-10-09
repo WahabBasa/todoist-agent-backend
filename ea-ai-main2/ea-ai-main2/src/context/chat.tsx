@@ -11,7 +11,7 @@ import { useAuth } from '@clerk/clerk-react';
 import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@ai-sdk/ui-utils';
 import { useChatStore } from '../store/chatStore';
 import { useSessionStore } from '../store/sessionStore';
-import { shallow } from 'zustand/shallow';
+import { useShallow } from 'zustand/shallow';
 import type { UiStatus, UiMsg } from '../store/chatStore';
 import { logChatEvent } from '../utils/chatLogger';
 
@@ -259,14 +259,14 @@ function buildUiPartsFromConvexMessage(msg: any): UiPart[] {
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { ensureDefaultSession, selectSession } = useSessions();
-  const { currentSessionId, currentSessionMeta, hasMessagesFlag } = useSessionStore((state) => {
-    const id = state.currentSessionId;
-    return {
-      currentSessionId: id,
-      currentSessionMeta: id ? state.sessionMap[id] ?? null : null,
-      hasMessagesFlag: id ? state.hasMessagesById[id] ?? false : false,
-    };
-  }, shallow);
+  // Tuple selector to avoid returning a new object each render (prevents getSnapshot caching loops)
+  const [currentSessionId, currentSessionMeta, hasMessagesFlag] = useSessionStore(
+    useShallow((s) => [
+      s.currentSessionId,
+      s.currentSessionId ? s.sessionMap[s.currentSessionId] ?? null : null,
+      s.currentSessionId ? s.hasMessagesById[s.currentSessionId] ?? false : false,
+    ])
+  );
   const setHasMessages = useSessionStore((state) => state.actions.setHasMessages);
   const bumpSessionStats = useSessionStore((state) => state.actions.bumpSessionStats);
   const lastSyncedCountRef = React.useRef<Record<string, number>>({});
@@ -286,6 +286,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const queuedRetryRef = React.useRef(false);
   const skipVersionOnceRef = React.useRef(false);
   const lockRetryCountRef = React.useRef(0);
+  // Queue the very first send until session is active; prefer this session id in transport
+  const queuedFirstSendRef = React.useRef<{ sessionId: string; text: string } | null>(null);
+  const pendingSendSessionIdRef = React.useRef<string | null>(null);
   
   // FIX: Use ref for canonicalHistoryVersion to stabilize transport during streaming
   const canonicalHistoryVersionRef = React.useRef(0);
@@ -313,19 +316,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   
   // (zustand) No remount/rehydration tracking needed
 
-  // Zustand store for UI state per session
-  const {
-    instances,
-    setInput: setInputStore,
-    setStatus: setStatusStore,
-    replaceFromDb,
-    appendUser,
-    ensureAssistantPlaceholder,
-    updateAssistant,
-    clear: clearStore,
-    resetStatuses,
-  } = useChatStore();
-  const currentInstance = instances[chatId] ?? { input: '', messages: [], status: 'ready' };
+  // Zustand store for UI state per session - select only what we need
+  const setInputStore = useChatStore((s) => s.setInput);
+  const setStatusStore = useChatStore((s) => s.setStatus);
+  const replaceFromDb = useChatStore((s) => s.replaceFromDb);
+  const appendUser = useChatStore((s) => s.appendUser);
+  const ensureAssistantPlaceholder = useChatStore((s) => s.ensureAssistantPlaceholder);
+  const updateAssistant = useChatStore((s) => s.updateAssistant);
+  const clearStore = useChatStore((s) => s.clear);
+  const resetStatuses = useChatStore((s) => s.resetStatuses);
+
+  const emptyMsgsRef = React.useRef<UiMsg[]>([]);
+  const [inputFromStore, storeMessages, storeStatus] = useChatStore(
+    useShallow((s) => {
+      const inst = s.instances[chatId];
+      return [
+        inst?.input ?? "",
+        inst?.messages ?? emptyMsgsRef.current,
+        inst?.status ?? 'ready',
+      ] as const;
+    })
+  );
 
   // Auth header for Convex httpAction
   const { getToken } = useAuth();
@@ -378,13 +389,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ? { Authorization: `Bearer ${token}`, "X-Request-Id": requestId }
       : { "X-Request-Id": requestId };
 
-    if (currentSessionId) {
-      headers["X-Session-Id"] = currentSessionId;
-    }
+    const sid = pendingSendSessionIdRef.current ?? currentSessionId ?? undefined;
+    if (sid) headers["X-Session-Id"] = sid as string;
 
     const body: any = {
-      sessionId: currentSessionId ?? undefined,
-      id: currentSessionId ?? undefined,
+      sessionId: sid ?? undefined,
+      id: sid ?? undefined,
       requestId,
       latestUserMessage,
       messages,
@@ -505,10 +515,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // Avoid calling reload() here to prevent finish-time flicker; live Convex query will reconcile
     },
   });
-  const isLoading = currentInstance.status === 'submitted' || currentInstance.status === 'streaming';
+  const isLoading = storeStatus === 'submitted' || storeStatus === 'streaming';
   const isRetriable = false;
 
-  const lastStatusLogRef = React.useRef({ hookStatus, storeStatus: currentInstance.status });
+  const lastStatusLogRef = React.useRef({ hookStatus, storeStatus });
   const lastAssistantContentRef = React.useRef('');
   const lastAssistantPartsRef = React.useRef<UiPart[] | undefined>(undefined);
 
@@ -523,11 +533,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     prevHookStatusRef.current = hookStatus;
     
     // Log status changes
-    if (prev.hookStatus !== hookStatus || prev.storeStatus !== currentInstance.status) {
-      lastStatusLogRef.current = { hookStatus, storeStatus: currentInstance.status };
+    if (prev.hookStatus !== hookStatus || prev.storeStatus !== storeStatus) {
+      lastStatusLogRef.current = { hookStatus, storeStatus };
       logChatEvent(chatId, 'status_change', {
         hookStatus,
-        storeStatus: currentInstance.status,
+        storeStatus,
       });
     }
 
@@ -552,7 +562,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // Handle streaming state
     if (hookStatus === 'streaming') {
-      setStatusStore(chatId, 'streaming');
+      if (storeStatus !== 'streaming') setStatusStore(chatId, 'streaming');
       ensureAssistantPlaceholder(chatId);
       
       if (rafRef.current) {
@@ -582,7 +592,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // Handle submitted state
     if (hookStatus === 'submitted') {
-      setStatusStore(chatId, 'submitted');
+      if (storeStatus !== 'submitted') setStatusStore(chatId, 'submitted');
       return;
     }
 
@@ -591,11 +601,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ? rawParts.filter((part: any) => part?.type === 'tool-invocation')
       : [];
     const mappedStatus: UiStatus = !text.trim() && toolParts.length > 0 ? 'streaming' : 'ready';
-    setStatusStore(chatId, mappedStatus);
+    if (storeStatus !== mappedStatus) setStatusStore(chatId, mappedStatus);
 
     // Update assistant content when stream finishes
     if (hookStatus === 'ready' && prevStatus !== 'ready') {
-      const currentContent = currentInstance.messages[currentInstance.messages.length - 1]?.content;
+      const currentContent = storeMessages[storeMessages.length - 1]?.content;
       if (currentContent !== text) {
         updateAssistant(chatId, { content: text, parts });
         lastAssistantContentRef.current = text;
@@ -617,11 +627,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         rafRef.current = null;
       }
     };
-  }, [hookStatus, messages, chatId, currentInstance.status, currentInstance.messages, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
+  }, [hookStatus, messages, chatId, storeStatus, storeMessages, setStatusStore, ensureAssistantPlaceholder, updateAssistant]);
   
   // FIX: Add timeout recovery for hung streams
   React.useEffect(() => {
-    if (currentInstance.status !== 'streaming') return;
+    if (storeStatus !== 'streaming') return;
     
     const timeoutId = setTimeout(() => {
       console.warn('[CHAT] Stream timeout - resetting status');
@@ -633,14 +643,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }, 30000); // 30 second timeout
     
     return () => clearTimeout(timeoutId);
-  }, [currentInstance.status, chatId, setStatusStore]);
+  }, [storeStatus, chatId, setStatusStore]);
 
   // Normalize DB (Convex) messages to store shape and replace when idle/ready
   React.useEffect(() => {
     if (activeConversation === undefined) return;
-    
+
     const dbMsgs = mapConvexMessagesToUi(activeConversation?.messages);
-    const localMsgs = currentInstance.messages;
+    const localMsgs = storeMessages;
     const isEqual = areUiMessagesEqual(dbMsgs, localMsgs);
 
     // Smart DB Sync: Allow user messages immediately, preserve streaming assistant
@@ -649,7 +659,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const isActivelySyncingFromHook = hookStatus === 'streaming' || hookStatus === 'submitted';
 
       // Allow immediate user message display even during submit
-      if (dbIsAhead && currentInstance.status === 'submitted') {
+      if (dbIsAhead && storeStatus === 'submitted') {
         // User message landed in DB while status still 'submitted'
         const lastLocal = localMsgs[localMsgs.length - 1];
         if (lastLocal?.role === 'user') {
@@ -679,7 +689,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         // DB behind, keep local optimistic state
         logChatEvent(chatId, 'store_skip_replace_preserving_stream', {
           hookStatus,
-          status: currentInstance.status,
+          status: storeStatus,
           dbCount: dbMsgs.length,
           localCount: localMsgs.length,
         });
@@ -687,9 +697,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       // Only block sync if we're not ready and DB isn't ahead
-      if (currentInstance.status !== 'ready' && !dbIsAhead) {
+      if (storeStatus !== 'ready' && !dbIsAhead) {
         logChatEvent(chatId, 'store_skip_replace_not_ready', {
-          status: currentInstance.status,
+          status: storeStatus,
           dbCount: dbMsgs.length,
           localCount: localMsgs.length,
         });
@@ -730,10 +740,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
       lastSyncedHasMessagesRef.current[sessionId] = serverHasMessages;
     }
-  }, [activeConversation, chatId, currentInstance.messages, currentInstance.status, replaceFromDb, setStatusStore, currentSessionId, hasMessagesFlag, setHasMessages, currentSessionMeta, bumpSessionStats]);
+  }, [activeConversation, chatId, storeMessages, storeStatus, replaceFromDb, setStatusStore, currentSessionId, hasMessagesFlag, setHasMessages, currentSessionMeta, bumpSessionStats]);
 
   // Ensure input is always a string to avoid trim() issues
-  const safeInput = currentInstance.input ?? "";
+  const safeInput = inputFromStore ?? "";
 
   const clearChat = React.useCallback(() => {
     clearStore(chatId);
@@ -758,7 +768,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const isFreshSession = React.useMemo(() => {
     if (!currentSessionId) return false;
     if (hasMessagesFlag) return false;
-    if (currentInstance.messages.length > 0) return false;
+    if (storeMessages.length > 0) return false;
 
     if (Array.isArray(activeConversation?.messages)) {
       return activeConversation.messages.length === 0;
@@ -767,7 +777,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return currentSessionMeta.messageCount === 0;
     }
     return true;
-  }, [currentSessionId, hasMessagesFlag, currentInstance.messages.length, activeConversation, currentSessionMeta]);
+  }, [currentSessionId, hasMessagesFlag, storeMessages.length, activeConversation, currentSessionMeta]);
 
   // Our own input change handler (SDK-agnostic)
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -778,7 +788,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Our own submit handler using sendMessage
   const handleSubmitCompat = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    const content = (currentInstance.input || '').trim();
+    const content = (inputFromStore || '').trim();
     if (!content || isLoading) return;
 
     void (async () => {
@@ -810,12 +820,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setUiError(null);
 
       setHasMessages(targetSessionId, true);
-      bumpSessionStats(targetSessionId, { incrementMessageCount: 1, lastMessageAt: now });
       lastSyncedHasMessagesRef.current[targetSessionId] = true;
-      const optimisticMeta = useSessionStore.getState().sessionMap[targetSessionId];
-      if (optimisticMeta) {
-        lastSyncedCountRef.current[targetSessionId] = optimisticMeta.messageCount;
-      }
 
       try {
         setStatusStore(targetSessionId, 'submitted');
@@ -837,8 +842,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             textLength: content.length,
           }, { dedupe: false });
         }
+
+        // If we just created or switched sessions, queue the first send until session is active
+        if (targetSessionId !== currentSessionId || targetSessionId !== chatId) {
+          queuedFirstSendRef.current = { sessionId: targetSessionId, text: content };
+          logChatEvent(targetSessionId, 'queued_first_send_until_session_active', {});
+          return;
+        }
+
         if (typeof sendMessage === 'function') {
+          pendingSendSessionIdRef.current = targetSessionId;
+          skipVersionOnceRef.current = true; // first send in an active session: avoid non-zero historyVersion
           void sendMessage({ text: content });
+          pendingSendSessionIdRef.current = null;
         } else {
           console.warn('[CHAT] sendMessage not available on useChat return');
         }
@@ -846,7 +862,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         console.error('[CHAT] sendMessage failed:', err);
       }
     })();
-  }, [currentInstance.input, isLoading, currentSessionId, ensureDefaultSession, selectSession, setInputStore, chatId, canonicalHistoryVersion, setUiError, setHasMessages, bumpSessionStats, setStatusStore, appendUser, ensureAssistantPlaceholder, sendMessage]);
+  }, [inputFromStore, isLoading, currentSessionId, ensureDefaultSession, selectSession, setInputStore, chatId, canonicalHistoryVersion, setUiError, setHasMessages, setStatusStore, appendUser, ensureAssistantPlaceholder, sendMessage]);
 
   // Retry queued message once we're idle/ready
   React.useEffect(() => {
@@ -878,6 +894,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     prevSessionIdRef.current = chatId;
   }, [chatId, canonicalHistoryVersion]);
 
+  // Flush a queued first send when the desired session becomes active
+  React.useEffect(() => {
+    const q = queuedFirstSendRef.current;
+    if (!q) return;
+    if (!currentSessionId || q.sessionId !== currentSessionId) return;
+    try {
+      if (typeof sendMessage === 'function') {
+        pendingSendSessionIdRef.current = q.sessionId;
+        skipVersionOnceRef.current = true; // avoid sending historyVersion on the very first message
+        logChatEvent(q.sessionId, 'flushing_queued_first_send', {});
+        void sendMessage({ text: q.text });
+      }
+    } finally {
+      queuedFirstSendRef.current = null;
+      pendingSendSessionIdRef.current = null;
+    }
+  }, [currentSessionId, sendMessage]);
+
   React.useEffect(() => {
     setInputStore(chatId, '');
   }, [chatId, setInputStore]);
@@ -888,7 +922,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Context value - much simpler than before!
   const contextValue: ChatContextType = {
-    messages: currentInstance.messages,
+    messages: storeMessages,
     input: safeInput,
     setInput: (val: string) => setInputStore(chatId, val),
     handleInputChange,
