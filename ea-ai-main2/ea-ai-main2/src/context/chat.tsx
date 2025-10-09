@@ -10,6 +10,8 @@ import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
 import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@ai-sdk/ui-utils';
 import { useChatStore } from '../store/chatStore';
+import { useSessionStore } from '../store/sessionStore';
+import { shallow } from 'zustand/shallow';
 import type { UiStatus, UiMsg } from '../store/chatStore';
 import { logChatEvent } from '../utils/chatLogger';
 
@@ -256,9 +258,21 @@ function buildUiPartsFromConvexMessage(msg: any): UiPart[] {
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  // Session context - get current session from centralized state
-  const { currentSessionId, sessions } = useSessions();
+  const { ensureDefaultSession, selectSession } = useSessions();
+  const { currentSessionId, currentSessionMeta, hasMessagesFlag } = useSessionStore((state) => {
+    const id = state.currentSessionId;
+    return {
+      currentSessionId: id,
+      currentSessionMeta: id ? state.sessionMap[id] ?? null : null,
+      hasMessagesFlag: id ? state.hasMessagesById[id] ?? false : false,
+    };
+  }, shallow);
+  const setHasMessages = useSessionStore((state) => state.actions.setHasMessages);
+  const bumpSessionStats = useSessionStore((state) => state.actions.bumpSessionStats);
+  const lastSyncedCountRef = React.useRef<Record<string, number>>({});
+  const lastSyncedHasMessagesRef = React.useRef<Record<string, boolean>>({});
   const chatId = currentSessionId ?? "default";
+  const prevSessionIdRef = React.useRef<string | null>(null);
 
   // Phase 4: guarded rehydration key to remount the chat hook safely when needed (e.g., on session switch)
   const [rehydrationKey, setRehydrationKey] = React.useState(0);
@@ -275,12 +289,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   
   // FIX: Use ref for canonicalHistoryVersion to stabilize transport during streaming
   const canonicalHistoryVersionRef = React.useRef(0);
-
-  const currentSessionMeta = React.useMemo(() => {
-    if (!currentSessionId) return null;
-    return sessions.find((session) => session._id === currentSessionId) ?? null;
-  }, [currentSessionId, sessions]);
-  
   // Load messages for current session from Convex
   const activeConversation = useQuery(
     api.conversations.getConversationBySession,
@@ -701,16 +709,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         assistantPreview: assistantText.slice(0, 80),
       });
     }
-  }, [activeConversation, chatId, currentInstance.messages, currentInstance.status, replaceFromDb, setStatusStore]);
+    const sessionId = currentSessionId;
+    if (!sessionId) {
+      return;
+    }
+
+    const serverMessageCount = dbMsgs.length;
+    if (lastSyncedCountRef.current[sessionId] !== serverMessageCount) {
+      const storeCount = currentSessionMeta?.messageCount ?? 0;
+      if (storeCount !== serverMessageCount) {
+        bumpSessionStats(sessionId, { setMessageCount: serverMessageCount });
+      }
+      lastSyncedCountRef.current[sessionId] = serverMessageCount;
+    }
+
+    const serverHasMessages = serverMessageCount > 0;
+    if (lastSyncedHasMessagesRef.current[sessionId] !== serverHasMessages) {
+      if (hasMessagesFlag !== serverHasMessages) {
+        setHasMessages(sessionId, serverHasMessages);
+      }
+      lastSyncedHasMessagesRef.current[sessionId] = serverHasMessages;
+    }
+  }, [activeConversation, chatId, currentInstance.messages, currentInstance.status, replaceFromDb, setStatusStore, currentSessionId, hasMessagesFlag, setHasMessages, currentSessionMeta, bumpSessionStats]);
 
   // Ensure input is always a string to avoid trim() issues
   const safeInput = currentInstance.input ?? "";
 
   const clearChat = React.useCallback(() => {
     clearStore(chatId);
+    if (currentSessionId) {
+      setHasMessages(currentSessionId, false);
+      bumpSessionStats(currentSessionId, { setMessageCount: 0 });
+      lastSyncedHasMessagesRef.current[currentSessionId] = false;
+      lastSyncedCountRef.current[currentSessionId] = 0;
+    }
     window.dispatchEvent(new CustomEvent('clear-chat-requested'));
     toast.success("Chat cleared");
-  }, [chatId, clearStore]);
+  }, [chatId, clearStore, currentSessionId, setHasMessages, bumpSessionStats]);
   
   // FIX: Add manual recovery for stuck states
   const forceResetStatus = React.useCallback(() => {
@@ -719,18 +754,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     logChatEvent(chatId, 'manual_status_reset');
   }, [chatId, setStatusStore]);
 
-  // Fresh session detection: prefer sessions meta; else conversation; allow initial loading to show greeting for new sessions
+  // Fresh session detection with optimistic store state
   const isFreshSession = React.useMemo(() => {
-    if (currentInstance.status !== 'ready') return false; // avoid greeting during streaming/submitted
-    if (typeof currentSessionMeta?.messageCount === 'number') {
-      return currentSessionMeta.messageCount === 0;
-    }
-    if (activeConversation === undefined) return true; // loading: favor greeting for empty new chat
+    if (!currentSessionId) return false;
+    if (hasMessagesFlag) return false;
+    if (currentInstance.messages.length > 0) return false;
+
     if (Array.isArray(activeConversation?.messages)) {
       return activeConversation.messages.length === 0;
     }
-    return false;
-  }, [currentInstance.status, currentSessionMeta, activeConversation]);
+    if (typeof currentSessionMeta?.messageCount === 'number') {
+      return currentSessionMeta.messageCount === 0;
+    }
+    return true;
+  }, [currentSessionId, hasMessagesFlag, currentInstance.messages.length, activeConversation, currentSessionMeta]);
 
   // Our own input change handler (SDK-agnostic)
   const handleInputChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -743,40 +780,73 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     e.preventDefault();
     const content = (currentInstance.input || '').trim();
     if (!content || isLoading) return;
-    setInputStore(chatId, '');
-    lastUserTextRef.current = content;
-    lastSentVersionRef.current = canonicalHistoryVersion;
-    lockRetryCountRef.current = 0;
-    setUiError(null);
-    try {
-      setStatusStore(chatId, 'submitted');
-      logChatEvent(chatId, 'user_submitted', {
-        textPreview: content.slice(0, 80),
-        length: content.length,
-      });
-      const appendedId = appendUser(chatId, content);
-      ensureAssistantPlaceholder(chatId);
-      lastAssistantContentRef.current = '';
-      lastAssistantPartsRef.current = undefined;
-      const appendedMessage = useChatStore.getState().instances[chatId]?.messages.find((msg) => msg.id === appendedId);
-      if (appendedMessage?.metrics) {
-        logChatEvent(chatId, 'user_message_sent_timing', {
-          messageId: appendedMessage.id,
-          sentAt: appendedMessage.metrics.sentAt ?? null,
-          sentAtIso: appendedMessage.metrics.sentAt ? new Date(appendedMessage.metrics.sentAt).toISOString() : null,
-          sentAtPerf: appendedMessage.metrics.sentAtPerf ?? null,
-          textLength: content.length,
-        }, { dedupe: false });
+
+    void (async () => {
+      let targetSessionId = currentSessionId;
+      setInputStore(chatId, '');
+      if (!targetSessionId) {
+        try {
+          targetSessionId = await ensureDefaultSession();
+          selectSession(targetSessionId);
+        } catch (err) {
+          console.error('[CHAT] Failed to ensure default session before submit:', err);
+          toast.error('Unable to start chat session. Please try again.');
+          return;
+        }
       }
-      if (typeof sendMessage === 'function') {
-        void sendMessage({ text: content });
-      } else {
-        console.warn('[CHAT] sendMessage not available on useChat return');
+
+      if (!targetSessionId) return;
+
+      const now = Date.now();
+
+      if (targetSessionId !== chatId) {
+        setInputStore(targetSessionId, '');
+        delete lastSyncedCountRef.current[targetSessionId];
+        delete lastSyncedHasMessagesRef.current[targetSessionId];
       }
-    } catch (err) {
-      console.error('[CHAT] sendMessage failed:', err);
-    }
-  }, [currentInstance.input, isLoading, sendMessage, canonicalHistoryVersion, chatId, setInputStore, setStatusStore, appendUser, ensureAssistantPlaceholder]);
+      lastUserTextRef.current = content;
+      lastSentVersionRef.current = canonicalHistoryVersion;
+      lockRetryCountRef.current = 0;
+      setUiError(null);
+
+      setHasMessages(targetSessionId, true);
+      bumpSessionStats(targetSessionId, { incrementMessageCount: 1, lastMessageAt: now });
+      lastSyncedHasMessagesRef.current[targetSessionId] = true;
+      const optimisticMeta = useSessionStore.getState().sessionMap[targetSessionId];
+      if (optimisticMeta) {
+        lastSyncedCountRef.current[targetSessionId] = optimisticMeta.messageCount;
+      }
+
+      try {
+        setStatusStore(targetSessionId, 'submitted');
+        logChatEvent(targetSessionId, 'user_submitted', {
+          textPreview: content.slice(0, 80),
+          length: content.length,
+        });
+        const appendedId = appendUser(targetSessionId, content);
+        ensureAssistantPlaceholder(targetSessionId);
+        lastAssistantContentRef.current = '';
+        lastAssistantPartsRef.current = undefined;
+        const appendedMessage = useChatStore.getState().instances[targetSessionId]?.messages.find((msg) => msg.id === appendedId);
+        if (appendedMessage?.metrics) {
+          logChatEvent(targetSessionId, 'user_message_sent_timing', {
+            messageId: appendedMessage.id,
+            sentAt: appendedMessage.metrics.sentAt ?? null,
+            sentAtIso: appendedMessage.metrics.sentAt ? new Date(appendedMessage.metrics.sentAt).toISOString() : null,
+            sentAtPerf: appendedMessage.metrics.sentAtPerf ?? null,
+            textLength: content.length,
+          }, { dedupe: false });
+        }
+        if (typeof sendMessage === 'function') {
+          void sendMessage({ text: content });
+        } else {
+          console.warn('[CHAT] sendMessage not available on useChat return');
+        }
+      } catch (err) {
+        console.error('[CHAT] sendMessage failed:', err);
+      }
+    })();
+  }, [currentInstance.input, isLoading, currentSessionId, ensureDefaultSession, selectSession, setInputStore, chatId, canonicalHistoryVersion, setUiError, setHasMessages, bumpSessionStats, setStatusStore, appendUser, ensureAssistantPlaceholder, sendMessage]);
 
   // Retry queued message once we're idle/ready
   React.useEffect(() => {
@@ -800,6 +870,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (prevChatIdRef.current === chatId) return;
     prevChatIdRef.current = chatId;
     logChatEvent(chatId, 'session_changed', { canonicalHistoryVersion });
+    const lastSessionId = prevSessionIdRef.current;
+    if (lastSessionId && lastSessionId !== chatId) {
+      delete lastSyncedCountRef.current[lastSessionId];
+      delete lastSyncedHasMessagesRef.current[lastSessionId];
+    }
+    prevSessionIdRef.current = chatId;
   }, [chatId, canonicalHistoryVersion]);
 
   React.useEffect(() => {

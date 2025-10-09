@@ -1,18 +1,43 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { Id } from "../../convex/_generated/dataModel";
+import { SessionMeta, useSessionStore } from "../store/sessionStore";
 
 // ChatHub pattern: Session management types
-export interface ChatSession {
-  _id: Id<"chatSessions">;
-  title: string;
-  lastMessageAt: number;
-  messageCount: number;
-  isDefault?: boolean;
+export type ChatSession = SessionMeta;
+
+function areSessionsSynced(existingMap: Record<string, SessionMeta>, incoming: SessionMeta[]): boolean {
+  const incomingById = new Map(incoming.map((session) => [session._id, session]));
+
+  let nonOptimisticCount = 0;
+  for (const session of Object.values(existingMap)) {
+    if (session.isOptimistic) {
+      continue;
+    }
+    nonOptimisticCount += 1;
+    const fromServer = incomingById.get(session._id);
+    if (!fromServer) {
+      return false;
+    }
+    if (
+      session.title !== fromServer.title ||
+      session.lastMessageAt !== fromServer.lastMessageAt ||
+      session.messageCount !== fromServer.messageCount ||
+      Boolean(session.isDefault) !== Boolean(fromServer.isDefault)
+    ) {
+      return false;
+    }
+  }
+
+  if (nonOptimisticCount !== incoming.length) {
+    return false;
+  }
+
+  return true;
 }
 
 // Sessions context interface - ChatHub centralized session management pattern
@@ -44,6 +69,13 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   const adminStatus = useQuery(api.auth.admin.isCurrentUserAdmin, {});
   const isAdmin = adminStatus === true;
 
+  const sessions = useSessionStore((state) => state.sessionList);
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const setSessionsAction = useSessionStore((state) => state.actions.setSessions);
+  const upsertSessionAction = useSessionStore((state) => state.actions.upsertSession);
+  const removeSessionAction = useSessionStore((state) => state.actions.removeSession);
+  const setCurrentSessionAction = useSessionStore((state) => state.actions.setCurrentSession);
+
   // Debug: Log admin status
   useEffect(() => {
     console.log('?? [FRONTEND] Admin check:', {
@@ -53,6 +85,16 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       type: typeof adminStatus
     });
   }, [adminStatus, isAdmin]);
+
+  useEffect(() => {
+    if (!sessionsQuery) return;
+    const incomingSessions = sessionsQuery.sessions || [];
+    const { sessionMap } = useSessionStore.getState();
+    if (areSessionsSynced(sessionMap, incomingSessions)) {
+      return;
+    }
+    setSessionsAction(incomingSessions);
+  }, [sessionsQuery, setSessionsAction]);
   
   // Convex mutations
   const createChatSession = useMutation(api.chatSessions.createChatSession);
@@ -84,18 +126,21 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Session state - single source of truth with persistence
-  const [currentSessionId, setCurrentSessionId] = useState<Id<"chatSessions"> | null>(() => {
-    // Initialize from localStorage if available
+  const didLoadPersistedRef = useRef(false);
+  useEffect(() => {
+    if (didLoadPersistedRef.current) return;
+    didLoadPersistedRef.current = true;
     const stored = loadPersistedSession();
-    console.log('🔄 [SESSIONS DEBUG] Initializing session state from localStorage:', stored);
-    return stored;
-  });
-  
-  // Debug: Log when currentSessionId changes
-  React.useEffect(() => {
-    console.log('🔄 [SESSIONS DEBUG] Current session ID changed:', currentSessionId);
+    if (stored) {
+      setCurrentSessionAction(stored);
+    }
+  }, [setCurrentSessionAction]);
+
+  useEffect(() => {
+    persistSession(currentSessionId);
   }, [currentSessionId]);
+
+  // Session state - single source of truth with persistence
   const [activeView, setActiveViewState] = useState<"chat" | "settings" | "admin">("chat");
 
   // Enforce admin gating even if persisted state tries to open the admin view
@@ -106,7 +151,6 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, [activeView, isAdmin]);
 
   // Extract sessions array safely
-  const sessions = sessionsQuery?.sessions || [];
   const isLoadingSessions = sessionsQuery === undefined;
   
   // Debug: Log sessions
@@ -124,23 +168,15 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     });
   }, [sessions, isLoadingSessions]);
 
-  // Validate persisted session only once after first sessions load
-  const didValidateRef = React.useRef(false);
   useEffect(() => {
-    if (didValidateRef.current) return;
-    if (isLoadingSessions) return; // wait for initial load
-    didValidateRef.current = true;  // run once per app load
-    if (!currentSessionId) return;  // nothing to validate
-
-    const sessionExists = sessions.some(session => session._id === currentSessionId);
+    if (isLoadingSessions) return;
+    if (!currentSessionId) return;
+    const sessionExists = sessions.some((session) => session._id === currentSessionId);
     if (!sessionExists) {
       console.warn('🗑️ Persisted session no longer exists, clearing:', currentSessionId);
-      setCurrentSessionId(null);
-      persistSession(null);
-    } else {
-      console.log('✅ Persisted session validated:', currentSessionId);
+      setCurrentSessionAction(null);
     }
-  }, [isLoadingSessions, currentSessionId, sessions]);
+  }, [isLoadingSessions, currentSessionId, sessions, setCurrentSessionAction]);
 
   // Fixed: Proper default session management
   // Users start with a default session, and can create new sessions as needed
@@ -151,6 +187,17 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     
     try {
       const defaultSessionId = await createDefaultSession();
+      const existing = useSessionStore.getState().sessionMap[defaultSessionId];
+      if (!existing) {
+        upsertSessionAction({
+          _id: defaultSessionId,
+          title: "New Chat",
+          lastMessageAt: Date.now(),
+          messageCount: 0,
+          isDefault: true,
+          isOptimistic: true,
+        });
+      }
       console.log('✅ Default session ready:', defaultSessionId);
       return defaultSessionId;
     } catch (error) {
@@ -158,7 +205,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       toast.error("Failed to initialize default chat. Please try again.");
       throw error;
     }
-  }, [createDefaultSession]);
+  }, [createDefaultSession, upsertSessionAction]);
 
   // Create new session (explicit user action)
   const createNewSession = useCallback(async (): Promise<Id<"chatSessions">> => {
@@ -166,9 +213,17 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     
     try {
       const newSessionId = await createChatSession({});
+      upsertSessionAction({
+        _id: newSessionId,
+        title: "New Chat",
+        lastMessageAt: Date.now(),
+        messageCount: 0,
+        isDefault: false,
+        isOptimistic: true,
+      });
       
       // Switch to the new session
-      setCurrentSessionId(newSessionId);
+      setCurrentSessionAction(newSessionId);
       setActiveViewState("chat");
       
       console.log('✅ Created and switched to new session:', newSessionId);
@@ -178,7 +233,7 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       toast.error("Failed to create new chat. Please try again.");
       throw error;
     }
-  }, [createChatSession]);
+  }, [createChatSession, setCurrentSessionAction, upsertSessionAction]);
 
   // ChatHub pattern: Select session with persistence
   const selectSession = useCallback((sessionId: Id<"chatSessions"> | null) => {
@@ -187,13 +242,12 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       previousSessionId: currentSessionId
     });
     
-    setCurrentSessionId(sessionId);
-    persistSession(sessionId); // Persist to localStorage
+    setCurrentSessionAction(sessionId);
     
     if (sessionId) {
       setActiveViewState("chat");
     }
-  }, [currentSessionId]);
+  }, [currentSessionId, setCurrentSessionAction]);
 
   const setActiveView = useCallback((view: "chat" | "settings" | "admin") => {
     if (view === "admin" && !isAdmin) {
@@ -210,18 +264,19 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     try {
       await deleteChatSession({ sessionId });
       console.log('✅ Session deleted - Convex reactivity will update UI');
+      removeSessionAction(sessionId);
       
       // Clear current session if it was the deleted one
       if (currentSessionId === sessionId) {
-        setCurrentSessionId(null);
-        persistSession(null); // Clear from localStorage
+        const nextSession = useSessionStore.getState().sessionList[0] ?? null;
+        setCurrentSessionAction(nextSession?._id ?? null);
       }
     } catch (error) {
       console.error("Failed to delete chat session:", error);
       toast.error("Failed to delete chat. Please try again.");
       throw error;
     }
-  }, [deleteChatSession, currentSessionId]);
+  }, [deleteChatSession, currentSessionId, removeSessionAction, setCurrentSessionAction]);
 
   // Context value - single source of truth for sessions
   const contextValue: SessionsContextType = {

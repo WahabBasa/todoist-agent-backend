@@ -270,6 +270,18 @@ export const chat = httpAction(async (ctx, request) => {
 
     const modelMessages = convertConvexToModelMessages(canonicalHistory);
 
+    // Best-effort: auto-generate a concise session title (eesy-chat approach)
+    if (sessionConvexId && appendedUser) {
+      try {
+        if (session?.title === "New Chat" || session?.title === "Default Chat") {
+          void ctx.runAction(api.chatSessions.generateChatTitleWithAI, {
+            sessionId: sessionConvexId,
+            prompt: latestUserMessage,
+          });
+        }
+      } catch {}
+    }
+
     // OpenCode-style: start an assistant turn placeholder so we never end with a noop
     if (sessionConvexId) {
       try {

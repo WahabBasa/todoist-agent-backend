@@ -1,5 +1,8 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalAction, action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { api, internal } from "./_generated/api";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { generateText } from "ai";
 
 // Generate a title from the first user message (Morphic-style)
 function generateChatTitle(firstMessage: string): string {
@@ -714,4 +717,61 @@ export const getById = query({
     const session = await ctx.db.get(args.sessionId);
     return session;
   },
+});
+
+// Internal-only: safely apply an AI-generated title without overwriting user changes
+export const applyTitleInternal = internalMutation({
+  args: { sessionId: v.id("chatSessions"), title: v.string() },
+  handler: async (ctx, { sessionId, title }) => {
+    const s = await ctx.db.get(sessionId);
+    if (!s) return;
+    // Do not overwrite if user already customized the title
+    const isDefault = s.title === "New Chat" || s.title === "Default Chat";
+    if (!isDefault) return;
+    const clean = (title || "")
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60) || "New Chat";
+    await ctx.db.patch(sessionId, { title: clean, lastMessageAt: Date.now() });
+  }
+});
+
+// Action: generate a concise chat title using the configured OpenRouter model
+export const generateChatTitleWithAI = action({
+  args: { sessionId: v.id("chatSessions"), prompt: v.string() },
+  handler: async (ctx, { sessionId, prompt }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+    const tokenIdentifier = identity.tokenIdentifier || identity.subject;
+
+    // Load provider configuration (user then global)
+    const [userCfg, globalCfg] = await Promise.all([
+      ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier }),
+      ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {})
+    ]);
+
+    const provider = (userCfg?.apiProvider || globalCfg?.apiProvider || "openrouter") as string;
+    if (provider !== "openrouter") return; // Only supported provider for now
+
+    const apiKey = userCfg?.openRouterApiKey || globalCfg?.openRouterApiKey || (process.env.OPENROUTER_API_KEY as string | undefined);
+    if (!apiKey) return;
+    const baseURL = userCfg?.openRouterBaseUrl || globalCfg?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+    const modelId = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano";
+
+    try {
+      const openrouter = createOpenRouter({ apiKey, baseURL });
+      const res = await generateText({
+        model: openrouter.chat(modelId),
+        system: "You generate a very short, descriptive chat title (max 6 words).",
+        messages: [{ role: "user", content: (prompt || "").trim() }]
+      });
+      const title = (res.text || "").trim();
+      if (title) {
+        await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title });
+      }
+    } catch (_err) {
+      // Fail silently; title generation is best-effort
+    }
+  }
 });

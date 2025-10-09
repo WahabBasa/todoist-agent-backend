@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Id } from "../../../convex/_generated/dataModel"
 import { cn } from "@/lib/utils"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 
 import { Button } from "../ui/button"
 import {
@@ -36,10 +39,16 @@ interface ChatMenuItemProps {
   isActive: boolean
   onSelect: () => void
   onDelete: () => void
+  isDeleting?: boolean
+  
 }
 
-export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuItemProps) {
+export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting }: ChatMenuItemProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const updateSession = useMutation(api.chatSessions.updateChatSession)
+  const [isEditing, setIsEditing] = useState(false)
+  const [tempTitle, setTempTitle] = useState(chat.title)
+  const [pointerType, setPointerType] = useState<"mouse" | "touch" | "pen" | null>(null)
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp)
@@ -62,26 +71,74 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
     onDelete()
   }
 
+  const handleRenameStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setTempTitle(chat.title)
+    setIsEditing(true)
+  }
+
+  const commitRename = async () => {
+    const next = tempTitle.trim().replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ')
+    setIsEditing(false)
+    if (!next || next === chat.title) return
+    try {
+      await updateSession({ sessionId: chat._id, title: next })
+    } catch (e) {
+      // Revert local edit on failure
+      setTempTitle(chat.title)
+    }
+  }
+
   return (
     <>
-      <div
+      <motion.div
+        initial={{ opacity: 1, x: 0 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -100, transition: { duration: 0.3, ease: "easeInOut" } }}
+        layout
         className={cn(
-          "group relative flex items-center gap-tertiary rounded-design-md p-1.5 cursor-pointer hover:bg-muted/50",
-          "transition-all duration-200 mb-0", // Use design system transition and add margin bottom
+          "group relative flex items-center gap-tertiary rounded-design-md p-1.5 cursor-pointer",
+          pointerType !== "touch" && "hover:bg-muted/50",
+          "mb-0",
           isActive && "bg-muted"
         )}
-        onClick={onSelect}
+        onClick={(e) => { if (!isDeleting && !isEditing) onSelect(); }}
+        onPointerDown={(event) => {
+          setPointerType(event.pointerType as "mouse" | "touch" | "pen")
+        }}
+        
       >
         {/* Chat content */}
         <div className="flex-1 min-w-0">
-          <div className="text-base font-medium font-sans text-muted-foreground truncate">
-            {chat.title}
-          </div>
+          {isEditing ? (
+            <input
+              className="h-6 w-full bg-transparent outline-none text-base font-medium text-muted-foreground"
+              value={tempTitle}
+              onChange={(e) => setTempTitle(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void commitRename();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setIsEditing(false);
+                  setTempTitle(chat.title);
+                }
+              }}
+              autoFocus
+            />
+          ) : (
+            <div className="text-base font-medium font-sans text-muted-foreground truncate">
+              {tempTitle !== chat.title ? tempTitle : chat.title}
+            </div>
+          )}
         </div>
 
         {/* Menu button - only show on hover or when active */}
         <div className={cn(
-          "flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+          "flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200",
           isActive && "opacity-100"
         )}>
           {!chat.isDefault && (
@@ -92,11 +149,18 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
                   size="icon"
                   className="h-6 w-6 text-utility hover:text-secondary rounded-design-sm"
                   onClick={(e) => e.stopPropagation()}
+                  aria-label="Chat options"
                 >
-                  <MoreHorizontal className="h-3 w-3" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 rounded-design-md">
+                <DropdownMenuItem
+                  className="text-tertiary"
+                  onClick={handleRenameStart}
+                >
+                  Rename
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive text-tertiary"
                   onClick={(e) => {
@@ -111,7 +175,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete }: ChatMenuIte
             </DropdownMenu>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
