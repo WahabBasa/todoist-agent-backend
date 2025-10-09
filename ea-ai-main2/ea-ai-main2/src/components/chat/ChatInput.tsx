@@ -46,7 +46,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
         className="relative"
       >
         {/* ChatHub-style input container - Original multi-row design */}
-        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-primary/20 ring-offset-2 ring-offset-background bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out shadow-lg">
+        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-primary/20 ring-offset-2 ring-offset-background hover:ring-2 hover:ring-primary/30 bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out shadow-lg">
           
           {/* Main input row */}
           <div className="flex flex-row items-end pl-3 md:pl-4 pr-2 py-2 w-full gap-0">
@@ -64,10 +64,11 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               value={value}
               disabled={disabled || isLoading}
               className={cn(
-                "w-full min-h-8 text-sm md:text-base max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
+                "w-full min-h-8 max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
                 "resize-none border-0 bg-transparent",
                 "text-foreground placeholder:text-muted-foreground",
-                "scrollbar-hide leading-relaxed"
+                "scrollbar-hide leading-relaxed",
+                "t-user"
               )}
               onChange={onChange}
               onKeyDown={onKeyDown}
@@ -84,11 +85,29 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               <Button
                 type="submit"
                 size="icon"
+                variant="ghost"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full shadow-sm',
-                  "btn-blue-primary",
+                  // Visual reset handled via variant=ghost; colors via inline style
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
+                style={{
+                  backgroundColor: 'var(--primary-blue)',
+                  borderColor: 'var(--primary-blue)',
+                  color: 'var(--pure-white)'
+                }}
+                onMouseEnter={(e) => {
+                  if (!disabled && !isLoading) {
+                    e.currentTarget.style.backgroundColor = '#4a8cb0'
+                    e.currentTarget.style.borderColor = '#4a8cb0'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!disabled && !isLoading) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary-blue)'
+                    e.currentTarget.style.borderColor = 'var(--primary-blue)'
+                  }
+                }}
                 disabled={(((value?.trim?.().length ?? 0) === 0) && !isLoading) || disabled}
               >
                 <ArrowUp size={16} />
@@ -99,11 +118,16 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               <Button
                 type="button"
                 size="icon"
+                variant="ghost"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full shadow-sm',
-                  'btn-blue-primary',
                   'animate-pulse'
                 )}
+                style={{
+                  backgroundColor: 'var(--primary-blue)',
+                  borderColor: 'var(--primary-blue)',
+                  color: 'var(--pure-white)'
+                }}
                 disabled
               >
                 <Square size={16} />

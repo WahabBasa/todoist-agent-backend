@@ -474,8 +474,8 @@ function ConnectedAppsSettings({
     {
       appName: "Google Calendar",
       description: gcalConnected
-        ? (gcalStatusMsg || "Connected to your Google Calendar.")
-        : "Connect your Google Calendar to enable scheduling and availability features.",
+        ? "Connected to Google Calendar."
+        : "Connect Google Calendar to schedule and sync events.",
       iconBgColor: "bg-green-600",
       iconText: "G",
       gradientFrom: undefined,
@@ -494,8 +494,8 @@ function ConnectedAppsSettings({
     {
       appName: "Todoist",
       description: todoistConflictData 
-        ? "Account conflict detected. Please resolve the conflict to connect Todoist."
-        : "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
+        ? "Resolve account conflict to connect Todoist."
+        : "Connect Todoist to manage your tasks and projects.",
       iconBgColor: "bg-red-500",
       iconText: "T",
       gradientFrom: undefined,
@@ -595,10 +595,10 @@ function ConnectedAppsSettings({
           className="text-2xl font-bold mb-2"
           style={{ color: "var(--soft-off-white)" }}
         >
-          Connected Apps
+          Connected apps
         </h1>
         <p style={{ color: "var(--neutral-stone)" }}>
-          Connect external services to enhance your AI assistant with additional capabilities and data sources.
+          Link and manage app connections.
         </p>
       </div>
 

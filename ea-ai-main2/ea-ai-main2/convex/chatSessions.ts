@@ -888,3 +888,80 @@ function deriveFallbackTitle(src: string): string {
   const t = words.join(" ");
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New Chat";
 }
+
+// Helper: sanitize greeting (short, safe, no vendors/emojis, last-name addressing)
+function sanitizeGreeting(raw: string, lastName: string, localHour?: number): string {
+  const fallback = fallbackGreeting(lastName, localHour)
+  if (!raw || !raw.trim()) return fallback
+  let t = raw.replace(/[\r\n]+/g, " ").trim()
+  // Remove vendor/model words if present
+  t = t.replace(/\b(grok|xai|openai|anthropic|llama|mistral)\b/gi, "")
+  // Strip emojis and excessive punctuation
+  t = t.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, "").replace(/^['"\-:;\s]+|['"\-:;\s]+$/g, "").trim()
+  // Collapse whitespace and cap to 10 words
+  const words = t.split(/\s+/).filter(Boolean).slice(0, 10)
+  t = words.join(" ")
+  // Ensure it ends plainly with a period (optional)
+  if (!/[.!?]$/.test(t)) t = t + "."
+  return t || fallback
+}
+
+function fallbackGreeting(lastName: string, localHour?: number): string {
+  const cleanLast = (lastName || "there").replace(/[^\p{L}\p{N} -]/gu, "").trim() || "there"
+  const h = typeof localHour === 'number' ? localHour : new Date().getHours()
+  const tod = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
+  return `${tod}, ${cleanLast}.`
+}
+
+// Action: generate a concise greeting using ONLY last name and time-of-day (no DB writes)
+export const generateGreetingForUser = action({
+  args: { sessionId: v.id("chatSessions"), lastName: v.string(), localHour: v.optional(v.number()) },
+  handler: async (ctx, { sessionId, lastName, localHour }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return fallbackGreeting(lastName, localHour)
+    const tokenIdentifier = identity.tokenIdentifier || identity.subject
+
+    // Load provider configuration (user then global)
+    const [userCfg, globalCfg] = await Promise.all([
+      ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier }),
+      ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {})
+    ])
+
+    const provider = (userCfg?.apiProvider || globalCfg?.apiProvider || "openrouter") as string
+    if (provider !== "openrouter") return fallbackGreeting(lastName, localHour)
+
+    const apiKey = userCfg?.openRouterApiKey || globalCfg?.openRouterApiKey || (process.env.OPENROUTER_API_KEY as string | undefined)
+    if (!apiKey) return fallbackGreeting(lastName, localHour)
+    const baseURL = userCfg?.openRouterBaseUrl || globalCfg?.openRouterBaseUrl || "https://openrouter.ai/api/v1"
+    const modelId = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano"
+
+    try {
+      const openrouter = createOpenRouter({ apiKey, baseURL })
+      const tod = typeof localHour === 'number' ? (localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening') : ''
+      const system = [
+        "You are a greeting generator.",
+        "Return ONLY a short, warm, neutral greeting (max 10 words).",
+        "Use ONLY the provided last name to address the user.",
+        "No emojis. No questions. No vendor/model names. Output just the greeting."
+      ].join(" ")
+      const userContent = [
+        lastName ? `LastName: ${lastName}` : undefined,
+        tod ? `TimeOfDay: ${tod}` : undefined,
+        "Return only the greeting."
+      ].filter(Boolean).join("\n")
+
+      const res = await generateText({
+        model: openrouter.chat(modelId),
+        system,
+        messages: [{ role: "user", content: userContent }],
+        temperature: 0.2 as any,
+        maxTokens: 24 as any
+      } as any)
+
+      const raw = (res?.text || "").trim()
+      return sanitizeGreeting(raw, lastName, localHour)
+    } catch (_err) {
+      return fallbackGreeting(lastName, localHour)
+    }
+  }
+})

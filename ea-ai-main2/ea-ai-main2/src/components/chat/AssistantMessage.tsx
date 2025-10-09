@@ -49,7 +49,7 @@ export const AssistantMessage = React.memo<AssistantMessageProps>(
             ) : (
               // Content rendering - single Response component for both streaming and complete
               <div className="markdown">
-                <Response className="text-primary" parseIncompleteMarkdown={false}>
+                <Response className="t-ai font-ai" parseIncompleteMarkdown={false}>
                   {safeContent}
                 </Response>
                 {/* Typing indicator - simple conditional, no state */}

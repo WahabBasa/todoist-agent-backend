@@ -46,7 +46,7 @@ const UserMessageRow = React.memo(({ message }: { message: UiMsg }) => {
   return (
     <div className="flex justify-start">
       <div className="flex items-start gap-3 w-full">
-        <div className="message-bubble-user"><div className="whitespace-normal break-words">{(message.content ?? '').trimStart()}</div></div>
+      <div className="message-bubble-user"><div className="whitespace-normal break-words t-user">{(message.content ?? '').trimStart()}</div></div>
       </div>
     </div>
   )
@@ -155,7 +155,7 @@ export function Chat() {
       <div
         className={cn(
           "w-full flex flex-col items-center absolute bottom-0 px-3 md:px-4 pb-2 pt-16 right-0 gap-2",
-          "transition-all ease-in-out duration-300 left-0 z-10",
+          "transition-all ease-in-out duration-300 left-0 z-10 transform -translate-y-[10%]",
           isFreshSession && "top-0 justify-center" // Full height centering like ChatHub
         )}
       >

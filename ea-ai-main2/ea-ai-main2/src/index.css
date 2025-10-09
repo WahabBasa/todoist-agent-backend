@@ -90,6 +90,27 @@
   --color-text-tertiary: #8b9297;                 /* TERTIARY attention - slightly muted stone */
   --color-text-utility: #6b7280;                  /* UTILITY attention - more muted */
 
+  /* Global HSL text tokens (calibrated to current foreground) */
+  --fg-h: 210;     /* approx hue of soft-off-white */
+  --fg-s: 14%;     /* approximate saturation */
+  --fg-l: 95%;     /* maps to current --soft-off-white */
+  --text-100: hsl(var(--fg-h) var(--fg-s) var(--fg-l));
+  --text-65: hsl(var(--fg-h) var(--fg-s) 65%);
+
+  /* Global type size/weight tokens (scaled up for better readability) */
+  --t-display-size: 2.65rem;    /* ~5% smaller */
+  --t-primary-size: 1.28rem;    /* ~5% smaller */
+  --t-body-size: 1.11rem;       /* ~5% smaller */
+  --t-meta-size: 1.03rem;       /* ~5% smaller */
+  --t-bold: 600;
+  --t-regular: 400;
+
+  /* Additional globals for specific chat roles */
+  --t-ai-size: 1.1rem;          /* Smaller AI message size */
+  --t-ai-weight: 568;           /* ~5% thicker than previous 540 */
+  --t-user-size: 1rem;          /* Smaller user message */
+  --t-user-weight: 500;         /* Medium weight */
+
   /* Core Theme Colors - Claude Style */
   --color-background: var(--dark-charcoal);
   --color-foreground: var(--soft-off-white);
@@ -218,6 +239,17 @@
 }
 
 @layer utilities {
+  /* Global typography utilities (attention-based) */
+  .t-display { font-size: var(--t-display-size); font-weight: var(--t-bold); color: var(--text-100); }
+  .t-primary { font-size: var(--t-primary-size); font-weight: var(--t-bold); color: var(--text-100); }
+  .t-body { font-size: var(--t-body-size); font-weight: var(--t-regular); color: var(--text-100); }
+  .t-meta { font-size: var(--t-meta-size); font-weight: var(--t-regular); color: var(--text-65); }
+
+  /* Role-specific typography */
+  .t-ai { font-size: var(--t-ai-size); font-weight: var(--t-ai-weight); color: var(--text-100); }
+  .t-user { font-size: var(--t-user-size); font-weight: var(--t-user-weight); color: var(--text-100); }
+  .font-ai { font-family: var(--greeting-font-family); }
+
   /* Scrollbar utilities */
   .scrollbar-hide {
     -ms-overflow-style: none;

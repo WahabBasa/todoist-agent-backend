@@ -93,8 +93,8 @@ export function CollapsibleSidebar() {
     await createNewSession();
   };
 
-  // Claude-style dimensions: 48px collapsed, 246px expanded (safer fit for buttons)
-  const sidebarWidth = collapsed ? "w-[48px]" : "w-[246px]";
+  // Claude-style dimensions: increased by ~8% → 52px collapsed, 266px expanded
+  const sidebarWidth = collapsed ? "w-[52px]" : "w-[266px]";
 
   return (
     <aside

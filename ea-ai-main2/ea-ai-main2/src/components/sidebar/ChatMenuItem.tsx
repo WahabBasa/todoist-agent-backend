@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Id } from "../../../convex/_generated/dataModel"
@@ -53,6 +53,13 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
   const [isEditing, setIsEditing] = useState(false)
   const [tempTitle, setTempTitle] = useState(chat.title)
   const [pointerType, setPointerType] = useState<"mouse" | "touch" | "pen" | null>(null)
+
+  // Keep local tempTitle in sync with server title when not editing
+  useEffect(() => {
+    if (!isEditing) {
+      setTempTitle(chat.title)
+    }
+  }, [chat.title, isEditing])
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp)
@@ -117,7 +124,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
               <div className="flex-1 min-w-0">
                 {isEditing ? (
                   <input
-                    className="h-6 w-full bg-transparent outline-none text-base font-medium text-muted-foreground"
+                    className="h-6 w-full bg-transparent outline-none text-[0.92rem] font-medium text-muted-foreground"
                     value={tempTitle}
                     onChange={(e) => setTempTitle(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
@@ -135,9 +142,8 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
                     autoFocus
                   />
                 ) : (
-                  <div className="text-base font-medium font-sans truncate">
-                    {tempTitle !== chat.title ? tempTitle : chat.title}
-                  </div>
+                  // Always display the latest server title when not editing
+                  <div className="text-[0.92rem] font-medium font-sans truncate">{chat.title}</div>
                 )}
               </div>
             </button>
