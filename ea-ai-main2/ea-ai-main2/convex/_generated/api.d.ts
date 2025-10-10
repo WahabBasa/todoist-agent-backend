@@ -38,6 +38,7 @@ import type * as ai_prompts_sections_rules from "../ai/prompts/sections/rules.js
 import type * as ai_prompts_sections_systemInfo from "../ai/prompts/sections/systemInfo.js";
 import type * as ai_prompts_sections_toolUseGuidelines from "../ai/prompts/sections/toolUseGuidelines.js";
 import type * as ai_prompts_system from "../ai/prompts/system.js";
+import type * as ai_prompts_task_breakdown from "../ai/prompts/task_breakdown.js";
 import type * as ai_prompts_zen_new from "../ai/prompts/zen_new.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_simpleMessages from "../ai/simpleMessages.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "ai/prompts/sections/systemInfo": typeof ai_prompts_sections_systemInfo;
   "ai/prompts/sections/toolUseGuidelines": typeof ai_prompts_sections_toolUseGuidelines;
   "ai/prompts/system": typeof ai_prompts_system;
+  "ai/prompts/task_breakdown": typeof ai_prompts_task_breakdown;
   "ai/prompts/zen_new": typeof ai_prompts_zen_new;
   "ai/session": typeof ai_session;
   "ai/simpleMessages": typeof ai_simpleMessages;

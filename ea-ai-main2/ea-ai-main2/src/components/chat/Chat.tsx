@@ -6,6 +6,7 @@ import { Id } from "../../../convex/_generated/dataModel"
 import { AssistantMessage } from './AssistantMessage'
 import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
+import { QuickPromptButtons } from './QuickPromptButtons'
 import { useChat } from '../../context/chat'
 import type { UiMsg } from '../../store/chatStore'
 import { useAutoScroll } from '../../hooks/use-auto-scroll'
@@ -193,6 +194,9 @@ export function Chat() {
               }
             }}
           />
+          {isFreshSession && (
+            <QuickPromptButtons />
+          )}
         </div>
       </div>
     </div>
