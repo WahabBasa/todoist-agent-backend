@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useAction } from "convex/react";
+import { useQuery, useAction, useMutation } from "convex/react";
 import { useClerk, useUser, useSignIn } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -304,19 +304,21 @@ function ConnectedAppsSettings({
   const generateGoogleOAuthURL = useAction(api.googleCalendar.auth.generateGoogleOAuthURL);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
-  const setGoogleCalendarEnabled = useAction(api.googleCalendar.tokens.setGoogleCalendarEnabled);
+  const setGoogleCalendarEnabled = useMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled);
+  const revokeLegacyGoogleToken = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
+  const forceDestroyGoogleExternalAccount = useAction(api.googleCalendar.auth.forceDestroyGoogleExternalAccount);
 
-  const [gcalConnected, setGcalConnected] = useState<boolean>(false);
+  // Reactive enabled flag to avoid initial flicker
+  const gcalEnabled = useQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled);
+  const gcalStatusLoading = gcalEnabled === undefined;
+  const gcalConnectedQuery = gcalEnabled === true;
+
   const [gcalTesting, setGcalTesting] = useState<boolean>(false);
   const [gcalStatusMsg, setGcalStatusMsg] = useState<string>("");
 
   const refreshGcalStatus = async () => {
-    try {
-      const has = await hasGoogleCalendarConnection();
-      setGcalConnected(!!has);
-    } catch (e) {
-      console.warn("[Settings] Failed to check Google Calendar connection", e);
-    }
+    // Keep diagnostic action; UI derives state from query
+    try { await hasGoogleCalendarConnection(); } catch (e) { console.warn("[Settings] Failed to check Google Calendar connection", e); }
   };
 
   useEffect(() => {
@@ -383,7 +385,17 @@ function ConnectedAppsSettings({
   const disconnectGoogleCalendar = async () => {
     try {
       setIsConnecting('Google Calendar');
+      // 1) Remove Clerk external account for Google so next connect requires consent
+      const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+      if (extAcc && typeof extAcc.destroy === 'function') {
+        try { await extAcc.destroy(); } catch {}
+      }
+      // Server-side enforcement as fallback
+      try { await forceDestroyGoogleExternalAccount(); } catch {}
+      // 2) Flip enabled flag off in backend (soft disable)
       await removeGoogleCalendarConnection();
+      // 3) Revoke and delete any legacy stored refresh token
+      try { await revokeLegacyGoogleToken(); } catch {}
       await refreshGcalStatus();
       toast.success('Disconnected Google Calendar');
     } catch (e) {
@@ -484,18 +496,21 @@ function ConnectedAppsSettings({
   const connectedApps = [
     {
       appName: "Google Calendar",
-      description: gcalConnected
-        ? "Connected to Google Calendar."
-        : "Connect Google Calendar to schedule and sync events.",
+      description: gcalStatusLoading
+        ? "Checking Google Calendar status..."
+        : (gcalConnectedQuery
+          ? "Connected to Google Calendar."
+          : "Connect Google Calendar to schedule and sync events."),
       iconBgColor: "bg-green-600",
       iconText: "G",
       gradientFrom: undefined,
       gradientTo: undefined,
-      isConnected: gcalConnected,
-      canConnect: true,
-      isConnecting: isConnecting === 'Google Calendar' || gcalTesting,
+      isConnected: gcalConnectedQuery,
+      canConnect: !gcalStatusLoading,
+      isConnecting: isConnecting === 'Google Calendar' || gcalTesting || gcalStatusLoading,
       onConnect: () => {
-        if (gcalConnected) {
+        if (gcalStatusLoading) return;
+        if (gcalConnectedQuery) {
           void disconnectGoogleCalendar();
         } else {
           void connectGoogleCalendar();

@@ -257,6 +257,78 @@ export const removeGoogleCalendarConnection = action({
 });
 
 // =================================================================
+// LEGACY TOKEN REVOCATION (for true disconnect behavior)
+// =================================================================
+
+/**
+ * Revoke and delete any legacy stored Google refresh token so that
+ * the next connect requires full user consent.
+ */
+export const revokeLegacyGoogleToken = action({
+  args: {},
+  handler: async (ctx: ActionCtx): Promise<{ revoked: boolean; deleted: boolean } | { revoked: false; deleted: false; reason: string }> => {
+    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+    await logUserAccess(tokenIdentifier, "googleCalendar.auth.revokeLegacyGoogleToken", "REQUESTED");
+    try {
+      const refreshToken = await ctx.runQuery(api.googleCalendar.tokens.getRefreshToken, {});
+      if (!refreshToken) {
+        await logUserAccess(tokenIdentifier, "googleCalendar.auth.revokeLegacyGoogleToken", "NO_REFRESH_TOKEN");
+        return { revoked: false, deleted: false, reason: "no_refresh_token" };
+      }
+
+      // Revoke token via Google's token revocation endpoint
+      const resp = await fetch("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: refreshToken }).toString(),
+      });
+      const revoked = resp.ok;
+
+      // Delete from DB regardless of revoke outcome
+      const deleted = await ctx.runMutation(api.googleCalendar.tokens.deleteGoogleCalendarToken, {});
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.revokeLegacyGoogleToken", revoked ? "REVOKED_AND_DELETED" : "DELETE_ONLY");
+      return { revoked, deleted };
+    } catch (error) {
+      console.error("Error revoking legacy Google token:", error);
+      await logUserAccess(tokenIdentifier, "googleCalendar.auth.revokeLegacyGoogleToken", `FAILED: ${error}`);
+      return { revoked: false, deleted: false, reason: "error" } as const;
+    }
+  },
+});
+
+// =================================================================
+// CLERK EXTERNAL ACCOUNT CLEANUP (server-side enforcement)
+// =================================================================
+
+/**
+ * Force-destroy the user's Google external account in Clerk.
+ * Use this as a server-side fallback to ensure true disconnect
+ * even if the frontend object isn't available.
+ */
+export const forceDestroyGoogleExternalAccount = action({
+  args: {},
+  handler: async (ctx: ActionCtx): Promise<{ removed: boolean } | { removed: false; reason: string }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { removed: false, reason: "not_authenticated" };
+    const clerkUserId = identity.subject;
+
+    try {
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+      const user = await clerkClient.users.getUser(clerkUserId);
+      const googleAccount = (user?.externalAccounts || []).find((acc: any) => acc?.provider === "oauth_google" || acc?.provider === "google");
+      if (!googleAccount?.id) return { removed: false, reason: "no_external_account" };
+
+      // According to prior devlog, the correct method is deleteUserExternalAccount({ userId, externalAccountId })
+      await clerkClient.users.deleteUserExternalAccount({ userId: clerkUserId, externalAccountId: googleAccount.id });
+      return { removed: true };
+    } catch (e) {
+      console.error("forceDestroyGoogleExternalAccount error:", e);
+      return { removed: false, reason: "error" } as const;
+    }
+  },
+});
+
+// =================================================================
 // CALENDAR EVENT OPERATIONS (Calendly Clone Pattern)  
 // =================================================================
 
@@ -271,6 +343,8 @@ export const getCalendarEventTimes = action({
   handler: async (ctx: ActionCtx, args) => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCalendarEventTimes", "REQUESTED");
+    const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
+    if (!enabled) throw new Error("Google Calendar disabled.");
     let oAuthClient = await getOAuthClientFromDB(ctx);
     if (!oAuthClient) {
       const identity = await ctx.auth.getUserIdentity();
@@ -339,6 +413,8 @@ export const createCalendarEvent = action({
   handler: async (ctx: ActionCtx, args) => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", "REQUESTED");
+    const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
+    if (!enabled) throw new Error("Google Calendar disabled.");
     let oAuthClient = await getOAuthClientFromDB(ctx);
     if (!oAuthClient) {
       const identity = await ctx.auth.getUserIdentity();
@@ -399,6 +475,8 @@ export const getUserCalendarSettings = action({
   handler: async (ctx: ActionCtx) => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getUserCalendarSettings", "REQUESTED");
+    const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
+    if (!enabled) throw new Error("Google Calendar disabled.");
     let oAuthClient = await getOAuthClientFromDB(ctx);
     if (!oAuthClient) {
       const identity = await ctx.auth.getUserIdentity();
@@ -455,6 +533,8 @@ export const getCurrentCalendarTime = action({
   handler: async (ctx: ActionCtx) => {
     const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCurrentCalendarTime", "REQUESTED");
+    const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
+    if (!enabled) throw new Error("Google Calendar disabled.");
     let oAuthClient = await getOAuthClientFromDB(ctx);
     if (!oAuthClient) {
       const identity = await ctx.auth.getUserIdentity();
