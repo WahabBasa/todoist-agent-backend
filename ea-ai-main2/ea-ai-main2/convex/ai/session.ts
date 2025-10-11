@@ -4,7 +4,6 @@ import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { streamText, stepCountIs, type StreamTextResult } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { createVertex } from "@ai-sdk/google-vertex";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { autoCompactHistory } from "./compaction";
@@ -267,7 +266,8 @@ export const chatWithAI = action({
         }
       }
       
-      // Initialize Google Vertex AI provider
+      // Initialize Google Vertex AI provider (dynamic import to avoid non-Node bundling in default runtime)
+      const { createVertex } = await import("@ai-sdk/google-vertex");
       modelProvider = createVertex({
         project: googleProjectId,
         location: googleRegion || "us-central1",
