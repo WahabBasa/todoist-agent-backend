@@ -4,46 +4,51 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Smooth scroll behavior for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
 @theme {
   --default-transition: all 0.2s ease;
   --chat-position-transition: all 0.5s ease-in-out;
   --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --greeting-font-family: 'Lora', serif;
-  
+
   /* UX-Driven Typography System - Attention Flow Based */
   /* PRIMARY ATTENTION ZONE - Active interaction areas (chat input, main actions) */
   --font-primary-size: 14px;
   --font-primary-weight: 500;
   --font-primary-line-height: 1.5;
-  
+
   /* SECONDARY ATTENTION ZONE - Navigation and important controls */
   --font-secondary-size: 13px;
   --font-secondary-weight: 475;
   --font-secondary-line-height: 1.45;
-  
+
   /* TERTIARY ATTENTION ZONE - Background content, scannable lists */
   --font-tertiary-size: 12px;
   --font-tertiary-weight: 400;
   --font-tertiary-line-height: 1.4;
-  
+
   /* UTILITY ATTENTION ZONE - Minimal UI elements, three dots, meta info */
   --font-utility-size: 11px;
   --font-utility-weight: 350;
   --font-utility-line-height: 1.35;
-  
+
   /* LEGACY SCALE - Maintained for headings and special use */
   --font-size-lg: 18px;       /* Section headings */
   --line-height-lg: 1.4;
   --font-weight-lg: 600;
-  
+
   --font-size-xl: 20px;       /* Page headings */
   --line-height-xl: 1.3;
   --font-weight-xl: 600;
-  
+
   --font-size-2xl: 24px;      /* Large headings */
   --line-height-2xl: 1.2;
   --font-weight-2xl: 600;
-  
+
   --font-size-3xl: 30px;      /* Hero text */
   --line-height-3xl: 1.2;
   --font-weight-3xl: 600;
@@ -53,28 +58,28 @@
   --radius-md: 0.5rem;       /* 8px - default buttons and inputs */  
   --radius-lg: 0.75rem;      /* 12px - large containers like chat input */
   --radius-xl: 1rem;         /* 16px - special cases like modals */
-  
+
   /* UX-Driven Spacing System - Attention Priority Based */
   /* PRIMARY SPACING - Generous padding for primary interaction zones */
   --spacing-primary-x: 1rem;    /* 16px horizontal padding */
   --spacing-primary-y: 0.75rem; /* 12px vertical padding */
   --spacing-primary-gap: 0.75rem; /* 12px gaps between primary elements */
-  
+
   /* SECONDARY SPACING - Balanced padding for navigation zones */
   --spacing-secondary-x: 0.5rem;   /* 8px horizontal padding */
   --spacing-secondary-y: 0.375rem; /* 6px vertical padding */
   --spacing-secondary-gap: 0.375rem; /* 6px gaps between secondary elements */
-  
+
   /* TERTIARY SPACING - Compact padding for background content */
   --spacing-tertiary-x: 0.375rem;  /* 6px horizontal padding */
   --spacing-tertiary-y: 0.25rem;   /* 4px vertical padding */
   --spacing-tertiary-gap: 0.25rem; /* 4px gaps for efficient scanning */
-  
+
   /* UTILITY SPACING - Minimal padding for utility elements */
   --spacing-utility-x: 0.375rem;  /* 6px horizontal padding */
   --spacing-utility-y: 0.25rem;   /* 4px vertical padding */
   --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
-  
+
   /* Claude Color System - Blue-Accented Dark Theme */
   --dark-charcoal: #242424;      /* Main background - darkened */
   --medium-dark: #303030;        /* Sidebar & input containers - darkened */
@@ -131,7 +136,7 @@
   --color-border: #4a4a4a;                        /* Slightly lighter than medium-dark */
   --color-input: var(--medium-dark);
   --color-ring: var(--primary-blue);
-  
+
   /* Sidebar Colors - Claude Style */
   --color-sidebar-background: var(--medium-dark);
   --color-sidebar-foreground: var(--soft-off-white);
@@ -141,26 +146,25 @@
   --color-sidebar-accent-foreground: var(--soft-off-white);
   --color-sidebar-border: #4a4a4a;
   --color-sidebar-ring: var(--primary-blue);
-  
+
   /* Blue Accent System */
   --color-accent-blue: var(--primary-blue);
   --color-accent-blue-foreground: var(--pure-white);
   --color-accent-blue-border: var(--primary-blue);
-  
+
   /* Primary Blue Button - Updated for Claude */
   --color-blue-primary: var(--primary-blue);
   --color-blue-primary-foreground: var(--pure-white);
   --color-blue-primary-hover: #4a8cb0;             /* Slightly darker blue */
-  
+
   /* Claude Transition System */
   --claude-sidebar-transition: width 300ms ease-in-out;
   --claude-opacity-transition: opacity 150ms ease-in-out;
   --claude-opacity-delay: 150ms;
-  
+
   /* Radius */
   --radius: 0.5rem;
 }
-
 
 @layer base {
 
@@ -171,12 +175,12 @@
     margin: 0;
     padding: 0;
   }
-  
+
   /* Hide scrollbars but preserve scroll functionality */
   body::-webkit-scrollbar {
     display: none;
   }
-  
+
   body {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -187,18 +191,18 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
-  
+
   * {
     border-color: var(--color-border);
   }
-  
+
   /* Ensure all text elements inherit consistent sizing */
   p, span, div {
     font-size: inherit;
     font-weight: inherit;
     line-height: inherit;
   }
-  
+
   /* Typography hierarchy with professional standards */
   h1 { 
     font-size: 20px;        /* text-xl */
@@ -206,29 +210,29 @@
     line-height: 1.3;
     color: var(--color-foreground);
   }
-  
+
   h2, h3 { 
     font-size: 18px;        /* text-lg */
     font-weight: 600;       /* font-semibold */
     line-height: 1.4;
     color: var(--color-foreground);
   }
-  
+
   h4, h5, h6 { 
     font-size: 14px;        /* text-sm */
     font-weight: 600;       /* font-semibold */
     line-height: 1.5;
     color: var(--color-foreground);
   }
-  
+
   /* Remove global interactive element overrides - let components control their typography */
-  
+
   label {
     font-size: 14px;        /* text-sm standard */
     font-weight: 500;       /* font-medium consistency */
     color: var(--color-foreground);
   }
-  
+
   /* Meta text standardization */
   small {
     font-size: 12px;        /* text-xs */
@@ -255,7 +259,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -264,21 +268,21 @@
   .scrollbar-dark::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-track {
     background: var(--color-muted);
     border-radius: 3px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 3px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb:hover {
     background: var(--color-accent);
   }
-  
+
   .scrollbar-dark {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) var(--color-muted);
@@ -288,12 +292,12 @@
   .sidebar-transition {
     transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
   }
-  
+
   /* Smooth hover effects for sidebar items */
   .sidebar-item {
     transition: all 0.2s ease;
   }
-  
+
   .sidebar-item:hover {
     transform: translateX(2px);
   }
@@ -335,7 +339,7 @@
   .padding-secondary { padding: var(--spacing-secondary-y) var(--spacing-secondary-x); }
   .padding-tertiary { padding: var(--spacing-tertiary-y) var(--spacing-tertiary-x); }
   .padding-utility { padding: var(--spacing-utility-y) var(--spacing-utility-x); }
-  
+
   .gap-primary { gap: var(--spacing-primary-gap); }
   .gap-secondary { gap: var(--spacing-secondary-gap); }
   .gap-tertiary { gap: var(--spacing-tertiary-gap); }
@@ -343,13 +347,13 @@
 
   /* Chat position animation */
   .chat-transition { transition: var(--chat-position-transition); }
-  
+
   /* Empty chat state - center the form vertically and horizontally */
   .chat-empty {
     justify-content: center; /* Center form vertically in flex column */
     align-items: center;     /* Center form horizontally */
   }
-  
+
   /* Simplified form positioning - clean slide-down animation */
   .form-centered {
     /* Form starts in centered position naturally via parent .chat-empty */
@@ -357,14 +361,14 @@
     transform: none; /* No initial transform needed - centering handled by flexbox */
     transition: none; /* No initial transitions to prevent sliding from left */
   }
-  
+
   .form-slide-down {
     /* Slide down to normal bottom position after first message */
     position: static;
     transform: translateY(20vh); /* Move down to simulate sliding to bottom */
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth slide-down */
   }
-  
+
   /* Ensure no unwanted animations after slide-down completes */
   .form-started {
     transition: none !important;
@@ -383,7 +387,7 @@
     flex-direction: column;
     position: relative;
   }
-  
+
   .wrapper {
     flex: 1;
     overflow-y: auto; /* Only vertical scrolling when needed */
@@ -392,7 +396,7 @@
     display: flex;
     justify-content: center; /* Centers .chat horizontally */
   }
-  
+
   .chat {
     /* Removed fixed width - using Tailwind utilities in Chat.tsx instead */
     max-width: 800px; /* Constrain maximum width */
@@ -404,14 +408,14 @@
     /* DEBUG: Disable transitions temporarily */
     transition: none !important;
   }
-  
+
   /* Debug state for chat that has started */
   .chat-has-started {
     /* Ensure no sliding animations after chat starts */
     transform: none !important;
     transition: none !important;
   }
-  
+
   /* Message styling - vertical stacking with dynamic sizing */
   .message {
     /* No fixed width - allows natural sizing like ChatGPT clone */
@@ -423,7 +427,7 @@
     line-height: var(--font-primary-line-height);
     color: var(--color-text-primary);
   }
-  
+
   .message.user {
     background-color: var(--color-secondary);
     border-radius: var(--radius-lg);
@@ -434,7 +438,7 @@
     align-self: flex-start; /* Left-align user messages */
     margin-top: 1.5rem; /* Extra space before every user message, including first */
   }
-  
+
   .message.assistant {
     /* Clean text presentation, no background */
     background: transparent;
@@ -445,7 +449,7 @@
     /* Removed max-width - using Tailwind utilities in components instead */
     align-self: flex-start; /* Left-align assistant messages */
   }
-  
+
   /* Form styling - part of scrollable content */
   .new-form {
     margin-top: 1rem;
@@ -455,7 +459,7 @@
     /* DEBUG: Disable transitions that might cause sliding */
     transition: none !important;
   }
-  
+
   .form-container {
     position: relative;
     display: flex;
@@ -468,7 +472,7 @@
     padding: 0.75rem; /* Reduced padding for smaller height */
     min-height: 3rem; /* Reduced minimum height */
   }
-  
+
   .form-textarea {
     resize: none;
     width: 100%;
@@ -480,20 +484,20 @@
     line-height: var(--font-primary-line-height);
     color: var(--color-text-primary);
   }
-  
+
   .form-textarea::placeholder {
     color: var(--color-muted-foreground);
   }
-  
+
   .form-textarea:focus {
     outline: none;
   }
-  
+
   .form-textarea:disabled {
     cursor: not-allowed;
     opacity: 0.5;
   }
-  
+
   .form-submit-button {
     align-self: flex-end;
     border-radius: var(--radius-md);
@@ -502,12 +506,12 @@
     border: 1px solid var(--color-blue-primary);
     transition: all 0.2s ease;
   }
-  
+
   .form-submit-button:hover:not(:disabled) {
     background-color: var(--color-blue-primary-hover);
     border-color: var(--color-blue-primary-hover);
   }
-  
+
   .form-submit-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -517,39 +521,37 @@
   .account-blue {
     background-color: var(--color-accent-blue-foreground);
   }
-  
+
   .account-blue-text {
     color: var(--color-accent-blue-foreground);
   }
-  
+
   .account-blue-border {
     border-color: var(--color-accent-blue-border);
   }
-  
-
 
   /* Typing indicator animation */
   @keyframes typing-dot-bounce {
     0%, 40% { transform: translateY(0); }
     20% { transform: translateY(-0.25rem); }
   }
-  
+
   .animate-typing-dot-bounce {
     animation: typing-dot-bounce 1.25s ease-out infinite;
   }
-  
+
   /* Consistent button styling matching chat input */
   .btn-blue-primary {
     background-color: var(--medium-dark) !important;
     color: var(--soft-off-white) !important;
     border-color: var(--medium-dark) !important;
   }
-  
+
   .btn-blue-primary:hover {
     background-color: var(--user-message-bg) !important;
     border-color: var(--medium-dark) !important;
   }
-  
+
   .btn-blue-primary:disabled {
     background-color: var(--medium-dark) !important;
     opacity: 0.5;
@@ -577,7 +579,7 @@
       font-size: 14px;
     }
   }
-  
+
   /* Markdown typography (aligned with eesy-chat, adapted to theme) */
   .markdown h1 { margin-bottom: 1rem; font-size: 1.875rem; font-weight: 700; }
   .markdown h2 { margin-bottom: 1rem; font-size: 1.5rem; font-weight: 700; }
@@ -598,4 +600,13 @@
   .markdown tr:last-child { border-bottom: 0; }
   .markdown code:not(pre code) { border-radius: 0.375rem; background: color-mix(in oklab, var(--color-muted) 90%, transparent); padding: 0.125rem 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.75rem; }
 
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
