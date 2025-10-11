@@ -98,8 +98,8 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
                 }}
                 onMouseEnter={(e) => {
                   if (!disabled && !isLoading) {
-                    e.currentTarget.style.backgroundColor = '#4a8cb0'
-                    e.currentTarget.style.borderColor = '#4a8cb0'
+                    e.currentTarget.style.backgroundColor = 'var(--color-blue-primary-hover)'
+                    e.currentTarget.style.borderColor = 'var(--color-blue-primary-hover)'
                   }
                 }}
                 onMouseLeave={(e) => {

@@ -60,13 +60,14 @@ function Button({
       data-slot="button"
       className={cn(buttonVariants({ variant, size, attention, className }))}
       style={{
-        backgroundColor: variant === 'ghost' ? 'transparent' : 'var(--medium-dark)',
-        borderColor: variant === 'ghost' ? 'transparent' : 'var(--medium-dark)',
+        backgroundColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
+        borderColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
+        color: variant === 'ghost' ? undefined : 'var(--pure-white)',
         ...((props as any).style || {})
       }}
       onMouseEnter={(e) => {
         if (variant !== 'ghost' && !props.disabled) {
-          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+          e.currentTarget.style.backgroundColor = 'var(--color-blue-primary-hover)';
         }
         if ((props as any).onMouseEnter) {
           (props as any).onMouseEnter(e);
@@ -74,7 +75,7 @@ function Button({
       }}
       onMouseLeave={(e) => {
         if (variant !== 'ghost' && !props.disabled) {
-          e.currentTarget.style.backgroundColor = 'var(--medium-dark)';
+          e.currentTarget.style.backgroundColor = 'var(--primary-blue)';
         }
         if ((props as any).onMouseLeave) {
           (props as any).onMouseLeave(e);

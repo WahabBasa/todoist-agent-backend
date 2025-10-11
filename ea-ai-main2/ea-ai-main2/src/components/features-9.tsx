@@ -116,11 +116,11 @@ const Map = () => {
 const chartConfig = {
     desktop: {
         label: 'Desktop',
-        color: '#2563eb',
+        color: '#5BA4CF',
     },
     mobile: {
         label: 'Mobile',
-        color: '#60a5fa',
+        color: '#7DB8DB',
     },
 } satisfies ChartConfig
 

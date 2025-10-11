@@ -1,11 +1,11 @@
 # Agent Communication Flow
 
 ## Overview
-The 4-mode AI system uses a unified communication approach where all agents work together to provide a seamless experience to the user. The system communicates as a single entity (Zen) regardless of which specialized agent is handling the current task.
+The 4-mode AI system uses a unified communication approach where all agents work together to provide a seamless experience to the user. The system communicates as a single entity (Miller) regardless of which specialized agent is handling the current task.
 
 ## Communication Architecture
 
-### Primary Agent (Zen)
+### Primary Agent (Miller)
 - **Role**: Main interface between user and the AI system
 - **Communication**: Direct interaction with user through natural conversation
 - **Responsibilities**:
@@ -34,7 +34,7 @@ Specialized agents work behind the scenes and typically do not communicate direc
 - **Reporting**: Provides status updates to primary agent only
 
 ## Unified Identity
-All agents maintain the same identity (Zen) and communication style:
+All agents maintain the same identity (Miller) and communication style:
 - Consistent voice and personality across all interactions
 - Natural, conversational responses
 - Concise but thorough communication
@@ -61,4 +61,4 @@ All agents maintain the same identity (Zen) and communication style:
 8. Planning Agent: Completes analysis and returns recommendations to Primary Agent
 9. Primary Agent: Presents organized plan to user
 
-This architecture ensures that users interact with a single, consistent AI assistant (Zen) while benefiting from specialized capabilities working behind the scenes.
+This architecture ensures that users interact with a single, consistent AI assistant (Miller) while benefiting from specialized capabilities working behind the scenes.

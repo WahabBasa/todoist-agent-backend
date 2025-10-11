@@ -84,7 +84,7 @@ html {
   --dark-charcoal: #242424;      /* Main background - darkened */
   --medium-dark: #303030;        /* Sidebar & input containers - darkened */
   --user-message-bg: #1a1a1a;    /* User message background - darker than main bg but not pure black */
-  --primary-blue: #5b9fc4;       /* Accents & buttons */
+  --primary-blue: #5BA4CF;       /* Accents & buttons - 5% more vibrant */
   --neutral-stone: #a5adb4;      /* Secondary text */
   --soft-off-white: #f0f3f5;     /* Primary text */
   --pure-white: #ffffff;         /* Highlights */
@@ -155,7 +155,7 @@ html {
   /* Primary Blue Button - Updated for Claude */
   --color-blue-primary: var(--primary-blue);
   --color-blue-primary-foreground: var(--pure-white);
-  --color-blue-primary-hover: #4a8cb0;             /* Slightly darker blue */
+  --color-blue-primary-hover: #4A92BB;             /* Slightly darker blue - 5% more vibrant */
 
   /* Claude Transition System */
   --claude-sidebar-transition: width 300ms ease-in-out;

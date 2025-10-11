@@ -1,7 +1,7 @@
 # Agent System Alignment Summary
 
 ## Overview
-This document summarizes the changes made to align all agent prompts in the 4-mode AI system to ensure consistent communication as a single entity (Zen).
+This document summarizes the changes made to align all agent prompts in the 4-mode AI system to ensure consistent communication as a single entity (Miller).
 
 ## Changes Made
 
@@ -11,7 +11,7 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 - `convex/ai/prompts/zen_new.ts`
 
 **Key Changes:**
-- Unified identity as "Zen, an AI executive assistant"
+- Unified identity as "Miller, an AI executive assistant"
 - Clear role definition as the primary interface between user and specialized agents
 - Consistent communication principles emphasizing natural, conversational responses
 - Defined orchestration principles for delegating to specialists
@@ -22,7 +22,7 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 - `convex/ai/prompts/system.ts` (getInformationCollectorPrompt function)
 
 **Key Changes:**
-- Unified identity as "Zen, an AI executive assistant"
+- Unified identity as "Miller, an AI executive assistant"
 - Clear role definition as information collection specialist
 - Consistent communication principles with the primary agent
 - Defined workflow for systematic information gathering
@@ -34,7 +34,7 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 - `convex/ai/prompts/planning_new.ts`
 
 **Key Changes:**
-- Unified identity as "Zen, an AI executive assistant"
+- Unified identity as "Miller, an AI executive assistant"
 - Clear role definition as strategic planning specialist
 - Consistent communication principles with the primary agent
 - Defined planning principles using Eisenhower Matrix
@@ -47,7 +47,7 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 - `convex/ai/prompts/execution_new.ts`
 
 **Key Changes:**
-- Unified identity as "Zen, an AI executive assistant" (for system.ts)
+- Unified identity as "Miller, an AI executive assistant" (for system.ts)
 - Maintained background execution role (for execution_new.ts)
 - Consistent communication principles where applicable
 - Clear role definition as execution specialist
@@ -58,7 +58,7 @@ This document summarizes the changes made to align all agent prompts in the 4-mo
 - `convex/ai/prompts/system.ts` (getInternalTodoEnhancedPrompt function)
 
 **Key Changes:**
-- Unified identity as "Zen, an AI executive assistant"
+- Unified identity as "Miller, an AI executive assistant"
 - Consistent communication principles
 - Maintained existing workflow for complex multi-step operations
 
@@ -70,7 +70,7 @@ A separate document `agent-communication-flow.md` was created to clarify:
 - Unified identity maintenance across all agents
 
 ## Benefits
-1. **Consistent User Experience**: Users interact with a single, consistent AI assistant (Zen)
+1. **Consistent User Experience**: Users interact with a single, consistent AI assistant (Miller)
 2. **Seamless Agent Switching**: No revelation of internal agent switching to users
 3. **Clear Role Definitions**: Each agent has well-defined responsibilities
 4. **Unified Voice**: All agents maintain the same communication style and personality
