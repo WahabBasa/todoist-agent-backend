@@ -587,7 +587,7 @@ export async function chatHandler(ctx: any, request: Request) {
   }
 }
 
-export const chat = httpAction(chatHandler);
+// Note: Do not export an httpAction from this file to avoid default-runtime bundling paths.
 
 function extractLastUserContent(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {

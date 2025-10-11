@@ -343,8 +343,29 @@ http.route({
   path: "/chat",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const mod = await import("./ai/stream");
-    return mod.chatHandler(ctx, request);
+    const body = await request.json().catch(() => ({}));
+    const message = typeof body?.latestUserMessage === "string"
+      ? body.latestUserMessage
+      : typeof body?.message === "string"
+        ? body.message
+        : "";
+    if (!message) {
+      return new Response(JSON.stringify({ error: "latestUserMessage or message is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const sessionId = typeof body?.sessionId === "string" ? body.sessionId : undefined;
+    const currentTimeContext = typeof body?.currentTimeContext === "object" ? body.currentTimeContext : undefined;
+    const result = await ctx.runAction(api.ai.session.chatWithAI, {
+      message,
+      sessionId,
+      currentTimeContext,
+    } as any);
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }),
 });
 
