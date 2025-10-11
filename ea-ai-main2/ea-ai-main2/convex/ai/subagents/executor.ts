@@ -1,6 +1,7 @@
 "use node";
 
-import { ActionCtx } from "../../_generated/server";
+import { ActionCtx, action } from "../../_generated/server";
+import { v } from "convex/values";
 import { api } from "../../_generated/api";
 import { Id, Doc } from "../../_generated/dataModel";
 import { SubagentRegistry } from "./registry";
@@ -470,3 +471,24 @@ export async function cleanupCompletedSubagentSessions(
 
   return cleanedCount;
 }
+
+// Expose an action wrapper to avoid importing this Node module from default runtime files
+export const executeSubagentAction = action({
+  args: {
+    subagentName: v.string(),
+    prompt: v.string(),
+    parentSessionId: v.id("chatSessions"),
+    userId: v.string(),
+    currentTimeContext: v.optional(v.any()),
+  },
+  handler: async (ctx, { subagentName, prompt, parentSessionId, userId, currentTimeContext }) => {
+    const result = await executeSubagent(ctx as ActionCtx, {
+      subagentName,
+      prompt,
+      parentSessionId,
+      userId,
+      currentTimeContext: currentTimeContext as any,
+    });
+    return result;
+  },
+});

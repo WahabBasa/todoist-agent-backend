@@ -4,7 +4,6 @@ import { ActionCtx } from "../../_generated/server";
 import { api } from "../../_generated/api";
 import { PrimaryModeRegistry } from "../modes/registry";
 import { SubagentRegistry } from "../subagents/registry";
-import { executeSubagent } from "../subagents/executor";
 import { logSubagentCall, logSubagentResponse } from "../langfuse/logger";
 import { Id } from "../../_generated/dataModel";
 import { ConversationState } from "../state/ConversationState";
@@ -216,7 +215,7 @@ async function executeSubagentMode(
 
   try {
     // Execute subagent in complete isolation (like OpenCode pattern)
-    const result = await executeSubagent(actionCtx, {
+    const result = await actionCtx.runAction(api.ai.subagents.executor.executeSubagentAction as any, {
       subagentName,
       prompt,
       parentSessionId: validSessionId,
