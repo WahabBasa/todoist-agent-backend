@@ -8,7 +8,7 @@ export function Resources() {
     {
       icon: MessageSquare,
       title: "Natural Language AI",
-      description: "Simply describe what you need in plain English. The AI understands context and intent."
+      description: "Simply describe what you need in plain English. Miller understands context and intent."
     },
     {
       icon: ListTodo,
@@ -23,7 +23,7 @@ export function Resources() {
     {
       icon: Zap,
       title: "Smart Automation",
-      description: "AI learns your patterns and suggests optimizations for your workflow."
+      description: "Miller learns your patterns and suggests optimizations for your workflow."
     }
   ];
 
@@ -52,8 +52,8 @@ export function Resources() {
       answer: "Go to Settings → Connected Apps, then click 'Connect' next to Google Calendar or Todoist. You'll be guided through a secure OAuth flow."
     },
     {
-      question: "What AI commands can I use?",
-      answer: "Use natural language! The AI understands tasks, calendar events, projects, priorities, and due dates. Just describe what you need."
+      question: "What commands can I use?",
+      answer: "Use natural language! Miller understands tasks, calendar events, projects, priorities, and due dates. Just describe what you need."
     },
     {
       question: "Is my data secure?",
@@ -71,9 +71,9 @@ export function Resources() {
       <header className="px-6 py-6 max-w-7xl mx-auto flex items-center justify-between">
         <a href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground font-semibold text-lg">T</span>
+            <span className="text-primary-foreground font-semibold text-lg">O</span>
           </div>
-          <span className="font-semibold text-xl">TaskAI</span>
+          <span className="font-semibold text-xl">Oldowan</span>
         </a>
         <nav className="hidden md:flex gap-6">
           <a href="/#features" className="text-sm text-muted-foreground hover:text-primary transition-colors">Features</a>
@@ -85,9 +85,9 @@ export function Resources() {
       <main className="px-6 pb-12 max-w-5xl mx-auto">
         {/* Hero Section */}
         <section className="pt-12 pb-16 text-center">
-          <h1 className="text-4xl md:text-5xl font-semibold mb-4">Getting Started with TaskAI</h1>
+          <h1 className="text-4xl md:text-5xl font-semibold mb-4">Getting Started with Miller</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Everything you need to know to master AI-powered task management and boost your productivity.
+            Everything you need to know to master Miller and boost your productivity.
           </p>
         </section>
 
@@ -107,7 +107,7 @@ export function Resources() {
 
         {/* Usage Guide */}
         <section className="mb-16">
-          <h2 className="text-2xl font-semibold mb-8 text-center">How to Use TaskAI</h2>
+          <h2 className="text-2xl font-semibold mb-8 text-center">How to Use Miller</h2>
           <div className="space-y-6">
             {usageGuides.map((guide, index) => (
               <div key={index} className="p-6 rounded-lg border border-border bg-card">
@@ -147,7 +147,7 @@ export function Resources() {
               <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium mb-1">3. Start chatting</p>
-                <p className="text-sm text-muted-foreground">Describe what you need in natural language - the AI handles the rest.</p>
+                <p className="text-sm text-muted-foreground">Describe what you need in natural language - Miller handles the rest.</p>
               </div>
             </div>
           </div>
@@ -172,12 +172,12 @@ export function Resources() {
         {/* CTA Section */}
         <section className="text-center py-12 px-6 rounded-lg border border-border bg-card">
           <h2 className="text-2xl font-semibold mb-4">Ready to get started?</h2>
-          <p className="text-muted-foreground mb-6">Join thousands of users managing their tasks smarter with AI.</p>
+          <p className="text-muted-foreground mb-6">Join thousands of users managing their tasks smarter with Miller.</p>
           <a 
             href="/#auth" 
             className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
-            Start Using TaskAI
+            Start Using Miller
           </a>
         </section>
       </main>

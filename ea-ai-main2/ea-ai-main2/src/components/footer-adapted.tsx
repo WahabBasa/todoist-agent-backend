@@ -3,8 +3,7 @@ export default function FooterSection() {
         { title: 'Resources', href: '/resources' },
         { title: 'Pricing', href: '/pricing' },
         { title: 'Privacy', href: '/privacy' },
-        { title: 'Terms', href: '#terms' },
-        { title: 'Contact', href: 'mailto:support@example.com' },
+        { title: 'Contact', href: 'mailto:AtheA.hab@gmail.com' },
     ]
 
     return (
@@ -15,7 +14,7 @@ export default function FooterSection() {
                     aria-label="go home"
                     className="mx-auto block size-fit">
                     <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center mx-auto">
-                        <span className="text-primary-foreground font-semibold text-xl">T</span>
+                        <span className="text-primary-foreground font-semibold text-xl">O</span>
                     </div>
                 </a>
 
@@ -30,7 +29,7 @@ export default function FooterSection() {
                     ))}
                 </div>
                 
-                <span className="text-muted-foreground block text-center text-sm"> © {new Date().getFullYear()} TaskAI, All rights reserved</span>
+                <span className="text-muted-foreground block text-center text-sm"> © {new Date().getFullYear()} Oldowan, All rights reserved</span>
             </div>
         </footer>
     )

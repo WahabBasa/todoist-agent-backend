@@ -2,7 +2,6 @@ import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TextEffect } from '@/components/ui/text-effect'
 import { AnimatedGroup } from '@/components/ui/animated-group'
-import { CustomAuthForm } from '@/components/CustomAuthForm'
 
 const transitionVariants = {
     item: {
@@ -44,23 +43,7 @@ export default function HeroSection() {
                     <div className="mx-auto max-w-7xl px-6">
                         <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
                             <AnimatedGroup variants={transitionVariants}>
-                                <a
-                                    href="#features"
-                                    className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-zinc-950/5 transition-colors duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
-                                    <span className="text-foreground text-sm">AI-Powered Task Management</span>
-                                    <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
 
-                                    <div className="bg-background group-hover:bg-muted size-6 overflow-hidden rounded-full duration-500">
-                                        <div className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
-                                            <span className="flex size-6">
-                                                <ArrowRight className="m-auto size-3" />
-                                            </span>
-                                            <span className="flex size-6">
-                                                <ArrowRight className="m-auto size-3" />
-                                            </span>
-                                        </div>
-                                    </div>
-                                </a>
                             </AnimatedGroup>
 
                             <TextEffect
@@ -68,7 +51,7 @@ export default function HeroSection() {
                                 speedSegment={0.3}
                                 as="h1"
                                 className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                Your tasks, amplified
+                                The Art of Relaxed Control
                             </TextEffect>
                             <TextEffect
                                 per="line"
@@ -77,27 +60,32 @@ export default function HeroSection() {
                                 delay={0.5}
                                 as="p"
                                 className="mx-auto mt-8 max-w-2xl text-balance text-lg">
-                                AI-powered task management that helps you organize and accomplish more. Connect Google Calendar and Todoist for seamless productivity.
+                                A virtual EA that captures your chaos and helps you see what matters
                             </TextEffect>
 
                             <AnimatedGroup
-                                id="auth"
                                 variants={{
                                     container: {
                                         visible: {
                                             transition: {
-                                                staggerChildren: 0.05,
-                                                delayChildren: 0.75,
+                                                delayChildren: 0.9,
                                             },
                                         },
                                     },
                                     ...transitionVariants,
                                 }}
-                                className="mt-12 flex flex-col items-center justify-center gap-6 md:flex-row">
-                                <div className="w-full max-w-md">
-                                    <CustomAuthForm />
-                                </div>
+                                className="mt-12 flex justify-center">
+                                <Button 
+                                    asChild
+                                    size="lg"
+                                    className="gap-2">
+                                    <a href="/#auth">
+                                        Get Started
+                                        <ArrowRight className="size-4" />
+                                    </a>
+                                </Button>
                             </AnimatedGroup>
+
                         </div>
                     </div>
                 </div>

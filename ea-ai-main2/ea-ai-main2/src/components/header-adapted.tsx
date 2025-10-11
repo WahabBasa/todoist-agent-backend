@@ -35,9 +35,9 @@ export default function HeaderNav() {
                                 aria-label="home"
                                 className="flex items-center space-x-2">
                                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                                    <span className="text-primary-foreground font-semibold text-lg">T</span>
+                                    <span className="text-primary-foreground font-semibold text-lg">O</span>
                                 </div>
-                                <span className="font-semibold text-lg">TaskAI</span>
+                                <span className="font-semibold text-lg">Oldowan</span>
                             </a>
 
                             <button

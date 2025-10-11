@@ -12,10 +12,10 @@ export default function FeaturesSection() {
                     <div className="p-6 sm:p-12">
                         <span className="text-muted-foreground flex items-center gap-2">
                             <MapIcon className="size-4" />
-                            Smart task organization
+                            Just Talk, No Forms
                         </span>
 
-                        <p className="mt-8 text-2xl font-semibold">Intelligent categorization, instantly prioritize your work.</p>
+                        <p className="mt-8 text-2xl font-semibold">No project templates. No dropdowns. Just type or speak what's on your mind.</p>
                     </div>
 
                     <div
@@ -38,10 +38,10 @@ export default function FeaturesSection() {
                     <div className="relative z-10">
                         <span className="text-muted-foreground flex items-center gap-2">
                             <MessageCircle className="size-4" />
-                            AI chat assistant
+                            Outcome Visualization
                         </span>
 
-                        <p className="my-8 text-2xl font-semibold">Natural language interface for managing your tasks.</p>
+                        <p className="my-8 text-2xl font-semibold">AI paints what "done" looks like. You refine. 90 seconds to clarity.</p>
                     </div>
                     <div
                         aria-hidden
@@ -69,11 +69,11 @@ export default function FeaturesSection() {
                     <div className="absolute z-10 max-w-lg px-6 pr-12 pt-6 md:px-12 md:pt-12">
                         <span className="text-muted-foreground flex items-center gap-2">
                             <Activity className="size-4" />
-                            Activity tracking
+                            Today View
                         </span>
 
                         <p className="my-8 text-2xl font-semibold">
-                            Monitor your productivity in real-time. <span className="text-muted-foreground"> Stay on top of your goals.</span>
+                            Your full list lives in the background. <span className="text-muted-foreground">Today View shows only what matters now.</span>
                         </p>
                     </div>
                     <MonitoringChart />
