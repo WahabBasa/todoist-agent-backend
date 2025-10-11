@@ -1,5 +1,7 @@
 export default function FooterSection() {
     const links = [
+        { title: 'Resources', href: '/resources' },
+        { title: 'Pricing', href: '/pricing' },
         { title: 'Privacy', href: '/privacy' },
         { title: 'Terms', href: '#terms' },
         { title: 'Contact', href: 'mailto:support@example.com' },
