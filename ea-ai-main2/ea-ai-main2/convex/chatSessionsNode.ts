@@ -3,7 +3,6 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText } from "ai";
 
 // Helper: sanitize and normalize model output to a safe short title
@@ -100,6 +99,7 @@ export const generateChatTitleWithAI_impl = action({
     const isGeneric = genericUser.length < 3 || ["hi", "hello", "help", "hey"].some(w => genericUser === w);
 
     try {
+      const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
       const openrouter = createOpenRouter({ apiKey, baseURL });
       const system = [
         "You are a title generator.",
@@ -160,6 +160,7 @@ export const generateGreetingForUser_impl = action({
     const modelId: string = userCfg?.activeModelId || globalCfg?.activeModelId || "openai/gpt-4.1-nano";
 
     try {
+      const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
       const openrouter = createOpenRouter({ apiKey, baseURL });
       const tod = typeof localHour === 'number' ? (localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening') : '';
       const system = [

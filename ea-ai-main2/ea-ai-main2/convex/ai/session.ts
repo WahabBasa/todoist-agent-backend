@@ -3,7 +3,6 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { streamText, stepCountIs, type StreamTextResult } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { autoCompactHistory } from "./compaction";
@@ -361,6 +360,7 @@ export const chatWithAI = action({
         }
       }
 
+      const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
       modelProvider = createOpenRouter({
         apiKey,
         baseURL: openRouterBaseUrl,

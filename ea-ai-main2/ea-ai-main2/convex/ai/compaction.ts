@@ -1,7 +1,6 @@
 "use node";
 
 import { streamText } from 'ai';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider'; // Assume provider setup
 import { EmbeddedMetadataSchema } from './messageSchemas';
 
 export async function autoCompactHistory(history: any[], maxLength: number = 50): Promise<any[]> {
@@ -11,6 +10,7 @@ export async function autoCompactHistory(history: any[], maxLength: number = 50)
   const snapshot = { /* mode, toolStates from last message */ };
   
   // Summarize via LLM (OpenCode snapshot)
+  const { createOpenRouter } = await import('@openrouter/ai-sdk-provider');
   const model = createOpenRouter({
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: 'https://openrouter.ai/api/v1',

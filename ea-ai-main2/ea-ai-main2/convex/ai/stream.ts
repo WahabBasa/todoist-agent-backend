@@ -5,7 +5,6 @@
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
 import { streamText, stepCountIs, type UIMessage } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SystemPrompt } from "./system";
 import { convertConvexToModelMessages, type ConvexMessage } from "./simpleMessages";
 import { createModeToolRegistry } from "./toolRegistry";
@@ -124,6 +123,7 @@ export async function chatHandler(ctx: any, request: Request) {
     }
 
     const baseURL = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+    const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
     const openrouter = createOpenRouter({ apiKey, baseURL });
 
     // Start telemetry once model/provider are known

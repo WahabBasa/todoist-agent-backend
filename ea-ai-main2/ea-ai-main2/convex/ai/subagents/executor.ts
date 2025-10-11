@@ -7,7 +7,6 @@ import { Id, Doc } from "../../_generated/dataModel";
 import { SubagentRegistry } from "./registry";
 import { createSimpleToolRegistry } from "../toolRegistry";
 import { streamText, stepCountIs } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 const KNOWN_INVALID_PROVIDER_SLUGS = new Set([
   "web_search",
@@ -225,6 +224,7 @@ export async function executeSubagent(
     }
 
     const baseURL = userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+    const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
     const buildProviderPreferences = (slug?: string) => slug && slug.length > 0
       ? { provider: { order: [slug], allow_fallbacks: false } }
       : { provider: { sort: "throughput" } };
