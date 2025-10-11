@@ -2,7 +2,6 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
-import { chat as streamChat } from "./ai/stream";
 import type { WebhookEvent } from "@clerk/backend";
 
 // Debug logging control
@@ -343,7 +342,11 @@ http.route({
 http.route({
   path: "/chat",
   method: "POST",
-  handler: streamChat,
+  handler: httpAction(async (ctx, request) => {
+    const mod = await import("./ai/stream");
+    // mod.chat is an httpAction handler (ctx, request) => Response
+    return mod.chat(ctx, request);
+  }),
 });
 
 // CORS preflight for chat
