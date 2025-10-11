@@ -34,8 +34,8 @@ export default function HeaderNav() {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                                    <span className="text-primary-foreground font-semibold text-lg">O</span>
+                                <div className="w-17 h-17 flex items-center justify-center">
+                                    <img src="/oldowan-logo.png" alt="Oldowan" className="w-17 h-17 object-contain" />
                                 </div>
                                 <span className="font-semibold text-lg">Oldowan</span>
                             </a>

@@ -70,8 +70,8 @@ export function Resources() {
       {/* Header */}
       <header className="px-6 py-6 max-w-7xl mx-auto flex items-center justify-between">
         <a href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground font-semibold text-lg">O</span>
+          <div className="w-17 h-17 flex items-center justify-center">
+            <img src="/oldowan-logo.png" alt="Oldowan" className="w-17 h-17 object-contain" />
           </div>
           <span className="font-semibold text-xl">Oldowan</span>
         </a>

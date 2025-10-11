@@ -13,8 +13,8 @@ export default function FooterSection() {
                     href="/"
                     aria-label="go home"
                     className="mx-auto block size-fit">
-                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center mx-auto">
-                        <span className="text-primary-foreground font-semibold text-xl">O</span>
+                    <div className="w-22 h-22 flex items-center justify-center mx-auto">
+                        <img src="/oldowan-logo.png" alt="Oldowan" className="w-22 h-22 object-contain" />
                     </div>
                 </a>
 
