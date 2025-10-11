@@ -45,7 +45,7 @@ function sanitizeUserText(s: string): string {
   return (s ?? "").replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
 }
 
-export const chat = httpAction(async (ctx, request) => {
+export async function chatHandler(ctx: any, request: Request) {
   let releaseLock: (() => Promise<void>) | null = null;
   let streamStarted = false;
   let streamChunkCount = 0;
@@ -585,7 +585,9 @@ export const chat = httpAction(async (ctx, request) => {
     }
     return new Response("Streaming endpoint error", { status: 500, headers: corsHeadersFor(request) });
   }
-});
+}
+
+export const chat = httpAction(chatHandler);
 
 function extractLastUserContent(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {

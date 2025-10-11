@@ -344,8 +344,7 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const mod = await import("./ai/stream");
-    // mod.chat is an httpAction handler (ctx, request) => Response
-    return mod.chat(ctx, request);
+    return mod.chatHandler(ctx, request);
   }),
 });
 
