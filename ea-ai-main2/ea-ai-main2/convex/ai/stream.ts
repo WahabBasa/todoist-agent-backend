@@ -1,5 +1,6 @@
-// NOTE: httpAction runs in Convex's default JS runtime (not Node).
-// Avoid importing Node-only packages here.
+"use node";
+
+// HTTP action runs in Node runtime to support providers requiring Node built-ins.
 
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
