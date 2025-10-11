@@ -246,31 +246,8 @@ export const chatWithAI = action({
     let buildProviderPreferences: (slug?: string) => any = () => ({ provider: { sort: "throughput" } });
     
     if (provider === "google") {
-      // Initialize Google Vertex AI
-      console.log(`🔄 [MODEL_SELECTION] Initializing Google Vertex AI provider`);
-      
-      // Get Google credentials from config
-      const googleProjectId = userConfig?.googleProjectId || "not-provided";
-      const googleRegion = userConfig?.googleRegion;
-      const googleCredentials = userConfig?.googleCredentials;
-      
-      // Set up Google credentials if provided
-      if (googleCredentials) {
-        try {
-          // Parse the credentials JSON and set up authentication
-          const credentials = JSON.parse(googleCredentials);
-          process.env.GOOGLE_APPLICATION_CREDENTIALS = JSON.stringify(credentials);
-        } catch (error) {
-          console.warn("⚠️ [GOOGLE] Failed to parse Google credentials JSON, using default authentication");
-        }
-      }
-      
-      // Initialize Google Vertex AI provider (dynamic import to avoid non-Node bundling in default runtime)
-      const { createVertex } = await import("@ai-sdk/google-vertex");
-      modelProvider = createVertex({
-        project: googleProjectId,
-        location: googleRegion || "us-central1",
-      });
+      console.warn("[MODEL_SELECTION] Google Vertex AI temporarily disabled to avoid default-runtime bundling issues");
+      throw new Error("Google Vertex AI is temporarily disabled in this build. Please select an OpenRouter model in Admin Dashboard.");
     } else {
       // Initialize OpenRouter (default)
       console.log(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
