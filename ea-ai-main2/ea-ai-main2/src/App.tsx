@@ -21,6 +21,7 @@ import { api } from "../convex/_generated/api";
 import { AppLoading } from "./components/ui/AppLoading";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Landing } from "./views/Landing";
+import { Auth } from "./views/Auth";
 import { PrivacyPolicy } from "./views/PrivacyPolicy";
 import { Resources } from "./views/Resources";
 import { Pricing } from "./views/Pricing";
@@ -88,26 +89,11 @@ export default function App() {
     <div className="h-full" suppressHydrationWarning>
       <Toaster position="top-right" />
       
-      {/* Show loading only on the explicit callback route */}
-      {path.startsWith('/sso-callback') && isOAuthCallback && (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
-              <span className="text-primary-foreground font-semibold text-lg">T</span>
-            </div>
-            <p className="text-muted-foreground">Completing sign in...</p>
-            {oauthError && (
-              <p className="text-destructive text-sm">Google sign-in failed: {oauthError}</p>
-            )}
-          </div>
-        </div>
-      )}
-      
       <AuthLoading>
         <div className="h-full flex items-center justify-center">
           <div className="text-center space-y-4">
-            <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
-              <span className="text-primary-foreground font-semibold text-lg">T</span>
+            <div className="w-16 h-16 mx-auto animate-pulse">
+              <img src="/oldowan-logo.png" alt="Loading" className="w-full h-full object-contain" />
             </div>
             <p className="text-muted-foreground">Loading...</p>
           </div>
@@ -126,7 +112,8 @@ export default function App() {
       <SignedOut>
         {!isOAuthCallback && (
           <ErrorBoundary>
-            {path.startsWith('/privacy') ? <PrivacyPolicy /> : 
+            {path.startsWith('/auth') ? <Auth /> :
+             path.startsWith('/privacy') ? <PrivacyPolicy /> : 
              path.startsWith('/resources') ? <Resources /> :
              path.startsWith('/pricing') ? <Pricing /> :
              <Landing />}

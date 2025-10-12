@@ -54,19 +54,29 @@ function Button({
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot : "button"
+  
+  const isOutline = variant === 'outline'
+  const isGhost = variant === 'ghost'
+  const isDefault = !isOutline && !isGhost
 
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, attention, className }))}
       style={{
-        backgroundColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
-        borderColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
-        color: variant === 'ghost' ? undefined : 'var(--pure-white)',
+        backgroundColor: isGhost ? 'transparent' : 
+                        isOutline ? 'transparent' :
+                        'var(--primary-blue)',
+        borderColor: isGhost ? 'transparent' : 
+                     isOutline ? 'var(--color-border)' :
+                     'var(--primary-blue)',
+        color: isGhost ? undefined : 
+               isOutline ? 'var(--color-foreground)' :
+               'var(--pure-white)',
         ...((props as any).style || {})
       }}
       onMouseEnter={(e) => {
-        if (variant !== 'ghost' && !props.disabled) {
+        if (isDefault && !props.disabled) {
           e.currentTarget.style.backgroundColor = 'var(--color-blue-primary-hover)';
         }
         if ((props as any).onMouseEnter) {
@@ -74,7 +84,7 @@ function Button({
         }
       }}
       onMouseLeave={(e) => {
-        if (variant !== 'ghost' && !props.disabled) {
+        if (isDefault && !props.disabled) {
           e.currentTarget.style.backgroundColor = 'var(--primary-blue)';
         }
         if ((props as any).onMouseLeave) {

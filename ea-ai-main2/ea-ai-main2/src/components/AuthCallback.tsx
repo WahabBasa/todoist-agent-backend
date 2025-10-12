@@ -55,8 +55,8 @@ export default function AuthCallback() {
   return (
     <div className="h-full flex items-center justify-center">
       <div className="text-center space-y-4">
-        <div className="w-8 h-8 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
-          <span className="text-primary-foreground font-semibold text-lg">T</span>
+        <div className="w-16 h-16 mx-auto animate-pulse">
+          <img src="/oldowan-logo.png" alt="Loading" className="w-full h-full object-contain" />
         </div>
         <p className="text-muted-foreground">Completing sign in...</p>
         {error && (
