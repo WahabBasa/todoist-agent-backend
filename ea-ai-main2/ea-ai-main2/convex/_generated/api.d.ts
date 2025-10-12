@@ -47,7 +47,6 @@ import type * as ai_stream from "../ai/stream.js";
 import type * as ai_subagents_executor from "../ai/subagents/executor.js";
 import type * as ai_subagents_registry from "../ai/subagents/registry.js";
 import type * as ai_system from "../ai/system.js";
-import type * as ai_test_error_handling from "../ai/test-error-handling.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_ToolRepetitionDetector from "../ai/tools/ToolRepetitionDetector.js";
 import type * as ai_tools_evaluateUserResponseTool from "../ai/tools/evaluateUserResponseTool.js";
@@ -70,6 +69,7 @@ import type * as ai_tracing_utils_spanUtils from "../ai/tracing/utils/spanUtils.
 import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as auth_admin from "../auth/admin.js";
 import type * as chatSessions from "../chatSessions.js";
+import type * as chatSessionsNode from "../chatSessionsNode.js";
 import type * as cleanup from "../cleanup.js";
 import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
@@ -140,7 +140,6 @@ declare const fullApi: ApiFromModules<{
   "ai/subagents/executor": typeof ai_subagents_executor;
   "ai/subagents/registry": typeof ai_subagents_registry;
   "ai/system": typeof ai_system;
-  "ai/test-error-handling": typeof ai_test_error_handling;
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/ToolRepetitionDetector": typeof ai_tools_ToolRepetitionDetector;
   "ai/tools/evaluateUserResponseTool": typeof ai_tools_evaluateUserResponseTool;
@@ -163,6 +162,7 @@ declare const fullApi: ApiFromModules<{
   aiInternalTodos: typeof aiInternalTodos;
   "auth/admin": typeof auth_admin;
   chatSessions: typeof chatSessions;
+  chatSessionsNode: typeof chatSessionsNode;
   cleanup: typeof cleanup;
   cleanupOrphans: typeof cleanupOrphans;
   cleanupTables: typeof cleanupTables;
