@@ -49,7 +49,7 @@ export class ConvexChatTransport {
       // Call existing Convex AI action
       const result = await this.convex.action(api.ai.session.chatWithAI, {
         message: lastMessage.content,
-        useHaiku: false,
+
         sessionId: sessionId as Id<"chatSessions"> | undefined,
         currentTimeContext
       });

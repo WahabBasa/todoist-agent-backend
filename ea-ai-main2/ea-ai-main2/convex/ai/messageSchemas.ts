@@ -1,15 +1,20 @@
 import { z } from 'zod';
 
 // Zod schema for embedded metadata (OpenCode-inspired)
-export const EmbeddedMetadataSchema = z.object({
-  mode: z.string().optional(),
-  toolStates: z.record(z.enum(['pending', 'running', 'completed'])).optional(),
-  delegation: z.object({
-    target: z.string(),
-    status: z.enum(['pending', 'completed', 'failed']),
-    reason: z.string().optional()
-  }).optional()
-});
+export const EmbeddedMetadataSchema = z
+  .object({
+    mode: z.string().optional(),
+    toolStates: z.record(z.enum(['pending', 'running', 'completed'])).optional(),
+    requestId: z.string().optional(),
+    delegation: z
+      .object({
+        target: z.string(),
+        status: z.enum(['pending', 'completed', 'failed']),
+        reason: z.string().optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
 
 // Full message schema
 export const MessageSchema = z.object({

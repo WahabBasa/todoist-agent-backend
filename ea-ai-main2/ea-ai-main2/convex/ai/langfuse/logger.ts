@@ -103,7 +103,11 @@ export function createConversationTrace(params: ConversationParams): LangfuseTra
  */
 export function createUserMessageSpan(params: UserMessageParams): LangfuseSpan {
   if (!currentTrace) {
-    throw new Error("No active trace for user message");
+    console.warn("[LANGFUSE] No active trace for user message - noop span");
+    return {
+      update: () => {},
+      end: () => {},
+    } as unknown as LangfuseSpan;
   }
 
   const span = currentTrace.span({
@@ -130,7 +134,11 @@ export function createUserMessageSpan(params: UserMessageParams): LangfuseSpan {
  */
 export function createPromptGeneration(params: PromptParams): LangfuseGeneration {
   if (!currentTrace) {
-    throw new Error("No active trace for prompt generation");
+    console.warn("[LANGFUSE] No active trace for prompt generation - noop generation");
+    return {
+      update: () => {},
+      end: () => {},
+    } as unknown as LangfuseGeneration;
   }
 
   currentGeneration = currentTrace.generation({
@@ -207,7 +215,11 @@ export function updatePromptGeneration(
  */
 export function createToolCallSpan(params: ToolCallParams): LangfuseSpan {
   if (!currentTrace) {
-    throw new Error("No active trace for tool call");
+    console.warn("[LANGFUSE] No active trace for tool call - noop span");
+    return {
+      update: () => {},
+      end: () => {},
+    } as unknown as LangfuseSpan;
   }
 
   // Analyze parameters - which are filled vs empty
@@ -292,7 +304,11 @@ export function createToolCallSpan(params: ToolCallParams): LangfuseSpan {
  */
 export function createToolResultSpan(params: ToolResultParams): LangfuseSpan {
   if (!currentTrace) {
-    throw new Error("No active trace for tool result");
+    console.warn("[LANGFUSE] No active trace for tool result - noop span");
+    return {
+      update: () => {},
+      end: () => {},
+    } as unknown as LangfuseSpan;
   }
 
   const span = currentTrace.span({
@@ -345,7 +361,11 @@ export function createToolResultSpan(params: ToolResultParams): LangfuseSpan {
  */
 export function createAssistantMessageSpan(params: AssistantMessageParams): LangfuseSpan {
   if (!currentTrace) {
-    throw new Error("No active trace for assistant message");
+    console.warn("[LANGFUSE] No active trace for assistant message - noop span");
+    return {
+      update: () => {},
+      end: () => {},
+    } as unknown as LangfuseSpan;
   }
 
   const span = currentTrace.span({

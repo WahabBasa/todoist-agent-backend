@@ -1,8 +1,10 @@
-import React, { useRef, forwardRef } from 'react'
-import { ArrowUp, Square, Trash2 } from 'lucide-react'
+import React, { useRef, forwardRef, useEffect } from 'react'
+import { ArrowUp, Square } from 'lucide-react'
 import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
+
+// Claude-inspired clean input design with blue accents
 
 interface ChatInputProps {
   value: string
@@ -35,6 +37,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
 }, ref) => {
   const formRef = useRef<HTMLFormElement>(null)
 
+
   return (
     <div className={cn("w-full transition-all duration-300 ease-in-out", className)}>
       <form
@@ -43,7 +46,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
         className="relative"
       >
         {/* ChatHub-style input container - Original multi-row design */}
-        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-primary/20 ring-offset-2 ring-offset-background bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out shadow-lg">
+        <div className="flex flex-col items-start gap-0 focus-within:ring-2 ring-primary/20 ring-offset-2 ring-offset-background hover:ring-2 hover:ring-primary/30 bg-muted w-full border border-border rounded-2xl overflow-hidden transition-all duration-300 ease-in-out shadow-lg">
           
           {/* Main input row */}
           <div className="flex flex-row items-end pl-3 md:pl-4 pr-2 py-2 w-full gap-0">
@@ -55,38 +58,23 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               tabIndex={0}
               onCompositionStart={onCompositionStart}
               onCompositionEnd={onCompositionEnd}
+              onFocus={() => { try { console.debug('[UI] <ChatInput> focused'); } catch {} }}
               placeholder={placeholder}
               spellCheck={false}
               value={value}
               disabled={disabled || isLoading}
               className={cn(
-                "w-full min-h-8 text-sm md:text-base max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
+                "w-full min-h-8 max-h-[120px] overflow-y-auto outline-none focus:outline-none p-1",
                 "resize-none border-0 bg-transparent",
                 "text-foreground placeholder:text-muted-foreground",
-                "no-scrollbar leading-relaxed"
+                "scrollbar-hide leading-relaxed",
+                "t-user"
               )}
               onChange={onChange}
               onKeyDown={onKeyDown}
             />
 
-            {/* Buttons row - only show when not loading */}
-            {!isLoading && (
-              <div className="flex items-center gap-1 ml-2">
-                {/* Clear Button */}
-                {showClearButton && onClear && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 rounded-design-md"
-                    onClick={onClear}
-                    disabled={disabled || isLoading}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                )}
-              </div>
-            )}
+
           </div>
           
           {/* Bottom row with submit button */}
@@ -97,12 +85,30 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               <Button
                 type="submit"
                 size="icon"
+                variant="ghost"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full shadow-sm',
-                  "btn-blue-primary",
+                  // Visual reset handled via variant=ghost; colors via inline style
                   'disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
-                disabled={(value.trim().length === 0 && !isLoading) || disabled}
+                style={{
+                  backgroundColor: 'var(--primary-blue)',
+                  borderColor: 'var(--primary-blue)',
+                  color: 'var(--pure-white)'
+                }}
+                onMouseEnter={(e) => {
+                  if (!disabled && !isLoading) {
+                    e.currentTarget.style.backgroundColor = 'var(--color-blue-primary-hover)'
+                    e.currentTarget.style.borderColor = 'var(--color-blue-primary-hover)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!disabled && !isLoading) {
+                    e.currentTarget.style.backgroundColor = 'var(--primary-blue)'
+                    e.currentTarget.style.borderColor = 'var(--primary-blue)'
+                  }
+                }}
+                disabled={(((value?.trim?.().length ?? 0) === 0) && !isLoading) || disabled}
               >
                 <ArrowUp size={16} />
               </Button>
@@ -112,11 +118,16 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
               <Button
                 type="button"
                 size="icon"
+                variant="ghost"
                 className={cn(
                   'h-8 w-8 shrink-0 rounded-full shadow-sm',
-                  'btn-blue-primary',
                   'animate-pulse'
                 )}
+                style={{
+                  backgroundColor: 'var(--primary-blue)',
+                  borderColor: 'var(--primary-blue)',
+                  color: 'var(--pure-white)'
+                }}
                 disabled
               >
                 <Square size={16} />

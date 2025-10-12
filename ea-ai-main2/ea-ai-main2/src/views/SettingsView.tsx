@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useAction } from "convex/react";
-import { useClerk, useUser } from "@clerk/clerk-react";
+import { useQuery, useAction, useMutation } from "convex/react";
+import { useClerk, useUser, useSignIn } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Button } from "../components/ui/button";
@@ -13,47 +13,25 @@ import { Label } from "../components/ui/label";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { ConnectedAppItem } from "../components/settings/ConnectedAppItem";
 import { 
-  User, Settings, Bell, Palette, Link, Shield, 
-  AlertTriangle, Download, Trash2, LogOut, ArrowLeft
+  User, Plug, 
+  AlertTriangle, Trash2, LogOut, ArrowLeft
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface SettingsViewProps {
   onBackToChat: () => void;
 }
 
 type SettingsSection = 
-  | "general" 
-  | "notifications" 
-  | "personalization" 
   | "connected-apps" 
-  | "data-controls" 
-  | "security" 
   | "account";
 
 const SETTINGS_SECTIONS = [
-  { id: "general" as const, label: "General", icon: Settings },
-  { id: "notifications" as const, label: "Notifications", icon: Bell },
-  { id: "personalization" as const, label: "Personalization", icon: Palette },
-  { id: "connected-apps" as const, label: "Connected apps", icon: Link },
-  { id: "data-controls" as const, label: "Data controls", icon: Shield },
-  { id: "security" as const, label: "Security", icon: Shield },
+  { id: "connected-apps" as const, label: "Connected Apps", icon: Plug },
   { id: "account" as const, label: "Account", icon: User },
 ];
 
-// Reusable Settings Components
-interface SettingsHeaderProps {
-  title: string;
-  description: string;
-}
 
-function SettingsHeader({ title, description }: SettingsHeaderProps) {
-  return (
-    <div className="space-y-2">
-      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-      <p className="text-muted-foreground">{description}</p>
-    </div>
-  );
-}
 
 interface SettingsSwitchProps {
   label: string;
@@ -67,12 +45,29 @@ function SettingsSwitch({ label, description, badge, defaultChecked }: SettingsS
     <div className="flex items-center justify-between py-1.5">
       <div className="space-y-2 flex-1">
         <div className="flex items-center gap-2">
-          <Label className="text-foreground font-medium">{label}</Label>
+          <Label 
+            className="font-medium"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            {label}
+          </Label>
           {badge && (
-            <Badge variant="secondary" className="text-xs">{badge}</Badge>
+            <Badge 
+              variant="secondary" 
+              className="text-xs"
+              style={{ 
+                backgroundColor: "var(--primary-blue)", 
+                color: "var(--pure-white)" 
+              }}
+            >
+              {badge}
+            </Badge>
           )}
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed">
+        <p 
+          className="text-sm leading-relaxed"
+          style={{ color: "var(--neutral-stone)" }}
+        >
           {description}
         </p>
       </div>
@@ -94,11 +89,27 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
   return (
     <Button 
       variant="outline" 
-      className={`w-full justify-start gap-3 h-10 ${
-        isDestructive 
-          ? 'text-destructive border-destructive/50 hover:bg-destructive/10 hover:border-destructive'
-          : 'bg-background hover:bg-muted border-border'
-      }`}
+      className="w-auto justify-start gap-2 h-9 text-sm transition-colors"
+      style={{
+        backgroundColor: isDestructive ? "transparent" : "var(--medium-dark)",
+        borderColor: isDestructive ? "#ef4444" : "var(--color-border)",
+        color: isDestructive ? "#ef4444" : "var(--soft-off-white)"
+      }}
+      onMouseEnter={(e) => {
+        if (isDestructive) {
+          e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+          e.currentTarget.style.borderColor = "#ef4444";
+        } else {
+          e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (isDestructive) {
+          e.currentTarget.style.backgroundColor = "transparent";
+        } else {
+          e.currentTarget.style.backgroundColor = "var(--medium-dark)";
+        }
+      }}
       onClick={onClick}
     >
       <Icon className="h-4 w-4" />
@@ -108,7 +119,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 }
 
 export function SettingsView({ onBackToChat }: SettingsViewProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("connected-apps");
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
@@ -120,12 +131,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 
   const renderContent = () => {
     switch (activeSection) {
-      case "general":
-        return <GeneralSettings clerkUser={clerkUser} />;
-      case "notifications":
-        return <NotificationsSettings />;
-      case "personalization":
-        return <PersonalizationSettings />;
       case "connected-apps":
         return <ConnectedAppsSettings 
           clerkUser={clerkUser} 
@@ -137,50 +142,84 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
           isConnecting={isConnecting}
           setIsConnecting={setIsConnecting}
         />;
-      case "data-controls":
-        return <DataControlsSettings />;
-      case "security":
-        return <SecuritySettings />;
       case "account":
         return <AccountSettings clerkUser={clerkUser} signOut={signOut} />;
       default:
-        return <GeneralSettings clerkUser={clerkUser} />;
+        return <ConnectedAppsSettings 
+          clerkUser={clerkUser} 
+          signOut={signOut} 
+          activeSection={activeSection}
+          hasTodoistConnection={hasTodoistConnection}
+          generateOAuthURL={generateOAuthURL}
+          removeTodoistConnection={removeTodoistConnection}
+          isConnecting={isConnecting}
+          setIsConnecting={setIsConnecting}
+        />;
     }
   };
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full" style={{ backgroundColor: "var(--dark-charcoal)" }}>
       {/* Back to Chat Button - Top Left */}
       <Button 
         variant="ghost" 
         size="sm" 
         onClick={onBackToChat}
-        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2"
+        className="absolute top-4 left-4 z-10 h-8 px-3 gap-2 transition-colors"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '';
+        }}
+        style={{ color: "var(--soft-off-white)" }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Chat
       </Button>
       
       {/* Left Navigation Sidebar */}
-      <div className="w-[250px] bg-secondary border-r border-border">
+      <div 
+        className="w-[250px]" 
+        style={{ 
+          backgroundColor: "var(--dark-charcoal)"
+        }}
+      >
         {/* Header */}
-        <div className="p-6 pt-16 border-b border-border/30">
-          <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+        <div className="p-6 pt-16">
+          <h2 
+            className="text-xl font-semibold" 
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            Settings
+          </h2>
         </div>
         
         {/* Navigation */}
-        <nav className="p-4">
+        <nav className="p-4 space-y-3">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             return (
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-design-md transition-colors ${
-                  activeSection === section.id
-                    ? 'bg-muted/30 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm rounded-md transition-colors"
+                style={{
+                  backgroundColor: activeSection === section.id ? "var(--user-message-bg)" : "transparent",
+                  color: activeSection === section.id ? "var(--soft-off-white)" : "var(--neutral-stone)"
+                }}
+                onMouseEnter={(e) => {
+                  if (activeSection !== section.id) {
+                    e.currentTarget.style.backgroundColor = "var(--user-message-bg)";
+                    e.currentTarget.style.color = "var(--soft-off-white)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeSection !== section.id) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "var(--neutral-stone)";
+                  }
+                }}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate text-left">{section.label}</span>
@@ -203,108 +242,10 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 }
 
 
-function GeneralSettings({ clerkUser }: { clerkUser: any }) {
-  void clerkUser; // Remove unused parameter warning
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="General"
-        description="These settings apply to all workspaces you're a part of."
-      />
-      
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Email notifications"
-          description="Get notified about task deadlines and project updates"
-          badge="Recommended"
-          defaultChecked={true}
-        />
-        
-        <SettingsSwitch 
-          label="Desktop notifications"
-          description="Show browser notifications for important updates"
-        />
-        
-        <SettingsSwitch 
-          label="AI suggestions"
-          description="Let AI help optimize your workflow and suggest improvements"
-          defaultChecked={true}
-        />
-      </div>
-    </div>
-  );
-}
 
-function NotificationsSettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Notifications"
-        description="Choose what updates you receive and how."
-      />
-      
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Task reminders"
-          description="Get reminded about upcoming deadlines"
-          defaultChecked={true}
-        />
-        
-        <SettingsSwitch 
-          label="Daily summaries"
-          description="Receive a daily summary of your tasks and progress"
-        />
-      </div>
-    </div>
-  );
-}
 
-function PersonalizationSettings() {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-lg font-semibold text-foreground">Personalization</h1>
-        <p className="text-muted-foreground">
-          Customize your TaskAI experience.
-        </p>
-      </div>
-      
-      {/* Settings */}
-      <div className="space-y-4">
-        <div className="space-y-3">
-          <Label htmlFor="ai-style" className="text-foreground font-medium">AI response style</Label>
-          <Select defaultValue="professional">
-            <SelectTrigger id="ai-style" className="bg-input border-border">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="professional">Professional</SelectItem>
-              <SelectItem value="casual">Casual</SelectItem>
-              <SelectItem value="detailed">Detailed</SelectItem>
-              <SelectItem value="concise">Concise</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-3">
-          <Label htmlFor="task-priority" className="text-foreground font-medium">Default task priority</Label>
-          <Select defaultValue="normal">
-            <SelectTrigger id="task-priority" className="bg-input border-border">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
 
 
 interface ConnectedAppsSettingsProps {
@@ -356,6 +297,136 @@ function ConnectedAppsSettings({
 
 
 
+  // GOOGLE CALENDAR CONNECTION STATE
+  const { user } = useUser();
+  const { signIn } = useSignIn();
+  const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const generateGoogleOAuthURL = useAction(api.googleCalendar.auth.generateGoogleOAuthURL);
+  const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  const setGoogleCalendarEnabled = useMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled);
+  const revokeLegacyGoogleToken = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
+  const forceDestroyGoogleExternalAccount = useAction(api.googleCalendar.auth.forceDestroyGoogleExternalAccount);
+
+  // Reactive enabled flag to avoid initial flicker
+  const gcalEnabled = useQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled);
+  const gcalStatusLoading = gcalEnabled === undefined;
+  const gcalConnectedQuery = gcalEnabled === true;
+
+  const [gcalTesting, setGcalTesting] = useState<boolean>(false);
+  const [gcalStatusMsg, setGcalStatusMsg] = useState<string>("");
+
+  const refreshGcalStatus = async () => {
+    // Keep diagnostic action; UI derives state from query
+    try { await hasGoogleCalendarConnection(); } catch (e) { console.warn("[Settings] Failed to check Google Calendar connection", e); }
+  };
+
+  useEffect(() => {
+    void refreshGcalStatus();
+    const onFocus = () => void refreshGcalStatus();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  const GCAL_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.settings.readonly'
+  ];
+
+  const telemetry = (phase: string, extra?: Record<string, any>) => {
+    try {
+      const url = `${import.meta.env.VITE_CONVEX_URL}/telemetry/oauth-callback`;
+      const payload = {
+        phase,
+        email: user?.primaryEmailAddress?.emailAddress,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now(),
+        ...extra,
+      };
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+    } catch {}
+  };
+
+  const connectGoogleCalendar = async () => {
+    telemetry('connect_start');
+    setIsConnecting('Google Calendar');
+    try {
+      const redirectUrl = `${window.location.origin}/sso-callback`;
+      const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+
+      let verificationUrl: string | undefined;
+      if (extAcc && typeof extAcc.reauthorize === 'function') {
+        const updated: any = await extAcc.reauthorize({ additionalScopes: GCAL_SCOPES, redirectUrl });
+        verificationUrl = updated?.verification?.externalVerificationRedirectURL;
+      } else {
+        const created: any = await user?.createExternalAccount?.({ strategy: 'oauth_google', redirectUrl });
+        verificationUrl = created?.verification?.externalVerificationRedirectURL;
+      }
+
+      if (!verificationUrl) throw new Error('Failed to get Google verification URL from Clerk');
+
+      const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
+      if (!popup) throw new Error('Popup blocked');
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          setTimeout(() => { void refreshGcalStatus(); setIsConnecting(null); }, 500);
+        }
+      }, 600);
+    } catch (e) {
+      console.error('[Settings] Google Calendar connect failed (Clerk flow)', e);
+      telemetry('connect_error', { error: String(e) });
+      alert('Failed to start Google Calendar connection. Please try again.');
+      setIsConnecting(null);
+    }
+  };
+
+  const disconnectGoogleCalendar = async () => {
+    try {
+      setIsConnecting('Google Calendar');
+      // 1) Remove Clerk external account for Google so next connect requires consent
+      const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+      if (extAcc && typeof extAcc.destroy === 'function') {
+        try { await extAcc.destroy(); } catch {}
+      }
+      // Server-side enforcement as fallback
+      try { await forceDestroyGoogleExternalAccount(); } catch {}
+      // 2) Flip enabled flag off in backend (soft disable)
+      await removeGoogleCalendarConnection();
+      // 3) Revoke and delete any legacy stored refresh token
+      try { await revokeLegacyGoogleToken(); } catch {}
+      await refreshGcalStatus();
+      toast.success('Disconnected Google Calendar');
+    } catch (e) {
+      console.error('[Settings] Google Calendar disconnect failed', e);
+      toast.error('Failed to disconnect Google Calendar');
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const testGoogleCalendar = async () => {
+    try {
+      setGcalTesting(true);
+      setGcalStatusMsg('');
+      const res = await testGoogleCalendarConnection();
+      if (res?.success) {
+        setGcalStatusMsg(res.message || 'Connected');
+        toast.success(res.message || 'Google Calendar connected');
+      } else {
+        setGcalStatusMsg(res?.error || 'Not connected');
+        toast.error(res?.error || 'Google Calendar not connected');
+      }
+    } catch (e) {
+      setGcalStatusMsg('Test failed');
+      toast.error('Google Calendar test failed');
+    } finally {
+      setGcalTesting(false);
+      void refreshGcalStatus();
+    }
+  };
+
   // PostMessage listener for OAuth popup messages (including account conflicts)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -383,6 +454,12 @@ function ConnectedAppsSettings({
         setTodoistConflictData(event.data.data);
         setIsConnecting(null); // Clear connecting state
         console.log("🚨 [Settings] Conflict dialog should now be visible");
+      } else if (event.data?.type === 'GCAL_CONNECTED') {
+        console.log('✅ [Settings] Google Calendar connected message received');
+        setIsConnecting(null);
+        // Enable calendar in backend to reflect soft connection
+        setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
+        void refreshGcalStatus();
       } else {
         console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
       }
@@ -418,38 +495,37 @@ function ConnectedAppsSettings({
 
   const connectedApps = [
     {
-      appName: "Google Drive",
-      description: "Upload Google Docs, Sheets, Slides and other files.",
-      iconBgColor: "",
+      appName: "Google Calendar",
+      description: gcalStatusLoading
+        ? "Checking Google Calendar status..."
+        : (gcalConnectedQuery
+          ? "Connected to Google Calendar."
+          : "Connect Google Calendar to schedule and sync events."),
+      iconBgColor: "bg-green-600",
       iconText: "G",
-      gradientFrom: "blue-500",
-      gradientTo: "green-500",
-      isConnected: false,
-      canConnect: false,
-    },
-    {
-      appName: "Microsoft OneDrive (personal)",
-      description: "Upload Microsoft Word, Excel, PowerPoint and other files.",
-      iconBgColor: "bg-blue-600",
-      iconText: "O",
-      isConnected: false,
-      canConnect: false,
-    },
-    {
-      appName: "Microsoft OneDrive (work/school)",
-      description: "Upload Microsoft Word, Excel, PowerPoint and other files, including those from SharePoint sites.",
-      iconBgColor: "bg-blue-700",
-      iconText: "O",
-      isConnected: false,
-      canConnect: false,
+      gradientFrom: undefined,
+      gradientTo: undefined,
+      isConnected: gcalConnectedQuery,
+      canConnect: !gcalStatusLoading,
+      isConnecting: isConnecting === 'Google Calendar' || gcalTesting || gcalStatusLoading,
+      onConnect: () => {
+        if (gcalStatusLoading) return;
+        if (gcalConnectedQuery) {
+          void disconnectGoogleCalendar();
+        } else {
+          void connectGoogleCalendar();
+        }
+      }
     },
     {
       appName: "Todoist",
       description: todoistConflictData 
-        ? "Account conflict detected. Please resolve the conflict to connect Todoist."
-        : "Connect your Todoist account to manage your real tasks and projects through AI conversations.",
+        ? "Resolve account conflict to connect Todoist."
+        : "Connect Todoist to manage your tasks and projects.",
       iconBgColor: "bg-red-500",
       iconText: "T",
+      gradientFrom: undefined,
+      gradientTo: undefined,
       isConnected: hasTodoistConnection ?? false,
       canConnect: !todoistConflictData, // Disable connection button when there's a conflict
     },
@@ -541,23 +617,47 @@ function ConnectedAppsSettings({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-primary mb-2">Connected Apps</h1>
-        <p className="text-tertiary">
-          Connect external services to enhance your AI assistant with additional capabilities and data sources.
+        <h1 
+          className="text-2xl font-bold mb-2"
+          style={{ color: "var(--soft-off-white)" }}
+        >
+          Connected apps
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
+          Link and manage app connections.
         </p>
       </div>
 
       
       {/* Todoist Account Conflict Dialog */}
       {todoistConflictData && (
-        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-design-lg">
+        <div 
+          className="p-4 border rounded-lg"
+          style={{
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            borderColor: "rgba(239, 68, 68, 0.3)"
+          }}
+        >
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <h3 className="font-semibold text-foreground mb-2">Todoist Account Already Connected</h3>
-              <p className="text-muted-foreground text-sm mb-3">{todoistConflictData.message}</p>
+              <h3 
+                className="font-semibold mb-2"
+                style={{ color: "var(--soft-off-white)" }}
+              >
+                Todoist Account Already Connected
+              </h3>
+              <p 
+                className="text-sm mb-3"
+                style={{ color: "var(--neutral-stone)" }}
+              >
+                {todoistConflictData.message}
+              </p>
               
-              <div className="text-sm text-muted-foreground mb-4">
+              <div 
+                className="text-sm mb-4"
+                style={{ color: "var(--neutral-stone)" }}
+              >
                 <p className="font-medium mb-1">To connect a different account:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   {todoistConflictData.instructions.map((instruction, index) => (
@@ -571,7 +671,11 @@ function ConnectedAppsSettings({
                   variant="outline" 
                   size="sm"
                   onClick={() => handleTodoistConflictInfo(todoistConflictData)}
-                  className="bg-background hover:bg-muted"
+                  style={{
+                    backgroundColor: "var(--medium-dark)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--soft-off-white)"
+                  }}
                 >
                   Show Instructions
                 </Button>
@@ -579,7 +683,11 @@ function ConnectedAppsSettings({
                   variant="outline" 
                   size="sm"
                   onClick={retryTodoistConnection}
-                  className="bg-background hover:bg-muted"
+                  style={{
+                    backgroundColor: "var(--medium-dark)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--soft-off-white)"
+                  }}
                 >
                   Try Again
                 </Button>
@@ -587,7 +695,7 @@ function ConnectedAppsSettings({
                   variant="ghost" 
                   size="sm"
                   onClick={() => setTodoistConflictData(null)}
-                  className="text-muted-foreground hover:text-foreground"
+                  style={{ color: "var(--neutral-stone)" }}
                 >
                   Cancel
                 </Button>
@@ -609,9 +717,9 @@ function ConnectedAppsSettings({
             gradientFrom={app.gradientFrom}
             gradientTo={app.gradientTo}
             isConnected={app.isConnected}
-            isConnecting={isConnecting === app.appName}
+            isConnecting={app.isConnecting ?? (isConnecting === app.appName)}
             canConnect={app.canConnect}
-            onConnect={() => void handleConnect(app.appName)}
+            onConnect={app.onConnect ?? (() => void handleConnect(app.appName))}
           />
         ))}
       </div>
@@ -619,80 +727,66 @@ function ConnectedAppsSettings({
   );
 }
 
-function DataControlsSettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Data controls"
-        description="Manage your data and privacy settings."
-      />
-      
-      {/* Actions */}
-      <div className="space-y-4">
-        <SettingsActionButton icon={Download}>
-          Export my data
-        </SettingsActionButton>
-        
-        <SettingsActionButton icon={Trash2}>
-          Clear conversation history
-        </SettingsActionButton>
-      </div>
-    </div>
-  );
-}
 
-function SecuritySettings() {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="Security"
-        description="Keep your account secure."
-      />
-      
-      {/* Settings */}
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Two-factor authentication"
-          description="Add an extra layer of security to your account"
-        />
-        
-        <div className="pt-4">
-          <SettingsActionButton icon={Shield}>
-            Change password
-          </SettingsActionButton>
-        </div>
-      </div>
-    </div>
-  );
-}
+
+
 
 
 function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   return (
     <div className="space-y-6">
-      <SettingsHeader 
-        title="Account"
-        description="Manage your account settings."
-      />
+      <div className="space-y-2">
+        <h1 
+          className="text-2xl font-bold"
+          style={{ color: "var(--soft-off-white)" }}
+        >
+          Account
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
+          Manage your account settings.
+        </p>
+      </div>
       
       {/* User Profile */}
-      <div className="flex items-center gap-4 p-3 border border-border rounded-lg bg-card/30 max-w-md">
+      <div 
+        className="flex items-center gap-4 p-3 border rounded-lg max-w-md"
+        style={{
+          backgroundColor: "var(--medium-dark)",
+          borderColor: "var(--color-border)"
+        }}
+      >
         <Avatar className="h-16 w-16">
-          <AvatarFallback className="bg-muted text-foreground text-2xl font-semibold">
+          <AvatarFallback 
+            className="text-2xl font-semibold"
+            style={{
+              backgroundColor: "var(--primary-blue)",
+              color: "var(--pure-white)"
+            }}
+          >
             {clerkUser?.emailAddresses?.[0]?.emailAddress?.[0]?.toUpperCase() || "U"}
           </AvatarFallback>
         </Avatar>
         <div className="space-y-2">
-          <div className="font-semibold text-base text-foreground">{clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}</div>
-          <div className="text-muted-foreground">
+          <div 
+            className="font-semibold text-base"
+            style={{ color: "var(--soft-off-white)" }}
+          >
+            {clerkUser?.emailAddresses?.[0]?.emailAddress || "User"}
+          </div>
+          <div style={{ color: "var(--neutral-stone)" }}>
             Member since {new Date().toLocaleDateString()}
           </div>
-          <Badge variant="default" className="mt-2 bg-primary/20 text-primary-foreground hover:bg-primary/30">Active</Badge>
         </div>
       </div>
       
       {/* Actions */}
-      <div className="space-y-4 pt-4">
+      <div 
+        className="pt-4 p-4 rounded-xl flex flex-col gap-3 items-start"
+        style={{ 
+          backgroundColor: "transparent",
+          border: "1px solid var(--color-border)"
+        }}
+      >
         <SettingsActionButton 
           icon={LogOut}
           variant="destructive"
@@ -711,10 +805,6 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
         >
           Delete Account
         </SettingsActionButton>
-        
-        <p className="text-muted-foreground text-sm leading-relaxed pt-2">
-          This action cannot be undone. All your tasks, projects, and data will be permanently deleted.
-        </p>
       </div>
     </div>
   );

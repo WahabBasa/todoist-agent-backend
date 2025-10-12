@@ -11,8 +11,8 @@ export function AppLoading({ className, message = "Loading..." }: AppLoadingProp
     <div className={cn("h-full w-full flex items-center justify-center", className)}>
       <div className="text-center space-y-6 max-w-md mx-auto">
         {/* Logo with pulse animation */}
-        <div className="w-12 h-12 mx-auto bg-primary rounded-lg flex items-center justify-center animate-pulse">
-          <span className="text-primary-foreground font-semibold text-xl">T</span>
+        <div className="w-17 h-17 mx-auto flex items-center justify-center animate-pulse">
+          <img src="/oldowan-logo.png" alt="Oldowan" className="w-17 h-17 object-contain" />
         </div>
         
         {/* Loading message */}

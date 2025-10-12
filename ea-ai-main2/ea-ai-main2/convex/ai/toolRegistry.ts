@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { tool } from "ai";
+import { tool as aiTool } from "ai";
 import { ActionCtx } from "../_generated/server";
 import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
@@ -146,10 +146,14 @@ export async function createSimpleToolRegistry(
       const simpleTool = convertToSimpleTool(toolDef);
       
       // Create AI SDK tool with direct execution
-      tools[key] = tool({
+      const toolConfig: any = {
+
         description: simpleTool.description,
+        // AI SDK v5+ API
+        parameters: simpleTool.inputSchema,
+        // Legacy API compatibility
         inputSchema: simpleTool.inputSchema,
-        execute: async (args: any) => {
+        execute: async (args: any, _options?: any) => {
           const startTime = Date.now();
           
           // Create OpenTelemetry span for tool call
@@ -173,8 +177,15 @@ export async function createSimpleToolRegistry(
               userId: context.userId
             });
             
-            // Return the full result object for proper AI SDK tool tracking
-            return result;
+            // CRITICAL FIX: Return content string directly for AI SDK
+            // This becomes the 'content' field in tool messages sent to the API
+            if (typeof result?.output === 'string') {
+              return result.output;
+            } else if (result?.output !== undefined) {
+              return JSON.stringify(result.output);
+            } else {
+              return JSON.stringify(result);
+            }
           } catch (error) {
             const executionTime = Date.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -191,20 +202,30 @@ export async function createSimpleToolRegistry(
             throw error; // Let AI SDK handle the error
           }
         },
-        // Control what the AI model sees while preserving structured tool results
-        toModelOutput(result: any) {
-          // For the primary mode, keep responses extremely concise
-          // Only return the output, not the title or metadata
-          // Remove any XML tags from the output to prevent them from being returned to the user
-          let output = result.output || "Operation completed";
-          output = output.replace(/<[^>]*>/g, '').trim();
-          
-          return {
-            type: "text",
-            value: output,
-          };
-        }
-      });
+        // Ensure provider-facing tool messages always include text content.
+        // Works for both v4 and v5 by normalizing any execute() result.
+        toModelOutput: (result: any) => {
+          try {
+            let out: string;
+            if (typeof result === 'string') {
+              out = result;
+            } else if (typeof result?.output === 'string') {
+              out = result.output;
+            } else if (result?.output !== undefined) {
+              out = JSON.stringify(result.output);
+            } else {
+              out = JSON.stringify(result);
+            }
+            if (!out || typeof out !== 'string') out = '';
+            return { type: 'text', value: out } as const;
+          } catch {
+            return { type: 'text', value: '' } as const;
+          }
+        },
+      };
+
+      // Use AI SDK tool function directly with proper typing
+      tools[key] = aiTool(toolConfig);
       
     } catch (error) {
       console.warn(`[SimpleToolRegistry] Failed to convert tool ${key}:`, error);

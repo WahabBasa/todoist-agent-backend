@@ -80,10 +80,13 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       evaluateUserResponse: true, // NEW: LLM decision-making tool
       internalTodoWrite: true,
       internalTodoRead: true,
+
+      // READING TOOLS - Full read access for informed decision-making
       getCurrentTime: true,
       getSystemStatus: true,
       validateInput: true,
-      
+      listTools: true,
+
       // READ-ONLY data access for decision making
       getProjectAndTaskMap: true,
       getProjectDetails: true,
@@ -109,9 +112,9 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       updateCalendarEvent: false,
       deleteCalendarEvent: false,
       
-      // DISABLED: No direct planning or information gathering
+      // Read-only tools permitted in primary for context gathering
       Write: false,
-      Read: false,
+      Read: true,
       researchTask: false,
       analyzeCode: false,
       planTask: false,

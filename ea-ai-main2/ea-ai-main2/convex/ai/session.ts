@@ -3,8 +3,6 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { streamText, stepCountIs, type StreamTextResult } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { createVertex } from "@ai-sdk/google-vertex";
 import { api } from "../_generated/api";
 import { SystemPrompt } from "./system";
 import { autoCompactHistory } from "./compaction";
@@ -102,6 +100,19 @@ function sanitizeUserInput(input: string): string {
   return sanitized;
 }
 
+const KNOWN_INVALID_PROVIDER_SLUGS = new Set([
+  "web_search",
+  "internal_reasoning",
+  "prompt",
+  "completion",
+  "request",
+  "image",
+  "image_output",
+  "cache_read",
+  "cache_write",
+  "discount"
+]);
+
 interface ChatMetadata {
   toolCalls: number;
   toolResults: number;
@@ -162,10 +173,18 @@ export const chatWithAI = action({
     const tokenIdentifier = userId;
     console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
     
-    const userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
-    console.log(`📋 [MODEL_SELECTION] User config retrieved:`, {
+    let userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+    // Load global defaults once (admin-selected) and prefer them for everyone
+    let globalConfig: any = null;
+    try {
+      globalConfig = await ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {});
+    } catch (e) {
+      console.warn(`⚠️ [MODEL_SELECTION] Failed to load global config:`, e);
+    }
+    const effectiveActiveModelId = globalConfig?.activeModelId || userConfig?.activeModelId;
+    console.log(`📋 [MODEL_SELECTION] Effective config:`, {
       hasConfig: !!userConfig,
-      activeModelId: userConfig?.activeModelId,
+      activeModelId: effectiveActiveModelId,
       hasApiKey: !!userConfig?.openRouterApiKey,
       apiKeyPreview: userConfig?.openRouterApiKey ? `${userConfig.openRouterApiKey.substring(0, 10)}...` : 'none'
     });
@@ -175,10 +194,15 @@ export const chatWithAI = action({
       console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
       console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
 
-      // 1. Check user's configured model (dashboard selection)
+      // 1. If admin set a global model, use it for everyone
+      if (globalConfig?.activeModelId) {
+        console.log(`🎯 [MODEL_SELECTION] Using admin global selection: ${globalConfig.activeModelId}`);
+        return globalConfig.activeModelId;
+      }
+
+      // 2. Otherwise, use user's configured model (if any)
       if (userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using dashboard selection: ${userConfig.activeModelId}`);
-        // Trust user's model selection - validation happens at provider API level
+        console.log(`🎯 [MODEL_SELECTION] Using user selection: ${userConfig.activeModelId}`);
         return userConfig.activeModelId;
       }
       
@@ -194,7 +218,7 @@ export const chatWithAI = action({
       });
       
       // 4. No fallback - require dashboard selection
-      console.error(`❌ [MODEL_SELECTION] No model selected in dashboard`);
+      console.error(`❌ [MODEL_SELECTION] No model selected (global/user)`);
       throw new Error("No model selected. Please select a model in the Admin Dashboard.");
     })();
     
@@ -214,50 +238,113 @@ export const chatWithAI = action({
     
     // Initialize the appropriate provider
     let modelProvider: any;
+    let lockedProvider: string | undefined;
+    let openRouterApiKey: string | undefined;
+    let openRouterBaseUrl = "https://openrouter.ai/api/v1";
+    let providerPreferenceCleared = false;
+    let persistProviderReset: () => Promise<void> = async () => {};
+    let buildProviderPreferences: (slug?: string) => any = () => ({ provider: { sort: "throughput" } });
     
     if (provider === "google") {
-      // Initialize Google Vertex AI
-      console.log(`🔄 [MODEL_SELECTION] Initializing Google Vertex AI provider`);
-      
-      // Get Google credentials from config
-      const googleProjectId = userConfig?.googleProjectId || "not-provided";
-      const googleRegion = userConfig?.googleRegion;
-      const googleCredentials = userConfig?.googleCredentials;
-      
-      // Set up Google credentials if provided
-      if (googleCredentials) {
-        try {
-          // Parse the credentials JSON and set up authentication
-          const credentials = JSON.parse(googleCredentials);
-          process.env.GOOGLE_APPLICATION_CREDENTIALS = JSON.stringify(credentials);
-        } catch (error) {
-          console.warn("⚠️ [GOOGLE] Failed to parse Google credentials JSON, using default authentication");
-        }
-      }
-      
-      // Initialize Google Vertex AI provider
-      modelProvider = createVertex({
-        project: googleProjectId,
-        location: googleRegion || "us-central1",
-      });
+      console.warn("[MODEL_SELECTION] Google Vertex AI temporarily disabled to avoid default-runtime bundling issues");
+      throw new Error("Google Vertex AI is temporarily disabled in this build. Please select an OpenRouter model in Admin Dashboard.");
     } else {
       // Initialize OpenRouter (default)
       console.log(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
       
-      // Get API key from unified config
-      const apiKey = userConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
-      console.log(`🔑 [MODEL_SELECTION] API key source: ${userConfig?.openRouterApiKey ? 'user_config' : 'environment'}`);
+      // Get API key from unified config (user → global → env)
+      const apiKey = userConfig?.openRouterApiKey || globalConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
+      const apiKeySource = userConfig?.openRouterApiKey
+        ? 'user_config'
+        : globalConfig?.openRouterApiKey
+          ? 'global_config'
+          : 'environment';
+      console.log(`🔑 [MODEL_SELECTION] API key source: ${apiKeySource}`);
       
       if (!apiKey) {
         console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
         throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
       }
       
-      // Initialize OpenRouter with proper configuration  
-      modelProvider = createOpenRouter({ 
+      openRouterApiKey = apiKey;
+      openRouterBaseUrl = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
+      buildProviderPreferences = (slug?: string) => slug && slug.length > 0
+        ? { provider: { order: [slug], allow_fallbacks: false } }
+        : { provider: { sort: "throughput" } };
+
+      const trimmedSpecificProvider = (userConfig?.openRouterSpecificProvider ?? globalConfig?.openRouterSpecificProvider)?.trim();
+      lockedProvider = trimmedSpecificProvider && trimmedSpecificProvider.length > 0 ? trimmedSpecificProvider : undefined;
+
+      persistProviderReset = async () => {
+        if (!userConfig || providerPreferenceCleared) {
+          return;
+        }
+        providerPreferenceCleared = true;
+        try {
+          await ctx.runMutation(api.providers.unified.setProviderConfig, {
+            apiProvider: userConfig.apiProvider || "openrouter",
+            openRouterApiKey: userConfig.openRouterApiKey,
+            openRouterModelId: userConfig.openRouterModelId,
+            openRouterBaseUrl: userConfig.openRouterBaseUrl,
+            openRouterSpecificProvider: undefined,
+            openRouterUseMiddleOutTransform: userConfig.openRouterUseMiddleOutTransform,
+            googleProjectId: userConfig.googleProjectId,
+            googleRegion: userConfig.googleRegion,
+            googleCredentials: userConfig.googleCredentials,
+            googleModelId: userConfig.googleModelId,
+            googleEnableUrlContext: userConfig.googleEnableUrlContext,
+            googleEnableGrounding: userConfig.googleEnableGrounding,
+            googleEnableReasoning: userConfig.googleEnableReasoning,
+            activeModelId: userConfig.activeModelId,
+          });
+          console.log(`🔁 [MODEL_SELECTION] Cleared OpenRouter provider override for model ${modelName}`);
+          try {
+            const refreshedConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
+            const stillLocked = refreshedConfig?.openRouterSpecificProvider;
+            if (stillLocked) {
+              logWarning(`Provider override persisted after reset attempt: ${stillLocked}`);
+            } else {
+              logDebug(`Provider override successfully cleared for ${modelName}`);
+            }
+          } catch (recheckError) {
+            logWarning(`Failed to verify provider override reset: ${recheckError instanceof Error ? recheckError.message : recheckError}`);
+          }
+        } catch (mutationError) {
+          console.warn(`⚠️ [MODEL_SELECTION] Failed to persist provider override reset:`, mutationError);
+        }
+      };
+
+      if (lockedProvider) {
+        const lowerLockedProvider = lockedProvider.toLowerCase();
+        if (KNOWN_INVALID_PROVIDER_SLUGS.has(lowerLockedProvider)) {
+          console.warn(`⚠️ [MODEL_SELECTION] Ignoring invalid provider override "${lockedProvider}" for ${modelName}`);
+          lockedProvider = undefined;
+          await persistProviderReset();
+        } else {
+          try {
+            const detailedInfo = await ctx.runQuery(api.providers.openrouterDetailed.getCachedDetailedModelInfo, { modelId: modelName });
+            if (detailedInfo?.providerSlugs && detailedInfo.providerSlugs.length > 0) {
+              const validSlugs = new Set(detailedInfo.providerSlugs.map((slug: string) => slug.toLowerCase()));
+              if (!validSlugs.has(lowerLockedProvider)) {
+                console.warn(`⚠️ [MODEL_SELECTION] Provider "${lockedProvider}" unavailable for ${modelName}, reverting to automatic routing`);
+                lockedProvider = undefined;
+                await persistProviderReset();
+              }
+            }
+          } catch (validationError) {
+            console.warn(`⚠️ [MODEL_SELECTION] Failed to validate provider override "${lockedProvider}":`, validationError);
+          }
+        }
+      }
+
+      const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
+      modelProvider = createOpenRouter({
         apiKey,
-        baseURL: userConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1",
+        baseURL: openRouterBaseUrl,
+        extraBody: buildProviderPreferences(lockedProvider),
       });
+
+      console.info(`🛠️ [MODEL_SELECTION] Prepared OpenRouter client for ${modelName} with routing:`, buildProviderPreferences(lockedProvider));
     }
     
     // Initialize Langfuse tracing
@@ -349,12 +436,17 @@ export const chatWithAI = action({
       // Add user message to conversation (use sanitized version)
       const updatedHistory = addMessageToConversation(history, {
         role: "user",
-        content: sanitizedMessage
+        content: sanitizedMessage,
+        timestamp: Date.now(),
       });
 
       // Simple conversation optimization
       const optimizedHistory = optimizeConversation(updatedHistory, 50);
-      const cleanHistory = sanitizeMessages(optimizedHistory);
+      const sanitizedMessages = sanitizeMessages(optimizedHistory);
+      const cleanHistory = Array.isArray(sanitizedMessages) ? sanitizedMessages : [];
+      if (!Array.isArray(sanitizedMessages)) {
+        logError(new Error("Clean history is not an array"), "History shape invalid");
+      }
       
       // Fetch previous mode for prompt injection
       const previousMode = sessionId ? ModeController.getPreviousMode(sessionId) : null;
@@ -499,8 +591,16 @@ export const chatWithAI = action({
 
       // Get final result from AI SDK - properly await promises
       const finalText: string = await result.text;
-      const finalToolCalls: any[] = await result.toolCalls;
-      const finalToolResults: any[] = await result.toolResults;
+      const rawToolCalls = await result.toolCalls;
+      const rawToolResults = await result.toolResults;
+      if (!Array.isArray(rawToolCalls)) {
+        logError(new Error("Tool calls result was not an array"), "Stream shape invalid");
+      }
+      if (!Array.isArray(rawToolResults)) {
+        logError(new Error("Tool results result was not an array"), "Stream shape invalid");
+      }
+      const finalToolCalls: any[] = Array.isArray(rawToolCalls) ? rawToolCalls : [];
+      const finalToolResults: any[] = Array.isArray(rawToolResults) ? rawToolResults : [];
       const finalUsage = await result.usage;
       
       console.log('✅ [BACKEND DEBUG] AI SDK result:', {
@@ -596,6 +696,9 @@ export const chatWithAI = action({
 
 
       // Build final conversation history using simple approach
+     if (!Array.isArray(cleanHistory)) {
+       logError(new Error("Final history source not array"), "History shape invalid");
+     }
      let finalHistory = [...cleanHistory];
 
      // Debug: Log the current conversation state

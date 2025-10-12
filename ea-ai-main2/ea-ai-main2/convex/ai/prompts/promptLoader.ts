@@ -9,6 +9,7 @@ import { prompt as planningPrompt } from "./planning_new";
 import { prompt as executionPrompt } from "./execution_new";
 import { prompt as internalTodoEnhancedPrompt } from "./internalTodoEnhanced";
 import { prompt as generalPrompt } from "./general";
+import { prompt as taskBreakdownPrompt } from "./task_breakdown";
 
 // Prompt registry mapping names to content
 const PROMPT_REGISTRY: Record<string, string> = {
@@ -18,6 +19,7 @@ const PROMPT_REGISTRY: Record<string, string> = {
   "execution_new": executionPrompt,
   "internalTodoEnhanced": internalTodoEnhancedPrompt,
   "general": generalPrompt,
+  "task_breakdown": taskBreakdownPrompt,
 };
 
 // Prompt metadata for validation and debugging
@@ -191,6 +193,7 @@ export const PROMPT_NAMES = {
   EXECUTION_NEW: "execution_new" as const,
   INTERNAL_TODO_ENHANCED: "internalTodoEnhanced" as const,
   GENERAL: "general" as const,
+  TASK_BREAKDOWN: "task_breakdown" as const,
 } as const;
 
 export type PromptName = typeof PROMPT_NAMES[keyof typeof PROMPT_NAMES];

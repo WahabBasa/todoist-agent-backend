@@ -120,6 +120,18 @@ const BUILT_IN_SUBAGENTS: Record<string, SubagentConfig> = {
     temperature: 0.3,
     options: {},
   },
+
+  task_breakdown: {
+    name: "task_breakdown",
+    description: "Multi-level task decomposition without external tools (returns a single structured breakdown).",
+    promptFile: "task_breakdown",
+    tools: {
+      // No tools allowed for this subagent
+    },
+    builtIn: true,
+    temperature: 0.3,
+    options: {},
+  },
 };
 
 // Subagent registry management - following OpenCode's Agent namespace pattern

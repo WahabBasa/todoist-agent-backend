@@ -3,6 +3,11 @@ import { ModeController } from "./ai/modes/controller";
 import { logDebug } from "./ai/logger";
 import { v, ConvexError } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { createEmbeddedMessage } from "./ai/messageSchemas";
+import { optimizeConversation, type ConvexMessage } from "./ai/simpleMessages";
+
+// Debug logging control
+const ENABLE_DEBUG_LOGS = process.env.ENABLE_DEBUG_LOGS === "true";
 
 // Helper function for consistent authentication (tokenIdentifier pattern)
 async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<string> {
@@ -21,28 +26,21 @@ async function getTokenIdentifier(ctx: QueryCtx): Promise<string | null> {
 
 // Helper function for schema migration: Convert legacy format to new format
 function migrateConversationSchema(conversation: any) {
-  console.log('🔄 [BACKEND DEBUG] Checking conversation schema migration:', {
-    conversationExists: !!conversation,
-    hasSchemaVersion: !!conversation?.schemaVersion,
-    schemaVersion: conversation?.schemaVersion,
-    hasMessages: !!conversation?.messages,
-    hasMessage: !!conversation?.message
-  });
-  
   if (!conversation) {
-    console.log('⚠️ [BACKEND DEBUG] No conversation to migrate');
     return null;
   }
   
   // If already migrated or has new format, return as-is
   if (conversation.schemaVersion === 2 || conversation.messages) {
-    console.log('✅ [BACKEND DEBUG] Conversation already in new format, no migration needed');
     return conversation;
   }
   
   // Legacy format detected - convert to new format
   if (conversation.message) {
-    console.log('🔄 [BACKEND DEBUG] Migrating legacy conversation format');
+    if (ENABLE_DEBUG_LOGS) {
+      console.log('🔄 [MIGRATION] Converting legacy conversation format');
+    }
+    
     const migratedMessages = [];
     
     // Add user message
@@ -58,7 +56,7 @@ function migrateConversationSchema(conversation: any) {
         role: "assistant" as const,
         content: conversation.response,
         toolCalls: conversation.toolCalls || undefined,
-        timestamp: (conversation.timestamp || Date.now()) + 1, // Slightly after user message
+        timestamp: (conversation.timestamp || Date.now()) + 1,
       });
     }
     
@@ -69,19 +67,540 @@ function migrateConversationSchema(conversation: any) {
       schemaVersion: 2,
     };
     
-    console.log('✅ [BACKEND DEBUG] Migration completed:', {
-      messageCount: result.messages.length,
-      messagesPreview: result.messages.map((msg: any) => ({
-        role: msg.role,
-        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
-      }))
-    });
+    if (ENABLE_DEBUG_LOGS) {
+      console.log('✅ [MIGRATION] Completed:', { messageCount: result.messages.length });
+    }
     
     return result;
   }
   
-  console.log('⚠️ [BACKEND DEBUG] Unknown conversation format, returning as-is');
+  if (ENABLE_DEBUG_LOGS) {
+    console.warn('⚠️ [MIGRATION] Unknown conversation format');
+  }
   return conversation;
+}
+
+const embeddedMetadataArg = v.object({
+  mode: v.optional(v.string()),
+  toolStates: v.optional(
+    v.record(
+      v.string(),
+      v.union(v.literal("pending"), v.literal("running"), v.literal("completed"))
+    )
+  ),
+  requestId: v.optional(v.string()),
+  delegation: v.optional(
+    v.object({
+      target: v.string(),
+      status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
+      reason: v.optional(v.string()),
+    })
+  ),
+});
+
+type AppendStatus = "appended" | "noop" | "conflict";
+
+type AppendResult = {
+  status: AppendStatus;
+  messages: ConvexMessage[];
+  version: number;
+  previousVersion: number;
+};
+
+export const appendUserMessage = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    content: v.string(),
+    historyVersion: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<AppendResult> => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) =>
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
+      )
+      .first();
+
+    const messages: ConvexMessage[] = Array.isArray(conversation?.messages)
+      ? [...(conversation!.messages as ConvexMessage[])]
+      : [];
+
+    const previousVersion = messages.length;
+    const trimmedContent = args.content.trim();
+
+    if (args.historyVersion !== undefined && args.historyVersion !== previousVersion) {
+      return {
+        status: "conflict",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    if (!trimmedContent) {
+      return {
+        status: "noop",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    const mode = resolveMode(args.sessionId, session);
+    const candidate = createEmbeddedMessage(
+      {
+        role: "user" as const,
+        content: trimmedContent,
+        timestamp: Date.now(),
+      },
+      { mode }
+    ) as ConvexMessage;
+
+    if (!shouldAppendMessage(messages, candidate)) {
+      return {
+        status: "noop",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    messages.push(candidate);
+    const now = Date.now();
+
+    if (conversation) {
+      await ctx.db.patch(conversation._id, {
+        messages,
+        schemaVersion: 2,
+      });
+    } else {
+      await ctx.db.insert("conversations", {
+        tokenIdentifier,
+        sessionId: args.sessionId,
+        messages,
+        schemaVersion: 2,
+      });
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      lastMessageAt: now,
+      messageCount: messages.length,
+    });
+
+    return {
+      status: "appended",
+      messages,
+      version: messages.length,
+      previousVersion,
+    };
+  },
+});
+
+export const appendAssistantMessage = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    content: v.optional(v.string()),
+    toolCalls: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          args: v.any(),
+          toolCallId: v.string(),
+        })
+      )
+    ),
+    toolResults: v.optional(
+      v.array(
+        v.object({
+          toolCallId: v.string(),
+          toolName: v.string(),
+          result: v.any(),
+        })
+      )
+    ),
+    historyVersion: v.optional(v.number()),
+    metadata: v.optional(embeddedMetadataArg),
+  },
+  handler: async (ctx, args): Promise<AppendResult> => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) =>
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
+      )
+      .first();
+
+    const messages: ConvexMessage[] = Array.isArray(conversation?.messages)
+      ? [...(conversation!.messages as ConvexMessage[])]
+      : [];
+
+    const previousVersion = messages.length;
+
+    if (args.historyVersion !== undefined && args.historyVersion !== previousVersion) {
+      console.warn('[BACKEND DEBUG] Assistant append conflict detected', {
+        sessionId: args.sessionId,
+        providedVersion: args.historyVersion,
+        previousVersion,
+      });
+      return {
+        status: "conflict",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    const trimmedContent = args.content?.trim() ?? "";
+    const hasContent = Boolean(trimmedContent);
+    const hasTools = Boolean(args.toolCalls?.length || args.toolResults?.length);
+
+    if (!hasContent && !hasTools) {
+      console.log('[BACKEND DEBUG] Assistant append noop (no content/tools)', {
+        sessionId: args.sessionId,
+        previousVersion,
+      });
+      return {
+        status: "noop",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    const mode = args.metadata?.mode ?? resolveMode(args.sessionId, session);
+    const metadata = args.metadata ? { ...args.metadata, mode } : { mode };
+
+    const baseMessage: ConvexMessage = {
+      role: "assistant",
+      timestamp: Date.now(),
+    };
+
+    if (hasContent) {
+      baseMessage.content = trimmedContent;
+    }
+
+    if (args.toolCalls?.length) {
+      baseMessage.toolCalls = args.toolCalls;
+    }
+
+    if (args.toolResults?.length) {
+      baseMessage.toolResults = args.toolResults.map((result) => ({
+        ...result,
+        toolName: result.toolName,
+      }));
+    }
+
+    const candidate = createEmbeddedMessage(baseMessage, metadata) as ConvexMessage;
+
+    const combined = [...messages, candidate];
+    const optimized = optimizeConversation(combined);
+
+    const now = Date.now();
+
+    if (conversation) {
+      await ctx.db.patch(conversation._id, {
+        messages: optimized,
+        schemaVersion: 2,
+      });
+    } else {
+      await ctx.db.insert("conversations", {
+        tokenIdentifier,
+        sessionId: args.sessionId,
+        messages: optimized,
+        schemaVersion: 2,
+      });
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      lastMessageAt: now,
+      messageCount: optimized.length,
+    });
+
+    const result: AppendResult = {
+      status: "appended",
+      messages: optimized,
+      version: optimized.length,
+      previousVersion,
+    };
+    console.log('[BACKEND DEBUG] Assistant append success', {
+      sessionId: args.sessionId,
+      previousVersion,
+      nextVersion: result.version,
+      contentLength: trimmedContent.length,
+      hasTools,
+    });
+    return result;
+  },
+});
+
+// OpenCode-style progressive assistant turn lifecycle: begin → update → finish
+export const beginAssistantTurn = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    requestId: v.string(),
+    historyVersion: v.optional(v.number()),
+    metadata: v.optional(embeddedMetadataArg),
+  },
+  handler: async (ctx, args): Promise<AppendResult> => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) =>
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
+      )
+      .first();
+
+    const messages: ConvexMessage[] = Array.isArray(conversation?.messages)
+      ? [...(conversation!.messages as ConvexMessage[])]
+      : [];
+
+    const previousVersion = messages.length;
+    if (args.historyVersion !== undefined && args.historyVersion !== previousVersion) {
+      return {
+        status: "conflict",
+        messages,
+        version: previousVersion,
+        previousVersion,
+      };
+    }
+
+    const mode = args.metadata?.mode ?? resolveMode(args.sessionId, session);
+    const baseMessage: ConvexMessage = {
+      role: "assistant",
+      content: "",
+      timestamp: Date.now(),
+    };
+
+    const metadata = { ...(args.metadata || {}), mode, requestId: args.requestId };
+    const candidate = createEmbeddedMessage(baseMessage, metadata) as ConvexMessage;
+
+    messages.push(candidate);
+
+    if (conversation) {
+      await ctx.db.patch(conversation._id, {
+        messages,
+        schemaVersion: 2,
+      });
+    } else {
+      await ctx.db.insert("conversations", {
+        tokenIdentifier,
+        sessionId: args.sessionId,
+        messages,
+        schemaVersion: 2,
+      });
+    }
+
+    await ctx.db.patch(args.sessionId, {
+      lastMessageAt: Date.now(),
+      messageCount: messages.length,
+    });
+
+    return {
+      status: "appended",
+      messages,
+      version: messages.length,
+      previousVersion,
+    };
+  },
+});
+
+export const updateAssistantTurn = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    requestId: v.string(),
+    patch: v.object({
+      toolCalls: v.optional(
+        v.array(
+          v.object({ name: v.string(), args: v.any(), toolCallId: v.string() })
+        )
+      ),
+      toolResults: v.optional(
+        v.array(
+          v.object({ toolCallId: v.string(), toolName: v.string(), result: v.any() })
+        )
+      ),
+      metadata: v.optional(embeddedMetadataArg),
+    }),
+  },
+  handler: async (ctx, args): Promise<AppendResult> => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) =>
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
+      )
+      .first();
+
+    const messages: ConvexMessage[] = Array.isArray(conversation?.messages)
+      ? [...(conversation!.messages as ConvexMessage[])]
+      : [];
+
+    const previousVersion = messages.length;
+    if (messages.length === 0) {
+      return { status: "noop", messages, version: previousVersion, previousVersion };
+    }
+
+    // Find the most recent assistant message with matching requestId
+    let idx = messages.length - 1;
+    while (idx >= 0) {
+      const m: any = messages[idx];
+      if (m?.role === "assistant" && m?.metadata?.requestId === args.requestId) break;
+      idx--;
+    }
+    if (idx < 0) {
+      return { status: "noop", messages, version: previousVersion, previousVersion };
+    }
+
+    const msg: any = { ...(messages[idx] as any) };
+    if (args.patch.toolCalls?.length) {
+      const existing = Array.isArray(msg.toolCalls) ? msg.toolCalls : [];
+      const merged = dedupeToolCallsForUpdate([...existing, ...args.patch.toolCalls]);
+      msg.toolCalls = merged;
+    }
+    if (args.patch.toolResults?.length) {
+      const existing = Array.isArray(msg.toolResults) ? msg.toolResults : [];
+      const merged = dedupeToolResultsForUpdate([...existing, ...args.patch.toolResults]);
+      msg.toolResults = merged;
+    }
+    if (args.patch.metadata) {
+      msg.metadata = { ...(msg.metadata || {}), ...args.patch.metadata };
+    }
+
+    messages[idx] = msg as ConvexMessage;
+
+    const optimized = optimizeConversation(messages);
+    await ctx.db.patch(conversation!._id, { messages: optimized, schemaVersion: 2 });
+    await ctx.db.patch(args.sessionId, { lastMessageAt: Date.now(), messageCount: optimized.length });
+
+    return { status: "appended", messages: optimized, version: optimized.length, previousVersion };
+  },
+});
+
+export const finishAssistantTurn = mutation({
+  args: {
+    sessionId: v.id("chatSessions"),
+    requestId: v.string(),
+    content: v.optional(v.string()),
+    metadata: v.optional(embeddedMetadataArg),
+  },
+  handler: async (ctx, args): Promise<AppendResult> => {
+    const tokenIdentifier = await requireAuth(ctx);
+
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.tokenIdentifier !== tokenIdentifier) {
+      throw new ConvexError("Chat session not found or unauthorized");
+    }
+
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_tokenIdentifier_and_session", (q) =>
+        q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId)
+      )
+      .first();
+
+    const messages: ConvexMessage[] = Array.isArray(conversation?.messages)
+      ? [...(conversation!.messages as ConvexMessage[])]
+      : [];
+
+    const previousVersion = messages.length;
+    if (messages.length === 0) {
+      return { status: "noop", messages, version: previousVersion, previousVersion };
+    }
+
+    // Find the most recent assistant message with matching requestId
+    let idx = messages.length - 1;
+    while (idx >= 0) {
+      const m: any = messages[idx];
+      if (m?.role === "assistant" && m?.metadata?.requestId === args.requestId) break;
+      idx--;
+    }
+    if (idx < 0) {
+      // Fallback: find last assistant placeholder (no content and no tools)
+      idx = messages.length - 1;
+      while (idx >= 0) {
+        const m: any = messages[idx];
+        const noContent = !m?.content || (typeof m.content === 'string' && m.content.trim() === '');
+        const noTools = !Array.isArray(m?.toolCalls) && !Array.isArray(m?.toolResults);
+        if (m?.role === 'assistant' && noContent && noTools) break;
+        idx--;
+      }
+      if (idx < 0) {
+        return { status: "noop", messages, version: previousVersion, previousVersion };
+      }
+    }
+
+    const msg: any = { ...(messages[idx] as any) };
+    if (typeof args.content === "string") {
+      msg.content = args.content;
+    }
+    if (args.metadata) {
+      msg.metadata = { ...(msg.metadata || {}), ...args.metadata };
+    } else {
+      // Ensure requestId is preserved on finalize
+      msg.metadata = { ...(msg.metadata || {}), requestId: args.requestId };
+    }
+
+    messages[idx] = msg as ConvexMessage;
+    const optimized = optimizeConversation(messages);
+
+    await ctx.db.patch(conversation!._id, { messages: optimized, schemaVersion: 2 });
+    await ctx.db.patch(args.sessionId, { lastMessageAt: Date.now(), messageCount: optimized.length });
+
+    return { status: "appended", messages: optimized, version: optimized.length, previousVersion };
+  },
+});
+
+// Helpers for dedupe during updates
+function dedupeToolCallsForUpdate(calls: Array<{ name: string; args: any; toolCallId: string }>) {
+  const map = new Map<string, { name: string; args: any; toolCallId: string }>();
+  for (const c of calls) {
+    const existing = map.get(c.toolCallId);
+    if (!existing) {
+      map.set(c.toolCallId, { name: c.name, args: c.args ?? {}, toolCallId: c.toolCallId });
+    } else {
+      const mergedArgs = (existing.args && Object.keys(existing.args).length) ? existing.args : (c.args ?? {});
+      map.set(c.toolCallId, { name: existing.name || c.name, args: mergedArgs, toolCallId: c.toolCallId });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function dedupeToolResultsForUpdate(results: Array<{ toolCallId: string; toolName: string; result: any }>) {
+  const map = new Map<string, { toolCallId: string; toolName: string; result: any }>();
+  for (const r of results) {
+    const existing = map.get(r.toolCallId);
+    if (!existing) {
+      map.set(r.toolCallId, r);
+    } else {
+      map.set(r.toolCallId, { toolCallId: r.toolCallId, toolName: existing.toolName || r.toolName, result: r.result ?? existing.result });
+    }
+  }
+  return Array.from(map.values());
 }
 
 // Get conversation for specific session (new multi-chat approach)
@@ -106,12 +625,9 @@ export const getConversationBySession = query({
     // Verify session belongs to user
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.tokenIdentifier !== tokenIdentifier) {
-      console.log('🔒 [BACKEND DEBUG] Session not found or unauthorized:', {
-        sessionId: args.sessionId,
-        sessionExists: !!session,
-        sessionTokenIdentifier: session?.tokenIdentifier,
-        userTokenIdentifier: tokenIdentifier
-      });
+      if (ENABLE_DEBUG_LOGS) {
+        console.log('🔒 [AUTH] Session not found or unauthorized:', { sessionId: args.sessionId });
+      }
       return null; // Big-brain pattern: return null instead of throwing
     }
 
@@ -120,25 +636,9 @@ export const getConversationBySession = query({
       .withIndex("by_tokenIdentifier_and_session", (q) => 
         q.eq("tokenIdentifier", tokenIdentifier).eq("sessionId", args.sessionId))
       .first();
-      
-    console.log('📚 [BACKEND DEBUG] Fetched conversation from database:', {
-      sessionId: args.sessionId,
-      conversationExists: !!conversation,
-      messageCount: conversation?.messages?.length || 0,
-      messagesPreview: conversation?.messages?.slice(-2).map(msg => ({
-        role: msg.role,
-        contentPreview: typeof msg.content === 'string' ? msg.content.substring(0, 50) + '...' : '[structured content]'
-      })) || 'no messages'
-    });
 
     // Apply schema migration if needed
     const migratedConversation = migrateConversationSchema(conversation);
-    
-    console.log('📚 [BACKEND DEBUG] Migrated conversation:', {
-      originalExists: !!conversation,
-      migratedExists: !!migratedConversation,
-      messageCount: migratedConversation?.messages?.length || 0
-    });
     
     return migratedConversation;
   },
@@ -224,6 +724,7 @@ export const upsertConversation = mutation({
       metadata: v.optional(v.object({
         mode: v.optional(v.string()),
         toolStates: v.optional(v.record(v.string(), v.union(v.literal("pending"), v.literal("running"), v.literal("completed")))),
+        requestId: v.optional(v.string()),
         delegation: v.optional(v.object({
           target: v.string(),
           status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
@@ -553,3 +1054,21 @@ export const addSyntheticMessage = mutation({
     return { success: true, messageAdded: syntheticMessage };
   },
 });
+
+function resolveMode(sessionId: Id<"chatSessions">, session: any): string {
+  return (
+    ModeController.getCurrentMode(sessionId) ||
+    session?.activeMode ||
+    session?.primaryMode ||
+    "primary"
+  );
+}
+
+function shouldAppendMessage(history: ConvexMessage[], candidate: ConvexMessage): boolean {
+  if (history.length === 0) {
+    return true;
+  }
+
+  const last = history[history.length - 1];
+  return !(last.role === candidate.role && last.content === candidate.content);
+}

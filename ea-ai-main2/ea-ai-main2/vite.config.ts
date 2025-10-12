@@ -8,12 +8,25 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Optional: absolute alias to the Convex generated directory to avoid mis-imports
+      "~convex": path.resolve(__dirname, "./convex"),
     },
   },
   server: {
     hmr: {
       // Reduce HMR aggressiveness to prevent unnecessary reloads
       timeout: 5000,
+    },
+    proxy: {
+      '/chat': {
+        target: process.env.VITE_CONVEX_HTTP_ORIGIN || 'http://localhost:3210',
+        changeOrigin: true,
+      },
+      '/convex-http': {
+        target: process.env.VITE_CONVEX_HTTP_ORIGIN || 'http://localhost:3210',
+        changeOrigin: true,
+        rewrite: (p: string) => p.replace(/^\/convex-http/, ''),
+      }
     },
     // Watch options to reduce file system noise
     watch: {

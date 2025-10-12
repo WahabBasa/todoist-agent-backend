@@ -38,11 +38,10 @@ function ConvexProvidersWithTheme({ children }: { children: React.ReactNode }) {
     <ClerkProvider
       publishableKey={PUBLISHABLE_KEY}
       afterSignOutUrl="/"
+      afterSignInUrl="/"
+      afterSignUpUrl="/"
       appearance={{
         baseTheme: resolvedTheme === "dark" ? dark : undefined,
-      }}
-      additionalOAuthScopes={{
-        google: ['https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.readonly']
       }}
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>

@@ -89,7 +89,7 @@ export function useConvexChat({
       // Call Convex action
       const result = await chatWithAI({
         message: message.content,
-        useHaiku: false,
+
         sessionId: id as Id<"chatSessions"> | undefined,
         currentTimeContext
       });

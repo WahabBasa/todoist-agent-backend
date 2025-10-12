@@ -1,48 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
+/* Smooth scroll behavior for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
 @theme {
   --default-transition: all 0.2s ease;
   --chat-position-transition: all 0.5s ease-in-out;
   --default-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  
+  --greeting-font-family: 'Lora', serif;
+
   /* UX-Driven Typography System - Attention Flow Based */
   /* PRIMARY ATTENTION ZONE - Active interaction areas (chat input, main actions) */
   --font-primary-size: 14px;
   --font-primary-weight: 500;
   --font-primary-line-height: 1.5;
-  
+
   /* SECONDARY ATTENTION ZONE - Navigation and important controls */
   --font-secondary-size: 13px;
   --font-secondary-weight: 475;
   --font-secondary-line-height: 1.45;
-  
+
   /* TERTIARY ATTENTION ZONE - Background content, scannable lists */
   --font-tertiary-size: 12px;
   --font-tertiary-weight: 400;
   --font-tertiary-line-height: 1.4;
-  
+
   /* UTILITY ATTENTION ZONE - Minimal UI elements, three dots, meta info */
   --font-utility-size: 11px;
   --font-utility-weight: 350;
   --font-utility-line-height: 1.35;
-  
+
   /* LEGACY SCALE - Maintained for headings and special use */
   --font-size-lg: 18px;       /* Section headings */
   --line-height-lg: 1.4;
   --font-weight-lg: 600;
-  
+
   --font-size-xl: 20px;       /* Page headings */
   --line-height-xl: 1.3;
   --font-weight-xl: 600;
-  
+
   --font-size-2xl: 24px;      /* Large headings */
   --line-height-2xl: 1.2;
   --font-weight-2xl: 600;
-  
+
   --font-size-3xl: 30px;      /* Hero text */
   --line-height-3xl: 1.2;
   --font-weight-3xl: 600;
@@ -52,78 +58,113 @@
   --radius-md: 0.5rem;       /* 8px - default buttons and inputs */  
   --radius-lg: 0.75rem;      /* 12px - large containers like chat input */
   --radius-xl: 1rem;         /* 16px - special cases like modals */
-  
+
   /* UX-Driven Spacing System - Attention Priority Based */
   /* PRIMARY SPACING - Generous padding for primary interaction zones */
   --spacing-primary-x: 1rem;    /* 16px horizontal padding */
   --spacing-primary-y: 0.75rem; /* 12px vertical padding */
   --spacing-primary-gap: 0.75rem; /* 12px gaps between primary elements */
-  
+
   /* SECONDARY SPACING - Balanced padding for navigation zones */
   --spacing-secondary-x: 0.5rem;   /* 8px horizontal padding */
   --spacing-secondary-y: 0.375rem; /* 6px vertical padding */
   --spacing-secondary-gap: 0.375rem; /* 6px gaps between secondary elements */
-  
+
   /* TERTIARY SPACING - Compact padding for background content */
   --spacing-tertiary-x: 0.375rem;  /* 6px horizontal padding */
   --spacing-tertiary-y: 0.25rem;   /* 4px vertical padding */
   --spacing-tertiary-gap: 0.25rem; /* 4px gaps for efficient scanning */
-  
+
   /* UTILITY SPACING - Minimal padding for utility elements */
   --spacing-utility-x: 0.375rem;  /* 6px horizontal padding */
   --spacing-utility-y: 0.25rem;   /* 4px vertical padding */
   --spacing-utility-gap: 0.125rem; /* 2px gaps for subtle presence */
-  
-  /* HSL White Intensity Text System - Attention Based */
-  --color-text-primary: hsl(0, 0%, 100%);     /* PRIMARY attention - Pure white */
-  --color-text-secondary: hsl(0, 0%, 90%);    /* SECONDARY attention - 90% white */
-  --color-text-tertiary: hsl(0, 0%, 75%);     /* TERTIARY attention - 75% white */
-  --color-text-utility: hsl(0, 0%, 60%);      /* UTILITY attention - 60% white */
 
-  /* Colors - ChatGPT Grey Theme (Legacy) */
-  --color-background: #212121;
-  --color-foreground: hsl(0, 0%, 100%);       /* Uses primary white */
-  --color-card: #2f2f2f;
-  --color-card-foreground: hsl(0, 0%, 100%);
-  --color-popover: #2f2f2f;
-  --color-popover-foreground: hsl(0, 0%, 100%);
-  --color-primary: #404040;
-  --color-primary-foreground: hsl(0, 0%, 100%);
-  --color-secondary: #1a1a1a;
-  --color-secondary-foreground: hsl(0, 0%, 100%);
-  --color-muted: #353535;
-  --color-muted-foreground: hsl(0, 0%, 75%);   /* Uses tertiary intensity */
-  --color-accent: #353535;
-  --color-accent-foreground: hsl(0, 0%, 100%);
+  /* Claude Color System - Blue-Accented Dark Theme */
+  --dark-charcoal: #242424;      /* Main background - darkened */
+  --medium-dark: #303030;        /* Sidebar & input containers - darkened */
+  --user-message-bg: #1a1a1a;    /* User message background - darker than main bg but not pure black */
+  --primary-blue: #5BA4CF;       /* Accents & buttons - 5% more vibrant */
+  --neutral-stone: #a5adb4;      /* Secondary text */
+  --soft-off-white: #f0f3f5;     /* Primary text */
+  --pure-white: #ffffff;         /* Highlights */
+
+  /* Text System - Claude Approach with Attention Levels */
+  --color-text-primary: var(--soft-off-white);    /* PRIMARY attention */
+  --color-text-secondary: var(--neutral-stone);   /* SECONDARY attention */
+  --color-text-tertiary: #8b9297;                 /* TERTIARY attention - slightly muted stone */
+  --color-text-utility: #6b7280;                  /* UTILITY attention - more muted */
+
+  /* Global HSL text tokens (calibrated to current foreground) */
+  --fg-h: 210;     /* approx hue of soft-off-white */
+  --fg-s: 14%;     /* approximate saturation */
+  --fg-l: 95%;     /* maps to current --soft-off-white */
+  --text-100: hsl(var(--fg-h) var(--fg-s) var(--fg-l));
+  --text-65: hsl(var(--fg-h) var(--fg-s) 65%);
+
+  /* Global type size/weight tokens (scaled up for better readability) */
+  --t-display-size: 2.65rem;    /* ~5% smaller */
+  --t-primary-size: 1.28rem;    /* ~5% smaller */
+  --t-body-size: 1.11rem;       /* ~5% smaller */
+  --t-meta-size: 1.03rem;       /* ~5% smaller */
+  --t-bold: 600;
+  --t-regular: 400;
+
+  /* Additional globals for specific chat roles */
+  --t-ai-size: 1.1rem;          /* Smaller AI message size */
+  --t-ai-weight: 568;           /* ~5% thicker than previous 540 */
+  --t-user-size: 1rem;          /* Smaller user message */
+  --t-user-weight: 500;         /* Medium weight */
+
+  /* Core Theme Colors - Claude Style */
+  --color-background: var(--dark-charcoal);
+  --color-foreground: var(--soft-off-white);
+  --color-card: var(--medium-dark);
+  --color-card-foreground: var(--soft-off-white);
+  --color-popover: var(--medium-dark);
+  --color-popover-foreground: var(--soft-off-white);
+  --color-primary: var(--primary-blue);
+  --color-primary-foreground: var(--pure-white);
+  --color-secondary: var(--medium-dark);
+  --color-secondary-foreground: var(--soft-off-white);
+  --color-muted: var(--medium-dark);
+  --color-muted-foreground: var(--neutral-stone);
+  --color-accent: var(--user-message-bg);
+  --color-accent-foreground: var(--soft-off-white);
   --color-destructive: #ef4444;
-  --color-destructive-foreground: hsl(0, 0%, 100%);
-  --color-border: #404040;
-  --color-input: #353535;
-  --color-ring: #404040;
-  
-  /* Custom colors - updated for grey theme */
-  --color-sidebar-background: #1a1a1a;
-  --color-sidebar-foreground: #ffffff;
-  --color-sidebar-primary: #404040;
-  --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent: #353535;
-  --color-sidebar-accent-foreground: #ffffff;
-  --color-sidebar-border: #404040;
-  --color-sidebar-ring: #404040;
-  
-  --color-accent-blue: #1e3a8a;
-  --color-accent-blue-foreground: #60a5fa;
-  --color-accent-blue-border: #1e40af;
-  
-  /* Primary Blue Button - Chat Submit Button */
-  --color-blue-primary: #60a5fa;        /* Nice blue background */
-  --color-blue-primary-foreground: #ffffff;  /* White text/icons */
-  --color-blue-primary-hover: #3b82f6;  /* Slightly darker blue on hover */
-  
+  --color-destructive-foreground: var(--pure-white);
+  --color-border: #4a4a4a;                        /* Slightly lighter than medium-dark */
+  --color-input: var(--medium-dark);
+  --color-ring: var(--primary-blue);
+
+  /* Sidebar Colors - Claude Style */
+  --color-sidebar-background: var(--medium-dark);
+  --color-sidebar-foreground: var(--soft-off-white);
+  --color-sidebar-primary: var(--primary-blue);
+  --color-sidebar-primary-foreground: var(--pure-white);
+  --color-sidebar-accent: var(--medium-dark);
+  --color-sidebar-accent-foreground: var(--soft-off-white);
+  --color-sidebar-border: #4a4a4a;
+  --color-sidebar-ring: var(--primary-blue);
+
+  /* Blue Accent System */
+  --color-accent-blue: var(--primary-blue);
+  --color-accent-blue-foreground: var(--pure-white);
+  --color-accent-blue-border: var(--primary-blue);
+
+  /* Primary Blue Button - Updated for Claude */
+  --color-blue-primary: var(--primary-blue);
+  --color-blue-primary-foreground: var(--pure-white);
+  --color-blue-primary-hover: #4A92BB;             /* Slightly darker blue - 5% more vibrant */
+
+  /* Claude Transition System */
+  --claude-sidebar-transition: width 300ms ease-in-out;
+  --claude-opacity-transition: opacity 150ms ease-in-out;
+  --claude-opacity-delay: 150ms;
+
   /* Radius */
   --radius: 0.5rem;
 }
-
 
 @layer base {
 
@@ -134,12 +175,12 @@
     margin: 0;
     padding: 0;
   }
-  
+
   /* Hide scrollbars but preserve scroll functionality */
   body::-webkit-scrollbar {
     display: none;
   }
-  
+
   body {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -150,18 +191,18 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
-  
+
   * {
     border-color: var(--color-border);
   }
-  
+
   /* Ensure all text elements inherit consistent sizing */
   p, span, div {
     font-size: inherit;
     font-weight: inherit;
     line-height: inherit;
   }
-  
+
   /* Typography hierarchy with professional standards */
   h1 { 
     font-size: 20px;        /* text-xl */
@@ -169,29 +210,29 @@
     line-height: 1.3;
     color: var(--color-foreground);
   }
-  
+
   h2, h3 { 
     font-size: 18px;        /* text-lg */
     font-weight: 600;       /* font-semibold */
     line-height: 1.4;
     color: var(--color-foreground);
   }
-  
+
   h4, h5, h6 { 
     font-size: 14px;        /* text-sm */
     font-weight: 600;       /* font-semibold */
     line-height: 1.5;
     color: var(--color-foreground);
   }
-  
+
   /* Remove global interactive element overrides - let components control their typography */
-  
+
   label {
     font-size: 14px;        /* text-sm standard */
     font-weight: 500;       /* font-medium consistency */
     color: var(--color-foreground);
   }
-  
+
   /* Meta text standardization */
   small {
     font-size: 12px;        /* text-xs */
@@ -202,12 +243,23 @@
 }
 
 @layer utilities {
+  /* Global typography utilities (attention-based) */
+  .t-display { font-size: var(--t-display-size); font-weight: var(--t-bold); color: var(--text-100); }
+  .t-primary { font-size: var(--t-primary-size); font-weight: var(--t-bold); color: var(--text-100); }
+  .t-body { font-size: var(--t-body-size); font-weight: var(--t-regular); color: var(--text-100); }
+  .t-meta { font-size: var(--t-meta-size); font-weight: var(--t-regular); color: var(--text-65); }
+
+  /* Role-specific typography */
+  .t-ai { font-size: var(--t-ai-size); font-weight: var(--t-ai-weight); color: var(--text-100); }
+  .t-user { font-size: var(--t-user-size); font-weight: var(--t-user-weight); color: var(--text-100); }
+  .font-ai { font-family: var(--greeting-font-family); }
+
   /* Scrollbar utilities */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -216,21 +268,21 @@
   .scrollbar-dark::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-track {
     background: var(--color-muted);
     border-radius: 3px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 3px;
   }
-  
+
   .scrollbar-dark::-webkit-scrollbar-thumb:hover {
     background: var(--color-accent);
   }
-  
+
   .scrollbar-dark {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) var(--color-muted);
@@ -240,12 +292,12 @@
   .sidebar-transition {
     transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
   }
-  
+
   /* Smooth hover effects for sidebar items */
   .sidebar-item {
     transition: all 0.2s ease;
   }
-  
+
   .sidebar-item:hover {
     transform: translateX(2px);
   }
@@ -287,7 +339,7 @@
   .padding-secondary { padding: var(--spacing-secondary-y) var(--spacing-secondary-x); }
   .padding-tertiary { padding: var(--spacing-tertiary-y) var(--spacing-tertiary-x); }
   .padding-utility { padding: var(--spacing-utility-y) var(--spacing-utility-x); }
-  
+
   .gap-primary { gap: var(--spacing-primary-gap); }
   .gap-secondary { gap: var(--spacing-secondary-gap); }
   .gap-tertiary { gap: var(--spacing-tertiary-gap); }
@@ -295,13 +347,13 @@
 
   /* Chat position animation */
   .chat-transition { transition: var(--chat-position-transition); }
-  
+
   /* Empty chat state - center the form vertically and horizontally */
   .chat-empty {
     justify-content: center; /* Center form vertically in flex column */
     align-items: center;     /* Center form horizontally */
   }
-  
+
   /* Simplified form positioning - clean slide-down animation */
   .form-centered {
     /* Form starts in centered position naturally via parent .chat-empty */
@@ -309,14 +361,14 @@
     transform: none; /* No initial transform needed - centering handled by flexbox */
     transition: none; /* No initial transitions to prevent sliding from left */
   }
-  
+
   .form-slide-down {
     /* Slide down to normal bottom position after first message */
     position: static;
     transform: translateY(20vh); /* Move down to simulate sliding to bottom */
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth slide-down */
   }
-  
+
   /* Ensure no unwanted animations after slide-down completes */
   .form-started {
     transition: none !important;
@@ -335,7 +387,7 @@
     flex-direction: column;
     position: relative;
   }
-  
+
   .wrapper {
     flex: 1;
     overflow-y: auto; /* Only vertical scrolling when needed */
@@ -344,9 +396,9 @@
     display: flex;
     justify-content: center; /* Centers .chat horizontally */
   }
-  
+
   .chat {
-    width: 75%; /* Widened chat content area for better readability */
+    /* Removed fixed width - using Tailwind utilities in Chat.tsx instead */
     max-width: 800px; /* Constrain maximum width */
     height: 100%; /* Take full wrapper height */
     display: flex;
@@ -356,14 +408,14 @@
     /* DEBUG: Disable transitions temporarily */
     transition: none !important;
   }
-  
+
   /* Debug state for chat that has started */
   .chat-has-started {
     /* Ensure no sliding animations after chat starts */
     transform: none !important;
     transition: none !important;
   }
-  
+
   /* Message styling - vertical stacking with dynamic sizing */
   .message {
     /* No fixed width - allows natural sizing like ChatGPT clone */
@@ -375,25 +427,29 @@
     line-height: var(--font-primary-line-height);
     color: var(--color-text-primary);
   }
-  
+
   .message.user {
     background-color: var(--color-secondary);
     border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);
-    max-width: 79%; /* Adjusted to 79% */
+    font-size: calc(var(--font-primary-size) * 1.1);
+    font-weight: var(--font-secondary-weight);
+    /* Removed max-width - using Tailwind utilities in components instead */
     align-self: flex-start; /* Left-align user messages */
     margin-top: 1.5rem; /* Extra space before every user message, including first */
   }
-  
+
   .message.assistant {
     /* Clean text presentation, no background */
     background: transparent;
     border: none;
     padding: 1rem 0;
-    max-width: 79%; /* Adjusted to 79% */
+    font-size: calc(var(--font-primary-size) * 1.1);
+    font-weight: var(--font-secondary-weight);
+    /* Removed max-width - using Tailwind utilities in components instead */
     align-self: flex-start; /* Left-align assistant messages */
   }
-  
+
   /* Form styling - part of scrollable content */
   .new-form {
     margin-top: 1rem;
@@ -403,7 +459,7 @@
     /* DEBUG: Disable transitions that might cause sliding */
     transition: none !important;
   }
-  
+
   .form-container {
     position: relative;
     display: flex;
@@ -416,7 +472,7 @@
     padding: 0.75rem; /* Reduced padding for smaller height */
     min-height: 3rem; /* Reduced minimum height */
   }
-  
+
   .form-textarea {
     resize: none;
     width: 100%;
@@ -428,20 +484,20 @@
     line-height: var(--font-primary-line-height);
     color: var(--color-text-primary);
   }
-  
+
   .form-textarea::placeholder {
     color: var(--color-muted-foreground);
   }
-  
+
   .form-textarea:focus {
     outline: none;
   }
-  
+
   .form-textarea:disabled {
     cursor: not-allowed;
     opacity: 0.5;
   }
-  
+
   .form-submit-button {
     align-self: flex-end;
     border-radius: var(--radius-md);
@@ -450,12 +506,12 @@
     border: 1px solid var(--color-blue-primary);
     transition: all 0.2s ease;
   }
-  
+
   .form-submit-button:hover:not(:disabled) {
     background-color: var(--color-blue-primary-hover);
     border-color: var(--color-blue-primary-hover);
   }
-  
+
   .form-submit-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -465,47 +521,47 @@
   .account-blue {
     background-color: var(--color-accent-blue-foreground);
   }
-  
+
   .account-blue-text {
     color: var(--color-accent-blue-foreground);
   }
-  
+
   .account-blue-border {
     border-color: var(--color-accent-blue-border);
   }
-  
+
   /* Typing indicator animation */
   @keyframes typing-dot-bounce {
     0%, 40% { transform: translateY(0); }
     20% { transform: translateY(-0.25rem); }
   }
-  
+
   .animate-typing-dot-bounce {
     animation: typing-dot-bounce 1.25s ease-out infinite;
   }
-  
-  /* Blue primary button for chat submit - force override */
+
+  /* Consistent button styling matching chat input */
   .btn-blue-primary {
-    background-color: var(--color-blue-primary) !important;
-    color: var(--color-blue-primary-foreground) !important;
-    border-color: var(--color-blue-primary) !important;
+    background-color: var(--medium-dark) !important;
+    color: var(--soft-off-white) !important;
+    border-color: var(--medium-dark) !important;
   }
-  
+
   .btn-blue-primary:hover {
-    background-color: var(--color-blue-primary-hover) !important;
-    border-color: var(--color-blue-primary-hover) !important;
+    background-color: var(--user-message-bg) !important;
+    border-color: var(--medium-dark) !important;
   }
-  
+
   .btn-blue-primary:disabled {
-    background-color: var(--color-blue-primary) !important;
+    background-color: var(--medium-dark) !important;
     opacity: 0.5;
   }
 
   /* User Message Bubble System - For left-aligned avatar layout */
   .message-bubble-user {
-    background-color: var(--color-primary);
+    background-color: var(--user-message-bg);
     color: var(--color-text-primary);
-    border-radius: var(--radius-lg);
+    border-radius: 10px;
     padding: 0.75rem 1rem;
     word-wrap: break-word;
     hyphens: auto;
@@ -513,7 +569,6 @@
     font-weight: var(--font-primary-weight);
     line-height: var(--font-primary-line-height);
     white-space: pre-wrap;
-    border-bottom-left-radius: var(--radius-sm);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
@@ -524,5 +579,34 @@
       font-size: 14px;
     }
   }
-  
+
+  /* Markdown typography (aligned with eesy-chat, adapted to theme) */
+  .markdown h1 { margin-bottom: 1rem; font-size: 1.875rem; font-weight: 700; }
+  .markdown h2 { margin-bottom: 1rem; font-size: 1.5rem; font-weight: 700; }
+  .markdown h3,
+  .markdown h4,
+  .markdown h5,
+  .markdown h6 { margin-bottom: 1rem; font-weight: 700; }
+  .markdown p { margin-bottom: 1rem; }
+  .markdown ul { margin-bottom: 1rem; margin-left: 2rem; list-style: disc outside; }
+  .markdown ol { margin-bottom: 1rem; margin-left: 2rem; list-style: decimal outside; }
+  .markdown li { margin-bottom: 0.5rem; }
+  .markdown hr { margin-top: 2rem; margin-bottom: 2rem; border-color: var(--color-border); }
+  .markdown a { text-decoration: underline; text-underline-offset: 0.2rem; }
+  .markdown table { width: 100%; border-collapse: collapse; }
+  .markdown th,
+  .markdown td { padding: 0.5rem 1rem; text-align: left; font-size: 0.875rem; border-color: var(--color-border); }
+  .markdown tr { border-bottom: 1px solid var(--color-border); }
+  .markdown tr:last-child { border-bottom: 0; }
+  .markdown code:not(pre code) { border-radius: 0.375rem; background: color-mix(in oklab, var(--color-muted) 90%, transparent); padding: 0.125rem 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.75rem; }
+
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

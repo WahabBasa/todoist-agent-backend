@@ -10,15 +10,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-background border border-border",
+          "border border-border transition-colors",
         destructive:
-          "bg-red-50 text-red-700 border border-red-200",
+          "bg-red-50 text-red-700 border border-red-200 transition-colors",
         outline:
-          "border bg-background border-border",
+          "border border-border transition-colors",
         secondary:
-          "bg-muted border border-border",
+          "border border-border transition-colors",
         ghost:
-          "bg-transparent",
+          "bg-transparent transition-colors",
         link: "underline-offset-4",
       },
       size: {
@@ -59,6 +59,28 @@ function Button({
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, attention, className }))}
+      style={{
+        backgroundColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
+        borderColor: variant === 'ghost' ? 'transparent' : 'var(--primary-blue)',
+        color: variant === 'ghost' ? undefined : 'var(--pure-white)',
+        ...((props as any).style || {})
+      }}
+      onMouseEnter={(e) => {
+        if (variant !== 'ghost' && !props.disabled) {
+          e.currentTarget.style.backgroundColor = 'var(--color-blue-primary-hover)';
+        }
+        if ((props as any).onMouseEnter) {
+          (props as any).onMouseEnter(e);
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (variant !== 'ghost' && !props.disabled) {
+          e.currentTarget.style.backgroundColor = 'var(--primary-blue)';
+        }
+        if ((props as any).onMouseLeave) {
+          (props as any).onMouseLeave(e);
+        }
+      }}
       {...props}
     />
   )

@@ -2,7 +2,10 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { api } from "./_generated/api";
-import { WebhookEvent } from "@clerk/backend";
+import type { WebhookEvent } from "@clerk/backend";
+
+// Debug logging control
+const ENABLE_DEBUG_LOGS = process.env.ENABLE_DEBUG_LOGS === "true";
 
 const http = httpRouter();
 
@@ -25,7 +28,8 @@ http.route({
 
       // In tokenIdentifier pattern, we don't need to sync users to database
       // Clerk authentication is handled directly via tokenIdentifier in each function
-      switch (result.type) {
+      const eventType = result.type as string;
+      switch (eventType) {
         case "user.created":
         case "user.updated":
           const userData = result.data as any;
@@ -40,6 +44,18 @@ http.route({
           break;
         }
 
+        case "session.created": {
+          const sessionData = result.data as any;
+          console.log("Clerk session.created:", {
+            id: sessionData.id,
+            user_id: sessionData.user_id,
+            last_active_at: sessionData.last_active_at,
+          });
+          break;
+        }
+
+        // Note: oauth access token events are not in the SDK's TS union; handle via default branch logging
+
         case "organizationMembership.created":
         case "organizationMembership.updated":
         case "organizationMembership.deleted":
@@ -48,7 +64,15 @@ http.route({
           break;
 
         default:
-          console.log("Ignored Clerk webhook event:", result.type);
+          // Log session/oauth-like events too for debugging unknown types
+          if (eventType?.includes("session") || eventType?.includes("oauth")) {
+            console.log("Clerk webhook event (debug):", eventType, {
+              id: (result.data as any)?.id,
+              user_id: (result.data as any)?.user_id,
+            });
+          } else {
+            console.log("Ignored Clerk webhook event:", eventType);
+          }
       }
 
       return new Response(null, {
@@ -212,3 +236,159 @@ http.route({
 });
 
 export default http;
+
+// Google Calendar OAuth callback handler (delegates to Node action)
+http.route({
+  path: "/auth/google/calendar/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+
+    const html = (body: string, status = 200) => new Response(`<!doctype html><html><body><script>${body}</script></body></html>`, { status, headers: { "Content-Type": "text/html" } });
+
+    if (!code || !state) {
+      return html("alert('OAuth callback failed: Missing required parameters'); window.close();", 400);
+    }
+
+    const result = await ctx.runAction(api.googleCalendar.auth.handleGoogleCalendarOAuthCallback, { code, state });
+    if (result?.ok) {
+      return html(`
+        try { if (window.opener) { window.opener.postMessage({ type: 'GCAL_CONNECTED' }, '*'); } } catch (e) {}
+        setTimeout(() => window.close(), 200);
+      `, 200);
+    } else {
+      const msg = (result as any)?.error || 'Unknown error';
+      return html(`alert('Google Calendar connection failed: ${String(msg)}'); window.close();`, 500);
+    }
+  }),
+});
+
+// Telemetry endpoint to log OAuth callback/debug info (unauthenticated)
+http.route({
+  path: "/telemetry/oauth-callback",
+  method: "POST",
+  handler: httpAction(async (_ctx, request) => {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const { phase, search, hash, href, error, email, userAgent, timestamp } = body || {};
+      
+      if (ENABLE_DEBUG_LOGS) {
+        console.log("[TELEMETRY][OAUTH]", {
+          phase: phase || "callback",
+          href,
+          search,
+          hash,
+          error,
+          email,
+          userAgent,
+          timestamp,
+        });
+      }
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response("ok", {
+        status: 200,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          Vary: "origin",
+        },
+      });
+    } catch (e) {
+      console.error("[TELEMETRY][OAUTH] error:", e);
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response("err", {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          Vary: "origin",
+        },
+      });
+    }
+  }),
+});
+
+// Telemetry preflight
+http.route({
+  path: "/telemetry/oauth-callback",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => {
+    const h = request.headers;
+    const isPreflight = h.get("Origin") && h.get("Access-Control-Request-Method");
+    if (isPreflight) {
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+    return new Response(null, { status: 204 });
+  }),
+});
+
+// Streaming chat endpoint (AI SDK useChat compatible)
+http.route({
+  path: "/chat",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = await request.json().catch(() => ({}));
+    const message = typeof body?.latestUserMessage === "string"
+      ? body.latestUserMessage
+      : typeof body?.message === "string"
+        ? body.message
+        : "";
+    if (!message) {
+      return new Response(JSON.stringify({ error: "latestUserMessage or message is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const sessionId = typeof body?.sessionId === "string" ? body.sessionId : undefined;
+    const currentTimeContext = typeof body?.currentTimeContext === "object" ? body.currentTimeContext : undefined;
+    const result = await ctx.runAction(api.ai.session.chatWithAI, {
+      message,
+      sessionId,
+      currentTimeContext,
+    } as any);
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// CORS preflight for chat
+http.route({
+  path: "/chat",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => {
+    const h = request.headers;
+    const isPreflight = h.get("Origin") && h.get("Access-Control-Request-Method");
+    if (isPreflight) {
+      const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
+          ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+    return new Response(null, { status: 204 });
+  }),
+});

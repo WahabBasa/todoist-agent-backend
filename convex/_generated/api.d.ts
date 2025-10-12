@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as agents from "../agents.js";
+import type * as ai_actions from "../ai-actions.js";
 import type * as http from "../http.js";
 import type * as todoist from "../todoist.js";
 
@@ -27,6 +28,7 @@ import type * as todoist from "../todoist.js";
  */
 declare const fullApi: ApiFromModules<{
   agents: typeof agents;
+  "ai-actions": typeof ai_actions;
   http: typeof http;
   todoist: typeof todoist;
 }>;

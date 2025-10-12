@@ -2,13 +2,9 @@
 
 import { cn } from '@/lib/utils';
 import type { ComponentProps, HTMLAttributes } from 'react';
-import { isValidElement, memo } from 'react';
+import { memo } from 'react';
 import ReactMarkdown, { type Options } from 'react-markdown';
-import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import { CodeBlock, CodeBlockCopyButton } from './code-block';
-import 'katex/dist/katex.min.css';
 import hardenReactMarkdown from 'harden-react-markdown';
 
 /**
@@ -312,38 +308,16 @@ const components: Options['components'] = {
       />
     );
   },
-  pre: ({ node, className, children }) => {
-    let language = 'javascript';
-
-    if (typeof node?.properties?.className === 'string') {
-      language = node.properties.className.replace('language-', '');
-    }
-
-    // Extract code content from children safely
-    let code = '';
-    if (
-      isValidElement(children) &&
-      children.props &&
-      typeof children.props.children === 'string'
-    ) {
-      code = children.props.children;
-    } else if (typeof children === 'string') {
-      code = children;
-    }
-
-    return (
-      <CodeBlock
-        className={cn('my-4 h-auto', className)}
-        code={code}
-        language={language}
-      >
-        <CodeBlockCopyButton
-          onCopy={() => console.log('Copied code to clipboard')}
-          onError={() => console.error('Failed to copy code to clipboard')}
-        />
-      </CodeBlock>
-    );
-  },
+  pre: ({ node, className, children }) => (
+    <pre
+      className={cn(
+        'my-4 h-auto overflow-x-auto rounded border bg-background/50 p-4 font-mono text-sm',
+        className
+      )}
+    >
+      {children}
+    </pre>
+  ),
 };
 
 export const Response = memo(
@@ -363,21 +337,32 @@ export const Response = memo(
         ? parseIncompleteMarkdown(children)
         : children;
 
+    // hardened-react-markdown requires defaultOrigin when allowed*Prefixes are provided.
+    // Provide a safe default that works in both browser and SSR contexts.
+    const origin =
+      defaultOrigin ??
+      (typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'http://localhost');
+
     return (
       <div
         className={cn(
           'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           className
         )}
+        style={{ 
+          lineHeight: "1.6",
+          ...((props as any).style || {})
+        }}
         {...props}
       >
         <HardenedMarkdown
-          allowedImagePrefixes={allowedImagePrefixes ?? ['*']}
-          allowedLinkPrefixes={allowedLinkPrefixes ?? ['*']}
+          allowedImagePrefixes={allowedImagePrefixes ?? []}
+          allowedLinkPrefixes={allowedLinkPrefixes ?? ['https://', 'http://', '/']}
           components={components}
-          defaultOrigin={defaultOrigin}
-          rehypePlugins={[rehypeKatex]}
-          remarkPlugins={[remarkGfm, remarkMath]}
+          defaultOrigin={origin}
+          remarkPlugins={[remarkGfm]}
           {...options}
         >
           {parsedChildren}

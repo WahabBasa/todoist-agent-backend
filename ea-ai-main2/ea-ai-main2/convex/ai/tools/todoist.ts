@@ -146,10 +146,21 @@ export const getTasks: ToolDefinition = {
           }));
       }
 
+      // Build concise, human-readable summary for model output
+      const now = Date.now();
+      const overdue = result.filter((t: any) => !!t.dueDate && t.dueDate < now && !t.isCompleted).length;
+      const examples = result
+        .slice(0, 3)
+        .map((t: any) => `${t.title}${t.dueDate ? ` (due ${new Date(t.dueDate).toLocaleDateString()})` : ""}`)
+        .join(", ");
+      const summary = result.length === 0
+        ? "No matching tasks found."
+        : `Found ${result.length} task${result.length === 1 ? "" : "s"}${overdue ? ` (${overdue} overdue)` : ""}${examples ? ": " + examples : "."}`;
+
       return {
         title: "Tasks Retrieved",
-        metadata: { taskCount: result.length, projectId: args.projectId },
-        output: JSON.stringify(result)
+        metadata: { taskCount: result.length, projectId: args.projectId, tasks: result },
+        output: summary
       };
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : "Failed to retrieve tasks");
@@ -384,10 +395,17 @@ Common ID Patterns:
       const taskCount = result?.unassignedTasks?.length || 0;
       const totalTasks = result?.projects?.reduce((sum: number, p: any) => sum + (p.tasks?.length || 0), 0) || 0;
 
+      const topProjects = (result?.projects || [])
+        .slice(0, 3)
+        .map((p: any) => `${p.name}${p.tasks?.length ? ` (${p.tasks.length})` : ""}`)
+        .join(", ");
+      const total = totalTasks + taskCount;
+      const summary = `Workspace: ${projectCount} project${projectCount === 1 ? "" : "s"}, ${total} task${total === 1 ? "" : "s"}${topProjects ? `. Top: ${topProjects}` : ""}.`;
+
       return {
         title: "Workspace Map Retrieved",
-        metadata: { projectCount, taskCount: totalTasks + taskCount },
-        output: JSON.stringify(result)
+        metadata: { projectCount, taskCount: total, map: result },
+        output: summary
       };
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : "Failed to retrieve workspace overview");

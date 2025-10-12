@@ -128,6 +128,31 @@ export const getUserProviderConfig = query({
   }
 });
 
+// Convenience: get current user's provider configuration (no args)
+export const getMyProviderConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const tokenIdentifier = identity.tokenIdentifier || identity.subject;
+    return await ctx.db
+      .query("systemConfig")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+      .first();
+  }
+});
+
+// Convenience: get global provider configuration (__GLOBAL__) set by admin
+export const getGlobalProviderConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("systemConfig")
+      .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", "__GLOBAL__"))
+      .first();
+  }
+});
+
 // Mutation to set user's provider configuration
 export const setProviderConfig = mutation({
   args: {
@@ -197,6 +222,57 @@ export const setProviderConfig = mutation({
         updatedAt: now,
         isAdmin: false // default
       });
+    }
+
+    // If caller is admin, also upsert global defaults so all users inherit the selection
+    try {
+      // Prefer centralized admin check
+      let isAdmin = false;
+      try {
+        isAdmin = await ctx.runQuery(api.auth.admin.isCurrentUserAdmin, {});
+      } catch (_e) {
+        // Fallback to env-based check if query not available
+        const adminUserId = process.env.ADMIN_USER_ID;
+        const adminEmail = process.env.ADMIN_EMAIL;
+        const isUserIdMatch = identity.subject === adminUserId;
+        const isEmailMatch = (identity as any).email === adminEmail;
+        isAdmin = !!(isUserIdMatch || isEmailMatch);
+      }
+
+      if (isAdmin) {
+        const globalToken = "__GLOBAL__";
+        const existingGlobal = await ctx.db
+          .query("systemConfig")
+          .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", globalToken))
+          .first();
+
+        const payload = {
+          tokenIdentifier: globalToken,
+          apiProvider: args.apiProvider,
+          openRouterApiKey: args.openRouterApiKey,
+          openRouterModelId: args.openRouterModelId,
+          openRouterBaseUrl: args.openRouterBaseUrl,
+          openRouterSpecificProvider: args.openRouterSpecificProvider,
+          openRouterUseMiddleOutTransform: args.openRouterUseMiddleOutTransform,
+          googleProjectId: args.googleProjectId,
+          googleRegion: args.googleRegion,
+          googleCredentials: args.googleCredentials,
+          googleModelId: args.googleModelId,
+          googleEnableUrlContext: args.googleEnableUrlContext,
+          googleEnableGrounding: args.googleEnableGrounding,
+          googleEnableReasoning: args.googleEnableReasoning,
+          activeModelId: args.activeModelId,
+          updatedAt: now,
+        } as any;
+
+        if (existingGlobal) {
+          await ctx.db.patch(existingGlobal._id, payload);
+        } else {
+          await ctx.db.insert("systemConfig", { ...payload, isAdmin: false });
+        }
+      }
+    } catch (e) {
+      console.warn("[ProviderConfig] Failed to upsert global defaults:", e);
     }
   }
 });

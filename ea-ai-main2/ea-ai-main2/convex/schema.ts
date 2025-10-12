@@ -86,6 +86,7 @@ const applicationTables = {
       metadata: v.optional(v.object({ // New: Embedded OpenCode-style metadata
         mode: v.optional(v.string()),
         toolStates: v.optional(v.record(v.string(), v.union(v.literal("pending"), v.literal("running"), v.literal("completed")))),
+        requestId: v.optional(v.string()),
         delegation: v.optional(v.object({
           target: v.string(),
           status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
@@ -113,7 +114,22 @@ const applicationTables = {
   }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
   // Google Calendar integration now uses Clerk OAuth tokens directly
-  // No database storage needed - Clerk manages all token lifecycle
+  // Storage for Google Calendar OAuth (separate from Clerk SSO)
+  googleCalendarTokens: defineTable({
+    tokenIdentifier: v.string(),
+    refreshToken: v.string(),
+    scope: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+
+  // Google Calendar per-user settings (soft enable/disable without breaking SSO)
+  googleCalendarSettings: defineTable({
+    tokenIdentifier: v.string(),
+    enabled: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
   // AI Mode Internal Todos - Session-scoped task management for complex workflows
   aiInternalTodos: defineTable({
@@ -231,6 +247,61 @@ const applicationTables = {
         limit: v.optional(v.object({
           context: v.number(),
           output: v.number(),
+        })),
+      })),
+    }).index("by_lastFetched", ["lastFetched"]),
+
+  sessionLocks: defineTable({
+    sessionId: v.id("chatSessions"),
+    requestId: v.string(),
+    expiresAt: v.number(),
+  }).index("by_session", ["sessionId"]),
+
+    cachedDetailedOpenrouterModels: defineTable({
+      lastFetched: v.number(),
+      models: v.array(v.object({
+        id: v.string(),
+        name: v.string(),
+        provider: v.object({
+          id: v.string()
+        }),
+        context_window: v.number(),
+        max_input_tokens: v.number(),
+        max_output_tokens: v.number(),
+        pricing: v.optional(v.any()),
+        category: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        attachment: v.optional(v.boolean()),
+        reasoning: v.optional(v.boolean()),
+        tool_call: v.optional(v.boolean()),
+        cost: v.optional(v.object({
+          input: v.number(),
+          output: v.number(),
+          cache_read: v.optional(v.number()),
+          cache_write: v.optional(v.number()),
+        })),
+        limit: v.optional(v.object({
+          context: v.number(),
+          output: v.number(),
+        })),
+        providerSlugs: v.optional(v.array(v.string())),
+        pricingByProvider: v.optional(v.record(v.string(), v.any())),
+        endpoints: v.optional(v.array(v.object({
+          provider: v.string(),
+          url: v.string(),
+          status: v.string(),
+        }))),
+        architecture: v.optional(v.object({
+          modality: v.string(),
+          tokenizer: v.string(),
+          instruct_type: v.optional(v.union(v.string(), v.null())),
+          input_modalities: v.optional(v.array(v.string())),
+          output_modalities: v.optional(v.array(v.string())),
+        })),
+        top_provider: v.optional(v.object({
+          context_length: v.number(),
+          max_completion_tokens: v.optional(v.union(v.number(), v.null())),
+          is_moderated: v.boolean(),
         })),
       })),
     }).index("by_lastFetched", ["lastFetched"]),

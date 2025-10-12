@@ -1,5 +1,7 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalAction, action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { api, internal } from "./_generated/api";
+// Node-dependent provider usage moved to chatSessionsNode.ts (Node runtime)
 
 // Generate a title from the first user message (Morphic-style)
 function generateChatTitle(firstMessage: string): string {
@@ -345,7 +347,7 @@ export const deleteChatSession = mutation({
     // ChatHub pattern: Idempotent operations like local storage filter()
     if (!session) {
       // Session already deleted or never existed - succeed silently like filter() would
-      return { success: true, alreadyDeleted: true };
+      return { success: true, alreadyDeleted: true } as { success: true; alreadyDeleted?: boolean; deleted?: boolean; newSessionId?: any };
     }
     
     // Still check authorization for existing sessions
@@ -353,9 +355,33 @@ export const deleteChatSession = mutation({
       throw new ConvexError("Chat session not found or unauthorized");
     }
 
-    // Don't allow deleting default session
+    let replacementSessionId: typeof args.sessionId | undefined;
+    // If deleting the default session, select or create a replacement default
     if (session.isDefault) {
-      throw new ConvexError("Cannot delete default chat session");
+      // Find another primary session for this user (excluding subagent and current)
+      const others = await ctx.db
+        .query("chatSessions")
+        .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
+        .collect();
+      const candidate = others.find((s) => s._id !== args.sessionId && s.sessionType !== "subagent");
+      if (candidate) {
+        await ctx.db.patch(candidate._id, { isDefault: true });
+        replacementSessionId = candidate._id as typeof args.sessionId;
+      } else {
+        // Create a fresh default session to keep UX consistent
+        const now = Date.now();
+        const newId = await ctx.db.insert("chatSessions", {
+          tokenIdentifier,
+          title: "New Chat",
+          createdAt: now,
+          lastMessageAt: now,
+          messageCount: 0,
+          isDefault: true,
+          sessionType: "primary",
+          primaryMode: "primary",
+        } as any);
+        replacementSessionId = newId as typeof args.sessionId;
+      }
     }
 
     // Delete all conversations for this session (optimized batch deletion)
@@ -371,7 +397,7 @@ export const deleteChatSession = mutation({
 
     // Delete the session
     await ctx.db.delete(args.sessionId);
-    return { success: true, deleted: true };
+    return { success: true, deleted: true, newSessionId: replacementSessionId } as { success: true; deleted: true; newSessionId?: typeof args.sessionId };
   },
 });
 
@@ -715,3 +741,94 @@ export const getById = query({
     return session;
   },
 });
+
+// Internal-only: safely apply an AI-generated title without overwriting user changes
+export const applyTitleInternal = internalMutation({
+  args: { sessionId: v.id("chatSessions"), title: v.string() },
+  handler: async (ctx, { sessionId, title }) => {
+    const s = await ctx.db.get(sessionId);
+    if (!s) return;
+    // Do not overwrite if user already customized the title
+    const isDefault = s.title === "New Chat" || s.title === "Default Chat";
+    if (!isDefault) return;
+    const clean = (title || "")
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60) || "New Chat";
+    await ctx.db.patch(sessionId, { title: clean, lastMessageAt: Date.now() });
+  }
+});
+
+// Action: generate a concise chat title using the configured OpenRouter model
+export const generateChatTitleWithAI = action({
+  args: { sessionId: v.id("chatSessions"), prompt: v.string() },
+  handler: async (ctx, { sessionId, prompt }): Promise<void> => {
+    await ctx.runAction(api.chatSessionsNode.generateChatTitleWithAI_impl, { sessionId, prompt });
+  }
+});
+
+// Helper: sanitize and normalize model output to a safe short title
+function sanitizeTitle(raw: string, fallbackSource: string): string {
+  const fallback = deriveFallbackTitle(fallbackSource);
+  if (!raw || !raw.trim()) return fallback;
+
+  let t = raw.replace(/[\r\n]+/g, " ").trim();
+  // Remove common prefixes and first-person/vendor bits
+  t = t.replace(/^\s*(chat\s*title\s*:\s*)/i, "");
+  t = t.replace(/^i\s+am\s+[^].*$/i, (m) => m.replace(/^i\s+am\s+/i, ""));
+  t = t.replace(/^i\'?m\s+[^].*$/i, (m) => m.replace(/^i\'?m\s+/i, ""));
+  // Drop vendor/model words if they appear as standalone tokens
+  t = t.replace(/\b(grok|xai|openai|anthropic|llama|mistral)\b/gi, "");
+  // Strip wrapping quotes/punctuation
+  t = t.replace(/^['"\-:;\s]+|['"\-:;\s]+$/g, "").trim();
+  // Collapse whitespace and limit to 6 words
+  const words = t.split(/\s+/).filter(Boolean).slice(0, 6);
+  t = words.join(" ");
+  if (!t) return fallback;
+  // Capitalize first letter (light touch to avoid SHOUTING)
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function deriveFallbackTitle(src: string): string {
+  const s = (src || "").replace(/[\r\n]+/g, " ").trim();
+  if (!s) return "New Chat";
+  // Take first sentence-ish, keep alphanumerics/spaces, limit to 6 words
+  const first = s.split(/[.!?]/)[0] || s;
+  const cleaned = first.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 6);
+  const t = words.join(" ");
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New Chat";
+}
+
+// Helper: sanitize greeting (short, safe, no vendors/emojis, last-name addressing)
+function sanitizeGreeting(raw: string, lastName: string, localHour?: number): string {
+  const fallback = fallbackGreeting(lastName, localHour)
+  if (!raw || !raw.trim()) return fallback
+  let t = raw.replace(/[\r\n]+/g, " ").trim()
+  // Remove vendor/model words if present
+  t = t.replace(/\b(grok|xai|openai|anthropic|llama|mistral)\b/gi, "")
+  // Strip emojis and excessive punctuation
+  t = t.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, "").replace(/^['"\-:;\s]+|['"\-:;\s]+$/g, "").trim()
+  // Collapse whitespace and cap to 10 words
+  const words = t.split(/\s+/).filter(Boolean).slice(0, 10)
+  t = words.join(" ")
+  // Ensure it ends plainly with a period (optional)
+  if (!/[.!?]$/.test(t)) t = t + "."
+  return t || fallback
+}
+
+function fallbackGreeting(lastName: string, localHour?: number): string {
+  const cleanLast = (lastName || "there").replace(/[^\p{L}\p{N} -]/gu, "").trim() || "there"
+  const h = typeof localHour === 'number' ? localHour : new Date().getHours()
+  const tod = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
+  return `${tod}, ${cleanLast}.`
+}
+
+// Action: generate a concise greeting using ONLY last name and time-of-day (no DB writes)
+export const generateGreetingForUser = action({
+  args: { sessionId: v.id("chatSessions"), lastName: v.string(), localHour: v.optional(v.number()) },
+  handler: async (ctx, { sessionId, lastName, localHour }): Promise<string> => {
+    return await ctx.runAction(api.chatSessionsNode.generateGreetingForUser_impl, { sessionId, lastName, localHour });
+  }
+})
