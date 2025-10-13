@@ -820,6 +820,15 @@ export const chatWithAI = action({
         sessionId
       });
 
+      // Schedule AI-generated title after save (works when >= 2 user messages)
+      try {
+        if (sessionId) {
+          await ctx.runAction(api.chatSessions.generateChatTitleWithAI, { sessionId, prompt: message });
+        }
+      } catch {
+        // best-effort only
+      }
+
       // Clean up internal todos if conversation is complete
       try {
         if (sessionId && finalToolResults.length === 0) {

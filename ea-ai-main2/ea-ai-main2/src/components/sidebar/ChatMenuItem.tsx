@@ -102,8 +102,8 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
 
   return (
     <>
-      <SidebarMenuItem asChild>
-        <motion.li
+      <SidebarMenuItem>
+        <motion.div
           initial={{ opacity: 1, x: 0 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -100, transition: { duration: 0.3, ease: "easeInOut" } }}
@@ -190,7 +190,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </motion.li>
+        </motion.div>
       </SidebarMenuItem>
 
       {/* Delete confirmation dialog */}

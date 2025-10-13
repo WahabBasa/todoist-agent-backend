@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, ReactNode } from 'react';
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 import { useSessions } from './sessions';
@@ -340,6 +340,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Auth header for Convex httpAction
   const { getToken } = useAuth();
+  const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage);
 
   const resolvedChatApi = React.useMemo(() => {
     const explicitOrigin = import.meta.env.VITE_CONVEX_HTTP_ORIGIN as string | undefined;
@@ -597,6 +598,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     // Handle ready state (stream completed or idle)
+    // Preserve 'submitted' while a manual HTTP request is in flight
+    if (storeStatus === 'submitted') {
+      return;
+    }
     const toolParts = Array.isArray(rawParts)
       ? rawParts.filter((part: any) => part?.type === 'tool-invocation')
       : [];
@@ -842,21 +847,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             textLength: content.length,
           }, { dedupe: false });
         }
-
-        // If we just created or switched sessions, queue the first send until session is active
-        if (targetSessionId !== currentSessionId || targetSessionId !== chatId) {
-          queuedFirstSendRef.current = { sessionId: targetSessionId, text: content };
-          logChatEvent(targetSessionId, 'queued_first_send_until_session_active', {});
-          return;
+        // Attempt to set a generated title for the first message (backend guards default-only)
+        try {
+          await updateChatTitle({
+            sessionId: targetSessionId as any,
+            firstMessage: content,
+          });
+        } catch (e) {
+          // non-fatal
         }
 
-        if (typeof sendMessage === 'function') {
-          pendingSendSessionIdRef.current = targetSessionId;
-          skipVersionOnceRef.current = true; // first send in an active session: avoid non-zero historyVersion
-          void sendMessage({ text: content });
-          pendingSendSessionIdRef.current = null;
-        } else {
-          console.warn('[CHAT] sendMessage not available on useChat return');
+        // Direct POST to /chat: update assistant immediately from JSON response
+        try {
+          const token = await getToken({ template: 'convex' });
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'X-Request-Id': generateRequestId(),
+          };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          headers['X-Session-Id'] = String(targetSessionId);
+
+          const body = {
+            message: content,
+            sessionId: String(targetSessionId),
+          };
+
+          const res = await fetch(resolvedChatApi, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+          });
+
+          if (!res.ok) {
+            throw new Error(`chat_http_${res.status}`);
+          }
+          const data = await res.json().catch(() => ({} as any));
+          const text = typeof data?.response === 'string'
+            ? data.response
+            : typeof data?.text === 'string'
+              ? data.text
+              : '';
+
+          ensureAssistantPlaceholder(targetSessionId);
+          updateAssistant(targetSessionId, { content: text });
+          setStatusStore(targetSessionId, 'ready');
+          logChatEvent(targetSessionId, 'http_finish_update_assistant', { textLength: text.length });
+        } catch (err) {
+          console.error('[CHAT] direct POST /chat failed:', err);
+          toast.error('Failed to get response. Please try again.');
+          setStatusStore(targetSessionId, 'ready');
         }
       } catch (err) {
         console.error('[CHAT] sendMessage failed:', err);

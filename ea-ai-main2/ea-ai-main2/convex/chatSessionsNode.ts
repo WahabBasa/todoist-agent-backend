@@ -130,7 +130,9 @@ export const generateChatTitleWithAI_impl = action({
       const raw: string = (res?.text || "").trim();
       const cleaned = sanitizeTitle(raw, u1 || prompt || "New Chat");
       if (cleaned && cleaned.toLowerCase() !== "new chat") {
-        await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title: cleaned });
+        const fallback0 = deriveFallbackTitle(u0);
+        const fallback1 = deriveFallbackTitle(u1);
+        await ctx.scheduler.runAfter(0, internal.chatSessions.applyTitleInternal, { sessionId, title: cleaned, allowIfEquals: [fallback0, fallback1] });
       }
     } catch {
       // best-effort only

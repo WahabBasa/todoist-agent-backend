@@ -3,13 +3,15 @@ import { v, ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 // Node-dependent provider usage moved to chatSessionsNode.ts (Node runtime)
 
-// Generate a title from the first user message (Morphic-style)
-function generateChatTitle(firstMessage: string): string {
-  const words = firstMessage.trim().split(' ');
-  const title = words.length > 8 
-    ? words.slice(0, 8).join(' ') + '...'
-    : firstMessage;
-  return title || "New Chat";
+// Fallback title from first message: sanitize, keep up to 6 words, capitalize first letter
+function deriveFallbackTitle(src: string): string {
+  const s = (src || "").replace(/[\r\n]+/g, " ").trim();
+  if (!s) return "New Chat";
+  const first = s.split(/[.!?]/)[0] || s;
+  const cleaned = first.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 6);
+  const t = words.join(" ");
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New Chat";
 }
 
 // Create a new chat session (updated for primary mode + subagent support)
@@ -291,7 +293,7 @@ export const updateChatSession = mutation({
   },
 });
 
-// Auto-generate title from first message
+// Auto-generate provisional title from first message (fallback)
 export const updateChatTitleFromMessage = mutation({
   args: {
     sessionId: v.id("chatSessions"),
@@ -315,7 +317,7 @@ export const updateChatTitleFromMessage = mutation({
 
     // Only update if it's still the default title
     if (session.title === "New Chat" || session.title === "Default Chat") {
-      const newTitle = generateChatTitle(args.firstMessage);
+      const newTitle = deriveFallbackTitle(args.firstMessage);
       await ctx.db.patch(args.sessionId, { 
         title: newTitle,
         lastMessageAt: Date.now(), // Also update timestamp
@@ -744,13 +746,14 @@ export const getById = query({
 
 // Internal-only: safely apply an AI-generated title without overwriting user changes
 export const applyTitleInternal = internalMutation({
-  args: { sessionId: v.id("chatSessions"), title: v.string() },
-  handler: async (ctx, { sessionId, title }) => {
+  args: { sessionId: v.id("chatSessions"), title: v.string(), allowIfEquals: v.optional(v.array(v.string())) },
+  handler: async (ctx, { sessionId, title, allowIfEquals }) => {
     const s = await ctx.db.get(sessionId);
     if (!s) return;
     // Do not overwrite if user already customized the title
     const isDefault = s.title === "New Chat" || s.title === "Default Chat";
-    if (!isDefault) return;
+    const matchesAllowed = Array.isArray(allowIfEquals) && allowIfEquals.some(t => (t || "").trim() && s.title === t);
+    if (!isDefault && !matchesAllowed) return;
     const clean = (title || "")
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
@@ -788,17 +791,6 @@ function sanitizeTitle(raw: string, fallbackSource: string): string {
   if (!t) return fallback;
   // Capitalize first letter (light touch to avoid SHOUTING)
   return t.charAt(0).toUpperCase() + t.slice(1);
-}
-
-function deriveFallbackTitle(src: string): string {
-  const s = (src || "").replace(/[\r\n]+/g, " ").trim();
-  if (!s) return "New Chat";
-  // Take first sentence-ish, keep alphanumerics/spaces, limit to 6 words
-  const first = s.split(/[.!?]/)[0] || s;
-  const cleaned = first.replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
-  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 6);
-  const t = words.join(" ");
-  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "New Chat";
 }
 
 // Helper: sanitize greeting (short, safe, no vendors/emojis, last-name addressing)

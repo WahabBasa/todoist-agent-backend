@@ -178,6 +178,8 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     }
   }, [isLoadingSessions, currentSessionId, sessions, setCurrentSessionAction]);
 
+  
+
   // Fixed: Proper default session management
   // Users start with a default session, and can create new sessions as needed
 
@@ -286,6 +288,24 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
       throw error;
     }
   }, [deleteChatSession, currentSessionId, removeSessionAction, setCurrentSessionAction]);
+
+  // Stabilize ensureDefaultSession reference to avoid TDZ issues in effects
+  const ensureDefaultSessionRef = useRef(ensureDefaultSession);
+  useEffect(() => { ensureDefaultSessionRef.current = ensureDefaultSession; }, [ensureDefaultSession]);
+
+  // Ensure a valid session exists before first send to avoid mid-turn churn
+  useEffect(() => {
+    if (isLoadingSessions) return;
+    if (currentSessionId) return;
+    (async () => {
+      try {
+        const id = await (ensureDefaultSessionRef.current?.() as Promise<Id<"chatSessions">>);
+        setCurrentSessionAction(id);
+      } catch (e) {
+        console.warn('Failed to auto-ensure default session:', e);
+      }
+    })();
+  }, [isLoadingSessions, currentSessionId, setCurrentSessionAction]);
 
   // Context value - single source of truth for sessions
   const contextValue: SessionsContextType = {

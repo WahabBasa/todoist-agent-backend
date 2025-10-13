@@ -362,9 +362,17 @@ http.route({
       sessionId,
       currentTimeContext,
     } as any);
+    const origin = request.headers.get("Origin") || process.env.CLIENT_ORIGIN || "*";
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Id, X-Request-Id",
+        ...(origin !== "*" ? { "Access-Control-Allow-Credentials": "true" } : {}),
+        Vary: "origin",
+      },
     });
   }),
 });
