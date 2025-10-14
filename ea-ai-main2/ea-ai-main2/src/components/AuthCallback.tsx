@@ -1,10 +1,11 @@
 "use client";
 
-import { useClerk } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 
 export default function AuthCallback() {
   const { handleRedirectCallback } = useClerk();
+  const { user } = useUser();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,7 +26,13 @@ export default function AuthCallback() {
               } catch {}
               window.close();
             } else {
-              window.location.replace(to || '/');
+              // Check onboarding status before redirecting
+              const onboardingComplete = user?.publicMetadata?.onboardingComplete;
+              if (!onboardingComplete) {
+                window.location.replace('/onboarding');
+              } else {
+                window.location.replace(to || '/');
+              }
             }
           }
         );

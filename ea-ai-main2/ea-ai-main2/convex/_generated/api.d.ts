@@ -38,14 +38,15 @@ import type * as ai_prompts_sections_rules from "../ai/prompts/sections/rules.js
 import type * as ai_prompts_sections_systemInfo from "../ai/prompts/sections/systemInfo.js";
 import type * as ai_prompts_sections_toolUseGuidelines from "../ai/prompts/sections/toolUseGuidelines.js";
 import type * as ai_prompts_system from "../ai/prompts/system.js";
+import type * as ai_prompts_task_breakdown from "../ai/prompts/task_breakdown.js";
 import type * as ai_prompts_zen_new from "../ai/prompts/zen_new.js";
 import type * as ai_session from "../ai/session.js";
 import type * as ai_simpleMessages from "../ai/simpleMessages.js";
 import type * as ai_state_ConversationState from "../ai/state/ConversationState.js";
+import type * as ai_stream from "../ai/stream.js";
 import type * as ai_subagents_executor from "../ai/subagents/executor.js";
 import type * as ai_subagents_registry from "../ai/subagents/registry.js";
 import type * as ai_system from "../ai/system.js";
-import type * as ai_test_error_handling from "../ai/test-error-handling.js";
 import type * as ai_toolRegistry from "../ai/toolRegistry.js";
 import type * as ai_tools_ToolRepetitionDetector from "../ai/tools/ToolRepetitionDetector.js";
 import type * as ai_tools_evaluateUserResponseTool from "../ai/tools/evaluateUserResponseTool.js";
@@ -68,6 +69,7 @@ import type * as ai_tracing_utils_spanUtils from "../ai/tracing/utils/spanUtils.
 import type * as aiInternalTodos from "../aiInternalTodos.js";
 import type * as auth_admin from "../auth/admin.js";
 import type * as chatSessions from "../chatSessions.js";
+import type * as chatSessionsNode from "../chatSessionsNode.js";
 import type * as cleanup from "../cleanup.js";
 import type * as cleanupOrphans from "../cleanupOrphans.js";
 import type * as cleanupTables from "../cleanupTables.js";
@@ -80,17 +82,22 @@ import type * as debug_fixTokenIdentifier from "../debug/fixTokenIdentifier.js";
 import type * as debug_sessionMigration from "../debug/sessionMigration.js";
 import type * as debug_todoistDebug from "../debug/todoistDebug.js";
 import type * as googleCalendar_auth from "../googleCalendar/auth.js";
+import type * as googleCalendar_tokens from "../googleCalendar/tokens.js";
 import type * as http from "../http.js";
 import type * as migrateAgentsToModes from "../migrateAgentsToModes.js";
 import type * as migrateTokens from "../migrateTokens.js";
 import type * as migrations_backfillSessionTimestamps from "../migrations/backfillSessionTimestamps.js";
+import type * as onboarding from "../onboarding.js";
 import type * as providers_openrouter from "../providers/openrouter.js";
+import type * as providers_openrouterDetailed from "../providers/openrouterDetailed.js";
 import type * as providers_unified from "../providers/unified.js";
+import type * as sessionLocks from "../sessionLocks.js";
 import type * as todoist_BatchTodoistHandler from "../todoist/BatchTodoistHandler.js";
 import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
 import type * as todoist_userAccess from "../todoist/userAccess.js";
+import type * as userProfiles from "../userProfiles.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -126,14 +133,15 @@ declare const fullApi: ApiFromModules<{
   "ai/prompts/sections/systemInfo": typeof ai_prompts_sections_systemInfo;
   "ai/prompts/sections/toolUseGuidelines": typeof ai_prompts_sections_toolUseGuidelines;
   "ai/prompts/system": typeof ai_prompts_system;
+  "ai/prompts/task_breakdown": typeof ai_prompts_task_breakdown;
   "ai/prompts/zen_new": typeof ai_prompts_zen_new;
   "ai/session": typeof ai_session;
   "ai/simpleMessages": typeof ai_simpleMessages;
   "ai/state/ConversationState": typeof ai_state_ConversationState;
+  "ai/stream": typeof ai_stream;
   "ai/subagents/executor": typeof ai_subagents_executor;
   "ai/subagents/registry": typeof ai_subagents_registry;
   "ai/system": typeof ai_system;
-  "ai/test-error-handling": typeof ai_test_error_handling;
   "ai/toolRegistry": typeof ai_toolRegistry;
   "ai/tools/ToolRepetitionDetector": typeof ai_tools_ToolRepetitionDetector;
   "ai/tools/evaluateUserResponseTool": typeof ai_tools_evaluateUserResponseTool;
@@ -156,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   aiInternalTodos: typeof aiInternalTodos;
   "auth/admin": typeof auth_admin;
   chatSessions: typeof chatSessions;
+  chatSessionsNode: typeof chatSessionsNode;
   cleanup: typeof cleanup;
   cleanupOrphans: typeof cleanupOrphans;
   cleanupTables: typeof cleanupTables;
@@ -168,17 +177,22 @@ declare const fullApi: ApiFromModules<{
   "debug/sessionMigration": typeof debug_sessionMigration;
   "debug/todoistDebug": typeof debug_todoistDebug;
   "googleCalendar/auth": typeof googleCalendar_auth;
+  "googleCalendar/tokens": typeof googleCalendar_tokens;
   http: typeof http;
   migrateAgentsToModes: typeof migrateAgentsToModes;
   migrateTokens: typeof migrateTokens;
   "migrations/backfillSessionTimestamps": typeof migrations_backfillSessionTimestamps;
+  onboarding: typeof onboarding;
   "providers/openrouter": typeof providers_openrouter;
+  "providers/openrouterDetailed": typeof providers_openrouterDetailed;
   "providers/unified": typeof providers_unified;
+  sessionLocks: typeof sessionLocks;
   "todoist/BatchTodoistHandler": typeof todoist_BatchTodoistHandler;
   "todoist/auth": typeof todoist_auth;
   "todoist/integration": typeof todoist_integration;
   "todoist/syncApi": typeof todoist_syncApi;
   "todoist/userAccess": typeof todoist_userAccess;
+  userProfiles: typeof userProfiles;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

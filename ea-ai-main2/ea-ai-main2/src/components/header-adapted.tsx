@@ -82,7 +82,7 @@ export default function HeaderNav() {
                                     asChild
                                     size="sm"
                                     className={cn(isScrolled ? 'lg:inline-flex' : 'hidden lg:inline-flex')}>
-                                    <a href="#auth">
+                                    <a href="/auth">
                                         <span>Get Started</span>
                                     </a>
                                 </Button>

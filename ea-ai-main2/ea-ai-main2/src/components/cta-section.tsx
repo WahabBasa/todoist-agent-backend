@@ -41,7 +41,7 @@ export default function CTASection() {
                             asChild
                             size="lg"
                             className="gap-2 px-8 text-lg w-full sm:w-auto">
-                            <a href="/#auth">
+                            <a href="/auth">
                                 Get Started Now
                                 <ArrowRight className="size-4" />
                             </a>

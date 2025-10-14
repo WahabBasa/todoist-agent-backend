@@ -10,6 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { ConnectedAppItem } from "../components/settings/ConnectedAppItem";
 import { 
@@ -23,11 +24,13 @@ interface SettingsViewProps {
 }
 
 type SettingsSection = 
-  | "connected-apps" 
+  | "connected-apps"
+  | "profile"
   | "account";
 
 const SETTINGS_SECTIONS = [
   { id: "connected-apps" as const, label: "Connected Apps", icon: Plug },
+  { id: "profile" as const, label: "Profile", icon: User },
   { id: "account" as const, label: "Account", icon: User },
 ];
 
@@ -142,6 +145,8 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
           isConnecting={isConnecting}
           setIsConnecting={setIsConnecting}
         />;
+      case "profile":
+        return <ProfileSettings />;
       case "account":
         return <AccountSettings clerkUser={clerkUser} signOut={signOut} />;
       default:
@@ -727,10 +732,250 @@ function ConnectedAppsSettings({
   );
 }
 
+function ProfileSettings() {
+  const profile = useQuery(api.userProfiles.getUserProfile);
+  const updateProfile = useMutation(api.userProfiles.updateUserProfile);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Form state
+  const [fullName, setFullName] = useState("");
+  const [preferredName, setPreferredName] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [workingHoursStart, setWorkingHoursStart] = useState("");
+  const [workingHoursEnd, setWorkingHoursEnd] = useState("");
+  const [timezone, setTimezone] = useState("");
 
+  // Load profile data when available
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.fullName || "");
+      setPreferredName(profile.preferredName || "");
+      setOccupation(profile.occupation || "");
+      setWorkingHoursStart(profile.preferredWorkingHours?.start || "");
+      setWorkingHoursEnd(profile.preferredWorkingHours?.end || "");
+      setTimezone(profile.preferredWorkingHours?.timezone || "");
+    }
+  }, [profile]);
 
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const updates: any = {
+        fullName,
+        preferredName,
+        occupation: occupation || undefined,
+      };
 
+      if (workingHoursStart && workingHoursEnd && timezone) {
+        updates.preferredWorkingHours = {
+          start: workingHoursStart,
+          end: workingHoursEnd,
+          timezone,
+        };
+      }
 
+      await updateProfile(updates);
+      setIsEditing(false);
+      toast.success("Profile updated successfully");
+    } catch (error: any) {
+      console.error("Failed to update profile:", error);
+      toast.error(error?.message || "Failed to update profile");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset to original values
+    if (profile) {
+      setFullName(profile.fullName || "");
+      setPreferredName(profile.preferredName || "");
+      setOccupation(profile.occupation || "");
+      setWorkingHoursStart(profile.preferredWorkingHours?.start || "");
+      setWorkingHoursEnd(profile.preferredWorkingHours?.end || "");
+      setTimezone(profile.preferredWorkingHours?.timezone || "");
+    }
+    setIsEditing(false);
+  };
+
+  const COMMON_TIMEZONES = [
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Phoenix",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Asia/Tokyo",
+    "Asia/Shanghai",
+    "Asia/Dubai",
+    "Australia/Sydney",
+    "Pacific/Auckland",
+  ];
+
+  if (!profile) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold" style={{ color: "var(--soft-off-white)" }}>
+          Profile
+        </h1>
+        <p style={{ color: "var(--neutral-stone)" }}>
+          Loading profile...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--soft-off-white)" }}>
+            Profile
+          </h1>
+          <p style={{ color: "var(--neutral-stone)" }}>
+            Manage your personal information and preferences
+          </p>
+        </div>
+        {!isEditing && (
+          <Button onClick={() => setIsEditing(true)} variant="outline">
+            Edit Profile
+          </Button>
+        )}
+      </div>
+
+      <div className="max-w-2xl space-y-6">
+        {/* Personal Information */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--soft-off-white)" }}>
+            Personal Information
+          </h3>
+          
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name</Label>
+            <Input
+              id="fullName"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              disabled={!isEditing}
+              maxLength={100}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="preferredName">Preferred Name</Label>
+            <Input
+              id="preferredName"
+              value={preferredName}
+              onChange={(e) => setPreferredName(e.target.value)}
+              disabled={!isEditing}
+              maxLength={50}
+            />
+            <p className="text-xs" style={{ color: "var(--neutral-stone)" }}>
+              How Miller will address you
+            </p>
+          </div>
+        </div>
+
+        {/* Professional */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--soft-off-white)" }}>
+            Professional
+          </h3>
+          
+          <div className="space-y-2">
+            <Label htmlFor="occupation">Occupation</Label>
+            <Input
+              id="occupation"
+              value={occupation}
+              onChange={(e) => setOccupation(e.target.value)}
+              disabled={!isEditing}
+              maxLength={100}
+              placeholder="e.g., Software Engineer, Designer, Student"
+            />
+          </div>
+        </div>
+
+        {/* Preferences */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--soft-off-white)" }}>
+            Work Preferences
+          </h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="workingHoursStart">Working Hours - Start</Label>
+              <Input
+                id="workingHoursStart"
+                type="time"
+                value={workingHoursStart}
+                onChange={(e) => setWorkingHoursStart(e.target.value)}
+                disabled={!isEditing}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workingHoursEnd">Working Hours - End</Label>
+              <Input
+                id="workingHoursEnd"
+                type="time"
+                value={workingHoursEnd}
+                onChange={(e) => setWorkingHoursEnd(e.target.value)}
+                disabled={!isEditing}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="timezone">Timezone</Label>
+            <Select 
+              value={timezone} 
+              onValueChange={setTimezone}
+              disabled={!isEditing}
+            >
+              <SelectTrigger id="timezone">
+                <SelectValue placeholder="Select your timezone" />
+              </SelectTrigger>
+              <SelectContent>
+                {COMMON_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        {isEditing && (
+          <div className="flex gap-3">
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                backgroundColor: "var(--primary-blue)",
+                color: "var(--pure-white)",
+              }}
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   return (

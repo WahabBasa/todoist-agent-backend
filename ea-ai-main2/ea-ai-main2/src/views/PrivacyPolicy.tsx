@@ -14,7 +14,7 @@ export function PrivacyPolicy() {
         </header>
 
         <h1 className="text-3xl font-semibold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last Updated: October 13, 2025</p>
+        <p className="text-sm text-muted-foreground mb-8">Last Updated: October 14, 2025</p>
 
         {/* Table of Contents */}
         <nav className="mb-12 p-6 bg-card border border-border rounded-lg">
@@ -25,15 +25,8 @@ export function PrivacyPolicy() {
             <li><a href="#how-we-use" className="hover:text-primary transition-colors">3. How We Use Your Information</a></li>
             <li><a href="#third-parties" className="hover:text-primary transition-colors">4. Who Gets Your Data</a></li>
             <li><a href="#google-calendar" className="hover:text-primary transition-colors">5. Google Calendar - Special Section</a></li>
-            <li><a href="#data-security" className="hover:text-primary transition-colors">6. How We Protect Your Data</a></li>
-            <li><a href="#data-retention" className="hover:text-primary transition-colors">7. How Long We Keep Your Data</a></li>
-            <li><a href="#your-rights" className="hover:text-primary transition-colors">8. Your Rights</a></li>
-            <li><a href="#cookies" className="hover:text-primary transition-colors">9. Cookies</a></li>
-            <li><a href="#international" className="hover:text-primary transition-colors">10. International Users</a></li>
-            <li><a href="#children" className="hover:text-primary transition-colors">11. Children's Privacy</a></li>
-            <li><a href="#policy-changes" className="hover:text-primary transition-colors">12. Policy Changes</a></li>
-            <li><a href="#data-sharing" className="hover:text-primary transition-colors">13. When We Share Data</a></li>
-            <li><a href="#contact" className="hover:text-primary transition-colors">14. Contact Us</a></li>
+            <li><a href="#policy-changes" className="hover:text-primary transition-colors">6. Policy Changes</a></li>
+            <li><a href="#contact" className="hover:text-primary transition-colors">7. Contact Us</a></li>
           </ol>
         </nav>
 
@@ -130,24 +123,19 @@ export function PrivacyPolicy() {
           <h2 className="text-2xl font-semibold">4. Who Gets Your Data</h2>
           
           <div className="space-y-6 text-muted-foreground">
-            <p>We use trusted third-party services to run our app. Here's who has access to what:</p>
+            <p>We use a small number of trusted service providers to run the app. We keep this list minimal and share only what is necessary.</p>
 
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Services We Use to Run the App</h3>
               <ul className="space-y-3 ml-4">
                 <li>
-                  <strong>Convex:</strong> Stores your data securely in the United States
+                  <strong>Our hosting and database provider:</strong> Stores your data securely. We limit access to what is needed for the app to work.
                 </li>
                 <li>
-                  <strong>Clerk:</strong> Handles secure login and authentication
+                  <strong>Our authentication provider:</strong> Handles secure login and account sessions.
                 </li>
                 <li>
-                  <strong>Anthropic (Claude AI):</strong> Powers the AI conversations
-                  <ul className="list-disc list-inside mt-1 ml-4 text-sm">
-                    <li>Your messages are sent to Anthropic to generate AI responses</li>
-                    <li>They don't use your data to train their AI models</li>
-                    <li>Privacy policy: <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">anthropic.com/privacy</a></li>
-                  </ul>
+                  <strong>Our AI service:</strong> Generates replies to your messages and helps draft content. We send only the minimum context needed to answer your request and do not allow use for advertising or model training.
                 </li>
               </ul>
             </div>
@@ -156,13 +144,14 @@ export function PrivacyPolicy() {
               <h3 className="text-lg font-semibold text-foreground mb-2">Services You Choose to Connect</h3>
               <ul className="space-y-3 ml-4">
                 <li>
-                  <strong>Google Calendar:</strong> When you authorize us, we can read and create calendar events
+                  <strong>Google Calendar:</strong> When you authorize us, we can read your calendar and create or change events you request.
                   <ul className="list-disc list-inside mt-1 ml-4 text-sm">
+                    <li>We do not store Google Calendar event content. We only keep the tokens and minimal metadata needed to connect your account, and we protect those tokens at rest.</li>
                     <li>Privacy policy: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">policies.google.com/privacy</a></li>
                   </ul>
                 </li>
                 <li>
-                  <strong>Todoist:</strong> When you connect it, we can read and create tasks
+                  <strong>Todoist:</strong> When you connect it, we can read and create tasks you request.
                   <ul className="list-disc list-inside mt-1 ml-4 text-sm">
                     <li>Privacy policy: <a href="https://doist.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">doist.com/privacy</a></li>
                   </ul>
@@ -172,7 +161,7 @@ export function PrivacyPolicy() {
 
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Payment Processing</h3>
-              <p><strong>Stripe:</strong> Processes payments securely (if you upgrade to a paid plan). We don't store your credit card numbers - Stripe handles that securely.</p>
+              <p><strong>Our payment processor:</strong> Processes payments securely if you upgrade to a paid plan. We do not store your credit card numbers.</p>
             </div>
           </div>
         </section>
@@ -191,6 +180,15 @@ export function PrivacyPolicy() {
                     Google API Services User Data Policy
                   </a>, including the Limited Use requirements.
                 </p>
+              </div>
+
+              <div className="p-4 bg-card border border-border rounded-md space-y-3">
+                <h3 className="text-lg font-semibold text-foreground">Scopes We Request</h3>
+                <ul className="list-disc list-inside ml-4">
+                  <li><code>https://www.googleapis.com/auth/calendar.events</code> – lets us create or change events when you ask</li>
+                  <li><code>https://www.googleapis.com/auth/calendar.readonly</code> – lets us read your calendars to avoid conflicts</li>
+                  <li><code>https://www.googleapis.com/auth/calendar.settings.readonly</code> – lets us read your time zone and calendar settings</li>
+                </ul>
               </div>
 
               <div>
@@ -236,148 +234,41 @@ export function PrivacyPolicy() {
                   <li>You can revoke access through your Google Account settings at any time</li>
                 </ul>
               </div>
+
+              <div className="p-4 bg-card border border-border rounded-md space-y-3">
+                <h3 className="text-lg font-semibold text-foreground">Limited Use Commitments</h3>
+                <ul className="list-disc list-inside ml-4">
+                  <li>We use your Google Calendar data only to provide features you asked for and that are visible in the app.</li>
+                  <li>We do not sell your Google data or use it for ads, retargeting, or interest‑based advertising.</li>
+                  <li>We do not allow humans to read your Google data unless you ask for support, we need to investigate abuse or security issues, or the law requires it.</li>
+                  <li>We do not combine your Google Calendar data with unrelated personal data to identify you, except as needed to deliver the features you requested.</li>
+                </ul>
+              </div>
+
+              <div className="p-4 bg-card border border-border rounded-md space-y-3">
+                <h3 className="text-lg font-semibold text-foreground">Data Handling & Storage for Google Data</h3>
+                <ul className="list-disc list-inside ml-4">
+                  <li>We do not store event details from your Google Calendar in our database. We fetch them when needed and discard them after use.</li>
+                  <li>We only store the OAuth tokens and minimal identifiers needed to connect your account. These tokens are protected at rest.</li>
+                  <li>If you disconnect Google Calendar in the app, we delete the stored tokens and stop access. You can also revoke access at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">myaccount.google.com/permissions</a>.</li>
+                </ul>
+              </div>
+
+              <div className="p-4 bg-card border border-border rounded-md space-y-3">
+                <h3 className="text-lg font-semibold text-foreground">Subprocessors</h3>
+                <p>To complete your requests (for example, to draft a meeting), we may send the minimum calendar context needed to our AI service to generate a response. That service is not allowed to use your data for advertising or training and can only use it to provide the requested result.</p>
+              </div>
+
+              <div className="p-4 bg-card border border-border rounded-md space-y-3">
+                <h3 className="text-lg font-semibold text-foreground">Transfers in Business Transactions</h3>
+                <p>If there is a merger, acquisition, or sale of assets, we will ask for your clear permission before transferring any Google Calendar data. If you do not give permission, we will delete that Google data instead of transferring it.</p>
+              </div>
             </div>
           </div>
         </section>
-
-        {/* Section 6: Data Security */}
-        <section id="data-security" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">6. How We Protect Your Data</h2>
-          
-          <div className="space-y-3 text-muted-foreground">
-            <p>We take security seriously and use industry-standard practices:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li>All data is encrypted when traveling over the internet (HTTPS/TLS)</li>
-              <li>Data is encrypted when stored in our database</li>
-              <li>We use secure authentication (Clerk) to protect your account</li>
-              <li>Only authorized systems can access your data</li>
-              <li>We regularly monitor for security issues</li>
-              <li>OAuth 2.0 security for third-party integrations</li>
-            </ul>
-            <p className="italic mt-4">
-              <strong>Reality check:</strong> No system is 100% secure. While we use industry-standard practices to protect your information, we cannot guarantee absolute security. We continuously work to improve our security measures.
-            </p>
-          </div>
-        </section>
-
-        {/* Section 7: Data Retention */}
-        <section id="data-retention" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">7. How Long We Keep Your Data</h2>
-          
-          <div className="space-y-3 text-muted-foreground">
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li><strong>While you have an account:</strong> We keep your data so the app works properly</li>
-              <li><strong>After you delete your account:</strong> All data permanently deleted within 90 days</li>
-              <li><strong>Backups:</strong> Encrypted backups kept for 90 days for disaster recovery</li>
-              <li><strong>When you disconnect an integration:</strong> Access tokens deleted immediately</li>
-              <li><strong>Chat history:</strong> Kept until you manually delete conversations</li>
-              <li><strong>Technical logs:</strong> Kept for 30-90 days for troubleshooting and security</li>
-              <li><strong>Legal requirements:</strong> Data may be kept longer if required by law</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Section 8: Your Rights */}
-        <section id="your-rights" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">8. Your Rights</h2>
-          
-          <div className="space-y-6 text-muted-foreground">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">Everyone Can:</h3>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>See what data we have about you</li>
-                <li>Export your chat history and data</li>
-                <li>Delete your account and all associated data</li>
-                <li>Disconnect Google Calendar or Todoist anytime</li>
-                <li>Ask us to fix incorrect information</li>
-                <li>Email us with questions about your data</li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">If You're in Europe (GDPR Rights):</h3>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>Right to access your personal data</li>
-                <li>Right to correct inaccurate data</li>
-                <li>Right to delete your data ("right to be forgotten")</li>
-                <li>Right to download your data in a portable format</li>
-                <li>Right to object to how we process your data</li>
-                <li>Right to restrict processing</li>
-                <li>Right to complain to your country's data protection authority</li>
-              </ul>
-              <p className="mt-2">Data transfers from EU/UK to the US are protected by Standard Contractual Clauses approved by the European Commission.</p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">If You're in California (CCPA Rights):</h3>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>Right to know what personal information we collect</li>
-                <li>Right to delete your personal information</li>
-                <li>Right to opt-out of data sales (we don't sell data, so this doesn't apply)</li>
-                <li>Right to non-discrimination for exercising your privacy rights</li>
-              </ul>
-            </div>
-
-            <div className="p-4 bg-card border border-border rounded-md">
-              <h3 className="text-lg font-semibold text-foreground mb-2">To Exercise Your Rights:</h3>
-              <p>Email us at <a href="mailto:AtheA.hab@gmail.com" className="text-primary underline hover:text-primary/80">AtheA.hab@gmail.com</a> with the subject "Privacy Request"</p>
-              <p className="mt-2">We'll respond within 30 days after verifying your identity.</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 9: Cookies */}
-        <section id="cookies" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">9. Cookies</h2>
-          
-          <div className="space-y-4 text-muted-foreground">
-            <p>We only use essential cookies that are required for the app to work:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li><strong>Session cookies:</strong> Keep you logged in (required for the app to work)</li>
-              <li><strong>Authentication cookies:</strong> Secure login managed by Clerk</li>
-            </ul>
-            <p className="font-semibold mt-4 text-foreground">We DON'T use:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li>❌ Advertising cookies</li>
-              <li>❌ Tracking cookies</li>
-              <li>❌ Analytics cookies</li>
-              <li>❌ Third-party marketing cookies</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Section 10: International Users */}
-        <section id="international" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">10. International Users</h2>
-          
-          <div className="space-y-3 text-muted-foreground">
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li>Our servers are located in the United States</li>
-              <li>If you access our services from outside the US, your data will be transferred to and processed in the US</li>
-              <li>For European and UK users: Data transfers comply with GDPR requirements using Standard Contractual Clauses</li>
-              <li>We ensure adequate safeguards for all international data transfers</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Section 11: Children */}
-        <section id="children" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">11. Children's Privacy</h2>
-          
-          <div className="space-y-3 text-muted-foreground">
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li>Our app is not designed for or directed at children under 13 years of age</li>
-              <li>We do not knowingly collect personal information from children under 13</li>
-              <li>If you're a parent or guardian and believe your child has provided us with information, please contact us immediately</li>
-              <li>We will promptly delete any child's data if we discover it</li>
-              <li>We comply with the Children's Online Privacy Protection Act (COPPA)</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Section 12: Policy Changes */}
+        {/* Section 6: Policy Changes */}
         <section id="policy-changes" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">12. Policy Changes</h2>
+          <h2 className="text-2xl font-semibold">6. Policy Changes</h2>
           
           <div className="space-y-3 text-muted-foreground">
             <ul className="list-disc list-inside space-y-2 ml-4">
@@ -389,27 +280,9 @@ export function PrivacyPolicy() {
             </ul>
           </div>
         </section>
-
-        {/* Section 13: Data Sharing */}
-        <section id="data-sharing" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">13. When We Share Data</h2>
-          
-          <div className="space-y-3 text-muted-foreground">
-            <p>We may share your information only in these specific situations:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
-              <li><strong>Legal requirements:</strong> When required by law, court order, subpoena, or government request</li>
-              <li><strong>Protect rights:</strong> To enforce our terms of service, investigate violations, or stop fraud</li>
-              <li><strong>Safety:</strong> To protect the safety of you, other users, or the public from harm</li>
-              <li><strong>Business transfer:</strong> If we sell the company or merge with another company (we'll notify you first)</li>
-              <li><strong>With your permission:</strong> Any other time you explicitly say it's okay</li>
-            </ul>
-            <p className="mt-4">We will notify you about legal data requests unless prohibited by law.</p>
-          </div>
-        </section>
-
-        {/* Section 14: Contact */}
+        {/* Section 7: Contact */}
         <section id="contact" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">14. Contact Us</h2>
+          <h2 className="text-2xl font-semibold">7. Contact Us</h2>
           
           <div className="space-y-4 text-muted-foreground">
             <div>
@@ -437,7 +310,7 @@ export function PrivacyPolicy() {
 
         <div className="border-t border-border pt-8 mb-12">
           <p className="text-sm text-muted-foreground text-center">
-            This privacy policy was last updated on October 13, 2025. If you have any questions or concerns, please contact us at{" "}
+            This privacy policy was last updated on October 14, 2025. If you have any questions or concerns, please contact us at{" "}
             <a href="mailto:AtheA.hab@gmail.com" className="text-primary underline hover:text-primary/80">AtheA.hab@gmail.com</a>
           </p>
         </div>

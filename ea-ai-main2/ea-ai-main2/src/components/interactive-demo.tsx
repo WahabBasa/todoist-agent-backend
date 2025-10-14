@@ -115,11 +115,11 @@ export default function InteractiveDemo() {
                                     Now imagine that feeling, every single day, for everything on your mind.
                                 </p>
                                 <Button
-                                    onClick={() => window.location.href = '/#auth'}
+                                    asChild
                                     size="lg"
                                     className="mt-4"
                                 >
-                                    Start Your Brain Dump →
+                                    <a href="/auth">Start Your Brain Dump →</a>
                                 </Button>
                             </div>
                         </div>

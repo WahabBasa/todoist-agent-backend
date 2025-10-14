@@ -79,7 +79,7 @@ export default function HeroSection() {
                                     asChild
                                     size="lg"
                                     className="gap-2">
-                                    <a href="/#auth">
+                                    <a href="/auth">
                                         Get Started
                                         <ArrowRight className="size-4" />
                                     </a>

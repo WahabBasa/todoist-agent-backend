@@ -400,9 +400,9 @@ export function CustomAuthForm() {
       <div className="text-center pt-2">
         <p className="text-xs text-muted-foreground">
           By continuing, you acknowledge TaskAI's{" "}
-          <button type="button" className="underline hover:text-foreground">
+          <a href="/privacy" className="underline hover:text-foreground">
             Privacy Policy
-          </button>
+          </a>
           .
         </p>
       </div>

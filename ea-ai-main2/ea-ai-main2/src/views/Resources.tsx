@@ -78,7 +78,7 @@ export function Resources() {
         <nav className="hidden md:flex gap-6">
           <a href="/#features" className="text-sm text-muted-foreground hover:text-primary transition-colors">Features</a>
           <a href="/pricing" className="text-sm text-muted-foreground hover:text-primary transition-colors">Pricing</a>
-          <a href="/#auth" className="text-sm text-primary font-medium">Get Started</a>
+          <a href="/auth" className="text-sm text-primary font-medium">Get Started</a>
         </nav>
       </header>
 
@@ -174,7 +174,7 @@ export function Resources() {
           <h2 className="text-2xl font-semibold mb-4">Ready to get started?</h2>
           <p className="text-muted-foreground mb-6">Join thousands of users managing their tasks smarter with Miller.</p>
           <a 
-            href="/#auth" 
+            href="/auth" 
             className="inline-block px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
             Start Using Miller

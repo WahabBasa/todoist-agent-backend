@@ -10,7 +10,7 @@ import { SidebarProvider } from "../components/ui/sidebar";
 
 export function ChatView() {
   // Get everything from SessionsContext - no props needed
-  const { activeView, setActiveView, isAdmin } = useSessions();
+  const { activeView, setActiveView, isAdmin, sessions, currentSessionId } = useSessions();
 
   useEffect(() => {
     if (activeView === "admin" && !isAdmin) {
@@ -20,9 +20,25 @@ export function ChatView() {
   
   console.log('🔄 [DEBUG] Active view changed:', activeView);
   
+  // Ensure title updates even if <title> hoisting is not supported
+  useEffect(() => {
+    const base = 'Oldowan';
+    if (activeView === 'chat') {
+      const title = sessions.find(s => s._id === currentSessionId)?.title ?? 'New Chat';
+      document.title = `${base} — ${title}`;
+    } else {
+      document.title = base;
+    }
+  }, [activeView, sessions, currentSessionId]);
+
   return (
     <SidebarProvider>
       <div className="w-full h-[100%] bg-background rounded-xl flex flex-row relative overflow-hidden">
+        {activeView === "chat" ? (
+          <title>{`Oldowan — ${sessions.find(s => s._id === currentSessionId)?.title ?? "New Chat"}`}</title>
+        ) : (
+          <title>Oldowan</title>
+        )}
         {/* Unified Collapsible Sidebar */}
         <CollapsibleSidebar />
         

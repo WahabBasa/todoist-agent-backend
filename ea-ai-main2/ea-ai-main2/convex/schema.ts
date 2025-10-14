@@ -131,6 +131,22 @@ const applicationTables = {
     updatedAt: v.number(),
   }).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
+  // User Profiles - Onboarding data and user preferences
+  userProfiles: defineTable({
+    tokenIdentifier: v.string(),
+    fullName: v.string(),
+    preferredName: v.string(),
+    occupation: v.optional(v.string()),
+    preferredWorkingHours: v.optional(v.object({
+      start: v.string(), // e.g., "09:00"
+      end: v.string(),   // e.g., "17:00"
+      timezone: v.string() // e.g., "America/New_York"
+    })),
+    onboardingCompletedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_tokenIdentifier", ["tokenIdentifier"]),
+
   // AI Mode Internal Todos - Session-scoped task management for complex workflows
   aiInternalTodos: defineTable({
     tokenIdentifier: v.string(), // User identifier (follows big-brain pattern)
