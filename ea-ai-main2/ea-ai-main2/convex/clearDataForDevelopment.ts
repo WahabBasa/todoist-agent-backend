@@ -2,7 +2,6 @@
 // Run this to clear all chat sessions and start fresh with the new schema
 
 import { mutation } from "./_generated/server";
-import { api } from "./_generated/api";
 
 /**
  * Clear all chat sessions for development

@@ -4,7 +4,6 @@ import React, { createContext, useContext, ReactNode, useState, useEffect, useCa
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
-import { Id } from "../../convex/_generated/dataModel";
 import { useSessions } from './sessions';
 
 // ChatHub pattern: Complete conversation turn (user + AI pair)
@@ -38,7 +37,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { currentSessionId } = useSessions();
   
   // Convex integration - preserve existing backend
-  const chatWithAI = useAction(api.ai.chatWithAI);
+  const chatWithAI = useAction(api.ai.session.chatWithAI);
   const updateChatTitle = useMutation(api.chatSessions.updateChatTitleFromMessage);
 
   // ChatHub pattern: Single source of truth for messages only
@@ -298,7 +297,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         responseText = result;
       } else if (result && typeof result === 'object') {
         // Handle different possible response formats
-        responseText = result.response || result.text || result.content || JSON.stringify(result);
+        responseText = (result as any).response || (result as any).text || (result as any).content || JSON.stringify(result);
       }
 
       console.log('✅ [FRONTEND DEBUG] Extracted response text:', {
@@ -371,7 +370,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       
       // Enhanced error handling with session validation
       let errorMessage = "Failed to send message";
-      let shouldRetry = true;
       
       if (error instanceof Error) {
         const errorText = error.message.toLowerCase();
@@ -380,15 +378,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           errorMessage = "Network error. Please check your connection and try again.";
         } else if (errorText.includes('rate limit') || errorText.includes('too many')) {
           errorMessage = "Too many requests. Please wait a moment before trying again.";
-          shouldRetry = false;
         } else if (errorText.includes('authentication') || errorText.includes('unauthorized') || errorText.includes('token')) {
           errorMessage = "Authentication error. Please refresh the page and try again.";
-          shouldRetry = false;
         } else if (errorText.includes('timeout')) {
           errorMessage = "Request timed out. The AI may be busy, please try again.";
         } else if (errorText.includes('session')) {
           errorMessage = "Session error. Your session may have expired.";
-          shouldRetry = false;
           // Clear session state if it seems corrupted
           setLoadedSessionData({ sessionId: null, hasLoaded: false });
         }

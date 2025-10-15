@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+// Replaced Next.js Link with standard anchor tags
 
 export default function ContentSection() {
     return (
@@ -25,10 +25,10 @@ export default function ContentSection() {
                             variant="secondary"
                             size="sm"
                             className="gap-1 pr-1.5">
-                            <Link href="#">
+                            <a href="#">
                                 <span>Learn More</span>
                                 <ChevronRight className="size-2" />
-                            </Link>
+                            </a>
                         </Button>
                     </div>
                 </div>

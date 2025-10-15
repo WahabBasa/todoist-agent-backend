@@ -1,6 +1,6 @@
-import { query, mutation, internalMutation, internalAction, action } from "./_generated/server";
+import { query, mutation, internalMutation, action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 // Node-dependent provider usage moved to chatSessionsNode.ts (Node runtime)
 
 // Fallback title from first message: sanitize, keep up to 6 words, capitalize first letter
@@ -121,8 +121,7 @@ export const getChatSessions = query({
       return undefined;
     }
 
-    const limit = args.limit || 20;
-    const offset = args.offset || 0;
+    // Note: currently returning all sessions; pagination can be added later
 
     // ChatHub pattern: Get ALL user sessions ordered by lastMessageAt DESC (most recent first)
     // Filter out subagent sessions - they are for isolated execution and shouldn't appear in sidebar
@@ -771,6 +770,7 @@ export const generateChatTitleWithAI = action({
   }
 });
 
+/*
 // Helper: sanitize and normalize model output to a safe short title
 function sanitizeTitle(raw: string, fallbackSource: string): string {
   const fallback = deriveFallbackTitle(fallbackSource);
@@ -814,8 +814,9 @@ function fallbackGreeting(lastName: string, localHour?: number): string {
   const cleanLast = (lastName || "there").replace(/[^\p{L}\p{N} -]/gu, "").trim() || "there"
   const h = typeof localHour === 'number' ? localHour : new Date().getHours()
   const tod = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
-  return `${tod}, ${cleanLast}.`
+return `${tod}, ${cleanLast}.`
 }
+*/
 
 // Action: generate a concise greeting using ONLY last name and time-of-day (no DB writes)
 export const generateGreetingForUser = action({

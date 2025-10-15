@@ -1,4 +1,4 @@
-import Link from 'next/link'
+// Replaced Next.js Link with standard anchor tags for Vite/React
 import { Logo } from '@/components/logo'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -31,12 +31,12 @@ export const HeroHeader = () => {
                 <div className={cn('mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12', isScrolled && 'bg-background/50 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5')}>
                     <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
                         <div className="flex w-full justify-between lg:w-auto">
-                            <Link
+                            <a
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
                                 <Logo />
-                            </Link>
+                            </a>
 
                             <button
                                 onClick={() => setMenuState(!menuState)}
@@ -51,11 +51,11 @@ export const HeroHeader = () => {
                             <ul className="flex gap-8 text-sm">
                                 {menuItems.map((item, index) => (
                                     <li key={index}>
-                                        <Link
+                                        <a
                                             href={item.href}
                                             className="text-muted-foreground hover:text-accent-foreground block duration-150">
                                             <span>{item.name}</span>
-                                        </Link>
+                                        </a>
                                     </li>
                                 ))}
                             </ul>
@@ -66,11 +66,11 @@ export const HeroHeader = () => {
                                 <ul className="space-y-6 text-base">
                                     {menuItems.map((item, index) => (
                                         <li key={index}>
-                                            <Link
+                                            <a
                                                 href={item.href}
                                                 className="text-muted-foreground hover:text-accent-foreground block duration-150">
                                                 <span>{item.name}</span>
-                                            </Link>
+                                            </a>
                                         </li>
                                     ))}
                                 </ul>
@@ -81,25 +81,25 @@ export const HeroHeader = () => {
                                     variant="outline"
                                     size="sm"
                                     className={cn(isScrolled && 'lg:hidden')}>
-                                    <Link href="#">
+                                    <a href="#">
                                         <span>Login</span>
-                                    </Link>
+                                    </a>
                                 </Button>
                                 <Button
                                     asChild
                                     size="sm"
                                     className={cn(isScrolled && 'lg:hidden')}>
-                                    <Link href="#">
+                                    <a href="#">
                                         <span>Sign Up</span>
-                                    </Link>
+                                    </a>
                                 </Button>
                                 <Button
                                     asChild
                                     size="sm"
                                     className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')}>
-                                    <Link href="#">
+                                    <a href="#">
                                         <span>Get Started</span>
-                                    </Link>
+                                    </a>
                                 </Button>
                             </div>
                         </div>

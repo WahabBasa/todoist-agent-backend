@@ -1,6 +1,5 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { Id } from "./_generated/dataModel";
 
 // Import clean logging system
 import { logTodosState } from "./ai/logger";

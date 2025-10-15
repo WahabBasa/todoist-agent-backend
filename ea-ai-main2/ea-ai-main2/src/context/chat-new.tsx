@@ -61,7 +61,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   } = useConvexChat({
     id: currentSessionId || undefined,
     initialMessages,
-    onFinish: (message) => {
+    onFinish: () => {
       // Optional: Add any post-message logic here
       window.dispatchEvent(new CustomEvent('chat-history-updated'));
     },

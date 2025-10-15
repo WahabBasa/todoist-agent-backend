@@ -1,5 +1,4 @@
-import { query, internalQuery } from "../_generated/server";
-import { v } from "convex/values";
+import { query } from "../_generated/server";
 
 // Debug function to inspect todoistTokens table and connection status
 export const debugTodoistTokens = query({

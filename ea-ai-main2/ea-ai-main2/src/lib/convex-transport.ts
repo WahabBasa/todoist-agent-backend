@@ -1,4 +1,4 @@
-import { Message, CreateMessage, RequestOptions } from '@ai-sdk/ui-utils';
+import { Message } from '@ai-sdk/ui-utils';
 import { api } from '../../convex/_generated/api';
 import { ConvexReactClient } from 'convex/react';
 import { Id } from '../../convex/_generated/dataModel';
@@ -35,7 +35,7 @@ export class ConvexChatTransport {
       }
 
       // Extract session ID from data or options
-      const sessionId = data?.id || requestOptions.body?.id;
+      const sessionId = (data as any)?.id || (requestOptions as any)?.body?.id;
 
       // Create time context
       const currentTimeContext = {

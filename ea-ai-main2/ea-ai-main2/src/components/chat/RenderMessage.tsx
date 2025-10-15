@@ -7,19 +7,11 @@ interface Message {
 
 interface RenderMessageProps {
   message: Message
-  messageId?: string
-  getIsOpen?: (id: string) => boolean
-  onOpenChange?: (id: string, open: boolean) => void
-  onQuerySelect?: (query: string) => void
   isOptimistic?: boolean // Indicates this is an optimistic update that should animate in
 }
 
 export function RenderMessage({
   message,
-  messageId,
-  getIsOpen,
-  onOpenChange,
-  onQuerySelect,
   isOptimistic = false
 }: RenderMessageProps) {
   

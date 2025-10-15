@@ -48,7 +48,7 @@ export async function testLangfuseConnection(): Promise<boolean> {
     const client = getLangfuseClient();
     
     // Create a test trace to verify connectivity
-    const trace = client.trace({
+    client.trace({
       name: "connection-test",
       metadata: {
         test: true,

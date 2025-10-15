@@ -9,8 +9,8 @@ import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { 
-  Cpu, Key, RefreshCw, CheckCircle, AlertCircle, 
-  Loader2, Database, Settings, Globe, Server, Search, ChevronDown, Check, X,
+  RefreshCw, CheckCircle, 
+  Loader2, Database, Settings, Globe, Server,
   ExternalLink, Info
 } from "lucide-react";
 import { toast } from "sonner";
@@ -392,28 +392,7 @@ export function AdminDashboard() {
     }
   };
 
-  const deriveCategory = (name: string): string => {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes("claude") || lowerName.includes("anthropic")) {
-      return "Anthropic";
-    }
-    if (lowerName.includes("gpt") || lowerName.includes("openai")) {
-      return "OpenAI";
-    }
-    if (lowerName.includes("llama") || lowerName.includes("meta")) {
-      return "Meta";
-    }
-    if (lowerName.includes("gemini") || lowerName.includes("google")) {
-      return "Google";
-    }
-    if (lowerName.includes("mistral")) {
-      return "Mistral";
-    }
-    if (lowerName.includes("command") || lowerName.includes("cohere")) {
-      return "Cohere";
-    }
-    return "Other";
-  };
+  // (removed unused deriveCategory)
 
   const filteredModels = Object.values(models).filter(model => {
     if (!searchQuery) return true;

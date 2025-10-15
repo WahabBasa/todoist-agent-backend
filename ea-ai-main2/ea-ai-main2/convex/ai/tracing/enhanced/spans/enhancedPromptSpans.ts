@@ -4,7 +4,6 @@ import {
   PromptAttributeKeys, 
   PromptComponentType, 
   createPromptComponentAttributes,
-  createTokenUsageAttributes,
   createContextAttributes,
   createHierarchyAttributes
 } from '../attributes/promptAttributes';

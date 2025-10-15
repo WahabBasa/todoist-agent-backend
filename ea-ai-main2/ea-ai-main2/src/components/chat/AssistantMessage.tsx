@@ -1,17 +1,15 @@
-import React, { useState } from 'react'
+import { useState, memo } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Response } from '@/components/ai-elements/response'
-import type { UIMessage } from '@ai-sdk/ui-utils'
 
 interface AssistantMessageProps {
   content: string
-  parts?: UIMessage['parts']
   streaming?: boolean
 }
 
-export const AssistantMessage = React.memo<AssistantMessageProps>(
-  ({ content, parts, streaming = false }) => {
+export const AssistantMessage = memo<AssistantMessageProps>(
+  ({ content, streaming = false }) => {
     const [copied, setCopied] = useState(false)
     const safeContent = (content ?? '')
       .trimStart()

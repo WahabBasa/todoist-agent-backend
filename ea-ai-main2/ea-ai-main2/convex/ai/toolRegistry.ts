@@ -154,10 +154,8 @@ export async function createSimpleToolRegistry(
         // Legacy API compatibility
         inputSchema: simpleTool.inputSchema,
         execute: async (args: any, _options?: any) => {
-          const startTime = Date.now();
-          
           // Create OpenTelemetry span for tool call
-          const toolCallSpan = createToolCallSpan({
+          createToolCallSpan({
             toolName: simpleTool.id,
             input: args,
             sessionId: context.sessionId || "default",
@@ -166,10 +164,9 @@ export async function createSimpleToolRegistry(
           
           try {
             const result = await simpleTool.execute(args, context, actionCtx);
-            const executionTime = Date.now() - startTime;
             
             // Create OpenTelemetry span for successful tool result
-            const toolResultSpan = createToolResultSpan({
+            createToolResultSpan({
               toolName: simpleTool.id,
               output: result,
               success: true,
@@ -187,11 +184,10 @@ export async function createSimpleToolRegistry(
               return JSON.stringify(result);
             }
           } catch (error) {
-            const executionTime = Date.now() - startTime;
             const errorMessage = error instanceof Error ? error.message : String(error);
             
             // Create tool result span for failed execution
-            const toolResultSpan = createToolResultSpan({
+            createToolResultSpan({
               toolName: simpleTool.id,
               output: errorMessage,
               success: false,
@@ -288,17 +284,7 @@ export async function createModeToolRegistry(
       }
     }
     
-    let formattedTodos = '';
-    if (sessionId) {
-      try {
-        const todoResult = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, { sessionId: typeof sessionId === 'string' ? sessionId as Id<"chatSessions"> : sessionId });
-        if (todoResult && todoResult.todos && todoResult.todos.length > 0) {
-          formattedTodos = todoResult.todos.map((t: any) => `- [${t.status === 'completed' ? 'x' : ' '}] ${t.content}`).join('\n');
-        }
-      } catch (err) {
-        console.warn(`[MODE_TOOLS] Failed to fetch todos:`, err);
-      }
-    }
+    // Removed internal todos fetch (unused here)
     
     if (process.env.LOG_LEVEL === 'debug') {
       console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);

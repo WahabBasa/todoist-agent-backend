@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Id } from "../../../convex/_generated/dataModel"
-import { cn } from "@/lib/utils"
 import { useMutation } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 
@@ -27,9 +26,7 @@ import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "../ui/sid
 
 interface ChatSession {
   _id: Id<"chatSessions">
-  userId: Id<"users">
   title: string
-  createdAt: number
   lastMessageAt: number
   messageCount: number
   isDefault?: boolean
@@ -52,7 +49,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
   const updateSession = useMutation(api.chatSessions.updateChatSession)
   const [isEditing, setIsEditing] = useState(false)
   const [tempTitle, setTempTitle] = useState(chat.title)
-  const [pointerType, setPointerType] = useState<"mouse" | "touch" | "pen" | null>(null)
+  const [, setPointerType] = useState<"mouse" | "touch" | "pen" | null>(null)
 
   // Keep local tempTitle in sync with server title when not editing
   useEffect(() => {
@@ -61,21 +58,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
     }
   }, [chat.title, isEditing])
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp)
-    const now = new Date()
-    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-    
-    if (diffInDays === 0) {
-      return 'Today'
-    } else if (diffInDays === 1) {
-      return 'Yesterday'
-    } else if (diffInDays < 7) {
-      return `${diffInDays} days ago`
-    } else {
-      return date.toLocaleDateString()
-    }
-  }
+  // (removed unused formatDate)
 
   const handleDelete = () => {
     setShowDeleteDialog(false)
@@ -117,7 +100,7 @@ export function ChatMenuItem({ chat, isActive, onSelect, onDelete, isDeleting, o
             <button
               type="button"
               className="flex w-full items-center gap-2 p-2"
-              onClick={(e) => {
+              onClick={() => {
                 if (!isDeleting && !isEditing) onSelect();
               }}
             >

@@ -1,11 +1,10 @@
 "use node";
 
 import { action } from "../_generated/server";
-import { v } from "convex/values";
 import { api } from "../_generated/api";
 import { requireUserAuthForAction } from "../todoist/userAccess";
 
-const CACHE_TTL = 3600000; // 1 hour in ms
+// (removed unused CACHE_TTL)
 
 // Helper to derive category from model name
 export function deriveCategory(name: string): string {

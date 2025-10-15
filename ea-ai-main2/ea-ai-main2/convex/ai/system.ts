@@ -1,6 +1,5 @@
 // OpenCode-inspired dynamic prompt system for Todoist Agent Backend
 import { api } from "../_generated/api";
-import { MessageCaching } from "./caching";
 import { generateSystemPrompt } from "./prompts/system";
 import { PromptLoader } from "./prompts/promptLoader";
 

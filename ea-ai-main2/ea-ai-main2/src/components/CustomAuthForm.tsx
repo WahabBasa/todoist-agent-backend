@@ -107,7 +107,7 @@ export function CustomAuthForm() {
       setError(null);
       sendAuthTelemetry('email_signup_start', { email });
       
-      const result = await signUp.create({
+      await signUp.create({
         emailAddress: email,
         password: password,
       });

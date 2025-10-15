@@ -238,7 +238,7 @@ function buildUiPartsFromConvexMessage(msg: any): UiPart[] {
       state = 'call';
     }
 
-    const toolInvocation: ToolInvocationUIPart['toolInvocation'] = {
+    const toolInvocation: any = {
       state,
       toolCallId,
       toolName,
@@ -275,7 +275,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const prevSessionIdRef = React.useRef<string | null>(null);
 
   // Phase 4: guarded rehydration key to remount the chat hook safely when needed (e.g., on session switch)
-  const [rehydrationKey, setRehydrationKey] = React.useState(0);
+  const [rehydrationKey] = React.useState(0);
   const hookId = React.useMemo(() => `${chatId}:${rehydrationKey}`,[chatId, rehydrationKey]);
 
   const [uiError, setUiError] = React.useState<Error | null>(null);
@@ -426,7 +426,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     messages,
     sendMessage,
     status: hookStatus,
-    reload
+    regenerate
   } = useVercelChat({
     id: hookId,
     transport,
@@ -812,8 +812,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (!targetSessionId) return;
 
-      const now = Date.now();
-
       if (targetSessionId !== chatId) {
         setInputStore(targetSessionId, '');
         delete lastSyncedCountRef.current[targetSessionId];
@@ -976,7 +974,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }, [uiError]),
     isRetriable,
     clearChat,
-    reload,
+    reload: regenerate,
     isFreshSession,
     forceResetStatus, // FIX: Manual recovery for stuck states
   };

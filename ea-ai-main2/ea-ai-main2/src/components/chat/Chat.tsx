@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, memo } from 'react'
 import { cn } from "@/lib/utils"
-import { Id } from "../../../convex/_generated/dataModel"
 import { AssistantMessage } from './AssistantMessage'
 import { ChatInput } from './ChatInput'
 import { ChatGreeting } from './ChatGreeting'
@@ -12,8 +11,8 @@ import type { UiMsg } from '../../store/chatStore'
 import { useAutoScroll } from '../../hooks/use-auto-scroll'
 import { logChatEvent } from '../../utils/chatLogger'
 
-const UserMessageRow = React.memo(({ message }: { message: UiMsg }) => {
-  const loggedRef = React.useRef(false)
+const UserMessageRow = memo(({ message }: { message: UiMsg }) => {
+  const loggedRef = useRef(false)
 
   useEffect(() => {
     if (loggedRef.current) return
@@ -69,10 +68,7 @@ export function Chat() {
     handleSubmit,
     isLoading,
     isFreshSession,
-    clearChat,
-    error,
-    isRetriable,
-    reload
+    clearChat
   } = useChat()
 
   const {
@@ -140,7 +136,6 @@ export function Chat() {
                 <AssistantMessage
                   key={m.id}
                   content={m.content}
-                  parts={m.parts}
                   streaming={streaming}
                 />
               )

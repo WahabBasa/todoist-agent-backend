@@ -42,9 +42,7 @@ export default function HeroSection() {
 
                     <div className="mx-auto max-w-7xl px-6">
                         <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-                            <AnimatedGroup variants={transitionVariants}>
-
-                            </AnimatedGroup>
+                            {/* Removed empty AnimatedGroup */}
 
                             <TextEffect
                                 preset="fade-in-blur"
@@ -73,7 +71,7 @@ export default function HeroSection() {
                                         },
                                     },
                                     ...transitionVariants,
-                                }}
+                                } as unknown as any}
                                 className="mt-12 flex justify-center">
                                 <Button 
                                     asChild

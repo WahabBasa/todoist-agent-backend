@@ -24,8 +24,6 @@ interface GoogleTokenError {
   hasToken: false;
 }
 
-type GoogleTokenResult = GoogleTokenSuccess | GoogleTokenError;
-
 interface TestConnectionResult {
   success: boolean;
   message?: string;
@@ -107,6 +105,7 @@ function verifyState<T = any>(state: string): T | null {
 
 async function getOAuthClientFromDB(ctx: ActionCtx): Promise<import("google-auth-library").OAuth2Client | null> {
   const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
+  void tokenIdentifier;
   const refreshToken = await ctx.runQuery(api.googleCalendar.tokens.getRefreshToken, {});
   if (!refreshToken) return null;
   const client = getDedicatedOAuthClient();
@@ -560,7 +559,7 @@ export const getCurrentCalendarTime = action({
       const timeMax = new Date(now.getTime() + 1000).toISOString(); // 1 second after
 
       // This is the key: Google will format the response times in the user's timezone
-      const response = await google.calendar("v3").events.list({
+      await google.calendar("v3").events.list({
         calendarId: "primary",
         timeMin: timeMin,
         timeMax: timeMax,

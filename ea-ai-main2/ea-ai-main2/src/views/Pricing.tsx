@@ -1,6 +1,4 @@
 "use client";
-
-import React from "react";
 import FooterSection from "@/components/footer-adapted";
 import { Check } from "lucide-react";
 

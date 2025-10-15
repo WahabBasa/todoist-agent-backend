@@ -81,8 +81,7 @@ export namespace ModeController {
 
     // Only log mode switches
     // Get tool count for the new mode
-    const modeTools = ModeRegistry.getModeTools(modeName);
-    const toolCount = Object.keys(modeTools).filter(toolName => modeTools[toolName] === true).length;
+    // const modeTools = ModeRegistry.getModeTools(modeName);
     
     // Log mode switch with structured logging
     logModeSwitch(state.previousMode || "unknown", modeName, "Mode controller switch", sessionId);
@@ -128,7 +127,7 @@ export namespace ModeController {
       }
 
       // SECURITY: Validate required decision fields
-      const { nextAction, decision: decisionType, focusArea } = decision;
+      const { nextAction, decision: decisionType } = decision;
 
       if (!nextAction || !decisionType) {
         console.error(`[ModeController] Decision missing required fields`);

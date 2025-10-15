@@ -5,8 +5,7 @@ import { logSpanToConsole } from '../exporters/consoleExporter';
 import {
   createEnhancedPromptSpan,
   EnhancedPromptSpanParams,
-  createPromptEffectivenessSpan,
-  PromptEffectivenessSpanParams
+  createPromptEffectivenessSpan
 } from '../enhanced/spans/enhancedPromptSpans';
 import { analyzePromptEffectiveness, PromptAnalysisParams } from '../enhanced/analysis/promptAnalysis';
 import { createEffectivenessAttributes } from '../enhanced/attributes/promptAttributes';

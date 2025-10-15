@@ -2,7 +2,6 @@
 
 // HTTP action runs in Node runtime to support providers requiring Node built-ins.
 
-import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
 import { streamText, stepCountIs, type UIMessage } from "ai";
 import { SystemPrompt } from "./system";
@@ -648,34 +647,7 @@ function extractAssistantResponse(responseMessages: any): string {
   return "";
 }
 
-function synthesizeAssistantSummary(
-  toolResults: NormalizedToolResult[],
-  mode: string
-): string {
-  if (!Array.isArray(toolResults) || toolResults.length === 0) {
-    return mode === "primary"
-      ? "I reviewed your request but didn’t produce any additional summary."
-      : "No additional information was generated.";
-  }
-
-  const summaries: string[] = [];
-  for (const result of toolResults) {
-    const normalizedText = normalizeToolResultForSummary(result);
-    if (normalizedText) {
-      summaries.push(normalizedText);
-    }
-  }
-
-  if (summaries.length === 0) {
-    return `Here's what I found:\n${JSON.stringify(toolResults.map((r) => r.result), null, 2)}`;
-  }
-
-  if (summaries.length === 1) {
-    return summaries[0];
-  }
-
-  return summaries.map((summary, idx) => `${idx + 1}. ${summary}`).join("\n");
-}
+// (removed unused synthesizeAssistantSummary)
 
 function normalizeToolResultForSummary(result: NormalizedToolResult): string {
   if (!result || typeof result !== "object") return "";

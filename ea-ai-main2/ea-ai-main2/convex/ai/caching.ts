@@ -43,11 +43,7 @@ export namespace MessageCaching {
 
     // Apply cache control to selected messages
     for (const msg of messagesToCache) {
-      const contentLength = typeof msg.content === 'string' 
-        ? msg.content.length 
-        : JSON.stringify(msg.content || '').length;
-
-      // console.log(`[CACHING] Applying cache control to ${msg.role} message (${contentLength} chars)`);
+      // console.log(`[CACHING] Applying cache control to ${msg.role} message`);
 
       const shouldUseContentOptions = Array.isArray(msg.content) && msg.content.length > 0;
 

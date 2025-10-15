@@ -5,7 +5,6 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { toast } from "sonner";
 import {
   Plus,
-  MessageSquare,
   Settings,
   Moon,
   Sun,
@@ -31,10 +30,8 @@ interface NavbarProps {
 }
 
 export function Navbar({ 
-  activeView, 
   onViewChange, 
   onNewChat,
-  currentSessionId,
   onChatSelect,
   onOpenSettings
 }: NavbarProps) {
@@ -60,10 +57,7 @@ export function Navbar({
     }
   };
 
-  const handleChatSelect = (sessionId: Id<"chatSessions">) => {
-    onChatSelect?.(sessionId);
-    onViewChange("chat");
-  };
+  // (removed unused handleChatSelect)
 
   const renderNewSession = () => {
     return (

@@ -11,10 +11,8 @@ import AuthCallback from "./components/AuthCallback";
 
 // Import components
 import { ChatView } from "./views/ChatView";
-import { SettingsView } from "./views/SettingsView";
 import { MainLayout } from "./components/layout/MainLayout";
-import { Button } from "./components/ui/button";
-import { Id } from "../convex/_generated/dataModel";
+ 
 import { ChatProvider } from "./context/chat";
 import { SessionsProvider, useSessions } from "./context/sessions";
 import { api } from "../convex/_generated/api";

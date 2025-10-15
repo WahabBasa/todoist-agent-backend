@@ -46,6 +46,7 @@ export const getCurrentTime: ToolDefinition = {
     timeZone: z.string().optional().describe("Override timezone (e.g., 'America/New_York', 'Europe/London'). If not provided, uses user's browser timezone."),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void actionCtx;
     // This tool is lightweight and doesn't need circuit breaker protection
     const currentTimeContext = (ctx as any).currentTimeContext;
     
@@ -99,6 +100,7 @@ export const getSystemStatus: ToolDefinition = {
     includeMetrics: z.boolean().optional().describe("Include performance metrics (default: false)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void actionCtx;
     try {
       const status = {
         timestamp: Date.now(),
@@ -158,6 +160,7 @@ export const validateInput: ToolDefinition = {
     type: z.enum(["date", "email", "todoistId", "url", "priority"]).describe("Type of validation to perform"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx; void actionCtx;
     try {
       const { input, type } = args;
       let isValid = false;
@@ -228,14 +231,6 @@ export const validateInput: ToolDefinition = {
           message = "Unknown validation type";
       }
 
-      const result = {
-        input,
-        type,
-        isValid,
-        message,
-        suggestions: suggestions.length > 0 ? suggestions : undefined,
-      };
-
       // Metadata handled by tool registry bridge
 
       const suggestionText = suggestions.length > 0 ? ` Suggestions: ${suggestions.join('; ')}` : '';
@@ -245,13 +240,6 @@ export const validateInput: ToolDefinition = {
         output: `${message}.${suggestionText}`
       };
     } catch (error) {
-      const errorResult = {
-        input: args.input,
-        type: args.type,
-        isValid: false,
-        error: error instanceof Error ? error.message : "Validation error",
-      };
-
       return {
         title: "Validation Error",
         metadata: { isValid: false },
@@ -268,6 +256,7 @@ export const listTools: ToolDefinition = {
     category: z.enum(["all", "todoist", "calendar", "internal", "utility"]).optional().describe("Filter tools by category (default: all)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx; void actionCtx;
     try {
       // Simple tool listing without complex registry lookup
       const availableTools = [
@@ -305,17 +294,6 @@ export const listTools: ToolDefinition = {
       // Count batch tools specifically
       const batchTools = availableTools.filter(tool => tool.name.includes('Batch') || tool.name.includes('batch'));
       
-      const result = {
-        totalTools: availableTools.length,
-        filteredTools: filteredTools.length,
-        batchTools: batchTools.length,
-        batchToolNames: batchTools.map(t => t.name),
-        requestedCategory: args.category || 'all',
-        toolsByCategory,
-        allToolNames: args.category === 'all' ? availableTools.map(t => t.name) : undefined,
-        timestamp: Date.now()
-      };
-
       // Metadata handled by tool registry bridge
 
       // Create a clean summary of tools

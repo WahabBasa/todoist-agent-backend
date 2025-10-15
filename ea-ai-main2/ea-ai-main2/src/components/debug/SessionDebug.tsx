@@ -15,7 +15,8 @@ export function SessionDebug() {
       toast.success(result.message);
     } catch (error) {
       console.error("❌ Migration failed:", error);
-      toast.error("Migration failed: " + error.message);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error("Migration failed: " + msg);
     }
   };
 
@@ -27,7 +28,8 @@ export function SessionDebug() {
       toast.success(`Found ${result.totalSessions} sessions - check console for details`);
     } catch (error) {
       console.error("❌ Debug failed:", error);
-      toast.error("Debug failed: " + error.message);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error("Debug failed: " + msg);
     }
   };
 

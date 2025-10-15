@@ -1,12 +1,4 @@
-import { 
-  getRulesSection,
-  getCapabilitiesSection,
-  getToolUseGuidelinesSection,
-  getSystemInfoSection,
-  getObjectiveSection,
-  getCustomSystemPromptSection
-} from "./sections";
-import { getModesSection } from "./sections/modes";
+import { getCustomSystemPromptSection } from "./sections";
 import { PromptLoader } from "./promptLoader";
 
 export interface SystemPromptSettings {

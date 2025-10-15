@@ -1,5 +1,5 @@
 import { Cpu, Zap } from 'lucide-react'
-import Image from 'next/image'
+// Replace Next.js Image with standard img for Vite/React
 
 export default function ContentSection() {
     return (
@@ -32,14 +32,14 @@ export default function ContentSection() {
                     </div>
                     <div className="md:mask-l-from-35% md:mask-l-to-55% mt-12 h-fit md:absolute md:-inset-y-12 md:inset-x-0 md:mt-0">
                         <div className="border-border/50 relative rounded-2xl border border-dotted p-2">
-                            <Image
+                            <img
                                 src="/charts.png"
                                 className="hidden rounded-[12px] dark:block"
                                 alt="payments illustration dark"
                                 width={1207}
                                 height={929}
                             />
-                            <Image
+                            <img
                                 src="/charts-light.png"
                                 className="rounded-[12px] shadow dark:hidden"
                                 alt="payments illustration light"

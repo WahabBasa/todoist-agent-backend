@@ -5,7 +5,6 @@ import { Response } from '@/components/ai-elements/response'
 import type { UIMessage, ToolInvocationUIPart } from '@ai-sdk/ui-utils'
 
 interface ConversationTurnProps {
-  id: string
   userMessage: string
   aiMessage?: string
   aiParts?: UIMessage['parts']
@@ -17,7 +16,6 @@ interface ConversationTurnProps {
 }
 
 export const ConversationTurn: React.FC<ConversationTurnProps> = ({
-  id,
   userMessage,
   aiMessage,
   aiParts: aiPartsProp,

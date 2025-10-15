@@ -1,5 +1,5 @@
 import { Cpu, Zap } from 'lucide-react'
-import Image from 'next/image'
+// Replace Next.js Image with standard img
 
 export default function ContentSection() {
     return (
@@ -32,8 +32,8 @@ export default function ContentSection() {
                     </div>
                     <div className="relative mt-6 sm:mt-0">
                         <div className="bg-linear-to-b aspect-67/34 relative rounded-2xl from-zinc-300 to-transparent p-px dark:from-zinc-700">
-                            <Image src="/exercice-dark.png" className="hidden rounded-[15px] dark:block" alt="payments illustration dark" width={1206} height={612} />
-                            <Image src="/exercice.png" className="rounded-[15px] shadow dark:hidden" alt="payments illustration light" width={1206} height={612} />
+                            <img src="/exercice-dark.png" className="hidden rounded-[15px] dark:block" alt="payments illustration dark" width={1206} height={612} />
+                            <img src="/exercice.png" className="rounded-[15px] shadow dark:hidden" alt="payments illustration light" width={1206} height={612} />
                         </div>
                     </div>
                 </div>

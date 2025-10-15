@@ -6,8 +6,7 @@ import { useClerk, useUser, useSignIn } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Switch } from "../components/ui/switch";
+ 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
@@ -34,50 +33,7 @@ const SETTINGS_SECTIONS = [
   { id: "account" as const, label: "Account", icon: User },
 ];
 
-
-
-interface SettingsSwitchProps {
-  label: string;
-  description: string;
-  badge?: string;
-  defaultChecked?: boolean;
-}
-
-function SettingsSwitch({ label, description, badge, defaultChecked }: SettingsSwitchProps) {
-  return (
-    <div className="flex items-center justify-between py-1.5">
-      <div className="space-y-2 flex-1">
-        <div className="flex items-center gap-2">
-          <Label 
-            className="font-medium"
-            style={{ color: "var(--soft-off-white)" }}
-          >
-            {label}
-          </Label>
-          {badge && (
-            <Badge 
-              variant="secondary" 
-              className="text-xs"
-              style={{ 
-                backgroundColor: "var(--primary-blue)", 
-                color: "var(--pure-white)" 
-              }}
-            >
-              {badge}
-            </Badge>
-          )}
-        </div>
-        <p 
-          className="text-sm leading-relaxed"
-          style={{ color: "var(--neutral-stone)" }}
-        >
-          {description}
-        </p>
-      </div>
-      <Switch defaultChecked={defaultChecked} />
-    </div>
-  );
-}
+// (removed unused SettingsSwitch)
 
 interface SettingsActionButtonProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -307,7 +263,7 @@ function ConnectedAppsSettings({
   const { signIn } = useSignIn();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
   const generateGoogleOAuthURL = useAction(api.googleCalendar.auth.generateGoogleOAuthURL);
-  const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
+  
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
   const setGoogleCalendarEnabled = useMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled);
   const revokeLegacyGoogleToken = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
@@ -319,7 +275,6 @@ function ConnectedAppsSettings({
   const gcalConnectedQuery = gcalEnabled === true;
 
   const [gcalTesting, setGcalTesting] = useState<boolean>(false);
-  const [gcalStatusMsg, setGcalStatusMsg] = useState<string>("");
 
   const refreshGcalStatus = async () => {
     // Keep diagnostic action; UI derives state from query
@@ -411,26 +366,7 @@ function ConnectedAppsSettings({
     }
   };
 
-  const testGoogleCalendar = async () => {
-    try {
-      setGcalTesting(true);
-      setGcalStatusMsg('');
-      const res = await testGoogleCalendarConnection();
-      if (res?.success) {
-        setGcalStatusMsg(res.message || 'Connected');
-        toast.success(res.message || 'Google Calendar connected');
-      } else {
-        setGcalStatusMsg(res?.error || 'Not connected');
-        toast.error(res?.error || 'Google Calendar not connected');
-      }
-    } catch (e) {
-      setGcalStatusMsg('Test failed');
-      toast.error('Google Calendar test failed');
-    } finally {
-      setGcalTesting(false);
-      void refreshGcalStatus();
-    }
-  };
+  // (removed unused testGoogleCalendar)
 
   // PostMessage listener for OAuth popup messages (including account conflicts)
   useEffect(() => {

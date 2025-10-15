@@ -1,5 +1,7 @@
 import React, { Suspense } from "react"
 import Markdown from "react-markdown"
+import type { Components } from "react-markdown"
+import type { JSX as ReactJSX } from "react"
 import remarkGfm from "remark-gfm"
 
 import { cn } from "@/lib/utils"
@@ -137,7 +139,7 @@ function childrenTakeAllStringContents(element: any): string {
   return ""
 }
 
-const COMPONENTS = {
+const COMPONENTS: Components = {
   h1: withClass("h1", "text-2xl font-semibold"),
   h2: withClass("h2", "font-semibold text-xl"),
   h3: withClass("h3", "font-semibold text-lg"),
@@ -163,7 +165,7 @@ const COMPONENTS = {
       </code>
     )
   },
-  pre: ({ children }: any) => children,
+  pre: ({ children }: any) => children as any,
   ol: withClass("ol", "list-decimal space-y-2 pl-6"),
   ul: withClass("ul", "list-disc space-y-2 pl-6"),
   li: withClass("li", "my-1.5"),
@@ -184,7 +186,7 @@ const COMPONENTS = {
   hr: withClass("hr", "border-foreground/20"),
 }
 
-function withClass(Tag: keyof JSX.IntrinsicElements, classes: string) {
+function withClass(Tag: keyof ReactJSX.IntrinsicElements, classes: string) {
   const Component = ({ node, ...props }: any) => (
     <Tag className={classes} {...props} />
   )

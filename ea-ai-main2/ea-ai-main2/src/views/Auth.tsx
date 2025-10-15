@@ -94,6 +94,7 @@ export function Auth() {
         return;
       }
       if (flow === "signUp") {
+        if (!isSignUpLoaded || !signUp) return;
         const res = await signUp.attemptEmailAddressVerification({ code });
         if ((res as any)?.status === "complete") {
           try { if ((res as any).createdSessionId && typeof (signUp as any).setActive === "function") await (signUp as any).setActive({ session: (res as any).createdSessionId }); } catch {}

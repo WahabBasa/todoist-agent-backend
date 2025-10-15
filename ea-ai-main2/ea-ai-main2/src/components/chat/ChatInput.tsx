@@ -1,4 +1,4 @@
-import React, { useRef, forwardRef, useEffect } from 'react'
+import { useRef, forwardRef } from 'react'
 import { ArrowUp, Square } from 'lucide-react'
 import { Button } from '../ui/button'
 import Textarea from 'react-textarea-autosize'
@@ -25,7 +25,6 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   value,
   onChange,
   onSubmit,
-  onClear,
   isLoading = false,
   disabled = false,
   placeholder = "Ask a question...",
@@ -33,7 +32,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(({
   onCompositionEnd,
   onKeyDown,
   className,
-  showClearButton = false
+  
 }, ref) => {
   const formRef = useRef<HTMLFormElement>(null)
 

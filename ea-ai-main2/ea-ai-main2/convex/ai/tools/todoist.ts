@@ -64,6 +64,7 @@ Error Handling:
     dueDate: z.number().optional().describe("Due date as timestamp (milliseconds since epoch)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.syncApi.createTodoistTaskSync, {
         content: args.title,
@@ -111,6 +112,7 @@ export const getTasks: ToolDefinition = {
     includeCompleted: z.boolean().optional().describe("Include completed tasks (default: false)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       // Validate projectId format if provided
       if (args.projectId && !/^[a-zA-Z0-9]{16,}$/.test(args.projectId)) {
@@ -124,8 +126,6 @@ export const getTasks: ToolDefinition = {
 
       let result = [];
       if (syncResult && syncResult.items && syncResult._userContext) {
-        const currentUserId = syncResult._userContext.userId;
-        
         result = syncResult.items
           .filter((task: any) => {
             // Filter by project if specified
@@ -181,8 +181,9 @@ export const updateTask: ToolDefinition = {
     isCompleted: z.boolean().optional().describe("Mark as completed/incomplete"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
-      const { taskId, title, description, priority, dueDate, isCompleted, ...updateArgs } = args;
+      const { taskId, title, description, priority, dueDate, isCompleted } = args;
       let result;
       
       // Handle task completion separately with appropriate sync API calls
@@ -225,6 +226,7 @@ export const deleteTask: ToolDefinition = {
     taskId: z.string().describe("The task ID from getProjectAndTaskMap"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.syncApi.deleteTodoistTaskSync, { 
         taskId: args.taskId 
@@ -250,6 +252,7 @@ export const createProject: ToolDefinition = {
     parentId: z.string().optional().describe("Parent project ID for nested projects"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.syncApi.createTodoistProjectSync, {
         name: args.name,
@@ -286,6 +289,7 @@ export const updateProject: ToolDefinition = {
     description: z.string().optional().describe("Project description"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const { projectId, ...updateArgs } = args;
       const result = await actionCtx.runAction(api.todoist.syncApi.updateTodoistProjectSync, {
@@ -311,6 +315,7 @@ export const deleteProject: ToolDefinition = {
     projectId: z.string().describe("The project ID from getProjectAndTaskMap"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.syncApi.deleteTodoistProjectSync, { 
         projectId: args.projectId 
@@ -386,6 +391,7 @@ Common ID Patterns:
     includeCompleted: z.boolean().optional().describe("Include completed tasks"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.integration.getTodoistProjectAndTaskMap, {
         includeCompleted: args.includeCompleted || false
@@ -420,6 +426,7 @@ export const getProjectDetails: ToolDefinition = {
     projectId: z.string().describe("The project ID obtained from getProjectAndTaskMap"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.integration.getTodoistProjectDetails, { 
         projectId: args.projectId 
@@ -443,6 +450,7 @@ export const getTaskDetails: ToolDefinition = {
     taskId: z.string().describe("The task ID obtained from getProjectAndTaskMap"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const result = await actionCtx.runAction(api.todoist.integration.getTodoistTaskDetails, { 
         taskId: args.taskId 
@@ -474,6 +482,7 @@ export const createBatchTasks: ToolDefinition = {
     })).min(1).max(50).describe("Array of tasks to create (1-50 tasks per batch)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       

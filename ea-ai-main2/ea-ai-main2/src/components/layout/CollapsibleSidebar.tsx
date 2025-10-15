@@ -7,7 +7,6 @@ import { Button } from "../ui/button";
 import {
   Plus,
   PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 import { UserProfile } from "../nav/UserProfile";
 import { ChatHistory } from "../chat/ChatHistory";
@@ -16,59 +15,14 @@ import { useSessions } from "../../context/sessions";
 
 // Claude-style sidebar with blue accents and smooth transitions
 
-interface SidebarMenuItemProps {
-  icon: React.ReactNode;
-  label: string;
-  onClick?: () => void;
-  collapsed: boolean;
-  className?: string;
-  children?: React.ReactNode;
-}
-
-function SidebarMenuItem({ 
-  icon, 
-  label, 
-  onClick, 
-  collapsed, 
-  className,
-  children
-}: SidebarMenuItemProps) {
-  return (
-    <div className={cn("relative", className)}>
-      <Button
-        variant="ghost"
-        className={cn(
-          "w-full justify-start gap-3 h-10 transition-colors",
-          collapsed ? "w-10 px-0 justify-center" : "px-3"
-        )}
-        onClick={onClick}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--user-message-bg)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '';
-        }}
-      >
-        <div className="shrink-0" style={{ color: "var(--neutral-stone)" }}>{icon}</div>
-        {!collapsed && (
-          <span className="text-sm font-medium transition-opacity duration-150 delay-150">
-            {label}
-          </span>
-        )}
-      </Button>
-      {children}
-    </div>
-  );
-}
+// (removed unused SidebarMenuItem)
 
 export function CollapsibleSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   
   // Get everything from SessionsContext
   const { 
-    currentSessionId, 
     createNewSession, 
-    selectSession, 
     setActiveView,
     isAdmin
   } = useSessions();

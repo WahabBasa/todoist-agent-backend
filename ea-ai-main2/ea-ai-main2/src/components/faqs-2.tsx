@@ -1,7 +1,7 @@
 'use client'
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import Link from 'next/link'
+// Replace Next.js Link with standard anchor tags
 
 export default function FAQsTwo() {
     const faqItems = [
@@ -60,11 +60,11 @@ export default function FAQsTwo() {
 
                     <p className="text-muted-foreground mt-6 px-8">
                         Can't find what you're looking for? Contact our{' '}
-                        <Link
+                        <a
                             href="#"
                             className="text-primary font-medium hover:underline">
                             customer support team
-                        </Link>
+                        </a>
                     </p>
                 </div>
             </div>

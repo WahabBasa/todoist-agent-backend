@@ -144,6 +144,7 @@ export const generateChatTitleWithAI_impl = action({
 export const generateGreetingForUser_impl = action({
   args: { sessionId: v.id("chatSessions"), lastName: v.string(), localHour: v.optional(v.number()) },
   handler: async (ctx, { sessionId, lastName, localHour }): Promise<string> => {
+    void sessionId;
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return fallbackGreeting(lastName, localHour);
     const tokenIdentifier = identity.tokenIdentifier || identity.subject;

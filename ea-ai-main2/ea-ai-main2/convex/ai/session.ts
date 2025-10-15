@@ -15,10 +15,10 @@ import {
   sanitizeMessages,
   addMessageToConversation
 } from "./simpleMessages";
-import { createSimpleToolRegistry, createPrimaryModeToolRegistry } from "./toolRegistry";
+import { createSimpleToolRegistry } from "./toolRegistry";
 import { createModeToolRegistry as createSessionModeToolRegistry } from "./toolRegistry";
 import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
-import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
+// import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
 // Import mode components
 import { ModeRegistry } from "./modes/registry";
@@ -39,8 +39,7 @@ import {
   createToolCallSpan,
   createToolResultSpan,
   createAssistantMessageSpan,
-  endConversation,
-  endSpan
+  endConversation
 } from "./langfuse/logger";
 
 // Enhanced Error Types - Following OpenCode's structured error approach
@@ -170,7 +169,7 @@ export const chatWithAI = action({
     const sanitizedMessage = sanitizeUserInput(message);
     
     // OpenCode-style unified config retrieval
-    const tokenIdentifier = userId;
+    // use userId directly without separate token identifier
     console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
     
     let userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
@@ -348,15 +347,13 @@ export const chatWithAI = action({
     }
     
     // Initialize Langfuse tracing
-    const conversationTrace = createConversationTrace({
+    createConversationTrace({
       sessionId: sessionId || "default",
       userId: userId,
     });
     
     // Declare Langfuse spans outside try block
-    let userMessageSpan: any = null;
     let promptGeneration: any = null;
-    let assistantMessageSpan: any = null;
     let tools: Record<string, any> = {}; // Declare tools here so it's available in catch block
 
     try {
@@ -427,7 +424,7 @@ export const chatWithAI = action({
       logUserMessage(sanitizedMessage, sessionId);
       
       // Create user message span
-      userMessageSpan = createUserMessageSpan({
+      createUserMessageSpan({
         sessionId: sessionId || "default",
         userId: userId,
         message: message
@@ -503,7 +500,7 @@ export const chatWithAI = action({
       logDebug(`Created tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
 
       // Initialize tool repetition detector
-      const toolRepetitionDetector = new ToolRepetitionDetector(3);
+      // const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
       // Enhanced retry wrapper for rate limiting resilience
       async function streamTextWithRateLimit(params: any): Promise<StreamTextResult<Record<string, any>, never>> {
@@ -686,7 +683,7 @@ export const chatWithAI = action({
       
       // Create assistant message span with final result
       if (finalText && finalUsage) {
-        assistantMessageSpan = createAssistantMessageSpan({
+        createAssistantMessageSpan({
           sessionId: sessionId || "default",
           userId: userId,
           message: finalText,
@@ -1112,12 +1109,7 @@ export const getSessionStats = action({
  * The LLM itself should determine when to use the task tool for delegation
  * This follows the OpenCode pattern where the AI decides when to switch modes
  */
-async function determineOptimalMode(message: string, history: any[]): Promise<string> {
-  logDebug(`LLM will determine optimal mode via task tool: "${message.substring(0, 50)}..."`);
-  
-  // Always return primary mode - let the LLM decide when to delegate
-  return "primary";
-}
+// (removed unused determineOptimalMode)
 
 /**
  * Inject mode-specific prompts into the conversation history
@@ -1196,51 +1188,7 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
  * Create tool registry filtered for a specific mode
  * Only provides tools that the mode has permission to use
  */
-async function createModeToolRegistry(
-  actionCtx: any,
-  userId: string,
-  modeName: string = "primary",
-  currentTimeContext?: any,
-  sessionId?: string
-): Promise<Record<string, any>> {
-  try {
-    // Create the full tool registry
-    const allTools = await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
-    
-    // Get mode configuration
-    const modeConfig = ModeRegistry.getMode(modeName);
-    if (!modeConfig) {
-      logError(`Mode ${modeName} not found, using all tools`, "ModeToolRegistry");
-      return allTools; // Fallback to all tools if mode not found
-    }
-    
-    // Get mode's tool permissions
-    const modeTools = ModeRegistry.getModeTools(modeName);
-    
-    // Filter tools based on mode permissions
-    const filteredTools: Record<string, any> = {};
-    
-    for (const [toolName, tool] of Object.entries(allTools)) {
-      // Special case: submodes should not have access to task tool to prevent recursion
-      if (toolName === "task" && modeConfig.type !== "primary") {
-        continue; // Skip task tool for submodes
-      }
-      
-      // Check if mode has permission for this tool
-      if (modeTools[toolName] === true) {
-        filteredTools[toolName] = tool;
-      }
-    }
-    
-    logDebug(`Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
-    
-    return filteredTools;
-  } catch (error) {
-    logError(error instanceof Error ? error : new Error(String(error)), "Failed to create filtered tool registry");
-    // Return all tools as fallback
-    return await createSimpleToolRegistry(actionCtx, userId, currentTimeContext, sessionId, modeName);
-  }
-}
+// (removed unused createModeToolRegistry)
 async function updateToolStates(toolCalls: any[], toolResults: any[]): Promise<Record<string, 'pending'|'running'|'completed'>> {
   const toolStates: Record<string, 'pending' | 'running' | 'completed'> = {};
   toolCalls.forEach(tc => toolStates[tc.toolName] = 'running' as const);

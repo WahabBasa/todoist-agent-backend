@@ -1,21 +1,16 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { useClerk, useUser } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { Dialog, DialogContent } from "./ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Switch } from "./ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Label } from "./ui/label";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { ConnectedAppItem } from "./settings/ConnectedAppItem";
 import { 
   User, Link, 
-  AlertTriangle, Trash2, LogOut, X 
+  Trash2, LogOut, X 
 } from "lucide-react";
 
 interface SettingsModalProps {
@@ -32,46 +27,7 @@ const SETTINGS_SECTIONS = [
   { id: "connected-apps" as const, label: "Connected Apps", icon: Link },
 ];
 
-// Reusable Settings Components
-interface SettingsHeaderProps {
-  title: string;
-  description: string;
-}
-
-function SettingsHeader({ title, description }: SettingsHeaderProps) {
-  return (
-    <div className="space-y-2">
-      <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-      <p className="text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
-interface SettingsSwitchProps {
-  label: string;
-  description: string;
-  badge?: string;
-  defaultChecked?: boolean;
-}
-
-function SettingsSwitch({ label, description, badge, defaultChecked }: SettingsSwitchProps) {
-  return (
-    <div className="flex items-center justify-between py-1.5">
-      <div className="space-y-2 flex-1">
-        <div className="flex items-center gap-2">
-          <Label className="text-foreground font-medium">{label}</Label>
-          {badge && (
-            <Badge variant="secondary" className="text-xs">{badge}</Badge>
-          )}
-        </div>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {description}
-        </p>
-      </div>
-      <Switch defaultChecked={defaultChecked} />
-    </div>
-  );
-}
+// (removed unused SettingsHeader and SettingsSwitch)
 
 interface SettingsActionButtonProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -176,38 +132,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 }
 
 
-function GeneralSettings({ clerkUser }: { clerkUser: any }) {
-  return (
-    <div className="space-y-6">
-      <SettingsHeader 
-        title="General"
-        description="These settings apply to all workspaces you're a part of."
-      />
-      
-      <div className="space-y-4">
-        <SettingsSwitch 
-          label="Email notifications"
-          description="Get notified about task deadlines and project updates"
-          badge="Recommended"
-          defaultChecked={true}
-        />
-        
-        <SettingsSwitch 
-          label="Desktop notifications"
-          description="Show browser notifications for important updates"
-        />
-        
-        <SettingsSwitch 
-          label="AI suggestions"
-          description="Let AI help optimize your workflow and suggest improvements"
-          defaultChecked={true}
-        />
-      </div>
-    </div>
-  );
-}
-
-
 
 
 
@@ -282,7 +206,6 @@ function GoogleCalendarAppItem({ app, isConnecting, onConnect, onDebug, onSync }
 
 function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
-  const [hasAutoSynced, setHasAutoSynced] = useState(false);
   const [hasGoogleCalendarConnection, setHasGoogleCalendarConnection] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -290,20 +213,15 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
   const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
-  const removeTodoistConnection = useMutation(api.todoist.auth.removeTodoistConnection);
+  const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
-  // Check if Google Calendar is connected (using new session manager)
-  const checkGoogleCalendarConnection = useAction(api.googleCalendar.sessionManager.hasGoogleCalendarConnection);
-  const removeGoogleCalendarConnection = useMutation(api.googleCalendar.sessionManager.removeGoogleCalendarConnection);
-  const getOAuthConnectionStatus = useAction(api.googleCalendar.oauthFlow.getOAuthConnectionStatus);
-  // TODO: Update Google Calendar initialization to work with Clerk
-  // const initializeGoogleCalendarAfterOAuth = useAction(api.auth.initializeGoogleCalendarAfterOAuth);
-  const migrateLegacyTokens = useAction(api.googleCalendar.oauthFlow.migrateLegacyTokens);
-  const forceOAuthReconnection = useAction(api.googleCalendar.oauthFlow.forceOAuthReconnection);
-  
-  // Legacy functions for backward compatibility (during transition)
-  const syncGoogleCalendarTokens = useAction(api.googleCalendar.auth.syncGoogleCalendarTokens);
-  const debugGoogleAuthAccount = useAction(api.googleCalendar.auth.debugGoogleAuthAccount);
+  // Google Calendar (Clerk-based OAuth endpoints)
+  const checkGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
+  const getOAuthConnectionStatus = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
+  // Optional legacy cleanup
+  // const migrateLegacyTokens = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
+  const forceOAuthReconnection = removeGoogleCalendarConnection;
 
   // Load Google Calendar connection status on component mount
   const loadConnectionStatus = async () => {
@@ -315,13 +233,12 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
       setHasGoogleCalendarConnection(isConnected);
     } catch (error) {
       console.error("ConnectedAppsSettings: Failed to check Google Calendar connection:", error);
-      console.error("ConnectedAppsSettings: Error details:", {
-        name: error?.name,
-        message: error?.message,
-        stack: error?.stack
-      });
+      const name = error instanceof Error ? error.name : undefined;
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error("ConnectedAppsSettings: Error details:", { name, message, stack });
       setHasGoogleCalendarConnection(false);
-      setLoadError(`Failed to load connection status: ${error?.message || 'Unknown error'}`);
+      setLoadError(`Failed to load connection status: ${message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -462,7 +379,7 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
         
         if (shouldReconnect) {
           // Sign out and redirect to home page where user can sign in with Google
-          signOut({ redirectUrl: "/" });
+          signOut();
         }
       }
     } else {
@@ -519,22 +436,14 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
                 onConnect={() => handleConnect(app.appName)}
                 onDebug={async () => {
                   try {
-                    // Get detailed connection status using new session manager
+                    // Get detailed connection status
                     const status = await getOAuthConnectionStatus();
                     console.log("Google Calendar connection status:", status);
                     
                     const debugInfo = {
-                      "Connection Status": status.isConnected ? "✅ Connected" : "❌ Not Connected",
-                      "Has Tokens": status.hasTokens ? "✅ Yes" : "❌ No",
-                      "Token Info": status.tokenInfo ? {
-                        "Access Token": status.tokenInfo.hasAccessToken ? "✅ Present" : "❌ Missing",
-                        "Refresh Token": status.tokenInfo.hasRefreshToken ? "✅ Present" : "❌ Missing",
-                        "Token Expired": status.tokenInfo.tokenExpired ? "⚠️ Yes" : "✅ No",
-                        "Expires In": status.tokenInfo.expiresIn ? `${Math.floor(status.tokenInfo.expiresIn / 3600)} hours` : "Unknown",
-                        "Token Type": status.tokenInfo.tokenType || "Unknown",
-                        "Scope": status.tokenInfo.scope || "Unknown"
-                      } : "No token data",
-                      "Recommendations": status.recommendations
+                      "Connected": status.success ? "✅ Yes" : "❌ No",
+                      "Message": (status as any).message || (status as any).error || "",
+                      "Tested At": new Date((status as any).testTimestamp).toISOString()
                     };
                     
                     alert(`Google Calendar Debug Info:\n\n${JSON.stringify(debugInfo, null, 2)}`);

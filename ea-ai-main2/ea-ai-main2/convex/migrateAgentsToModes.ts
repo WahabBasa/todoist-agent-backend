@@ -2,7 +2,6 @@
 // Run this script to migrate existing chatSessions from agent-based to mode-based schema
 
 import { action } from "./_generated/server";
-import { v } from "convex/values";
 import { api } from "./_generated/api";
 
 /**

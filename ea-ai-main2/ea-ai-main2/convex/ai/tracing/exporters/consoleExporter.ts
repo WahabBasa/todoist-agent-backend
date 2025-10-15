@@ -1,5 +1,4 @@
-import { Span } from '@opentelemetry/api';
-import { PromptAttributeKeys } from '../enhanced/attributes/promptAttributes';
+// (no external imports)
 
 /**
  * Clean, detailed console logging for AI workflow tracing
@@ -64,6 +63,7 @@ function handleConversationFlow(span: any, operation: string): void {
  * Handle user message with full content
  */
 function handleUserMessage(span: any, operation: string): void {
+  void span;
   if (!conversationActive) return;
 
   // Extract user message from the operation string
@@ -79,6 +79,7 @@ function handleUserMessage(span: any, operation: string): void {
  * Handle detailed tool call with complete parameter analysis
  */
 function handleToolCall(span: any, operation: string): void {
+  void operation;
   if (!conversationActive) return;
 
   const attributes = span.attributes || {};
@@ -156,6 +157,7 @@ function handleToolCall(span: any, operation: string): void {
  * Handle tool results with execution details
  */
 function handleToolResult(span: any, operation: string): void {
+  void operation;
   if (!conversationActive) return;
 
   const attributes = span.attributes || {};
@@ -229,6 +231,7 @@ function handleToolResult(span: any, operation: string): void {
  * Handle assistant final response
  */
 function handleAssistantResponse(span: any, operation: string): void {
+  void operation;
   if (!conversationActive) return;
 
   const attributes = span.attributes || {};
@@ -345,11 +348,13 @@ function truncateString(str: string, maxLength: number): string {
 export function createConsoleExporter() {
   return {
     export: (spans: any[]) => {
+      void spans;
       // Skip span-based logging entirely - we handle this in real-time
     }
   };
 }
 
 export function logTraceSummary(spans: any[]): void {
+  void spans;
   // Skip trace summaries - they add noise
 }

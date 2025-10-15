@@ -4,7 +4,6 @@ import { internal } from "../_generated/api";
 import { 
   requireUserAuthForAction, 
   logUserAccess,
-  validateDataOwnership 
 } from "./userAccess";
 
 // Modern Todoist API v1 Sync endpoint

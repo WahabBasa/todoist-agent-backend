@@ -1,5 +1,5 @@
 import { Cpu, Lock, Sparkles, Zap } from 'lucide-react'
-import Image from 'next/image'
+// Replace Next.js Image with standard img
 
 export default function FeaturesSection() {
     return (
@@ -11,21 +11,21 @@ export default function FeaturesSection() {
                 </div>
                 <div className="px-3 pt-3 md:-mx-8">
                     <div className="aspect-88/36 mask-b-from-75% mask-b-to-95% relative">
-                        <Image
+                        <img
                             src="/mail-upper.png"
                             className="absolute inset-0 z-10"
                             alt="payments illustration dark"
                             width={2797}
                             height={1137}
                         />
-                        <Image
+                        <img
                             src="/mail-back.png"
                             className="hidden dark:block"
                             alt="payments illustration dark"
                             width={2797}
                             height={1137}
                         />
-                        <Image
+                        <img
                             src="/mail-back-light.png"
                             className="dark:hidden"
                             alt="payments illustration light"

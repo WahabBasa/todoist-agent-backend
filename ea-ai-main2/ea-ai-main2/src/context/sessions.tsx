@@ -65,7 +65,6 @@ const SessionsContext = createContext<SessionsContextType | null>(null);
 export function SessionsProvider({ children }: { children: ReactNode }) {
   // Convex session queries
   const sessionsQuery = useQuery(api.chatSessions.getChatSessions, {});
-  const defaultSession = useQuery(api.chatSessions.getDefaultSession, {});
   const adminStatus = useQuery(api.auth.admin.isCurrentUserAdmin, {});
   const isAdmin = adminStatus === true;
 
