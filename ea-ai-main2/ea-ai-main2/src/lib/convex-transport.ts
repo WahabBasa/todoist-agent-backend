@@ -55,18 +55,18 @@ export class ConvexChatTransport {
       });
 
       // Create assistant message in the format expected by AI SDK
+      const content: string = String(result?.response ?? result?.text ?? "I'm ready to help!");
       const assistantMessage: Message = {
         id: `msg-${Date.now()}`,
         role: 'assistant',
-        content: result.response || result.text || "I'm ready to help!",
-        createdAt: new Date()
+        content,
       };
 
       // Yield the complete message (simulating streaming)
       // In a real streaming implementation, we'd yield chunks
       yield {
         type: 'text-delta' as const,
-        textDelta: assistantMessage.content
+        textDelta: assistantMessage.content!
       };
 
       yield {

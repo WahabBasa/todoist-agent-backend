@@ -8,7 +8,7 @@ import { useSessions } from './sessions';
 import { useChat as useVercelChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
-import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@/types/ai-ui';
+import type { UIMessage, ToolInvocationUIPart, TextUIPart, UiPart } from '@/types/ai-ui';
 import { useChatStore } from '../store/chatStore';
 import { useSessionStore } from '../store/sessionStore';
 import { useShallow } from 'zustand/shallow';
@@ -82,7 +82,7 @@ function extractLatestUserMessage(messages: UIMessage[]): string {
   }
   return '';
 }
-type UiPart = UIMessage['parts'][number];
+// Using explicit UiPart from our local AI UI types to avoid indexing into optional arrays
 
 function partsEqual(a: UiPart[] | undefined, b: UiPart[] | undefined): boolean {
   const left = Array.isArray(a) ? a : [];

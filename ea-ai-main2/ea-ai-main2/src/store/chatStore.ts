@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { UIMessage } from '@/types/ai-ui'
+import type { UIMessage, UiPart } from '@/types/ai-ui'
 import { logChatEvent } from '../utils/chatLogger'
 
 export type UiStatus = 'ready' | 'submitted' | 'streaming'
@@ -113,7 +113,7 @@ export const useChatStore = create<ChatStore>()(
               id: userId,
               role: 'user',
               content: text,
-              parts: text ? [{ type: 'text', text } as UIMessage['parts'][number]] : [],
+              parts: text ? [{ type: 'text', text } as UiPart] : [],
               createdAt: new Date(),
               metrics: {
                 sentAt,
