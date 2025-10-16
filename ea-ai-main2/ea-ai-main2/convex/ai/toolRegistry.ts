@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { tool as aiTool } from "ai";
 import { ActionCtx } from "../_generated/server";
-import { api } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import { TodoistTools } from "./tools/todoist";
 import { InternalTools } from "./tools/internal";
@@ -113,6 +112,7 @@ export async function createSimpleToolRegistry(
   sessionId?: string | Id<"chatSessions">,
   modeName: string = "primary" // New parameter for mode-aware filtering
 ): Promise<Record<string, any>> {
+  void modeName;
   
   // console.log(`[SimpleToolRegistry] Creating tools for user: ${userId.substring(0, 20)}...`);
   

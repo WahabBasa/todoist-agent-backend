@@ -30,6 +30,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       // console.log(`[GoogleCalendar] Creating calendar event: ${args.summary}`);
+      void context;
       
       try {
         // Calculate duration from start and end dates
@@ -85,6 +86,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Updating calendar event: ${args.eventId}`);
+      void context; void actionCtx;
       
       // Temporarily disabled - simplified version coming soon
       return {
@@ -104,6 +106,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Deleting calendar event: ${args.eventId}`);
+      void context; void actionCtx;
       
       // Temporarily disabled - simplified version coming soon
       return {
@@ -126,6 +129,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Listing calendar events for range: ${args.timeRange || 'default'}`);
+      void context;
       
       try {
         // Parse time range to specific dates if provided
@@ -243,6 +247,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Searching calendar events for: ${args.query}`);
+      void context; void actionCtx;
       
       // Temporarily disabled - simplified version coming soon  
       return {
@@ -261,6 +266,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Getting current time context`);
+      void args; void actionCtx;
       
       // Use current time provided by user's browser (no calculations needed)
       if ((context as any).currentTimeContext) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
-import { useClerk, useUser, useSignIn } from "@clerk/clerk-react";
+import { useClerk, useUser } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Button } from "../components/ui/button";
@@ -94,7 +94,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
         return <ConnectedAppsSettings 
           clerkUser={clerkUser} 
           signOut={signOut} 
-          activeSection={activeSection}
           hasTodoistConnection={hasTodoistConnection}
           generateOAuthURL={generateOAuthURL}
           removeTodoistConnection={removeTodoistConnection}
@@ -109,7 +108,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
         return <ConnectedAppsSettings 
           clerkUser={clerkUser} 
           signOut={signOut} 
-          activeSection={activeSection}
           hasTodoistConnection={hasTodoistConnection}
           generateOAuthURL={generateOAuthURL}
           removeTodoistConnection={removeTodoistConnection}
@@ -212,7 +210,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
 interface ConnectedAppsSettingsProps {
   clerkUser: any;
   signOut: () => void;
-  activeSection: SettingsSection;
   hasTodoistConnection: boolean | undefined;
   generateOAuthURL: any;
   removeTodoistConnection: any;
@@ -223,7 +220,6 @@ interface ConnectedAppsSettingsProps {
 function ConnectedAppsSettings({ 
   clerkUser, 
   signOut, 
-  activeSection, 
   hasTodoistConnection,
   generateOAuthURL,
   removeTodoistConnection,
@@ -233,6 +229,7 @@ function ConnectedAppsSettings({
   // Remove unused parameters for linting
   void clerkUser;
   void signOut;
+  
   const [hasAutoSynced] = useState(false);
   void hasAutoSynced; // Remove unused variable warning
   const [todoistConflictData, setTodoistConflictData] = useState<{
@@ -260,9 +257,8 @@ function ConnectedAppsSettings({
 
   // GOOGLE CALENDAR CONNECTION STATE
   const { user } = useUser();
-  const { signIn } = useSignIn();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
-  const generateGoogleOAuthURL = useAction(api.googleCalendar.auth.generateGoogleOAuthURL);
+  // Removed unused generateGoogleOAuthURL action
   
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
   const setGoogleCalendarEnabled = useMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled);
@@ -274,7 +270,7 @@ function ConnectedAppsSettings({
   const gcalStatusLoading = gcalEnabled === undefined;
   const gcalConnectedQuery = gcalEnabled === true;
 
-  const [gcalTesting, setGcalTesting] = useState<boolean>(false);
+  const [gcalTesting] = useState<boolean>(false);
 
   const refreshGcalStatus = async () => {
     // Keep diagnostic action; UI derives state from query

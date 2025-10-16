@@ -15,20 +15,16 @@ import {
   sanitizeMessages,
   addMessageToConversation
 } from "./simpleMessages";
-import { createSimpleToolRegistry } from "./toolRegistry";
 import { createModeToolRegistry as createSessionModeToolRegistry } from "./toolRegistry";
-import { ToolRepetitionDetector } from "./tools/ToolRepetitionDetector";
 // import { parseAssistantMessage } from "./assistantMessage/parseAssistantMessage";
 
 // Import mode components
-import { ModeRegistry } from "./modes/registry";
 import { ModeController } from "./modes/controller";
 
 // Import clean logging system
 import { logStep, logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled, logDebug, logError, logFinalResponse, logWarning } from "./logger";
 
 // Import existing types
-import type { ProviderSettings, ModelInfo } from "../providers/unified";
 
 // Langfuse Cloud tracing imports
 import {
@@ -238,7 +234,6 @@ export const chatWithAI = action({
     // Initialize the appropriate provider
     let modelProvider: any;
     let lockedProvider: string | undefined;
-    let openRouterApiKey: string | undefined;
     let openRouterBaseUrl = "https://openrouter.ai/api/v1";
     let providerPreferenceCleared = false;
     let persistProviderReset: () => Promise<void> = async () => {};
@@ -265,7 +260,6 @@ export const chatWithAI = action({
         throw new Error("OpenRouter API key is required. Please configure it in the admin dashboard.");
       }
       
-      openRouterApiKey = apiKey;
       openRouterBaseUrl = userConfig?.openRouterBaseUrl || globalConfig?.openRouterBaseUrl || "https://openrouter.ai/api/v1";
       buildProviderPreferences = (slug?: string) => slug && slug.length > 0
         ? { provider: { order: [slug], allow_fallbacks: false } }
@@ -1189,9 +1183,3 @@ async function injectModePrompts(history: any[], sessionId: string | undefined, 
  * Only provides tools that the mode has permission to use
  */
 // (removed unused createModeToolRegistry)
-async function updateToolStates(toolCalls: any[], toolResults: any[]): Promise<Record<string, 'pending'|'running'|'completed'>> {
-  const toolStates: Record<string, 'pending' | 'running' | 'completed'> = {};
-  toolCalls.forEach(tc => toolStates[tc.toolName] = 'running' as const);
-  toolResults.forEach(tr => toolStates[tr.toolName] = 'completed' as const);
-  return toolStates;
-}

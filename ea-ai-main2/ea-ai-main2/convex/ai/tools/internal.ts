@@ -146,7 +146,7 @@ User: "Show me my tasks and organize them by priority"
         console.warn('[InternalTodo] Warning: internalTodoWrite used without clear coordination need');
       }
 
-      const result = await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos, {
+      await actionCtx.runMutation(api.aiInternalTodos.updateInternalTodos, {
         sessionId: ctx.sessionId as any,
         todos: args.todos,
       });
@@ -179,6 +179,7 @@ export const internalTodoRead: ToolDefinition = {
   description: "Read your current internal todolist to check progress and understand what you're working on. Use this to stay organized and provide progress updates to users.",
   inputSchema: z.object({}),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void args;
     try {
       const todoData = await actionCtx.runQuery(api.aiInternalTodos.getInternalTodos, {
         sessionId: ctx.sessionId as any,

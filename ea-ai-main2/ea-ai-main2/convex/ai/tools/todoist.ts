@@ -533,6 +533,7 @@ export const deleteBatchTasks: ToolDefinition = {
     taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to delete (1-50 tasks per batch)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       
@@ -572,6 +573,7 @@ export const completeBatchTasks: ToolDefinition = {
     taskIds: z.array(z.string()).min(1).max(50).describe("Array of task IDs to mark as completed (1-50 tasks per batch)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       
@@ -619,6 +621,7 @@ export const updateBatchTasks: ToolDefinition = {
     })).min(1).max(50).describe("Array of task updates (1-50 tasks per batch)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       
@@ -666,6 +669,7 @@ export const createProjectWithTasks: ToolDefinition = {
     })).min(0).max(40).describe("Array of tasks to create within the project (0-40 tasks)"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       
@@ -685,7 +689,6 @@ export const createProjectWithTasks: ToolDefinition = {
       );
 
       const successCount = result.successful.length;
-      const failureCount = result.failed.length;
       const totalOperations = 1 + args.tasks.length; // project + tasks
       
       // Find the project creation result
@@ -736,6 +739,7 @@ export const reorganizeTasksBatch: ToolDefinition = {
     }).describe("Modifications to apply to all specified tasks"),
   }),
   async execute(args: any, ctx: ToolContext, actionCtx: ActionCtx) {
+    void ctx;
     try {
       const batchHandler = new BatchTodoistHandler(actionCtx);
       

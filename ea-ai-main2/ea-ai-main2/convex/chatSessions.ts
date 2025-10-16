@@ -115,6 +115,7 @@ export const getChatSessions = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    void args;
     // Big-brain pattern: return undefined when no user identity
     const tokenIdentifier = (await ctx.auth.getUserIdentity())?.tokenIdentifier;
     if (!tokenIdentifier) {

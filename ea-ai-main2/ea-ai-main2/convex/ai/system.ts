@@ -91,6 +91,7 @@ export namespace SystemPrompt {
     userId?: string,
     modeName: string = "primary"
   ): Promise<string> {
+    void modelID; // satisfy noUnusedParameters while keeping signature stable
     let promptName = getModeSpecificPrompt(modeName, userMessage);
     
     // Load user's custom system prompt if available

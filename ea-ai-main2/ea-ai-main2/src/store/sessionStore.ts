@@ -44,7 +44,7 @@ function sortSessions(map: SessionMap): SessionMeta[] {
   })
 }
 
-export const useSessionStore = create<SessionStoreState>((set, get) => ({
+export const useSessionStore = create<SessionStoreState>((set) => ({
   sessionMap: {},
   sessionList: [],
   currentSessionId: null,

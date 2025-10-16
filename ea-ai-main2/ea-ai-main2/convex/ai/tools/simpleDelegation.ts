@@ -1,6 +1,4 @@
-import { z } from "zod";
-import { ToolDefinition, ToolContext } from "../toolRegistry";
-import { ActionCtx } from "../../_generated/server";
+// Delegation tools are currently disabled; keep file minimal to satisfy TypeScript unused checks
 
 /**
  * Real OpenCode-style subagent delegation tools
