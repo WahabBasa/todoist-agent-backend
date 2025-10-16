@@ -46,6 +46,11 @@ export class ConvexChatTransport {
         source: "convex_transport"
       };
 
+      // Guard content is a non-empty string
+      if (typeof lastMessage.content !== 'string' || lastMessage.content.trim() === '') {
+        throw new Error('Invalid message format: missing user content');
+      }
+
       // Call existing Convex AI action
       const result = await this.convex.action(api.ai.session.chatWithAI, {
         message: lastMessage.content,
