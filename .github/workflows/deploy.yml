@@ -15,19 +15,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug lockfile path
-        run: ls -l ea-ai-main2/ea-ai-main2/package-lock.json
-
-      - name: Setup Node.js
+      - name: Setup Node.js (with cache)
+        if: ${{ hashFiles('ea-ai-main2/ea-ai-main2/package-lock.json') != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: 'ea-ai-main2/ea-ai-main2/package-lock.json'
 
+      - name: Setup Node.js (no cache)
+        if: ${{ hashFiles('ea-ai-main2/ea-ai-main2/package-lock.json') == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install dependencies
         working-directory: ea-ai-main2/ea-ai-main2
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build
         working-directory: ea-ai-main2/ea-ai-main2
