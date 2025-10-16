@@ -1,4 +1,4 @@
-import { Message } from '@ai-sdk/ui-utils';
+import type { UIMessage as Message } from '@/types/ai-ui';
 import { api } from '../../convex/_generated/api';
 import { ConvexReactClient } from 'convex/react';
 import { Id } from '../../convex/_generated/dataModel';

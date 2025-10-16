@@ -10,20 +10,6 @@ import { createClerkClient } from "@clerk/backend";
 import { google } from "googleapis";
 import crypto from "node:crypto";
 
-// TypeScript interfaces for return types
-interface GoogleTokenSuccess {
-  success: true;
-  token: string;
-  hasToken: true;
-  message: string;
-}
-
-interface GoogleTokenError {
-  success: false;
-  error: string;
-  hasToken: false;
-}
-
 interface TestConnectionResult {
   success: boolean;
   message?: string;
@@ -39,7 +25,7 @@ interface TestConnectionResult {
 // =================================================================
 
 // Simple OAuth client helper (mirrors Calendly pattern exactly)
-async function getOAuthClient(clerkUserId: string): Promise<import("google-auth-library").OAuth2Client | null> {
+async function getOAuthClient(clerkUserId: string): Promise<any | null> {
   const clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY!,
   });
@@ -61,7 +47,7 @@ async function getOAuthClient(clerkUserId: string): Promise<import("google-auth-
 
   client.setCredentials({ access_token: token.data[0].token });
 
-  return client;
+  return client as any;
 }
 
 // Dedicated Google OAuth client (separate from Clerk SSO)
@@ -103,14 +89,14 @@ function verifyState<T = any>(state: string): T | null {
 
 // DB helpers now live in ./tokens.ts (non-node runtime)
 
-async function getOAuthClientFromDB(ctx: ActionCtx): Promise<import("google-auth-library").OAuth2Client | null> {
+async function getOAuthClientFromDB(ctx: ActionCtx): Promise<any | null> {
   const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
   void tokenIdentifier;
   const refreshToken = await ctx.runQuery(api.googleCalendar.tokens.getRefreshToken, {});
   if (!refreshToken) return null;
   const client = getDedicatedOAuthClient();
   client.setCredentials({ refresh_token: refreshToken });
-  return client;
+  return client as any;
 }
 
 export const generateGoogleOAuthURL = action({
@@ -354,17 +340,17 @@ export const getCalendarEventTimes = action({
     if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
 
     try {
-      const events = await google.calendar("v3").events.list({
+      const calendar = google.calendar({ version: "v3", auth: oAuthClient as any });
+      const { data } = await calendar.events.list({
         calendarId: "primary",
         eventTypes: ["default"],
         singleEvents: true,
         timeMin: args.start,
         timeMax: args.end,
         maxResults: 2500,
-        auth: oAuthClient,
       });
 
-      const eventTimes = events.data.items?.map(event => {
+      const eventTimes = data.items?.map(event => {
         // Handle all-day events
         if (event.start?.date && event.end?.date) {
           return {
@@ -429,9 +415,9 @@ export const createCalendarEvent = action({
 
       const attendees = args.attendeeEmails?.map(email => ({ email })) || [];
 
-      const calendarEvent = await google.calendar("v3").events.insert({
+      const calendar = google.calendar({ version: "v3", auth: oAuthClient as any });
+      const calendarEvent = await calendar.events.insert({
         calendarId: "primary",
-        auth: oAuthClient,
         requestBody: {
           summary: args.title,
           description: args.description,
@@ -487,9 +473,8 @@ export const getUserCalendarSettings = action({
 
     try {
       // Get all user settings from Google Calendar
-      const settingsResponse = await google.calendar("v3").settings.list({
-        auth: oAuthClient,
-      });
+      const calendar = google.calendar({ version: "v3", auth: oAuthClient as any });
+      const settingsResponse = await calendar.settings.list({});
 
       const settings = settingsResponse.data.items || [];
       
@@ -545,9 +530,8 @@ export const getCurrentCalendarTime = action({
 
     try {
       // Get primary calendar to get user's timezone
-      const calendar = await google.calendar("v3").calendars.get({
+      const calendar = await google.calendar({ version: "v3", auth: oAuthClient as any }).calendars.get({
         calendarId: "primary",
-        auth: oAuthClient,
       });
 
       const userTimezone = calendar.data.timeZone || "UTC";
@@ -559,13 +543,12 @@ export const getCurrentCalendarTime = action({
       const timeMax = new Date(now.getTime() + 1000).toISOString(); // 1 second after
 
       // This is the key: Google will format the response times in the user's timezone
-      await google.calendar("v3").events.list({
+      await google.calendar({ version: "v3", auth: oAuthClient as any }).events.list({
         calendarId: "primary",
         timeMin: timeMin,
         timeMax: timeMax,
         timeZone: userTimezone,
         maxResults: 1,
-        auth: oAuthClient,
       });
 
       // Extract timezone and create formatted time using Google's timezone handling

@@ -2,7 +2,7 @@ import React from 'react'
 import { User, Bot, Copy, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Response } from '@/components/ai-elements/response'
-import type { UIMessage, ToolInvocationUIPart } from '@ai-sdk/ui-utils'
+import type { UIMessage, ToolInvocationUIPart } from '@/types/ai-ui'
 
 interface ConversationTurnProps {
   userMessage: string

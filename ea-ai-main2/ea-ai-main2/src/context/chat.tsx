@@ -8,7 +8,7 @@ import { useSessions } from './sessions';
 import { useChat as useVercelChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { useAuth } from '@clerk/clerk-react';
-import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@ai-sdk/ui-utils';
+import type { UIMessage, ToolInvocationUIPart, TextUIPart } from '@/types/ai-ui';
 import { useChatStore } from '../store/chatStore';
 import { useSessionStore } from '../store/sessionStore';
 import { useShallow } from 'zustand/shallow';

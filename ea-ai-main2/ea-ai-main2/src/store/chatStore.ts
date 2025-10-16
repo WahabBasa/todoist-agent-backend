@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { UIMessage } from '@ai-sdk/ui-utils'
+import type { UIMessage } from '@/types/ai-ui'
 import { logChatEvent } from '../utils/chatLogger'
 
 export type UiStatus = 'ready' | 'submitted' | 'streaming'
