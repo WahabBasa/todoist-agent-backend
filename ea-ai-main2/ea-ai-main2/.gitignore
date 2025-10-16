@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.firebase/
 
 # Environment files with secrets - use GitHub Secrets instead
 .env.production
