@@ -382,6 +382,26 @@ const applicationTables = {
       })),
     }).index("by_lastFetched", ["lastFetched"]),
  
+    // Usage accounting: append-only per-request token usage events
+    usageEvents: defineTable({
+      tokenIdentifier: v.string(),
+      ts: v.number(),
+      reqId: v.string(),
+      inputTokens: v.number(),
+      outputTokens: v.number(),
+      totalTokens: v.number(),
+    })
+      .index("by_tokenIdentifier", ["tokenIdentifier"]) 
+      .index("by_tokenIdentifier_and_ts", ["tokenIdentifier", "ts"]),
+
+    // Usage quotas: optional per-user overrides; defaults applied in logic
+    usageQuotas: defineTable({
+      tokenIdentifier: v.string(),
+      monthlyTokenCap: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_tokenIdentifier", ["tokenIdentifier"]),
+ 
    
 };
 

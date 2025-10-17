@@ -21,6 +21,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Landing } from "./views/Landing";
 import { Auth } from "./views/Auth";
 import { PrivacyPolicy } from "./views/PrivacyPolicy";
+import { TermsOfService } from "./views/TermsOfService";
 import { Resources } from "./views/Resources";
 import { Pricing } from "./views/Pricing";
 
@@ -111,7 +112,8 @@ export default function App() {
         {!isOAuthCallback && (
           <ErrorBoundary>
             {path.startsWith('/auth') ? <Auth /> :
-             path.startsWith('/privacy') ? <PrivacyPolicy /> : 
+             path.startsWith('/privacy') ? <PrivacyPolicy /> :
+             path.startsWith('/terms') ? <TermsOfService /> :
              path.startsWith('/resources') ? <Resources /> :
              path.startsWith('/pricing') ? <Pricing /> :
              <Landing />}

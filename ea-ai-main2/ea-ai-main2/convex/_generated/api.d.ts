@@ -97,6 +97,7 @@ import type * as todoist_auth from "../todoist/auth.js";
 import type * as todoist_integration from "../todoist/integration.js";
 import type * as todoist_syncApi from "../todoist/syncApi.js";
 import type * as todoist_userAccess from "../todoist/userAccess.js";
+import type * as usage from "../usage.js";
 import type * as userProfiles from "../userProfiles.js";
 
 /**
@@ -192,6 +193,7 @@ declare const fullApi: ApiFromModules<{
   "todoist/integration": typeof todoist_integration;
   "todoist/syncApi": typeof todoist_syncApi;
   "todoist/userAccess": typeof todoist_userAccess;
+  usage: typeof usage;
   userProfiles: typeof userProfiles;
 }>;
 export declare const api: FilterApi<

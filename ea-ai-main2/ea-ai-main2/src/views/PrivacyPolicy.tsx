@@ -14,7 +14,7 @@ export function PrivacyPolicy() {
         </header>
 
         <h1 className="text-3xl font-semibold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-muted-foreground mb-8">Last Updated: October 14, 2025</p>
+        <p className="text-sm text-muted-foreground mb-8">Last Updated: October 18, 2025</p>
 
         {/* Table of Contents */}
         <nav className="mb-12 p-6 bg-card border border-border rounded-lg">
@@ -24,9 +24,12 @@ export function PrivacyPolicy() {
             <li><a href="#information-we-collect" className="hover:text-primary transition-colors">2. What Information We Collect</a></li>
             <li><a href="#how-we-use" className="hover:text-primary transition-colors">3. How We Use Your Information</a></li>
             <li><a href="#third-parties" className="hover:text-primary transition-colors">4. Who Gets Your Data</a></li>
-            <li><a href="#google-calendar" className="hover:text-primary transition-colors">5. Google Calendar - Special Section</a></li>
-            <li><a href="#policy-changes" className="hover:text-primary transition-colors">6. Policy Changes</a></li>
-            <li><a href="#contact" className="hover:text-primary transition-colors">7. Contact Us</a></li>
+            <li><a href="#oauth-scopes" className="hover:text-primary transition-colors">5. OAuth Scopes and Connected Services</a></li>
+            <li><a href="#data-storage" className="hover:text-primary transition-colors">6. Data Storage Policy</a></li>
+            <li><a href="#google-calendar" className="hover:text-primary transition-colors">7. Google Calendar - Special Section</a></li>
+            <li><a href="#revocation" className="hover:text-primary transition-colors">8. How to Disconnect Connected Services</a></li>
+            <li><a href="#policy-changes" className="hover:text-primary transition-colors">9. Policy Changes</a></li>
+            <li><a href="#contact" className="hover:text-primary transition-colors">10. Contact Us</a></li>
           </ol>
         </nav>
 
@@ -37,7 +40,7 @@ export function PrivacyPolicy() {
             <p><strong>Company Name:</strong> Oldowan</p>
             <p><strong>What We Do:</strong> We provide an AI-powered executive assistant that helps you manage tasks, schedule events, and stay organized.</p>
             <p><strong>Contact:</strong> <a href="mailto:AtheA.hab@gmail.com" className="text-primary underline hover:text-primary/80">AtheA.hab@gmail.com</a></p>
-            <p><strong>Effective Date:</strong> October 13, 2025</p>
+            <p><strong>Effective Date:</strong> October 18, 2025</p>
             <p>We are the data controller for your personal information. This means we decide how and why your data is processed.</p>
           </div>
         </section>
@@ -54,7 +57,7 @@ export function PrivacyPolicy() {
                 <li>Your Google profile information (name, email, profile picture) if you sign in with Google</li>
                 <li>Messages you type to the AI assistant</li>
                 <li>Tasks and calendar events you want to create</li>
-                <li>Payment information if you upgrade (processed securely by Stripe - we don't store card numbers)</li>
+                <li>Payment information if you upgrade to a paid plan (we don't store full card numbers)</li>
               </ul>
             </div>
 
@@ -146,13 +149,14 @@ export function PrivacyPolicy() {
                 <li>
                   <strong>Google Calendar:</strong> When you authorize us, we can read your calendar and create or change events you request.
                   <ul className="list-disc list-inside mt-1 ml-4 text-sm">
-                    <li>We do not store Google Calendar event content. We only keep the tokens and minimal metadata needed to connect your account, and we protect those tokens at rest.</li>
+                    <li>We do not store Google Calendar event content. We only keep the tokens needed to connect your account, and we protect those tokens at rest.</li>
                     <li>Privacy policy: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">policies.google.com/privacy</a></li>
                   </ul>
                 </li>
                 <li>
                   <strong>Todoist:</strong> When you connect it, we can read and create tasks you request.
                   <ul className="list-disc list-inside mt-1 ml-4 text-sm">
+                    <li>We do not store Todoist task content. We fetch tasks on-demand for AI analysis and discard them after use.</li>
                     <li>Privacy policy: <a href="https://doist.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">doist.com/privacy</a></li>
                   </ul>
                 </li>
@@ -161,15 +165,119 @@ export function PrivacyPolicy() {
 
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-2">Payment Processing</h3>
-              <p><strong>Our payment processor:</strong> Processes payments securely if you upgrade to a paid plan. We do not store your credit card numbers.</p>
+              <p>Payments are processed securely through a third-party payment provider. We do not store your full credit card numbers.</p>
             </div>
           </div>
         </section>
 
-        {/* Section 5: Google Calendar - HIGHLIGHTED */}
+        {/* Section 5: OAuth Scopes */}
+        <section id="oauth-scopes" className="space-y-4 mb-12 scroll-mt-24">
+          <h2 className="text-2xl font-semibold">5. OAuth Scopes and Connected Services</h2>
+          
+          <div className="space-y-6 text-muted-foreground">
+            <p className="text-sm bg-accent/10 p-3 rounded border border-primary/30">
+              When you connect your Google Calendar or Todoist accounts, we request specific permissions (called "scopes") to perform actions on your behalf. Below explains exactly what we request and why.
+            </p>
+
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Google Calendar Scopes</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">calendar.events</p>
+                  <p className="text-sm mb-2"><strong>Classification:</strong> Restricted scope</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Create, read, edit, and delete calendar events</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> So the AI assistant can schedule meetings, update events, and avoid calendar conflicts when you request it</p>
+                </div>
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">calendar.readonly</p>
+                  <p className="text-sm mb-2"><strong>Classification:</strong> Restricted scope</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Read your calendar events and free/busy times (no write access)</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> To check your availability before suggesting meeting times and avoid scheduling conflicts</p>
+                </div>
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">calendar.settings.readonly</p>
+                  <p className="text-sm mb-2"><strong>Classification:</strong> Restricted scope</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Read your timezone and calendar format preferences</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> To display suggested times in your timezone and respect your calendar preferences</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Todoist Scopes</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">data:read_write</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Read and modify your tasks, projects, sections, and labels</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> So the AI can understand your task structure and help organize your work</p>
+                </div>
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">task:add</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Create new tasks</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> So the AI can create tasks when you ask it to add something to your to-do list</p>
+                </div>
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <p className="font-semibold text-foreground mb-1">data:delete</p>
+                  <p className="text-sm mb-2"><strong>What it allows:</strong> Delete tasks and projects</p>
+                  <p className="text-sm"><strong>Why we need it:</strong> So the AI can remove completed or cancelled tasks when you request it</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-accent/10 border border-primary/30 rounded-md">
+              <h3 className="text-lg font-semibold text-foreground mb-2">How We Use This Data</h3>
+              <ul className="list-disc list-inside space-y-2 ml-2">
+                <li>All requested data is fetched on-demand from Google Calendar or Todoist</li>
+                <li>We use it only to pass to the AI assistant for analysis and to display results to you</li>
+                <li>Immediately after use, this data is discarded and not retained</li>
+                <li>No calendar events, tasks, or personal data are stored in our database</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 6: Data Storage Policy */}
+        <section id="data-storage" className="space-y-4 mb-12 scroll-mt-24">
+          <h2 className="text-2xl font-semibold">6. Data Storage Policy</h2>
+          
+          <div className="space-y-6 text-muted-foreground">
+            <div className="p-4 bg-accent/10 border-2 border-primary/30 rounded-lg">
+              <h3 className="text-lg font-semibold text-foreground mb-3">We DO NOT Store</h3>
+              <ul className="list-disc list-inside space-y-2 ml-4">
+                <li>Your calendar events from Google Calendar</li>
+                <li>Your task lists from Todoist</li>
+                <li>Your contact information from connected services</li>
+                <li>Your email data or personal files</li>
+                <li>Any sensitive data from connected services</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-3">How Connected Data is Handled</h3>
+              <ul className="list-disc list-inside space-y-2 ml-4">
+                <li><strong>Session Data:</strong> Fetched in real-time during your conversation, then immediately discarded</li>
+                <li><strong>OAuth Tokens:</strong> Stored securely to maintain the connection; deleted when you disconnect</li>
+                <li><strong>Conversation Logs:</strong> Your chat messages are stored to show your conversation history</li>
+                <li><strong>Usage Analytics:</strong> We may log basic anonymized metrics (e.g., "user connected Google Calendar") but never specific event or task details</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-card border border-border rounded-md">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Why This Matters</h3>
+              <p>By not storing your connected data, we minimize risk and ensure your sensitive information stays where it belongs—in your own Google Calendar and Todoist accounts. This design also means:</p>
+              <ul className="list-disc list-inside space-y-2 ml-4 mt-2">
+                <li>Your data is never included in backups</li>
+                <li>We cannot sell it, analyze it, or share it with third parties</li>
+                <li>You have complete control—disconnect anytime with immediate effect</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 7: Google Calendar - HIGHLIGHTED */}
         <section id="google-calendar" className="mb-12 scroll-mt-24">
           <div className="p-6 bg-accent/10 border-2 border-primary/30 rounded-lg space-y-4">
-            <h2 className="text-2xl font-semibold">5. Google Calendar - Special Section</h2>
+            <h2 className="text-2xl font-semibold">7. Google Calendar - Special Section</h2>
             
             <div className="space-y-6 text-muted-foreground">
               <div className="p-4 bg-card border border-border rounded-md">
@@ -248,9 +356,9 @@ export function PrivacyPolicy() {
               <div className="p-4 bg-card border border-border rounded-md space-y-3">
                 <h3 className="text-lg font-semibold text-foreground">Data Handling & Storage for Google Data</h3>
                 <ul className="list-disc list-inside ml-4">
-                  <li>We do not store event details from your Google Calendar in our database. We fetch them when needed and discard them after use.</li>
-                  <li>We only store the OAuth tokens and minimal identifiers needed to connect your account. These tokens are protected at rest.</li>
-                  <li>If you disconnect Google Calendar in the app, we delete the stored tokens and stop access. You can also revoke access at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">myaccount.google.com/permissions</a>.</li>
+                  <li><strong>No Event Storage:</strong> We do not store event details from your Google Calendar in our database. We fetch them when needed during your session and immediately discard them after use.</li>
+                  <li><strong>Token Protection:</strong> We only store the OAuth tokens and minimal identifiers needed to connect your account. These tokens are protected and encrypted at rest.</li>
+                  <li><strong>Disconnection:</strong> If you disconnect Google Calendar in the app, we delete the stored tokens and stop access. You can also revoke access at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">myaccount.google.com/permissions</a>.</li>
                 </ul>
               </div>
 
@@ -266,9 +374,88 @@ export function PrivacyPolicy() {
             </div>
           </div>
         </section>
-        {/* Section 6: Policy Changes */}
+
+        {/* Section 8: Revocation Instructions */}
+        <section id="revocation" className="space-y-4 mb-12 scroll-mt-24">
+          <h2 className="text-2xl font-semibold">8. How to Disconnect Connected Services</h2>
+          
+          <div className="space-y-6 text-muted-foreground">
+            <p className="text-sm bg-accent/10 p-3 rounded border border-primary/30">
+              You have complete control over which services you connect. You can disconnect anytime, and we'll immediately stop accessing your data.
+            </p>
+
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Disconnect from Within Oldowan</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <h4 className="font-semibold text-foreground mb-2">Google Calendar</h4>
+                  <ol className="list-decimal list-inside space-y-2 ml-2 text-sm">
+                    <li>Go to Settings in the app</li>
+                    <li>Click on "Connected Apps" or "Integrations"</li>
+                    <li>Find Google Calendar</li>
+                    <li>Click "Disconnect" or "Remove"</li>
+                    <li>Confirm the disconnection</li>
+                  </ol>
+                  <p className="text-xs mt-3">Effect: Immediate. We delete your calendar tokens and stop accessing Google Calendar.</p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <h4 className="font-semibold text-foreground mb-2">Todoist</h4>
+                  <ol className="list-decimal list-inside space-y-2 ml-2 text-sm">
+                    <li>Go to Settings in the app</li>
+                    <li>Click on "Connected Apps" or "Integrations"</li>
+                    <li>Find Todoist</li>
+                    <li>Click "Disconnect" or "Remove"</li>
+                    <li>Confirm the disconnection</li>
+                  </ol>
+                  <p className="text-xs mt-3">Effect: Immediate. We delete your Todoist tokens and stop accessing your tasks.</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Additional Revocation via Third-Party Services</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <h4 className="font-semibold text-foreground mb-2">Revoke Google Calendar Access</h4>
+                  <ol className="list-decimal list-inside space-y-2 ml-2 text-sm">
+                    <li>Go to <a href="https://myaccount.google.com" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">myaccount.google.com</a></li>
+                    <li>Click "Security" in the left sidebar</li>
+                    <li>Scroll down to "Your apps and websites"</li>
+                    <li>Find "Oldowan" in the list</li>
+                    <li>Click it, then click "Remove Access"</li>
+                  </ol>
+                  <p className="text-xs mt-3">Effect: Google immediately revokes our access. We can no longer read or modify your calendar.</p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-md">
+                  <h4 className="font-semibold text-foreground mb-2">Revoke Todoist Access</h4>
+                  <ol className="list-decimal list-inside space-y-2 ml-2 text-sm">
+                    <li>Go to <a href="https://todoist.com/settings" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">todoist.com/settings</a></li>
+                    <li>Click "Integrations" or "Connected Apps"</li>
+                    <li>Find "Oldowan" in the list</li>
+                    <li>Click "Disconnect" or the trash icon</li>
+                  </ol>
+                  <p className="text-xs mt-3">Effect: Todoist immediately revokes our access. We can no longer read or modify your tasks.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-accent/10 border border-primary/30 rounded-md">
+              <h3 className="text-lg font-semibold text-foreground mb-2">What Happens When You Disconnect</h3>
+              <ul className="list-disc list-inside space-y-2 ml-4">
+                <li>We immediately delete your OAuth tokens</li>
+                <li>We stop all access to that service's data</li>
+                <li>No residual data remains in our system</li>
+                <li>You can reconnect anytime by going through authorization again</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 9: Policy Changes */}
         <section id="policy-changes" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">6. Policy Changes</h2>
+          <h2 className="text-2xl font-semibold">9. Policy Changes</h2>
           
           <div className="space-y-3 text-muted-foreground">
             <ul className="list-disc list-inside space-y-2 ml-4">
@@ -280,9 +467,10 @@ export function PrivacyPolicy() {
             </ul>
           </div>
         </section>
-        {/* Section 7: Contact */}
+
+        {/* Section 10: Contact */}
         <section id="contact" className="space-y-4 mb-12 scroll-mt-24">
-          <h2 className="text-2xl font-semibold">7. Contact Us</h2>
+          <h2 className="text-2xl font-semibold">10. Contact Us</h2>
           
           <div className="space-y-4 text-muted-foreground">
             <div>
@@ -310,7 +498,7 @@ export function PrivacyPolicy() {
 
         <div className="border-t border-border pt-8 mb-12">
           <p className="text-sm text-muted-foreground text-center">
-            This privacy policy was last updated on October 14, 2025. If you have any questions or concerns, please contact us at{" "}
+            This privacy policy was last updated on October 18, 2025. If you have any questions or concerns, please contact us at{" "}
             <a href="mailto:AtheA.hab@gmail.com" className="text-primary underline hover:text-primary/80">AtheA.hab@gmail.com</a>
           </p>
         </div>

@@ -334,7 +334,8 @@ export const chatWithAI = action({
       modelProvider = createOpenRouter({
         apiKey,
         baseURL: openRouterBaseUrl,
-        extraBody: buildProviderPreferences(lockedProvider),
+        // Include per-user identifier for OpenRouter usage analytics & sticky routing
+        extraBody: { ...buildProviderPreferences(lockedProvider), user: userId },
       });
 
       console.info(`🛠️ [MODEL_SELECTION] Prepared OpenRouter client for ${modelName} with routing:`, buildProviderPreferences(lockedProvider));
@@ -496,6 +497,16 @@ export const chatWithAI = action({
       // Initialize tool repetition detector
       // const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
+      // ===== Monthly token cap pre-check (hard 1,000,000 tokens/user/month) =====
+      const monthlySoFar = await ctx.runQuery(api.usage.getMonthlyTotal, { tokenIdentifier: userId });
+      const monthlyCap = await ctx.runQuery(api.usage.getMonthlyCap, { tokenIdentifier: userId });
+      if ((monthlySoFar || 0) >= monthlyCap) {
+        throw new Error("Monthly token limit reached (1,000,000 tokens). Resets next month.");
+      }
+      const remainingMonthly = Math.max(0, monthlyCap - (monthlySoFar || 0));
+      // cap per-call output to remaining budget to avoid single-call overflow
+      const maxTokensForCall = Math.max(1, Math.min(remainingMonthly, 8192));
+
       // Enhanced retry wrapper for rate limiting resilience
       async function streamTextWithRateLimit(params: any): Promise<StreamTextResult<Record<string, any>, never>> {
         let attempt = 0;
@@ -568,7 +579,9 @@ export const chatWithAI = action({
       // Pass the correctly parsed model name to the appropriate provider
       const result: StreamTextResult<Record<string, any>, never> = await streamTextWithRateLimit({
         model: modelProvider.chat(modelName, {
-          usage: { include: true }
+          usage: { include: true },
+          // Enforce hard monthly remaining budget on this call
+          maxTokens: maxTokensForCall,
         }),
         messages: cachedMessages,
         tools,
@@ -602,6 +615,21 @@ export const chatWithAI = action({
         toolResultsCount: finalToolResults?.length || 0,
         hasUsage: !!finalUsage
       });
+
+      // ===== Post-record usage event for monthly accounting =====
+      try {
+        const reqId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        await ctx.runMutation(api.usage.recordEvent, {
+          tokenIdentifier: userId,
+          ts: Date.now(),
+          reqId,
+          inputTokens: finalUsage?.inputTokens || 0,
+          outputTokens: finalUsage?.outputTokens || 0,
+          totalTokens: finalUsage?.totalTokens || 0,
+        });
+      } catch (recErr) {
+        console.warn("[USAGE] Failed to record usage event:", recErr);
+      }
 
       // MODE TIMING FIX: Update currentModeName after successful mode switches
       if (finalToolCalls?.length > 0 && sessionId) {
