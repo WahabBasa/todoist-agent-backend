@@ -3,6 +3,7 @@ export default function FooterSection() {
         { title: 'Resources', href: '/resources' },
         { title: 'Pricing', href: '/pricing' },
         { title: 'Privacy', href: '/privacy' },
+        { title: 'Terms', href: '/terms' },
         { title: 'Contact', href: 'mailto:AtheA.hab@gmail.com' },
     ]
 
