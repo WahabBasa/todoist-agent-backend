@@ -13,13 +13,13 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     inputSchema: z.object({
       summary: z.string().describe("The event title (e.g., 'Team Meeting', 'Doctor Appointment', 'Project Deadline')"),
       description: z.string().optional().describe("Optional event description or notes"),
-      startDate: z.string().describe("Event start time - supports natural language like 'tomorrow at 2pm', 'next Friday at 10am', '2024-12-25 14:00', or ISO format"),
-      endDate: z.string().optional().describe("Event end time - natural language or specific time. If not provided, will default to 1 hour duration"),
+      startDate: z.string().describe("Local date-time string (YYYY-MM-DDTHH:MM:SS), no Z or offsets. Preserve exact user time."),
+      endDate: z.string().optional().describe("Local end date-time (YYYY-MM-DDTHH:MM:SS). If not provided, duration is required or defaults to 60 minutes."),
       duration: z.number().optional().describe("Event duration in minutes if endDate not specified (default: 60)"),
       location: z.string().optional().describe("Event location or meeting URL"),
       attendees: z.array(z.string()).optional().describe("List of attendee email addresses"),
       recurrencePattern: z.string().optional().describe("Recurring pattern like 'every day', 'every Tuesday', 'every week', 'every 2 weeks'"),
-      timeZone: z.string().optional().describe("Timezone (e.g., 'America/New_York', 'Europe/London'). Defaults to UTC"),
+      timeZone: z.string().optional().describe("IANA timezone (e.g., 'America/New_York'). If omitted, will be resolved from Google Calendar settings."),
       reminders: z.object({
         useDefault: z.boolean().describe("Use default calendar reminders"),
         overrides: z.array(z.object({
@@ -33,28 +33,50 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
       void context;
       
       try {
-        // Calculate duration from start and end dates
-        const startTime = new Date(args.startDate);
-        const endTime = args.endDate ? new Date(args.endDate) : new Date(startTime.getTime() + (args.duration || 60) * 60000);
-        const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
-        
-        const result = await actionCtx.runAction(api.googleCalendar.auth.createCalendarEvent, {
+        // Resolve timezone (prefer provided, then user calendar settings, then current calendar time)
+        let tz: string | undefined = args.timeZone;
+        let tzSource: string = tz ? 'args' : 'settings';
+        if (!tz) {
+          try {
+            const settings: any = await actionCtx.runAction(api.googleCalendar.auth.getUserCalendarSettings, {});
+            tz = settings?.timezone;
+            tzSource = 'settings';
+          } catch { /* ignore */ }
+        }
+        if (!tz) {
+          try {
+            const nowCtx: any = await actionCtx.runAction(api.googleCalendar.auth.getCurrentCalendarTime, {});
+            tz = nowCtx?.userTimezone;
+            tzSource = 'calendarTime';
+          } catch { /* ignore */ }
+        }
+        if (!tz) throw new Error("Cannot resolve user timezone. Provide timeZone or connect Google Calendar.");
+
+        // Validate start/end local strings (do not convert to UTC)
+        const startLocal: string = String(args.startDate);
+        if (hasOffsetOrZ(startLocal)) throw new Error("startDate must be local (no Z or offset). Provide YYYY-MM-DDTHH:MM:SS and a separate timeZone.");
+        const endLocal: string = args.endDate ? String(args.endDate) : addMinutesLocal(startLocal, args.duration ?? 60);
+        if (args.endDate && hasOffsetOrZ(endLocal)) throw new Error("endDate must be local (no Z or offset). Provide YYYY-MM-DDTHH:MM:SS and a separate timeZone.");
+
+        const result = await actionCtx.runAction(api.googleCalendar.auth.createCalendarEvent as any, {
           title: args.summary,
-          startTime: startTime.toISOString(),
-          durationMinutes,
+          start: { dateTime: startLocal, timeZone: tz },
+          end: { dateTime: endLocal, timeZone: tz },
           description: args.description,
           attendeeEmails: args.attendees,
-        });
+        } as any);
         
         return {
           title: `Calendar Event Created: ${args.summary}`,
           metadata: {
             eventId: result.id,
-            startTime: startTime.toISOString(),
-            duration: durationMinutes,
+            startTime: startLocal,
+            endTime: endLocal,
+            timeZone: tz,
+            timeZoneSource: tzSource,
             attendees: args.attendees?.length || 0
           },
-          output: `✅ Successfully created calendar event "${args.summary}" for ${startTime.toLocaleString()}${args.location ? ` at ${args.location}` : ''}${args.attendees?.length ? ` with ${args.attendees.length} attendees` : ''}.`
+          output: `✅ Created calendar event "${args.summary}" for ${startLocal} (${tz})${args.location ? ` at ${args.location}` : ''}${args.attendees?.length ? ` with ${args.attendees.length} attendees` : ''}.`
         };
       } catch (error: any) {
         const errorMessage = error.message || "Unknown error creating calendar event";
@@ -119,119 +141,72 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
 
   listCalendarEvents: {
     id: "listCalendarEvents",
-    description: "List upcoming events from your Google Calendar with smart date filtering. Use this when users ask about their schedule, upcoming events, or want to see what they have planned. Supports natural language time ranges.",
-    inputSchema: z.object({
-      timeRange: z.string().optional().describe("Natural language time range like 'today', 'tomorrow', 'this week', 'next week', 'this month', or 'next 7 days'"),
-      timeMin: z.string().optional().describe("Specific start time override (ISO format)"),
-      timeMax: z.string().optional().describe("Specific end time override (ISO format)"),
-      maxResults: z.number().optional().describe("Maximum number of events to return (default: 20, max: 100)"),
-      timeZone: z.string().optional().describe("Timezone for results (default: UTC)"),
-    }),
+    description: "List calendar events for an arbitrary date window. Provide explicit ISO boundaries so the model can request ANY range. Always compute a concrete window before calling (e.g., using current time + user timezone). Returns raw JSON events, not prose.",
+    inputSchema: z.union([
+      z.object({
+        timeMin: z.string().describe("Start (ISO 8601) of the desired window, e.g. '2025-10-19T00:00:00Z'"),
+        timeMax: z.string().describe("End (ISO 8601) of the desired window, e.g. '2025-10-19T23:59:59Z'"),
+        timeZone: z.string().optional().describe("IANA timezone used to compute this window (e.g., 'Europe/London'). Optional metadata."),
+        maxResults: z.number().optional().describe("Max events (server may cap)."),
+        calendarIds: z.array(z.string()).optional().describe("Optional set of calendar IDs. Not yet supported; primary is used if omitted."),
+      }),
+      z.object({
+        nlRange: z.string().describe("Natural language range resolved by the model (e.g., 'next 3 days', 'tomorrow 9-5'). If provided alone, the tool will request explicit timeMin/timeMax instead of guessing."),
+        referenceTime: z.string().optional().describe("Reference time (ISO) used by the model to resolve nlRange."),
+        timeZone: z.string().optional().describe("IANA timezone used to resolve nlRange."),
+        maxResults: z.number().optional(),
+        calendarIds: z.array(z.string()).optional(),
+      })
+    ]),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
-      console.log(`[GoogleCalendar] Listing calendar events for range: ${args.timeRange || 'default'}`);
+      // Expect explicit ISO boundaries for full flexibility
+      const hasExplicitRange = typeof args?.timeMin === 'string' && typeof args?.timeMax === 'string';
+      const tz = typeof args?.timeZone === 'string' ? args.timeZone : undefined;
+      if (!hasExplicitRange) {
+        // Do not guess ranges in the tool. Ask the model to compute and supply explicit timeMin/timeMax.
+        return {
+          title: "Calendar Events (range required)",
+          metadata: { error: "missing_range" },
+          output: JSON.stringify({
+            error: "missing_range",
+            message: "Provide explicit timeMin and timeMax (ISO) based on the user's timezone (use getCurrentTime() or calendar settings). Example: { timeMin: '2025-10-19T00:00:00Z', timeMax: '2025-10-19T23:59:59Z' }.",
+          }),
+        };
+      }
+      console.log(`[GoogleCalendar] Listing calendar events for explicit window`, { timeMin: args.timeMin, timeMax: args.timeMax, timeZone: tz });
       void context;
       
       try {
-        // Parse time range to specific dates if provided
-        let timeMin = args.timeMin;
-        let timeMax = args.timeMax;
-        
-        if (args.timeRange && !timeMin && !timeMax) {
-          // Handle natural language time ranges
-          const now = new Date();
-          const lowerRange = args.timeRange.toLowerCase().trim();
-          
-          if (lowerRange === "today") {
-            const startOfDay = new Date(now);
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(now);
-            endOfDay.setHours(23, 59, 59, 999);
-            timeMin = startOfDay.toISOString();
-            timeMax = endOfDay.toISOString();
-          } else if (lowerRange === "this week") {
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - now.getDay());
-            startOfWeek.setHours(0, 0, 0, 0);
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6);
-            endOfWeek.setHours(23, 59, 59, 999);
-            timeMin = startOfWeek.toISOString();
-            timeMax = endOfWeek.toISOString();
-          } else if (lowerRange === "next week") {
-            const startOfNextWeek = new Date(now);
-            startOfNextWeek.setDate(now.getDate() - now.getDay() + 7);
-            startOfNextWeek.setHours(0, 0, 0, 0);
-            const endOfNextWeek = new Date(startOfNextWeek);
-            endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
-            endOfNextWeek.setHours(23, 59, 59, 999);
-            timeMin = startOfNextWeek.toISOString();
-            timeMax = endOfNextWeek.toISOString();
-          } else if (lowerRange === "this month") {
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-            endOfMonth.setHours(23, 59, 59, 999);
-            timeMin = startOfMonth.toISOString();
-            timeMax = endOfMonth.toISOString();
-          }
-        }
-        
+        const timeMin: string = args.timeMin;
+        const timeMax: string = args.timeMax;
+
         const result = await actionCtx.runAction(api.googleCalendar.auth.getCalendarEventTimes, {
-          start: timeMin || new Date().toISOString(),
-          end: timeMax || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default 7 days
+          start: timeMin,
+          end: timeMax,
         });
-        
-        const eventCount = result?.length || 0;
-        const timeRangeDesc = args.timeRange || "next 7 days";
-        
-        // Return selective summary instead of full list
-        if (eventCount === 0) {
-          return {
-            title: `Calendar Events Listed (0 events)`,
-            metadata: { eventCount: 0, timeRange: timeRangeDesc },
-            output: `No events found for ${timeRangeDesc}.`
-          };
-        }
-        
-        // For many events, provide summary with key highlights
-        if (eventCount > 5) {
-          // Filter out routine events (sleep, morning routine, etc.) to find highlights
-          const routineKeywords = ['sleep', 'morning routine', 'routine', 'daily'];
-          const highlights = result?.filter((event: any) => 
-            !routineKeywords.some(keyword => 
-              event.title?.toLowerCase().includes(keyword)
-            )
-          ) || [];
-          
-          if (highlights.length > 0) {
-            const keyEvents = highlights.slice(0, 3).map((event: any) => 
-              `${event.title} on ${new Date(event.start).toLocaleDateString()}`
-            ).join(', ');
-            return {
-              title: `Calendar Events Listed (${eventCount} events)`,
-              metadata: { eventCount, timeRange: timeRangeDesc, highlights: highlights.length },
-              output: `${eventCount} events scheduled for ${timeRangeDesc}. Key events: ${keyEvents}.`
-            };
-          }
-        }
-        
-        // For 5 or fewer events, list them all
-        const eventList = result?.slice(0, 5).map((event: any) => 
-          `${event.title} on ${new Date(event.start).toLocaleDateString()}${event.isAllDay ? ' (all day)' : ` at ${new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}`
-        ).join(', ') || '';
-        
+
+        const events = Array.isArray(result) ? result.map((e: any) => ({
+          title: e.title,
+          start: e.start,
+          end: e.end,
+          isAllDay: !!e.isAllDay,
+        })) : [];
+
+        const meta = { count: events.length, start: timeMin, end: timeMax, timeZone: tz };
+        console.log(`[GoogleCalendar] Window result`, meta);
+
         return {
-          title: `Calendar Events Listed (${eventCount} events)`,
-          metadata: { eventCount, timeRange: timeRangeDesc },
-          output: `${eventCount} events for ${timeRangeDesc}: ${eventList}.`
+          title: `Calendar Events (${events.length})`,
+          metadata: { eventCount: events.length, start: timeMin, end: timeMax, timeZone: tz },
+          output: JSON.stringify({ events, meta }),
         };
       } catch (error: any) {
         const errorMessage = error.message || "Unknown error listing calendar events";
         console.error(`[GoogleCalendar] List events failed:`, errorMessage);
-        
         return {
           title: "Calendar Events List Failed",
           metadata: { error: errorMessage },
-          output: `❌ Failed to list calendar events: ${errorMessage}. Please check your Google Calendar connection.`
+          output: JSON.stringify({ error: true, message: errorMessage }),
         };
       }
     }
@@ -266,27 +241,37 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       console.log(`[GoogleCalendar] Getting current time context`);
-      void args; void actionCtx;
-      
-      // Use current time provided by user's browser (no calculations needed)
-      if ((context as any).currentTimeContext) {
-        console.log("[getCurrentTime] Using browser-provided time context");
-        const timeContext = (context as any).currentTimeContext;
-        
+      void args;
+      // Prefer Google Calendar-based timezone
+      try {
+        const calNow: any = await actionCtx.runAction(api.googleCalendar.auth.getCurrentCalendarTime, {});
         return {
           title: "Current Time Retrieved",
           metadata: {
-            source: timeContext.source || "user_browser",
-            timezone: timeContext.userTimezone,
-            timestamp: timeContext.timestamp
+            source: calNow.source || "google_calendar_timezone",
+            timezone: calNow.userTimezone,
+            timestamp: calNow.timestamp
           },
-          output: `${timeContext.localTime} (${timeContext.userTimezone})`
+          output: `${calNow.localTime} (${calNow.userTimezone})`
         };
-      } else {
-        // Fallback to server time if no context provided
+      } catch {
+        // Use browser-provided time context if available
+        if ((context as any).currentTimeContext) {
+          console.log("[getCurrentTime] Using browser-provided time context");
+          const timeContext = (context as any).currentTimeContext;
+          return {
+            title: "Current Time Retrieved",
+            metadata: {
+              source: timeContext.source || "user_browser",
+              timezone: timeContext.userTimezone,
+              timestamp: timeContext.timestamp
+            },
+            output: `${timeContext.localTime} (${timeContext.userTimezone})`
+          };
+        }
+        // Fallback to server time if no other context provided
         console.warn("[getCurrentTime] No browser context provided, using server time");
         const now = new Date();
-        
         return {
           title: "Current Time Retrieved (Server Fallback)",
           metadata: {
@@ -300,3 +285,31 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
     }
   }
 };
+
+// Helper: add minutes to a local date-time string (YYYY-MM-DDTHH:MM:SS), no timezone math
+function addMinutesLocal(localDateTime: string, minutes: number): string {
+  // minimal validation and parsing
+  const m = localDateTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) throw new Error("Invalid local date-time format; expected YYYY-MM-DDTHH:MM:SS");
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6] ?? "00");
+  // Use UTC container to avoid host-local TZ effects; treat values as floating time
+  const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  dt.setUTCMinutes(dt.getUTCMinutes() + minutes);
+  const yyyy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  const hh = String(dt.getUTCHours()).padStart(2, '0');
+  const mi = String(dt.getUTCMinutes()).padStart(2, '0');
+  const ss = String(dt.getUTCSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
+}
+
+// Helper: detect Z or numeric timezone offset in a datetime string
+function hasOffsetOrZ(localDateTime: string): boolean {
+  return /Z$/i.test(localDateTime) || /[+-]\d{2}:?\d{2}$/.test(localDateTime);
+}

@@ -390,8 +390,12 @@ export const getCalendarEventTimes = action({
 export const createCalendarEvent = action({
   args: {
     title: v.string(),
-    startTime: v.string(), // ISO date string
-    durationMinutes: v.number(),
+    // Legacy fields (optional)
+    startTime: v.optional(v.string()), // ISO instant string
+    durationMinutes: v.optional(v.number()),
+    // New structured fields (preferred)
+    start: v.optional(v.object({ dateTime: v.string(), timeZone: v.string() })),
+    end: v.optional(v.object({ dateTime: v.string(), timeZone: v.string() })),
     description: v.optional(v.string()),
     attendeeEmails: v.optional(v.array(v.string())),
   },
@@ -410,23 +414,69 @@ export const createCalendarEvent = action({
     if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
 
     try {
-      const startTime = new Date(args.startTime);
-      const endTime = new Date(startTime.getTime() + args.durationMinutes * 60000);
-
       const attendees = args.attendeeEmails?.map(email => ({ email })) || [];
-
       const calendar = google.calendar({ version: "v3", auth: oAuthClient as any });
+
+      // Prefer new structured fields when provided
+      if (args.start && args.end) {
+        if (/[zZ]$/.test(args.start.dateTime) || /[+-]\d{2}:?\d{2}$/.test(args.start.dateTime)) {
+          throw new Error("start.dateTime must be local (no Z/offset); supply timeZone separately.");
+        }
+        if (/[zZ]$/.test(args.end.dateTime) || /[+-]\d{2}:?\d{2}$/.test(args.end.dateTime)) {
+          throw new Error("end.dateTime must be local (no Z/offset); supply timeZone separately.");
+        }
+        console.log("[GCAL] createCalendarEvent using structured start/end", { tz: args.start.timeZone, start: args.start.dateTime, end: args.end.dateTime });
+        const calendarEvent = await calendar.events.insert({
+          calendarId: "primary",
+          requestBody: {
+            summary: args.title,
+            description: args.description,
+            start: { dateTime: args.start.dateTime, timeZone: args.start.timeZone },
+            end: { dateTime: args.end.dateTime, timeZone: args.end.timeZone },
+            attendees,
+          },
+        });
+
+        await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", "SUCCESS");
+        return {
+          id: calendarEvent.data.id,
+          title: calendarEvent.data.summary,
+          start: calendarEvent.data.start?.dateTime,
+          end: calendarEvent.data.end?.dateTime,
+          htmlLink: calendarEvent.data.htmlLink,
+        };
+      }
+
+      // Legacy path: enrich with user's timezone and keep local wall time
+      if (!args.startTime) throw new Error("Missing start time");
+      const duration = args.durationMinutes ?? 60;
+
+      // Resolve user's timezone
+      let tz: string | undefined = undefined;
+      try {
+        const settings: any = await ctx.runAction(api.googleCalendar.auth.getUserCalendarSettings, {});
+        tz = settings?.timezone || tz;
+      } catch { /* ignore */ }
+      if (!tz) {
+        try {
+          const nowCtx: any = await ctx.runAction(api.googleCalendar.auth.getCurrentCalendarTime, {});
+          tz = nowCtx?.userTimezone;
+        } catch { /* ignore */ }
+      }
+      if (!tz) throw new Error("Cannot resolve timezone for legacy event creation");
+
+      const startLocal = toLocalDateTimeString(args.startTime, tz);
+      // Compute end by adding duration minutes in local wall time
+      const endLocal = addMinutesLocal(startLocal, duration);
+
+      console.log("[GCAL] createCalendarEvent legacy→structured", { tz, startLocal, endLocal });
       const calendarEvent = await calendar.events.insert({
         calendarId: "primary",
         requestBody: {
           summary: args.title,
           description: args.description,
-          start: {
-            dateTime: startTime.toISOString(),
-          },
-          end: {
-            dateTime: endTime.toISOString(),
-          },
+          start: { dateTime: startLocal, timeZone: tz },
+          end: { dateTime: endLocal, timeZone: tz },
           attendees,
         },
       });
@@ -446,6 +496,47 @@ export const createCalendarEvent = action({
     }
   },
 });
+
+// Format an instant (ISO) into local wall time string in a given IANA timezone: YYYY-MM-DDTHH:MM:SS
+function toLocalDateTimeString(isoInstant: string, timeZone: string): string {
+  const date = new Date(isoInstant);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const yyyy = map.year;
+  const mm = map.month;
+  const dd = map.day;
+  const hh = map.hour;
+  const mi = map.minute;
+  const ss = map.second;
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
+}
+
+// Add minutes to a local date-time string (YYYY-MM-DDTHH:MM:SS) preserving wall time (no TZ offsets)
+function addMinutesLocal(localDateTime: string, minutes: number): string {
+  const m = localDateTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) throw new Error("Invalid local date-time format; expected YYYY-MM-DDTHH:MM:SS");
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6] ?? "00");
+  const dt = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  dt.setUTCMinutes(dt.getUTCMinutes() + minutes);
+  const yyyy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  const hh = String(dt.getUTCHours()).padStart(2, '0');
+  const mi = String(dt.getUTCMinutes()).padStart(2, '0');
+  const ss = String(dt.getUTCSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
+}
 
 // =================================================================
 // USER SETTINGS API (Google Calendar Settings Integration)
@@ -478,8 +569,8 @@ export const getUserCalendarSettings = action({
 
       const settings = settingsResponse.data.items || [];
       
-      // Extract key settings we need
-      const timezone = settings.find(s => s.id === 'timezone')?.value || 'UTC';
+      // Extract key settings we need (do not default to UTC; let callers decide)
+      const timezone = settings.find(s => s.id === 'timezone')?.value || undefined as unknown as string | undefined;
       const format24Hour = settings.find(s => s.id === 'format24HourTime')?.value === 'true';
       const dateFieldOrder = settings.find(s => s.id === 'dateFieldOrder')?.value || 'MDY';
       const weekStart = parseInt(settings.find(s => s.id === 'weekStart')?.value || '0');

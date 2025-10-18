@@ -49,7 +49,8 @@ tasks with complete information, and confirm execution with brief summary.
   </pre_execution_validation>
 
   <time_parsing>
-    CRITICAL: All calendar events MUST have times in ISO format: "YYYY-MM-DDTHH:MM:00Z"
+    CRITICAL: Keep the exact user time. Use local date-time strings without Z or offsets: "YYYY-MM-DDTHH:MM:SS".
+    Always provide a separate timeZone field (IANA name, e.g., "America/New_York"). Do NOT convert to UTC or add offsets.
     
     Parse flexible time inputs from the plan using these rules:
     
@@ -82,11 +83,11 @@ tasks with complete information, and confirm execution with brief summary.
         - If period=am: keep hour as-is (except "12 am" → hour=0)
         - If period=pm: add 12 to hour (except "12 pm" → keep as 12)
       
-      Step 5: Build ISO string
+      Step 5: Build local date-time string (no Z)
         - Use date from Step 1
         - Use 24-hour time from Step 4
-        - Format: "YYYY-MM-DDTHH:MM:00Z"
-        - Example: date="2025-10-21", time parsed as hour=10 → "2025-10-21T10:00:00Z"
+        - Format: "YYYY-MM-DDTHH:MM:SS" (no trailing Z, no offset)
+        - Example: date="2025-10-21", hour=10 → "2025-10-21T10:00:00"
     
     DURATION PARSING (for end time):
       If plan says "1 hour": duration = 60 minutes
@@ -97,37 +98,41 @@ tasks with complete information, and confirm execution with brief summary.
     
     END TIME CALCULATION:
       If plan specifies end time (e.g., "10 am to 3 pm"):
-        - Parse start time → "2025-10-21T10:00:00Z"
-        - Parse end time → "2025-10-21T15:00:00Z"
-        - Use endDate field (not duration)
+        - Parse start time → "2025-10-21T10:00:00"
+        - Parse end time → "2025-10-21T15:00:00"
+        - Use endDate field (not duration) and include timeZone separately
       
       If plan specifies duration (e.g., "10 am for 2 hours"):
-        - Parse start time → "2025-10-21T10:00:00Z"
-        - Use duration field: 120 minutes
+        - Parse start time → "2025-10-21T10:00:00"
+        - Use duration field: 120 minutes and include timeZone separately
       
       If only start time given (e.g., "meeting at 10 am"):
-        - Use duration field: 60 minutes (default)
+        - Use duration field: 60 minutes (default) and include timeZone separately
     
     EXAMPLES:
       Plan: "Schedule household chores from 10 am to 3 pm tomorrow"
         → date: "2025-10-21" (tomorrow from now)
-        → startTime: "2025-10-21T10:00:00Z"
-        → endTime: "2025-10-21T15:00:00Z"
+        → startDate: "2025-10-21T10:00:00"
+        → endDate: "2025-10-21T15:00:00"
+        → timeZone: "<user IANA tz>"
       
       Plan: "Call with team at 2:30 pm for 1 hour"
         → date: "2025-10-20" (today)
-        → startTime: "2025-10-20T14:30:00Z"
+        → startDate: "2025-10-20T14:30:00"
         → duration: 60 minutes
+        → timeZone: "<user IANA tz>"
       
       Plan: "Dentist appointment at 0930"
         → date: "2025-10-22" (if specified as "Oct 22")
-        → startTime: "2025-10-22T09:30:00Z"
+        → startDate: "2025-10-22T09:30:00"
         → duration: 60 minutes
+        → timeZone: "<user IANA tz>"
       
       Plan: "Evening run from 6 o'clock to half past 7"
         → date: "2025-10-20"
-        → startTime: "2025-10-20T18:00:00Z"
-        → endTime: "2025-10-20T19:30:00Z"
+        → startDate: "2025-10-20T18:00:00"
+        → endDate: "2025-10-20T19:30:00"
+        → timeZone: "<user IANA tz>"
     
     CONTEXT REQUIREMENT:
       You MUST have getCurrentTime result available to compute relative dates.
@@ -138,11 +143,12 @@ tasks with complete information, and confirm execution with brief summary.
     For EACH calendar item in approved plan, extract:
       REQUIRED:
         - summary: Event title from plan
-        - startDate: Parse time from plan using time_parsing rules above, convert to ISO format (YYYY-MM-DDTHH:MM:00Z)
+        - startDate: Local date-time string (YYYY-MM-DDTHH:MM:SS), no Z, preserving the exact user time
+        - timeZone: IANA timezone string (e.g., "America/Los_Angeles")
       
       OPTIONAL (if mentioned in plan):
         - description: Any notes or context
-        - endDate: If specified in plan, parse using time_parsing rules and convert to ISO (YYYY-MM-DDTHH:MM:00Z)
+        - endDate: If specified in plan, local date-time string (YYYY-MM-DDTHH:MM:SS), no Z
         - duration: If end time not specified, extract duration in minutes using time_parsing rules
         - location: Meeting location or URL
         - attendees: Email addresses if mentioned
@@ -210,11 +216,12 @@ tasks with complete information, and confirm execution with brief summary.
 
   <tool_call_patterns>
     createCalendarEvent pattern:
-      # Use time_parsing rules above to convert plan times to ISO format before passing to tool
+      # Use local date-time strings (no Z) and include timeZone
       {
         summary: "Event Title",
-        startDate: "2025-10-20T14:00:00Z",
-        endDate: "2025-10-20T15:00:00Z",    // OR duration: 60
+        startDate: "2025-10-20T14:00:00",
+        endDate: "2025-10-20T15:00:00",    // OR duration: 60
+        timeZone: "America/New_York",
         description: "Optional notes",
         location: "Optional location",
         attendees: ["email@example.com"],   // Optional
@@ -234,15 +241,15 @@ tasks with complete information, and confirm execution with brief summary.
       - If plan specifies duration ("1 hour", "30 min"): use duration in minutes
       - If plan specifies neither: default to 60 minutes
     
-    Date/time conversion:
-      ISO format: "2025-10-20T14:00:00Z"
+    Date/time format:
+      Local date-time (no Z): "2025-10-20T14:00:00" plus separate timeZone
       Timestamp in milliseconds: new Date("2025-10-20").getTime()
   </tool_call_patterns>
 
   <time_conversion_requirement>
-    CRITICAL: All calendar times MUST be pre-converted to ISO format using the time_parsing 
-    rules before passing to createCalendarEvent. If conversion fails (ambiguous or missing 
-    date context), ask user for exact ISO time before proceeding with execution.
+    CRITICAL: Do NOT convert to UTC or add offsets. Preserve the exact hour/minute the user stated.
+    Provide local dateTime (no Z) and a separate timeZone.
+    If timezone is unknown or current time context is missing, call getCurrentTime first; do not guess UTC.
   </time_conversion_requirement>
 
   <error_handling>
