@@ -171,9 +171,7 @@ export function Auth() {
 
         <p className="text-accent-foreground text-center text-sm">
           Don't have an account ?
-          <Button asChild variant="link" className="px-2">
-            <a href="#">Create account</a>
-          </Button>
+          <a href="#" className="text-primary hover:text-primary/80 transition-colors ml-1">Create account</a>
         </p>
 
         <div className="mt-8 pt-6 border-t border-border flex flex-wrap justify-center gap-6 text-xs text-muted-foreground">
