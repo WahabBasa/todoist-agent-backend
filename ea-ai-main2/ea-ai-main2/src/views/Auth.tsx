@@ -1,7 +1,6 @@
 "use client";
 
 // Tailark login-3 block markup with Clerk wiring (Google + Email code only)
-import { LogoIcon } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -118,8 +117,11 @@ export function Auth() {
         <form className="max-w-md m-auto h-fit w-full" onSubmit={mode === "idle" ? handleSendCode : handleVerifyCode}>
         <div className="p-6">
           <div>
-            <a href="/" aria-label="go home">
-              <LogoIcon />
+            <a href="/" aria-label="go home" className="flex items-center gap-2 w-fit">
+              <div className="w-8 h-8 flex items-center justify-center">
+                <img src="/oldowan-logo.png" alt="Oldowan" className="w-8 h-8 object-contain" />
+              </div>
+              <span className="font-semibold text-lg">Oldowan</span>
             </a>
             <h1 className="mb-1 mt-4 text-xl font-semibold">Sign In</h1>
             <p>Welcome back! Sign in to continue</p>
@@ -134,7 +136,7 @@ export function Auth() {
                 <path fill="#fbbc05" d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z"></path>
                 <path fill="#eb4335" d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"></path>
               </svg>
-              <span>Google</span>
+              <span>Sign in with Google</span>
             </Button>
           </div>
 
@@ -173,6 +175,12 @@ export function Auth() {
             <a href="#">Create account</a>
           </Button>
         </p>
+
+        <div className="mt-8 pt-6 border-t border-border flex flex-wrap justify-center gap-6 text-xs text-muted-foreground">
+          <a href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</a>
+          <a href="/terms" className="hover:text-primary transition-colors">Terms of Service</a>
+          <a href="mailto:AtheA.hab@gmail.com" className="hover:text-primary transition-colors">Support</a>
+        </div>
       </form>
       </section>
     </div>
