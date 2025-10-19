@@ -18,13 +18,9 @@ interface TestConnectionResult {
   hasConnection?: boolean;
 }
 
-// Simplified Google Calendar OAuth using Clerk (matches Calendly clone pattern)
+// Simplified Google Calendar OAuth using Clerk only
 
-// =================================================================
-// CLERK-BASED GOOGLE CALENDAR OAUTH (Calendly Clone Pattern)
-// =================================================================
-
-// Simple OAuth client helper (mirrors Calendly pattern exactly)
+// Simple OAuth client helper via Clerk-managed tokens
 async function getOAuthClient(clerkUserId: string): Promise<any | null> {
   const clerkClient = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY!,
@@ -50,17 +46,7 @@ async function getOAuthClient(clerkUserId: string): Promise<any | null> {
   return client as any;
 }
 
-// Dedicated Google OAuth client (separate from Clerk SSO)
-function getDedicatedOAuthClient() {
-  const clientId = process.env.GCAL_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GCAL_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const redirectUrl = process.env.GCAL_REDIRECT_URL || process.env.GOOGLE_CALENDAR_REDIRECT_URL || process.env.GOOGLE_OAUTH_REDIRECT_URL;
-  if (!clientId || !clientSecret || !redirectUrl) {
-    throw new Error("Google Calendar OAuth environment not configured");
-  }
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUrl);
-}
-
+// Required scopes (Clerk-managed external account)
 const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
@@ -114,90 +100,6 @@ async function getClerkOAuthClientWithScopes(requiredScopes: string[], clerkUser
   client.setCredentials({ access_token: tokenInfo.accessToken });
   return client as any;
 }
-
-function signState(payload: object): string {
-  const secret = process.env.STATE_HMAC_SECRET || process.env.CLERK_SECRET_KEY || "dev-secret";
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret).update(data).digest("base64url");
-  return `${data}.${sig}`;
-}
-
-function verifyState<T = any>(state: string): T | null {
-  const secret = process.env.STATE_HMAC_SECRET || process.env.CLERK_SECRET_KEY || "dev-secret";
-  const [data, sig] = state.split(".");
-  if (!data || !sig) return null;
-  const expected = crypto.createHmac("sha256", secret).update(data).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  try {
-    return JSON.parse(Buffer.from(data, "base64url").toString());
-  } catch {
-    return null;
-  }
-}
-
-// DB helpers now live in ./tokens.ts (non-node runtime)
-
-async function getOAuthClientFromDB(ctx: ActionCtx): Promise<any | null> {
-  const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
-  void tokenIdentifier;
-  const refreshToken = await ctx.runQuery(api.googleCalendar.tokens.getRefreshToken, {});
-  if (!refreshToken) return null;
-  const client = getDedicatedOAuthClient();
-  client.setCredentials({ refresh_token: refreshToken });
-  return client as any;
-}
-
-export const generateGoogleOAuthURL = action({
-  args: {},
-  handler: async (ctx: ActionCtx): Promise<{ url: string } | { error: string }> => {
-    const { userId: tokenIdentifier } = await requireUserAuthForAction(ctx);
-    try {
-      const client = getDedicatedOAuthClient();
-      const csrf = crypto.randomBytes(16).toString("base64url");
-      const state = signState({ tokenIdentifier, csrf, ts: Date.now() });
-      const url = client.generateAuthUrl({
-        access_type: "offline",
-        prompt: "consent",
-        scope: GCAL_SCOPES,
-        state,
-      });
-      return { url };
-    } catch (e: any) {
-      return { error: e?.message || "Failed to start Google OAuth" };
-    }
-  },
-});
-
-// Handle Google OAuth callback in Node runtime (exchanged in backend)
-export const handleGoogleCalendarOAuthCallback = action({
-  args: { code: v.string(), state: v.string() },
-  handler: async (ctx: ActionCtx, { code, state }): Promise<{ ok: true } | { ok: false; error: string }> => {
-    try {
-      const parsed = verifyState<{ tokenIdentifier: string; csrf: string; ts: number }>(state);
-      if (!parsed?.tokenIdentifier) {
-        return { ok: false, error: "Invalid OAuth state" };
-      }
-
-      const client = getDedicatedOAuthClient();
-      const { tokens } = await client.getToken(code);
-      const refreshToken = tokens.refresh_token;
-      const scope = tokens.scope as string | undefined;
-      if (!refreshToken) {
-        return { ok: false, error: "No refresh token returned. Ensure prompt=consent & offline access." };
-      }
-
-      await ctx.runMutation(api.googleCalendar.tokens.storeGoogleCalendarRefreshToken, {
-        tokenIdentifier: parsed.tokenIdentifier,
-        refreshToken,
-        scope,
-      });
-
-      return { ok: true };
-    } catch (e: any) {
-      return { ok: false, error: e?.message || "OAuth callback failed" };
-    }
-  },
-});
 
 /**
  * Check if user has Google Calendar connection
@@ -361,19 +263,23 @@ export const forceDestroyGoogleExternalAccount = action({
     if (!identity) return { removed: false, reason: "not_authenticated" };
     const clerkUserId = identity.subject;
 
-    try {
-      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-      const user = await clerkClient.users.getUser(clerkUserId);
-      const googleAccount = (user?.externalAccounts || []).find((acc: any) => acc?.provider === "oauth_google" || acc?.provider === "google");
-      if (!googleAccount?.id) return { removed: false, reason: "no_external_account" };
+     try {
+       const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+       const user = await clerkClient.users.getUser(clerkUserId);
+       const googleAccount = (user?.externalAccounts || []).find((acc: any) => acc?.provider === "oauth_google" || acc?.provider === "google");
+       if (!googleAccount?.id) return { removed: false, reason: "no_external_account" };
 
-      // According to prior devlog, the correct method is deleteUserExternalAccount({ userId, externalAccountId })
-      await clerkClient.users.deleteUserExternalAccount({ userId: clerkUserId, externalAccountId: googleAccount.id });
-      return { removed: true };
-    } catch (e) {
-      console.error("forceDestroyGoogleExternalAccount error:", e);
-      return { removed: false, reason: "error" } as const;
-    }
+       // According to prior devlog, the correct method is deleteUserExternalAccount({ userId, externalAccountId })
+       await clerkClient.users.deleteUserExternalAccount({ userId: clerkUserId, externalAccountId: googleAccount.id });
+       return { removed: true };
+     } catch (e: any) {
+       console.error("forceDestroyGoogleExternalAccount error:", e);
+       // Handle specific Clerk errors for missing external account
+       if (e?.status === 404 && e?.errors?.[0]?.code === 'external_account_not_found') {
+         return { removed: false, reason: "no_external_account" };
+       }
+       return { removed: false, reason: "error" } as const;
+     }
   },
 });
 

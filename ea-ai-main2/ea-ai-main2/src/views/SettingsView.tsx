@@ -274,10 +274,16 @@ function ConnectedAppsSettings({
 
   const [gcalTesting] = useState<boolean>(false);
 
-  const refreshGcalStatus = async () => {
-    // Keep diagnostic action; UI derives state from query
-    try { const ok = await hasGoogleCalendarConnection(); setGcalConnectedQuery(!!ok); } catch (e) { console.warn("[Settings] Failed to check Google Calendar connection", e); }
-  };
+   const refreshGcalStatus = async () => {
+     // Use testGoogleCalendarConnection for better diagnostics
+     try {
+       const result = await testGoogleCalendarConnection();
+       setGcalConnectedQuery(result?.success || false);
+     } catch (e) {
+       console.warn("[Settings] Failed to check Google Calendar connection", e);
+       setGcalConnectedQuery(false);
+     }
+   };
 
   useEffect(() => {
     void refreshGcalStatus();
@@ -310,12 +316,15 @@ function ConnectedAppsSettings({
     telemetry('connect_start');
     setIsConnecting('Google Calendar');
     try {
-      await clerkCtx.load();
+      // Ensure Clerk SDK is initialized if available in window
+      try { const anyClerk: any = (clerkCtx as any); if (anyClerk?.load) { await anyClerk.load(); } } catch {}
       const redirectUrl = `${window.location.origin}/sso-callback`;
       let verificationUrl: string | undefined;
       let attempts = 0;
-      while (!verificationUrl && attempts < 2) {
-        const latestUser: any = (clerkCtx as any).user || user;
+      while (!verificationUrl && attempts < 3) {
+        // Always fetch a fresh user snapshot
+        try { const anyClerk: any = (clerkCtx as any); if (anyClerk?.load) { await anyClerk.load(); } } catch {}
+        const latestUser: any = (window as any).Clerk?.user || (clerkCtx as any).user || user;
         const extAcc: any = latestUser?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
         if (extAcc?.reauthorize) {
           const updated: any = await extAcc.reauthorize({
@@ -327,8 +336,8 @@ function ConnectedAppsSettings({
           verificationUrl = typeof raw === 'string' ? raw : raw?.href;
           if (!verificationUrl && String(updated?.verification?.status) === 'verified') {
             // Check if we already have scopes
-            await clerkCtx.load();
-            const refreshed: any = (clerkCtx as any).user;
+            try { const anyClerk: any = (clerkCtx as any); if (anyClerk?.load) { await anyClerk.load(); } } catch {}
+            const refreshed: any = (window as any).Clerk?.user || (clerkCtx as any).user;
             const acc: any = refreshed?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
             const approved = String(acc?.approvedScopes || '');
             const ok = GCAL_SCOPES.every(s => approved.includes(s));
@@ -338,6 +347,16 @@ function ConnectedAppsSettings({
               setIsConnecting(null);
               return;
             }
+            // Force another reauthorize prompting consent if scopes still missing
+            try {
+              const forced: any = await extAcc.reauthorize({
+                additionalScopes: GCAL_SCOPES,
+                oidcPrompt: 'consent select_account',
+                redirectUrl,
+              });
+              const rawForced = forced?.verification?.externalVerificationRedirectURL as any;
+              verificationUrl = typeof rawForced === 'string' ? rawForced : rawForced?.href;
+            } catch {}
           }
         } else if (latestUser?.createExternalAccount) {
           const created: any = await latestUser.createExternalAccount({
@@ -348,14 +367,35 @@ function ConnectedAppsSettings({
           });
           const raw = created?.verification?.externalVerificationRedirectURL as any;
           verificationUrl = typeof raw === 'string' ? raw : raw?.href;
+          if (!verificationUrl) {
+            // Try reading a refreshed user and see if scopes already present
+            try { const anyClerk: any = (clerkCtx as any); if (anyClerk?.load) { await anyClerk.load(); } } catch {}
+            const refreshed: any = (window as any).Clerk?.user || (clerkCtx as any).user;
+            const acc: any = refreshed?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+            const approved = String(acc?.approvedScopes || '');
+            const ok = GCAL_SCOPES.every(s => approved.includes(s));
+            if (ok) {
+              try { await testGoogleCalendarConnection(); } catch {}
+              await refreshGcalStatus();
+              setIsConnecting(null);
+              return;
+            }
+          }
         }
         attempts++;
       }
 
-      if (!verificationUrl) throw new Error('Failed to get Google verification URL from Clerk');
+      if (!verificationUrl) {
+        throw new Error('No verification URL from Clerk. Ensure /sso-callback is in Clerk Allowed Redirect URLs and Google Calendar scopes are permitted.');
+      }
 
       const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
-      if (!popup) { window.location.href = verificationUrl; return; }
+      if (!popup) {
+        setIsConnecting(null);
+        alert('Popup was blocked. Click OK to open the Google consent page in a new tab.');
+        window.open(verificationUrl, '_blank', 'noopener');
+        return;
+      }
       const timer = setInterval(() => {
         if (popup.closed) {
           clearInterval(timer);
@@ -368,8 +408,9 @@ function ConnectedAppsSettings({
       }, 600);
     } catch (e) {
       console.error('[Settings] Google Calendar connect failed (Clerk flow)', e);
-      telemetry('connect_error', { error: String(e) });
-      alert('Failed to start Google Calendar connection. Please try again.');
+      const msg = (e as any)?.errors?.[0]?.message || (e as any)?.message || 'Unknown error';
+      telemetry('connect_error', { error: String(msg) });
+      alert(`Failed to start Google Calendar connection: ${msg}`);
       setIsConnecting(null);
     }
   };
@@ -409,10 +450,12 @@ function ConnectedAppsSettings({
 
       // Security: Only accept messages from expected origins
       // Allow messages from same origin or Convex site domain
-      const allowedOrigins = [
-        window.location.origin,
-        'https://peaceful-boar-923.convex.site'
-      ];
+      let convexOrigin: string | undefined;
+      try {
+        const convexUrl = (import.meta as any)?.env?.VITE_CONVEX_URL as string | undefined;
+        if (convexUrl) convexOrigin = new URL(convexUrl).origin;
+      } catch {}
+      const allowedOrigins = [window.location.origin, ...(convexOrigin ? [convexOrigin] : [])];
       
       if (!allowedOrigins.includes(event.origin)) {
         console.warn("🚫 [Settings] Rejected message from untrusted origin:", event.origin);
@@ -433,10 +476,10 @@ function ConnectedAppsSettings({
         // Verify scopes by testing connection before enabling
         testGoogleCalendarConnection().finally(() => { void refreshGcalStatus(); });
       } else if (event.data?.type === 'GCAL_MISSING_SCOPES') {
-        console.warn('⚠️ [Settings] Google Calendar missing scopes, re-authorizing');
+        console.warn('⚠️ [Settings] Google Calendar missing scopes; prompting re-consent');
         setIsConnecting(null);
-        // Retry immediately without extra messaging
-        void connectGoogleCalendar();
+        // Ask user to click connect again to avoid silent loops
+        toast.message('Google Calendar needs extra permissions. Click Connect again to re-authorize.');
       } else {
         console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
       }

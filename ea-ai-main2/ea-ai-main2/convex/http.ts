@@ -237,34 +237,7 @@ http.route({
 
 export default http;
 
-// Google Calendar OAuth callback handler (delegates to Node action)
-http.route({
-  path: "/auth/google/calendar/callback",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const url = new URL(request.url);
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-
-    const html = (body: string, status = 200) => new Response(`<!doctype html><html><body><script>${body}</script></body></html>`, { status, headers: { "Content-Type": "text/html" } });
-
-    if (!code || !state) {
-      return html("alert('OAuth callback failed: Missing required parameters'); window.close();", 400);
-    }
-
-    const result = await ctx.runAction(api.googleCalendar.auth.handleGoogleCalendarOAuthCallback, { code, state });
-    if (result?.ok) {
-      return html(`
-        try { if (window.opener) { window.opener.postMessage({ type: 'GCAL_CONNECTED' }, '*'); } } catch (e) {}
-        // Optional: Navigate to your site privacy/terms anchors if needed after consent
-        setTimeout(() => window.close(), 200);
-      `, 200);
-    } else {
-      const msg = (result as any)?.error || 'Unknown error';
-      return html(`alert('Google Calendar connection failed: ${String(msg)}'); window.close();`, 500);
-    }
-  }),
-});
+// Note: Legacy dedicated Google OAuth callback removed — Clerk external accounts handle consent
 
 // Telemetry endpoint to log OAuth callback/debug info (unauthenticated)
 http.route({

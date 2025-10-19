@@ -59,7 +59,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
         if (args.endDate && hasOffsetOrZ(endLocal)) throw new Error("endDate must be local (no Z or offset). Provide YYYY-MM-DDTHH:MM:SS and a separate timeZone.");
 
         // Preflight: verify connection
-        const hasConn = await actionCtx.runAction(api.googleCalendar.auth.hasGoogleCalendarConnection as any, {});
+        const hasConn = await actionCtx.runAction(api.googleCalendar.auth.testGoogleCalendarConnection as any, {});
         if (!hasConn?.success) {
           throw new Error(hasConn?.error || "Google Calendar not connected. Please connect in Settings.");
         }

@@ -30,16 +30,32 @@ export default function AuthCallback() {
             if (isPopup) {
               // Verify Google external account now includes required Calendar scopes
               try {
-                await clerk.load();
-                const updatedUser: any = (clerk as any).user;
-                const extAcc: any = updatedUser?.externalAccounts?.find?.((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
-                const approved = String(extAcc?.approvedScopes || '');
-                const have = approved.split(/\s+/).filter(Boolean);
-                const ok = GCAL_SCOPES.every(s => have.includes(s));
-                if (ok) {
-                  window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*');
-                } else {
-                  window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES', have }, '*');
+                let tries = 0;
+                while (tries < 3) {
+                  try { const anyClerk: any = clerk as any; if (anyClerk?.load) { await anyClerk.load(); } } catch {}
+                  const updatedUser: any = (clerk as any).user;
+                  const extAcc: any = updatedUser?.externalAccounts?.find?.((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+                  const approved = String(extAcc?.approvedScopes || '');
+                  const have = approved.split(/\s+/).filter(Boolean);
+                  const ok = GCAL_SCOPES.every(s => have.includes(s));
+                  if (ok) {
+                    window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*');
+                    break;
+                  }
+                  tries++;
+                  await new Promise(r => setTimeout(r, 400));
+                }
+                if (tries >= 3) {
+                  // Still missing scopes
+                  try {
+                    const updatedUser: any = (clerk as any).user;
+                    const extAcc: any = updatedUser?.externalAccounts?.find?.((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+                    const approved = String(extAcc?.approvedScopes || '');
+                    const have = approved.split(/\s+/).filter(Boolean);
+                    window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES', have }, '*');
+                  } catch {
+                    window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES' }, '*');
+                  }
                 }
               } catch {
                 try { window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES' }, '*'); } catch {}
