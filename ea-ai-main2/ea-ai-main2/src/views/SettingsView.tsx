@@ -258,6 +258,7 @@ function ConnectedAppsSettings({
   // GOOGLE CALENDAR CONNECTION STATE
   const { user } = useUser();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
+  const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
   // Removed unused generateGoogleOAuthURL action
   
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
@@ -339,7 +340,16 @@ function ConnectedAppsSettings({
       const timer = setInterval(() => {
         if (popup.closed) {
           clearInterval(timer);
-          setTimeout(() => { void refreshGcalStatus(); setIsConnecting(null); }, 500);
+          setTimeout(async () => {
+            try {
+              const res: any = await testGoogleCalendarConnection();
+              if (res?.success) {
+                await setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
+              }
+            } catch {}
+            void refreshGcalStatus();
+            setIsConnecting(null);
+          }, 500);
         }
       }, 600);
     } catch (e) {
@@ -406,9 +416,27 @@ function ConnectedAppsSettings({
       } else if (event.data?.type === 'GCAL_CONNECTED') {
         console.log('✅ [Settings] Google Calendar connected message received');
         setIsConnecting(null);
-        // Enable calendar in backend to reflect soft connection
-        setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
-        void refreshGcalStatus();
+        // Verify scopes by testing connection before enabling
+        testGoogleCalendarConnection()
+          .then((res: any) => {
+            if (res?.success) {
+              setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
+            } else {
+              toast.error('Google Calendar connection incomplete. Re-authorizing…');
+              void connectGoogleCalendar();
+            }
+          })
+          .catch(() => {
+            toast.error('Failed to verify Google Calendar connection. Try again.');
+          })
+          .finally(() => {
+            void refreshGcalStatus();
+          });
+      } else if (event.data?.type === 'GCAL_MISSING_SCOPES') {
+        console.warn('⚠️ [Settings] Google Calendar missing scopes, re-authorizing');
+        setIsConnecting(null);
+        toast.message('Additional Google Calendar permissions required. Please approve the consent screen.');
+        void connectGoogleCalendar();
       } else {
         console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
       }
