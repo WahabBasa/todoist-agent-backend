@@ -4,9 +4,16 @@ import { useClerk, useUser } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 
 export default function AuthCallback() {
-  const { handleRedirectCallback } = useClerk();
+  const clerk = useClerk();
+  const { handleRedirectCallback } = clerk;
   const { user } = useUser();
   const [error, setError] = useState<string | null>(null);
+
+  const GCAL_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar.settings.readonly',
+  ];
 
   useEffect(() => {
     let navigated = false;
@@ -21,9 +28,22 @@ export default function AuthCallback() {
           async (to: string) => {
             navigated = true;
             if (isPopup) {
+              // Verify Google external account now includes required Calendar scopes
               try {
-                window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*');
-              } catch {}
+                await clerk.load();
+                const updatedUser: any = (clerk as any).user;
+                const extAcc: any = updatedUser?.externalAccounts?.find?.((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+                const approved = String(extAcc?.approvedScopes || '');
+                const have = approved.split(/\s+/).filter(Boolean);
+                const ok = GCAL_SCOPES.every(s => have.includes(s));
+                if (ok) {
+                  window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*');
+                } else {
+                  window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES', have }, '*');
+                }
+              } catch {
+                try { window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES' }, '*'); } catch {}
+              }
               window.close();
             } else {
               // Check onboarding status before redirecting
@@ -49,7 +69,8 @@ export default function AuthCallback() {
         } catch {}
         if (!navigated) {
           if (isPopup) {
-            try { window.opener?.postMessage({ type: 'GCAL_CONNECTED' }, '*'); } catch {}
+            // Fallback: notify parent to re-check connection
+            try { window.opener?.postMessage({ type: 'GCAL_MISSING_SCOPES' }, '*'); } catch {}
             if (typeof window !== 'undefined') window.close();
           } else if (typeof window !== 'undefined') {
             window.location.replace('/');
