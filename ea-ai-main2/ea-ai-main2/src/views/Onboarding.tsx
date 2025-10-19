@@ -102,7 +102,16 @@ export function Onboarding() {
           'https://www.googleapis.com/auth/calendar.readonly',
           'https://www.googleapis.com/auth/calendar.settings.readonly'
         ];
-        if (clerkUser?.createExternalAccount) {
+        const extAcc: any = clerkUser?.externalAccounts?.find?.((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+        if (extAcc?.reauthorize) {
+          const updated = await extAcc.reauthorize({
+            additionalScopes: GCAL_SCOPES,
+            oidcPrompt: 'consent select_account',
+            redirectUrl,
+          });
+          const url = updated?.verification?.externalVerificationRedirectURL;
+          if (url) { window.location.href = url; return; }
+        } else if (clerkUser?.createExternalAccount) {
           const ea = await clerkUser.createExternalAccount({
             strategy: 'oauth_google',
             redirectUrl,
@@ -110,10 +119,7 @@ export function Onboarding() {
             oidcPrompt: 'consent select_account',
           });
           const url = ea?.verification?.externalVerificationRedirectURL;
-          if (url) {
-            window.location.href = url;
-            return;
-          }
+          if (url) { window.location.href = url; return; }
         }
       } catch {}
 
