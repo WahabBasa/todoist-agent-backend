@@ -921,17 +921,9 @@ export const chatWithAI = action({
           tc.args?.targetName === "planning"
         );
         
+        // Do not inject any templated planning prompt; let the model respond naturally on next turn
         if (modeSwitchCall && (!finalText || finalText.trim() === "") && finalToolResults.length === 0) {
-          // If the mode switch happened via tool call but no AI response was generated,
-          // we need to simulate what the planning mode should say
-          // In a real scenario, the AI should generate this itself based on mode context
-          
-          // Look for the original user message that triggered the mode switch
-          const userMessage = message; // This is the user's message that triggered the switch
-          
-          // Generate an appropriate response for planning mode
-          // This should ideally be handled by the AI itself, but we provide a fallback
-          cleanResponse = "What date range should I check first (today, tomorrow, this week)?"
+          // Keep cleanResponse as-is (neutral fallback may apply below)
         }
       }
       
