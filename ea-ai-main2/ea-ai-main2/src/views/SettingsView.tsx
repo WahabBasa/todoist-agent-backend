@@ -257,6 +257,7 @@ function ConnectedAppsSettings({
 
   // GOOGLE CALENDAR CONNECTION STATE
   const { user } = useUser();
+  const clerkCtx = useClerk();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
   // Removed unused generateGoogleOAuthURL action
@@ -309,34 +310,52 @@ function ConnectedAppsSettings({
     telemetry('connect_start');
     setIsConnecting('Google Calendar');
     try {
+      await clerkCtx.load();
       const redirectUrl = `${window.location.origin}/sso-callback`;
-      const redirectUrlComplete = `${window.location.origin}/sso-callback`;
-      const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
-
       let verificationUrl: string | undefined;
-      if (extAcc && typeof extAcc.reauthorize === 'function') {
-        const updated: any = await extAcc.reauthorize({
-          additionalScopes: GCAL_SCOPES,
-          redirectUrl,
-          // Force full consent and account picker to avoid silent reuse
-          oidcPrompt: 'consent select_account',
-        });
-        verificationUrl = updated?.verification?.externalVerificationRedirectURL;
-      } else {
-        const created: any = await user?.createExternalAccount?.({
-          strategy: 'oauth_google',
-          redirectUrl,
-          additionalScopes: GCAL_SCOPES,
-          // Force full consent and account picker for first connect
-          oidcPrompt: 'consent select_account',
-        });
-        verificationUrl = created?.verification?.externalVerificationRedirectURL;
+      let attempts = 0;
+      while (!verificationUrl && attempts < 2) {
+        const latestUser: any = (clerkCtx as any).user || user;
+        const extAcc: any = latestUser?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+        if (extAcc?.reauthorize) {
+          const updated: any = await extAcc.reauthorize({
+            additionalScopes: GCAL_SCOPES,
+            oidcPrompt: 'consent select_account',
+            redirectUrl,
+          });
+          const raw = updated?.verification?.externalVerificationRedirectURL as any;
+          verificationUrl = typeof raw === 'string' ? raw : raw?.href;
+          if (!verificationUrl && String(updated?.verification?.status) === 'verified') {
+            // Check if we already have scopes
+            await clerkCtx.load();
+            const refreshed: any = (clerkCtx as any).user;
+            const acc: any = refreshed?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
+            const approved = String(acc?.approvedScopes || '');
+            const ok = GCAL_SCOPES.every(s => approved.includes(s));
+            if (ok) {
+              try { await testGoogleCalendarConnection(); } catch {}
+              await refreshGcalStatus();
+              setIsConnecting(null);
+              return;
+            }
+          }
+        } else if (latestUser?.createExternalAccount) {
+          const created: any = await latestUser.createExternalAccount({
+            strategy: 'oauth_google',
+            additionalScopes: GCAL_SCOPES,
+            oidcPrompt: 'consent select_account',
+            redirectUrl,
+          });
+          const raw = created?.verification?.externalVerificationRedirectURL as any;
+          verificationUrl = typeof raw === 'string' ? raw : raw?.href;
+        }
+        attempts++;
       }
 
       if (!verificationUrl) throw new Error('Failed to get Google verification URL from Clerk');
 
       const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
-      if (!popup) throw new Error('Popup blocked');
+      if (!popup) { window.location.href = verificationUrl; return; }
       const timer = setInterval(() => {
         if (popup.closed) {
           clearInterval(timer);
@@ -416,7 +435,7 @@ function ConnectedAppsSettings({
       } else if (event.data?.type === 'GCAL_MISSING_SCOPES') {
         console.warn('⚠️ [Settings] Google Calendar missing scopes, re-authorizing');
         setIsConnecting(null);
-        toast.message('Additional Google Calendar permissions required. Please approve the consent screen.');
+        // Retry immediately without extra messaging
         void connectGoogleCalendar();
       } else {
         console.log("ℹ️ [Settings] Unhandled message type:", event.data?.type);
