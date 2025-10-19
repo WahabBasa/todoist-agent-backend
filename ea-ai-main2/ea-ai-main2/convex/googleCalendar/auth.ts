@@ -67,6 +67,54 @@ const GCAL_SCOPES = [
   "https://www.googleapis.com/auth/calendar.settings.readonly",
 ];
 
+/**
+ * Helper: Fetch Clerk Google access token for current user and discover its scopes.
+ */
+async function getClerkAccessTokenAndScopes(clerkUserId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+  const tokens = await clerkClient.users.getUserOauthAccessToken(clerkUserId, "oauth_google");
+  const accessToken = tokens?.data?.[0]?.token as string | undefined;
+  if (!accessToken) return null;
+
+  // Use Google's tokeninfo endpoint to retrieve scopes for this access token
+  try {
+    const resp = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(accessToken));
+    if (!resp.ok) {
+      // If tokeninfo fails, assume unknown scopes; caller will handle
+      return { accessToken, scopes: [] };
+    }
+    const json: any = await resp.json();
+    const scopeStr: string = json?.scope || "";
+    const scopes = scopeStr.split(/\s+/).filter(Boolean);
+    return { accessToken, scopes };
+  } catch {
+    return { accessToken, scopes: [] };
+  }
+}
+
+/**
+ * Helper: Ensure Clerk token exists and has required scopes; returns an OAuth client
+ * configured with that access token. If missing scopes, throws with clear message.
+ */
+async function getClerkOAuthClientWithScopes(requiredScopes: string[], clerkUserId: string): Promise<any> {
+  const tokenInfo = await getClerkAccessTokenAndScopes(clerkUserId);
+  if (!tokenInfo) {
+    throw new Error("Google Calendar not connected. Please connect in Settings.");
+  }
+  const missing = requiredScopes.filter(s => !tokenInfo.scopes.includes(s));
+  if (missing.length > 0) {
+    throw new Error(`Google Calendar is connected but missing required scope(s): ${missing.join(", ")}. Please reconnect in Settings.`);
+  }
+
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_REDIRECT_URL
+  );
+  client.setCredentials({ access_token: tokenInfo.accessToken });
+  return client as any;
+}
+
 function signState(payload: object): string {
   const secret = process.env.STATE_HMAC_SECRET || process.env.CLERK_SECRET_KEY || "dev-secret";
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -193,22 +241,32 @@ export const testGoogleCalendarConnection = action({
       if (!identity) {
         return { success: false, error: "Not authenticated", testTimestamp: Date.now() };
       }
-      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-      const tokens = await clerkClient.users.getUserOauthAccessToken(identity.subject, "oauth_google");
-      const accessToken = tokens?.data?.[0]?.token as string | undefined;
-      if (!accessToken) {
+
+      // Inspect Clerk token scopes for diagnostics
+      const tokenInfo = await getClerkAccessTokenAndScopes(identity.subject);
+      if (!tokenInfo) {
         return { success: false, error: "Google Calendar not connected.", testTimestamp: Date.now() };
       }
+      const have = tokenInfo.scopes;
+      const need = [
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/calendar.settings.readonly",
+      ];
+      const missing = need.filter(s => !have.includes(s));
+
+      // Try a lightweight read using the Clerk token
       const resp = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1", {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${tokenInfo.accessToken}` },
       });
       if (!resp.ok) {
-        const msg = resp.status === 403 ? "Insufficient Google Calendar scopes" : `HTTP ${resp.status}`;
+        const msg = resp.status === 403
+          ? `Insufficient Google Calendar scopes (have: ${have.join(" ") || "none"}; need: ${need.join(", ")})`
+          : `HTTP ${resp.status}`;
         return { success: false, error: msg, testTimestamp: Date.now() };
       }
       const json: any = await resp.json();
       const count = Array.isArray(json?.items) ? json.items.length : 0;
-      return { success: true, message: `Connected to Google Calendar (${count} calendar(s))`, testTimestamp: Date.now(), hasConnection: true };
+      return { success: true, message: `Connected to Google Calendar via Clerk token (${count} calendar(s))`, testTimestamp: Date.now(), hasConnection: true };
     } catch (error) {
       console.error("Error testing Google Calendar connection:", error);
       return { success: false, error: error instanceof Error ? error.message : "Unknown error", testTimestamp: Date.now() };
@@ -231,6 +289,8 @@ export const removeGoogleCalendarConnection = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.removeGoogleCalendarConnection", "REQUESTED");
     try {
       const ok = await ctx.runMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled, { enabled: false });
+      // Ensure any legacy refresh token is revoked and removed so the next connect must re-consent
+      try { await ctx.runAction(api.googleCalendar.auth.revokeLegacyGoogleToken, {} as any); } catch {}
       await logUserAccess(tokenIdentifier, "googleCalendar.auth.removeGoogleCalendarConnection", ok ? "SUCCESS" : "FAILED_SET_DISABLED");
       return !!ok;
     } catch (error) {
@@ -330,14 +390,11 @@ export const getCalendarEventTimes = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCalendarEventTimes", "REQUESTED");
     const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
     if (!enabled) throw new Error("Google Calendar disabled.");
-    let oAuthClient = await getOAuthClientFromDB(ctx);
-    if (!oAuthClient) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new Error("Not authenticated");
-      const clerkUserId = identity.subject;
-      oAuthClient = await getOAuthClient(clerkUserId);
-    }
-    if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const oAuthClient = await getClerkOAuthClientWithScopes([
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ], identity.subject);
 
     try {
       const calendar = google.calendar({ version: "v3", auth: oAuthClient as any });
@@ -404,14 +461,11 @@ export const createCalendarEvent = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.createCalendarEvent", "REQUESTED");
     const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
     if (!enabled) throw new Error("Google Calendar disabled.");
-    let oAuthClient = await getOAuthClientFromDB(ctx);
-    if (!oAuthClient) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new Error("Not authenticated");
-      const clerkUserId = identity.subject;
-      oAuthClient = await getOAuthClient(clerkUserId);
-    }
-    if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const oAuthClient = await getClerkOAuthClientWithScopes([
+      "https://www.googleapis.com/auth/calendar.events",
+    ], identity.subject);
 
     try {
       const attendees = args.attendeeEmails?.map(email => ({ email })) || [];
@@ -553,14 +607,11 @@ export const getUserCalendarSettings = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getUserCalendarSettings", "REQUESTED");
     const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
     if (!enabled) throw new Error("Google Calendar disabled.");
-    let oAuthClient = await getOAuthClientFromDB(ctx);
-    if (!oAuthClient) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new Error("Not authenticated");
-      const clerkUserId = identity.subject;
-      oAuthClient = await getOAuthClient(clerkUserId);
-    }
-    if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const oAuthClient = await getClerkOAuthClientWithScopes([
+      "https://www.googleapis.com/auth/calendar.settings.readonly",
+    ], identity.subject);
 
     try {
       // Get all user settings from Google Calendar
@@ -610,14 +661,11 @@ export const getCurrentCalendarTime = action({
     await logUserAccess(tokenIdentifier, "googleCalendar.auth.getCurrentCalendarTime", "REQUESTED");
     const enabled = await ctx.runQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled, {});
     if (!enabled) throw new Error("Google Calendar disabled.");
-    let oAuthClient = await getOAuthClientFromDB(ctx);
-    if (!oAuthClient) {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new Error("Not authenticated");
-      const clerkUserId = identity.subject;
-      oAuthClient = await getOAuthClient(clerkUserId);
-    }
-    if (!oAuthClient) throw new Error("Google Calendar not connected. Please connect in Settings.");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const oAuthClient = await getClerkOAuthClientWithScopes([
+      "https://www.googleapis.com/auth/calendar.readonly",
+    ], identity.subject);
 
     try {
       // Get primary calendar to get user's timezone

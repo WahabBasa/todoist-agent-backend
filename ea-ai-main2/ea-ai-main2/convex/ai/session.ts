@@ -880,8 +880,13 @@ export const chatWithAI = action({
       }
 
       // End conversation and flush to Langfuse Cloud
+      // Build a safe fallback that never falsely claims completion
+      const safeFallback = (finalToolCalls.length === 0 && finalToolResults.length === 0)
+        ? "I didn’t run any tools. Want me to check your calendar now?"
+        : "Here’s a brief update. Would you like more details?";
+
       await endConversation({
-        response: finalText || "I've completed the requested actions.",
+        response: finalText || safeFallback,
         toolCalls: finalToolCalls.length,
         toolResults: finalToolResults.length,
         tokens: finalUsage ? {
@@ -901,7 +906,7 @@ export const chatWithAI = action({
       
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
-      let cleanResponse: string = finalText || "I've completed the requested actions.";
+      let cleanResponse: string = finalText || safeFallback;
       
       console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
         originalResponse: cleanResponse,
@@ -928,11 +933,7 @@ export const chatWithAI = action({
           
           // Generate an appropriate response for planning mode
           // This should ideally be handled by the AI itself, but we provide a fallback
-          if (userMessage.toLowerCase().includes("deadline") || userMessage.toLowerCase().includes("work")) {
-            cleanResponse = "I'd be happy to help you organize your tasks. When is your work deadline due?";
-          } else {
-            cleanResponse = "I'm now collecting information to help organize your tasks. When is your work deadline due?";
-          }
+          cleanResponse = "What date range should I check first (today, tomorrow, this week)?"
         }
       }
       

@@ -309,14 +309,30 @@ function ConnectedAppsSettings({
     setIsConnecting('Google Calendar');
     try {
       const redirectUrl = `${window.location.origin}/sso-callback`;
+      const redirectUrlComplete = `${window.location.origin}/sso-callback`;
       const extAcc: any = user?.externalAccounts?.find((a: any) => a?.provider === 'google' || a?.provider === 'oauth_google');
 
       let verificationUrl: string | undefined;
       if (extAcc && typeof extAcc.reauthorize === 'function') {
-        const updated: any = await extAcc.reauthorize({ additionalScopes: GCAL_SCOPES, redirectUrl });
+        const updated: any = await extAcc.reauthorize({
+          additionalScopes: GCAL_SCOPES,
+          redirectUrl,
+          // Clerk may ignore unknown fields; passing for providers that support them
+          redirectUrlComplete,
+          prompt: 'consent',
+          includeGrantedScopes: true,
+        });
         verificationUrl = updated?.verification?.externalVerificationRedirectURL;
       } else {
-        const created: any = await user?.createExternalAccount?.({ strategy: 'oauth_google', redirectUrl });
+        const created: any = await user?.createExternalAccount?.({
+          strategy: 'oauth_google',
+          redirectUrl,
+          // Ask Google to show consent again and include Calendar scopes explicitly
+          additionalScopes: GCAL_SCOPES,
+          redirectUrlComplete,
+          prompt: 'consent',
+          includeGrantedScopes: true,
+        });
         verificationUrl = created?.verification?.externalVerificationRedirectURL;
       }
 

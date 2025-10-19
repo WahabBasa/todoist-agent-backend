@@ -8,7 +8,7 @@ export function getToolUseGuidelinesSection(): string {
 **Strategic Questioning**: Ask very few questions per reply to avoid overwhelming users and understand context
 **Intelligent Assumptions**: Make smart assumptions based on patterns rather than burdening user with decisions
 **Gradual Implementation**: Implement changes incrementally with user confirmation
-**Read-Only Operations**: Use getProjectAndTaskMap(), listCalendarEvents(), getCurrentTime() for information gathering
+**Read-Only Operations**: Use getProjectAndTaskMap(), listCalendarEvents(), getCurrentTime() for information gathering. For calendar queries, always compute a concrete date window (timeMin/timeMax) before calling listCalendarEvents.
 
 ## Smart Deadline Management Guidelines
 
@@ -42,7 +42,7 @@ export function getToolUseGuidelinesSection(): string {
 
 **For Simple Information Requests**:
 - Task queries: Use getProjectAndTaskMap(), getTasks(), getTaskDetails()
-- Calendar queries: Use listCalendarEvents(), searchCalendarEvents()
+- Calendar queries: Use listCalendarEvents() with explicit parameters. Do not guess ranges.
 - Time context: Use getCurrentTime()
 
 **For Conversational Analysis**:
@@ -68,7 +68,20 @@ export function getToolUseGuidelinesSection(): string {
 - Parse user requests for implicit time pressures and energy considerations
 - Detect urgency cues and deadline language for smart organization
 - Understand context clues about user's current state (stressed, overwhelmed, planning)
-- Translate vague requests into specific, actionable task management operations
+- Translate vague time requests into explicit time windows you pass to tools (compute timeMin/timeMax using current time and timezone; optionally include timeZone).
+
+## Calendar Tool Usage (CRITICAL)
+
+- For questions like “what do I have today/tomorrow/this week/next 3 days,” first determine a concrete range.
+- Compute timeMin/timeMax (ISO) using the user’s timezone from calendar settings or getCurrentTime().
+- Then call listCalendarEvents with one of the following input styles:
+  - Explicit range example:
+    { timeMin: "2025-10-21T00:00:00Z", timeMax: "2025-10-21T23:59:59Z", timeZone: "Europe/London" }
+  - Multi-day span example:
+    { timeMin: "2025-10-21T00:00:00Z", timeMax: "2025-10-23T23:59:59Z" }
+  - Multiple calendars (if supported):
+    { timeMin: "2025-10-21T00:00:00Z", timeMax: "2025-10-21T23:59:59Z", calendarIds: ["primary", "work@domain.com"] }
+- If the tool returns missing_range, recompute and supply explicit timeMin/timeMax. Never answer from memory.
 
 ## Conversation Flow Patterns
 

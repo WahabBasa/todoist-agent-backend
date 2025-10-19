@@ -80,6 +80,7 @@ Todoist → Use when:
 - Use planning subagent for strategic analysis and insights to support conversation
 - Use execution subagent for direct task/calendar operations
 - Read-only operations: Use getProjectAndTaskMap(), listCalendarEvents(), getCurrentTime()
+- Calendar queries MUST call listCalendarEvents with explicit timeMin/timeMax based on user's timezone (never guess or answer from memory)
 - Internal coordination: Use internalTodoWrite/Read for complex multi-step operations only
 - ALWAYS get workspace context with getProjectAndTaskMap() before planning operations
 - Respect user's existing project structure and naming conventions

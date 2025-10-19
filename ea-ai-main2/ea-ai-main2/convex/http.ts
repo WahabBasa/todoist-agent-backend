@@ -256,6 +256,7 @@ http.route({
     if (result?.ok) {
       return html(`
         try { if (window.opener) { window.opener.postMessage({ type: 'GCAL_CONNECTED' }, '*'); } } catch (e) {}
+        // Optional: Navigate to your site privacy/terms anchors if needed after consent
         setTimeout(() => window.close(), 200);
       `, 200);
     } else {
