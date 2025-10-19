@@ -880,13 +880,11 @@ export const chatWithAI = action({
       }
 
       // End conversation and flush to Langfuse Cloud
-      // Build a safe fallback that never falsely claims completion
-      const safeFallback = (finalToolCalls.length === 0 && finalToolResults.length === 0)
-        ? "I didn’t run any tools. Want me to check your calendar now?"
-        : "Here’s a brief update. Would you like more details?";
+      // Minimal neutral fallback when the model doesn't return text
+      const neutralFallback = "Okay.";
 
       await endConversation({
-        response: finalText || safeFallback,
+        response: finalText || neutralFallback,
         toolCalls: finalToolCalls.length,
         toolResults: finalToolResults.length,
         tokens: finalUsage ? {
@@ -906,7 +904,7 @@ export const chatWithAI = action({
       
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
-      let cleanResponse: string = finalText || safeFallback;
+      let cleanResponse: string = finalText || neutralFallback;
       
       if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
         originalResponse: cleanResponse,
@@ -947,7 +945,7 @@ export const chatWithAI = action({
         ]);
         const hasExecutionResult = Array.isArray(finalToolResults) && finalToolResults.some((tr: any) => executionTools.has(tr.toolName));
         if (successPhrases.test(cleanResponse) && !hasExecutionResult) {
-          cleanResponse = safeFallback;
+          cleanResponse = neutralFallback;
         }
       } catch {}
 
