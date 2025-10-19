@@ -93,7 +93,7 @@ export function Onboarding() {
       // Show success message
       toast.success("Profile created successfully!");
 
-      // Prompt user to connect Google Calendar immediately (full consent)
+      // Prompt user to connect Google Calendar immediately (consent via popup)
       try {
         const clerkUser: any = (window as any).Clerk?.user;
         const redirectUrl = `${window.location.origin}/sso-callback`;
@@ -109,8 +109,25 @@ export function Onboarding() {
             oidcPrompt: 'consent select_account',
             redirectUrl,
           });
-          const url = updated?.verification?.externalVerificationRedirectURL;
-          if (url) { window.location.href = url; return; }
+          const url = updated?.verification?.externalVerificationRedirectURL as any;
+          const verificationUrl = typeof url === 'string' ? url : url?.href;
+          if (verificationUrl) {
+            const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
+            if (!popup) {
+              // Popup blocked — open in new tab instead of forcing a full-page redirect
+              alert('Popup was blocked. Click OK to open Google consent in a new tab.');
+              window.open(verificationUrl, '_blank', 'noopener');
+            } else {
+              const timer = setInterval(() => {
+                if (popup.closed) {
+                  clearInterval(timer);
+                  // After consent closes, go to chat
+                  window.location.href = '/';
+                }
+              }, 600);
+            }
+            return;
+          }
         } else if (clerkUser?.createExternalAccount) {
           const ea = await clerkUser.createExternalAccount({
             strategy: 'oauth_google',
@@ -118,8 +135,23 @@ export function Onboarding() {
             additionalScopes: GCAL_SCOPES,
             oidcPrompt: 'consent select_account',
           });
-          const url = ea?.verification?.externalVerificationRedirectURL;
-          if (url) { window.location.href = url; return; }
+          const url = ea?.verification?.externalVerificationRedirectURL as any;
+          const verificationUrl = typeof url === 'string' ? url : url?.href;
+          if (verificationUrl) {
+            const popup = window.open(verificationUrl, 'gcal-oauth', 'width=500,height=650,scrollbars=yes,resizable=yes');
+            if (!popup) {
+              alert('Popup was blocked. Click OK to open Google consent in a new tab.');
+              window.open(verificationUrl, '_blank', 'noopener');
+            } else {
+              const timer = setInterval(() => {
+                if (popup.closed) {
+                  clearInterval(timer);
+                  window.location.href = '/';
+                }
+              }, 600);
+            }
+            return;
+          }
         }
       } catch {}
 
