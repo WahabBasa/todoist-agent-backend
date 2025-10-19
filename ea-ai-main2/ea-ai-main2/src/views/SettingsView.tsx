@@ -262,20 +262,20 @@ function ConnectedAppsSettings({
   // Removed unused generateGoogleOAuthURL action
   
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
-  const setGoogleCalendarEnabled = useMutation(api.googleCalendar.tokens.setGoogleCalendarEnabled);
+  // Removed enable flag usage; backend derives connection from Clerk tokens
   const revokeLegacyGoogleToken = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
   const forceDestroyGoogleExternalAccount = useAction(api.googleCalendar.auth.forceDestroyGoogleExternalAccount);
 
-  // Reactive enabled flag to avoid initial flicker
-  const gcalEnabled = useQuery(api.googleCalendar.tokens.getGoogleCalendarEnabled);
-  const gcalStatusLoading = gcalEnabled === undefined;
-  const gcalConnectedQuery = gcalEnabled === true;
+  // Connection is derived from Clerk tokens via action; use query-free booleans
+  const gcalEnabled = undefined as unknown as boolean | undefined; // deprecated
+  const gcalStatusLoading = false;
+  const [gcalConnectedQuery, setGcalConnectedQuery] = useState<boolean>(false);
 
   const [gcalTesting] = useState<boolean>(false);
 
   const refreshGcalStatus = async () => {
     // Keep diagnostic action; UI derives state from query
-    try { await hasGoogleCalendarConnection(); } catch (e) { console.warn("[Settings] Failed to check Google Calendar connection", e); }
+    try { const ok = await hasGoogleCalendarConnection(); setGcalConnectedQuery(!!ok); } catch (e) { console.warn("[Settings] Failed to check Google Calendar connection", e); }
   };
 
   useEffect(() => {
@@ -341,13 +341,8 @@ function ConnectedAppsSettings({
         if (popup.closed) {
           clearInterval(timer);
           setTimeout(async () => {
-            try {
-              const res: any = await testGoogleCalendarConnection();
-              if (res?.success) {
-                await setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
-              }
-            } catch {}
-            void refreshGcalStatus();
+            try { await testGoogleCalendarConnection(); } catch {}
+            await refreshGcalStatus();
             setIsConnecting(null);
           }, 500);
         }
@@ -417,21 +412,7 @@ function ConnectedAppsSettings({
         console.log('✅ [Settings] Google Calendar connected message received');
         setIsConnecting(null);
         // Verify scopes by testing connection before enabling
-        testGoogleCalendarConnection()
-          .then((res: any) => {
-            if (res?.success) {
-              setGoogleCalendarEnabled({ enabled: true }).catch(() => {});
-            } else {
-              toast.error('Google Calendar connection incomplete. Re-authorizing…');
-              void connectGoogleCalendar();
-            }
-          })
-          .catch(() => {
-            toast.error('Failed to verify Google Calendar connection. Try again.');
-          })
-          .finally(() => {
-            void refreshGcalStatus();
-          });
+        testGoogleCalendarConnection().finally(() => { void refreshGcalStatus(); });
       } else if (event.data?.type === 'GCAL_MISSING_SCOPES') {
         console.warn('⚠️ [Settings] Google Calendar missing scopes, re-authorizing');
         setIsConnecting(null);
