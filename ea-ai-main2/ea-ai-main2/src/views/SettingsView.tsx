@@ -317,21 +317,17 @@ function ConnectedAppsSettings({
         const updated: any = await extAcc.reauthorize({
           additionalScopes: GCAL_SCOPES,
           redirectUrl,
-          // Clerk may ignore unknown fields; passing for providers that support them
-          redirectUrlComplete,
-          prompt: 'consent',
-          includeGrantedScopes: true,
+          // Force full consent and account picker to avoid silent reuse
+          oidcPrompt: 'consent select_account',
         });
         verificationUrl = updated?.verification?.externalVerificationRedirectURL;
       } else {
         const created: any = await user?.createExternalAccount?.({
           strategy: 'oauth_google',
           redirectUrl,
-          // Ask Google to show consent again and include Calendar scopes explicitly
           additionalScopes: GCAL_SCOPES,
-          redirectUrlComplete,
-          prompt: 'consent',
-          includeGrantedScopes: true,
+          // Force full consent and account picker for first connect
+          oidcPrompt: 'consent select_account',
         });
         verificationUrl = created?.verification?.externalVerificationRedirectURL;
       }

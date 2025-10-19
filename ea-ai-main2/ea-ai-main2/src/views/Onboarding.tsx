@@ -93,10 +93,32 @@ export function Onboarding() {
       // Show success message
       toast.success("Profile created successfully!");
 
-      // Redirect to chat after a brief delay
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1000);
+      // Prompt user to connect Google Calendar immediately (full consent)
+      try {
+        const clerkUser: any = (window as any).Clerk?.user;
+        const redirectUrl = `${window.location.origin}/sso-callback`;
+        const GCAL_SCOPES = [
+          'https://www.googleapis.com/auth/calendar.events',
+          'https://www.googleapis.com/auth/calendar.readonly',
+          'https://www.googleapis.com/auth/calendar.settings.readonly'
+        ];
+        if (clerkUser?.createExternalAccount) {
+          const ea = await clerkUser.createExternalAccount({
+            strategy: 'oauth_google',
+            redirectUrl,
+            additionalScopes: GCAL_SCOPES,
+            oidcPrompt: 'consent select_account',
+          });
+          const url = ea?.verification?.externalVerificationRedirectURL;
+          if (url) {
+            window.location.href = url;
+            return;
+          }
+        }
+      } catch {}
+
+      // Fallback: Redirect to chat
+      setTimeout(() => { window.location.href = "/"; }, 1000);
     } catch (error: any) {
       console.error("Onboarding error:", error);
       toast.error(error?.message || "Failed to complete onboarding. Please try again.");
