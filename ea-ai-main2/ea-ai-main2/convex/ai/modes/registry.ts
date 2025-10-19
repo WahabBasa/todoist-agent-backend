@@ -95,10 +95,12 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       listCalendarEvents: true,
       searchCalendarEvents: true,
       
-      // DISABLED: All direct execution tools (must delegate)
-      createTask: false,
-      updateTask: false,
-      deleteTask: false,
+      // ENABLED: Direct execution for imperative single-step commands
+      // Keep scope tight to core actions; complex/batch ops remain disabled
+      createTask: true,
+      updateTask: true,
+      deleteTask: true,
+      // Leave project/batch operations disabled by default
       createProject: false,
       updateProject: false,
       deleteProject: false,
@@ -108,9 +110,10 @@ const BUILT_IN_PRIMARY_MODES: Record<string, PrimaryModeConfig> = {
       updateBatchTasks: false,
       createProjectWithTasks: false,
       reorganizeTasksBatch: false,
-      createCalendarEvent: false,
-      updateCalendarEvent: false,
-      deleteCalendarEvent: false,
+      // Calendar direct execution
+      createCalendarEvent: true,
+      updateCalendarEvent: true,
+      deleteCalendarEvent: true,
       
       // Read-only tools permitted in primary for context gathering
       Write: false,

@@ -166,7 +166,7 @@ export const chatWithAI = action({
     
     // OpenCode-style unified config retrieval
     // use userId directly without separate token identifier
-    console.log(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
+    logDebug(`🔍 [MODEL_SELECTION] Fetching config for user: ${userId.substring(0, 20)}...`);
     
     let userConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
     // Load global defaults once (admin-selected) and prefer them for everyone
@@ -174,43 +174,43 @@ export const chatWithAI = action({
     try {
       globalConfig = await ctx.runQuery(api.providers.unified.getGlobalProviderConfig, {});
     } catch (e) {
-      console.warn(`⚠️ [MODEL_SELECTION] Failed to load global config:`, e);
+      logWarning(`⚠️ [MODEL_SELECTION] Failed to load global config: ${e instanceof Error ? e.message : String(e)}`);
     }
     const effectiveActiveModelId = globalConfig?.activeModelId || userConfig?.activeModelId;
-    console.log(`📋 [MODEL_SELECTION] Effective config:`, {
+    logDebug(`📋 [MODEL_SELECTION] Effective config: ${JSON.stringify({
       hasConfig: !!userConfig,
       activeModelId: effectiveActiveModelId,
       hasApiKey: !!userConfig?.openRouterApiKey,
       apiKeyPreview: userConfig?.openRouterApiKey ? `${userConfig.openRouterApiKey.substring(0, 10)}...` : 'none'
-    });
+    })}`);
     
     // OpenCode-style model selection hierarchy - trust and validate at runtime
     const selectedModelId: string = await (async (): Promise<string> => {
-      console.log(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
-      console.log(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
+      logDebug(`🎯 [MODEL_SELECTION] Starting model selection hierarchy...`);
+      logDebug(`   - userConfig?.activeModelId: ${userConfig?.activeModelId}`);
 
       // 1. If admin set a global model, use it for everyone
       if (globalConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using admin global selection: ${globalConfig.activeModelId}`);
+        logDebug(`🎯 [MODEL_SELECTION] Using admin global selection: ${globalConfig.activeModelId}`);
         return globalConfig.activeModelId;
       }
 
       // 2. Otherwise, use user's configured model (if any)
       if (userConfig?.activeModelId) {
-        console.log(`🎯 [MODEL_SELECTION] Using user selection: ${userConfig.activeModelId}`);
+        logDebug(`🎯 [MODEL_SELECTION] Using user selection: ${userConfig.activeModelId}`);
         return userConfig.activeModelId;
       }
       
       // 3. Get cached models only as fallback if user hasn't selected a model
-      console.log(`📦 [MODEL_FALLBACK] User has not selected a model, checking cached models...`);
+      logDebug(`📦 [MODEL_FALLBACK] User has not selected a model, checking cached models...`);
       const provider = userConfig?.apiProvider || "openrouter";
       const cachedModels = await ctx.runQuery(api.providers.unified.getCachedProviderModels, { provider });
-      console.log(`📦 [MODEL_FALLBACK] Cached models status:`, {
+      logDebug(`📦 [MODEL_FALLBACK] Cached models status: ${JSON.stringify({
         hasCachedModels: !!cachedModels,
         modelCount: cachedModels?.models?.length || 0,
         lastFetched: cachedModels?.lastFetched ? new Date(cachedModels.lastFetched).toISOString() : 'never',
         provider
-      });
+      })}`);
       
       // 4. No fallback - require dashboard selection
       console.error(`❌ [MODEL_SELECTION] No model selected (global/user)`);
@@ -222,10 +222,7 @@ export const chatWithAI = action({
     const modelName = selectedModelId;
     const provider = userConfig?.apiProvider || "openrouter";
     
-    console.log(`🔄 [MODEL_SELECTION] Using full model ID:`, {
-      modelId: modelName,
-      provider: provider
-    });
+    logDebug(`🔄 [MODEL_SELECTION] Using full model ID: ${JSON.stringify({ modelId: modelName, provider })}`);
     
     if (process.env.LOG_LEVEL !== 'error') {
       logStep('Model Init', `${modelName} (${provider})`);
@@ -244,7 +241,7 @@ export const chatWithAI = action({
       throw new Error("Google Vertex AI is temporarily disabled in this build. Please select an OpenRouter model in Admin Dashboard.");
     } else {
       // Initialize OpenRouter (default)
-      console.log(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
+      logDebug(`🔄 [MODEL_SELECTION] Initializing OpenRouter provider`);
       
       // Get API key from unified config (user → global → env)
       const apiKey = userConfig?.openRouterApiKey || globalConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY;
@@ -253,7 +250,7 @@ export const chatWithAI = action({
         : globalConfig?.openRouterApiKey
           ? 'global_config'
           : 'environment';
-      console.log(`🔑 [MODEL_SELECTION] API key source: ${apiKeySource}`);
+      logDebug(`🔑 [MODEL_SELECTION] API key source: ${apiKeySource}`);
       
       if (!apiKey) {
         console.error(`❌ [MODEL_SELECTION] No API key found - userConfig: ${!!userConfig?.openRouterApiKey}, env: ${!!process.env.OPENROUTER_API_KEY}`);
@@ -290,15 +287,12 @@ export const chatWithAI = action({
             googleEnableReasoning: userConfig.googleEnableReasoning,
             activeModelId: userConfig.activeModelId,
           });
-          console.log(`🔁 [MODEL_SELECTION] Cleared OpenRouter provider override for model ${modelName}`);
+          logDebug(`🔁 [MODEL_SELECTION] Cleared OpenRouter provider override for model ${modelName}`);
           try {
             const refreshedConfig = await ctx.runQuery(api.providers.unified.getUserProviderConfig, { tokenIdentifier: userId });
             const stillLocked = refreshedConfig?.openRouterSpecificProvider;
-            if (stillLocked) {
-              logWarning(`Provider override persisted after reset attempt: ${stillLocked}`);
-            } else {
-              logDebug(`Provider override successfully cleared for ${modelName}`);
-            }
+            if (stillLocked) { logWarning(`Provider override persisted after reset attempt: ${stillLocked}`); }
+            else { logDebug(`Provider override successfully cleared for ${modelName}`); }
           } catch (recheckError) {
             logWarning(`Failed to verify provider override reset: ${recheckError instanceof Error ? recheckError.message : recheckError}`);
           }
@@ -325,7 +319,7 @@ export const chatWithAI = action({
               }
             }
           } catch (validationError) {
-            console.warn(`⚠️ [MODEL_SELECTION] Failed to validate provider override "${lockedProvider}":`, validationError);
+            logWarning(`⚠️ [MODEL_SELECTION] Failed to validate provider override "${lockedProvider}": ${validationError instanceof Error ? validationError.message : String(validationError)}`);
           }
         }
       }
@@ -338,7 +332,9 @@ export const chatWithAI = action({
         extraBody: { ...buildProviderPreferences(lockedProvider), user: userId },
       });
 
-      console.info(`🛠️ [MODEL_SELECTION] Prepared OpenRouter client for ${modelName} with routing:`, buildProviderPreferences(lockedProvider));
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.info(`🛠️ [MODEL_SELECTION] Prepared OpenRouter client for ${modelName} with routing:`, buildProviderPreferences(lockedProvider));
+      }
     }
     
     // Initialize Langfuse tracing
@@ -380,10 +376,12 @@ export const chatWithAI = action({
       const embeddedMode = embeddedData?.mode;
       
       // MODE DETERMINATION LOGGING: Enhanced logging for mode debugging
-      console.log(`🔍 [MODE_DETERMINATION] Session: ${sessionId?.substring(0, 8) || 'none'}`);
-      console.log(`   📊 Database mode: ${activeMode} (authoritative source)`);
-      console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'stale from reset' : 'reset due to serverless'} - IGNORED)`);
-      console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata - fallback only)`);
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log(`🔍 [MODE_DETERMINATION] Session: ${sessionId?.substring(0, 8) || 'none'}`);
+        console.log(`   📊 Database mode: ${activeMode} (authoritative source)`);
+        console.log(`   🧠 Memory mode: ${inMemoryMode || 'none'} (${inMemoryMode ? 'stale from reset' : 'reset due to serverless'} - IGNORED)`);
+        console.log(`   📝 Embedded mode: ${embeddedMode || 'none'} (from last message metadata - fallback only)`);
+      }
 
       logDebug(`[MODE_PRECEDENCE] Database-first: DB=${activeMode}, Embedded=${embeddedMode || 'none'}, Memory=${inMemoryMode || 'none'} (ignored)`);
       
@@ -393,18 +391,20 @@ export const chatWithAI = action({
       const effectiveMode = activeMode || embeddedMode || 'primary';
       let currentModeName = effectiveMode;
 
-      console.log(`   ✅ Effective mode: ${effectiveMode} (${
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log(`   ✅ Effective mode: ${effectiveMode} (${ 
         activeMode && activeMode !== 'primary' ? 'from database' :
         embeddedMode ? 'from embedded metadata' :
         'default primary'
       })`);
+      }
       
       // Always sync ModeController with database mode at function start
       // This ensures in-memory state matches the authoritative database state
       if (sessionId && activeMode) {
         ModeController.setCurrentMode(sessionId, activeMode);
         logDebug(`[MODE_SYNC] Synced ModeController to database mode: ${activeMode}`);
-        console.log(`   🔁 ModeController synchronized with database: ${activeMode}`);
+        logDebug(`   🔁 ModeController synchronized with database: ${activeMode}`);
       }
       
       logDebug("Using primary mode - LLM will determine delegation via task tool");
@@ -488,11 +488,11 @@ export const chatWithAI = action({
         messages: cachedMessages
       });
 
-      // Create mode-specific tool registry and log current mode with tool count
-      tools = await createSessionModeToolRegistry(ctx, userId, currentModeName, currentTimeContext, sessionId);
-      const toolCount = Object.keys(tools).length;
-      logCurrentMode(currentModeName, toolCount, "orchestration mode", sessionId);
-      logDebug(`Created tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
+      // De-dup: Tool registry already created above for this turn. Avoid re-creating/logging.
+      {
+        const toolCount = Object.keys(tools).length;
+        logDebug(`Reusing tool registry for mode: ${currentModeName} with ${toolCount} tools available`);
+      }
 
       // Initialize tool repetition detector
       // const toolRepetitionDetector = new ToolRepetitionDetector(3);
@@ -607,7 +607,7 @@ export const chatWithAI = action({
       const finalToolResults: any[] = Array.isArray(rawToolResults) ? rawToolResults : [];
       const finalUsage = await result.usage;
       
-      console.log('✅ [BACKEND DEBUG] AI SDK result:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] AI SDK result:', {
         finalTextType: typeof finalText,
         finalTextLength: finalText?.length || 0,
         finalTextPreview: finalText ? finalText.substring(0, 100) + '...' : null,
@@ -738,7 +738,7 @@ export const chatWithAI = action({
      }
 
       // Add consolidated assistant response (fix double response issue)
-      console.log('🔄 [BACKEND DEBUG] Building final conversation history:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('🔄 [BACKEND DEBUG] Building final conversation history:', {
         finalHistoryLength: finalHistory.length,
         finalToolCallsLength: finalToolCalls.length,
         finalTextLength: finalText?.length || 0,
@@ -769,7 +769,7 @@ export const chatWithAI = action({
           }));
         }
       
-        console.log('➕ [BACKEND DEBUG] Adding embedded assistant message:', {
+        if (process.env.LOG_LEVEL === 'debug') console.log('➕ [BACKEND DEBUG] Adding embedded assistant message:', {
           contentPreview: assistantMessage.content.substring(0, 50) + '...',
           embeddedMode: assistantMessage.mode,
           toolStatesCount: Object.keys(toolStates || {}).length
@@ -815,7 +815,7 @@ export const chatWithAI = action({
       }
 
       // Save conversation - simple, direct approach
-      console.log('💾 [BACKEND DEBUG] Saving conversation to database:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('💾 [BACKEND DEBUG] Saving conversation to database:', {
         sessionId,
         messageCount: finalHistory.length,
         lastMessages: finalHistory.slice(-3).map(msg => ({
@@ -834,7 +834,7 @@ export const chatWithAI = action({
       // Database mode is now the single source of truth, updated only by switchMode tool
       // This prevents stale embedded metadata from overwriting correct database mode
       
-      console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] Conversation saved successfully:', {
         conversationId: savedConversationId,
         sessionId
       });
@@ -908,7 +908,7 @@ export const chatWithAI = action({
       // Remove any XML tags from the response to prevent them from being returned to the user
       let cleanResponse: string = finalText || safeFallback;
       
-      console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
         originalResponse: cleanResponse,
         originalLength: cleanResponse.length
       });
@@ -937,9 +937,23 @@ export const chatWithAI = action({
         }
       }
       
+      // Prevent false success claims when no execution tool actually succeeded this turn
+      try {
+        const successPhrases = /(created|scheduled|added|updated|deleted|booked|completed)\b/i;
+        const executionTools = new Set([
+          'createCalendarEvent','updateCalendarEvent','deleteCalendarEvent',
+          'createTask','updateTask','deleteTask',
+          'createBatchTasks','deleteBatchTasks','completeBatchTasks','updateBatchTasks'
+        ]);
+        const hasExecutionResult = Array.isArray(finalToolResults) && finalToolResults.some((tr: any) => executionTools.has(tr.toolName));
+        if (successPhrases.test(cleanResponse) && !hasExecutionResult) {
+          cleanResponse = safeFallback;
+        }
+      } catch {}
+
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
       
-      console.log('✅ [BACKEND DEBUG] Final clean response:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] Final clean response:', {
         cleanResponseLength: cleanResponse.length,
         cleanResponsePreview: cleanResponse.substring(0, 100) + '...'
       });
@@ -961,7 +975,7 @@ export const chatWithAI = action({
         console.warn("[Logging] Failed to log final response:", loggingError);
       }
       
-      console.log('📤 [BACKEND DEBUG] Returning response to frontend:', {
+      if (process.env.LOG_LEVEL === 'debug') console.log('📤 [BACKEND DEBUG] Returning response to frontend:', {
         responseLength: cleanResponse.length,
         responsePreview: cleanResponse.substring(0, 100) + '...',
         hasMetadata: !!finalUsage

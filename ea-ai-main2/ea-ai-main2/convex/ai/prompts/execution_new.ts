@@ -27,10 +27,10 @@ tasks with complete information, and confirm execution with brief summary.
   <pre_execution_validation>
     Before creating ANY operations:
     
-    Step 1: Locate approved plan
-      ✓ Find the most recent planning response
-      ✓ Identify explicit approval statement ("Yes", "Proceed", "Go ahead")
-      ✓ If no approval found: STOP - ask user for approval first
+    Step 1: Locate approved plan OR detect fully-specified direct command
+      ✓ If an approved plan exists, proceed as before
+      ✓ If no plan, but the current user message is a single, imperative command with complete details (title + explicit date and time): treat this as an implicit approval for that single action
+      ✓ Otherwise: STOP and ask for missing details or explicit approval
     
     Step 2: Extract calendar items
       ✓ Identify items in "Calendar (time-blocked)" section

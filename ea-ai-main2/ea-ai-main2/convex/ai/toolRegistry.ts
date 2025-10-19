@@ -289,7 +289,6 @@ export async function createModeToolRegistry(
     if (process.env.LOG_LEVEL === 'debug') {
       console.log(`[MODE_TOOLS] Filtered tools for mode ${modeName}: ${Object.keys(filteredTools).length}/${Object.keys(allTools).length}`);
       console.log(`[MODE_TOOLS] Available tools in ${modeName}: ${Object.keys(filteredTools).join(', ')}`);
-    } else {
       logModeSwitch("unknown", modeName, "tool registry loaded", sessionId?.toString());
     }
     
