@@ -334,9 +334,10 @@ export async function chatHandler(ctx: any, request: Request) {
             finish
           );
 
-          const finalAssistantText = assistantText.trim().length
-            ? assistantText.trim()
-            : "I've got it.";
+           // If no text was generated, it's because the turn consisted only of tool calls.
+           // Return an empty string and the frontend will not display a new message,
+           // but the conversation history is correctly updated for the next turn.
+           const finalAssistantText = assistantText.trim();
 
           if (normalizedToolCalls.length) {
             logToolCalls(normalizedToolCalls.map((call) => ({ name: call.name, args: call.args })));

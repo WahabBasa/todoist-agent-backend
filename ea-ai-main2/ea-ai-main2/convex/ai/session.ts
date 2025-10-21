@@ -450,7 +450,9 @@ export const chatWithAI = action({
       }
 
       // Direct conversion to AI SDK format - no complex pipeline
-      const modelMessages = convertConvexToModelMessages(historyWithModePrompts);
+      // Maintain Convex-style history and always rebuild ModelMessages from it each step (OpenCode pattern)
+      let convHistory = historyWithModePrompts;
+      const modelMessages = convertConvexToModelMessages(convHistory);
 
       // Initialize caching for performance
       MessageCaching.initializeCaching();
@@ -497,115 +499,190 @@ export const chatWithAI = action({
       // Initialize tool repetition detector
       // const toolRepetitionDetector = new ToolRepetitionDetector(3);
 
-      // ===== Monthly token cap pre-check (hard 1,000,000 tokens/user/month) =====
-      const monthlySoFar = await ctx.runQuery(api.usage.getMonthlyTotal, { tokenIdentifier: userId });
-      const monthlyCap = await ctx.runQuery(api.usage.getMonthlyCap, { tokenIdentifier: userId });
-      if ((monthlySoFar || 0) >= monthlyCap) {
-        throw new Error("Monthly token limit reached (1,000,000 tokens). Resets next month.");
-      }
-      const remainingMonthly = Math.max(0, monthlyCap - (monthlySoFar || 0));
-      // cap per-call output to remaining budget to avoid single-call overflow
-      const maxTokensForCall = Math.max(1, Math.min(remainingMonthly, 8192));
+       // ===== Monthly token cap pre-check (hard 1,000,000 tokens/user/month) =====
+       const monthlySoFar = await ctx.runQuery(api.usage.getMonthlyTotal, { tokenIdentifier: userId });
+       const monthlyCap = await ctx.runQuery(api.usage.getMonthlyCap, { tokenIdentifier: userId });
+       if ((monthlySoFar || 0) >= monthlyCap) {
+         throw new Error("Monthly token limit reached (1,000,000 tokens). Resets next month.");
+       }
+       const remainingMonthly = Math.max(0, monthlyCap - (monthlySoFar || 0));
+       // cap per-call output to remaining budget to avoid single-call overflow
+       const maxTokensForCall = Math.max(1, Math.min(remainingMonthly, 8192));
 
-      // Enhanced retry wrapper for rate limiting resilience
-      async function streamTextWithRateLimit(params: any): Promise<StreamTextResult<Record<string, any>, never>> {
-        let attempt = 0;
-        const maxAttempts = 5;
-        
-        while (attempt < maxAttempts) {
-          try {
-            logDebug(`[RETRY] Attempt ${attempt + 1}/${maxAttempts} for model ${modelName}`);
-            
-            return await streamText({
-              ...params,
-              maxRetries: 8, // Increased from 3 to 8 for rate limit resilience
-            });
-            
-          } catch (error: any) {
-            // Enhanced error classification
-            const isRateLimit = error?.statusCode === 429 || 
-                               error?.responseBody?.includes('rate-limited') ||
-                               error?.message?.includes('rate limit') ||
-                               error?.message?.includes('temporarily rate-limited');
-            
-            if (isRateLimit && attempt < maxAttempts - 1) {
-              // Parse retry-after header if available
-              const retryAfter = error?.responseHeaders?.['retry-after'] || 
-                               error?.responseHeaders?.['Retry-After'];
-              const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : null;
-              
-              // Exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s (capped at 30s)
-              const baseDelay = Math.min(1000 * Math.pow(2, attempt), 30000);
-              const jitter = Math.random() * 1000; // Add 0-1s jitter
-              const delay = retryAfterSeconds ? retryAfterSeconds * 1000 : baseDelay + jitter;
-              
-              logWarning(`[RATE_LIMIT] Attempt ${attempt + 1} failed, retrying in ${Math.round(delay/1000)}s. Model: ${modelName}`);
-              
-              // Create structured rate limit error for logging
-              const rateLimitError = new RateLimitError(
-                error?.statusCode || 429,
-                retryAfterSeconds ?? undefined,
-                provider,
-                modelName
-              );
-              logError(rateLimitError, `Rate limit retry ${attempt + 1}/${maxAttempts}`);
-              
-              await new Promise(resolve => setTimeout(resolve, delay));
-              attempt++;
-              continue;
-            }
-            
-            // For non-rate-limit errors or final attempt, classify and throw
-            if (error?.statusCode === 401 || error?.message?.includes('API key') || error?.message?.includes('Unauthorized')) {
-              throw new ProviderAuthError(provider, error.message || 'Authentication failed', modelName);
-            } else if (error?.statusCode === 404 || error?.message?.includes('model not found')) {
-              throw new ModelNotFoundError(modelName, provider);
-            } else if (isRateLimit) {
-              // Final rate limit attempt failed
-              const retryAfterSeconds = error?.responseHeaders?.['retry-after'] || 
-                                      error?.responseHeaders?.['Retry-After'];
-              throw new RateLimitError(error?.statusCode || 429, retryAfterSeconds ? parseInt(retryAfterSeconds) : undefined, provider, modelName);
-            }
-            
-            // Re-throw original error for unhandled cases
-            throw error;
-          }
-        }
-        
-        throw new Error(`Max retry attempts (${maxAttempts}) exceeded for ${modelName}`);
-      }
+       // Enhanced retry wrapper for rate limiting resilience
+       async function streamTextWithRateLimit(params: any): Promise<StreamTextResult<Record<string, any>, never>> {
+         let attempt = 0;
+         const maxAttempts = 5;
 
-      // Use enhanced streamText with rate limit handling
-      // Pass the correctly parsed model name to the appropriate provider
-      const result: StreamTextResult<Record<string, any>, never> = await streamTextWithRateLimit({
-        model: modelProvider.chat(modelName, {
-          usage: { include: true },
-          // Enforce hard monthly remaining budget on this call
-          maxTokens: maxTokensForCall,
-        }),
-        messages: cachedMessages,
-        tools,
-        // Allow multi-step tool workflows for complex operations
-        stopWhen: stepCountIs(8), // Allow up to 8 steps for complex multi-tool operations
-      });
-      
+         while (attempt < maxAttempts) {
+           try {
+             logDebug(`[RETRY] Attempt ${attempt + 1}/${maxAttempts} for model ${modelName}`);
 
-      // Let AI SDK handle the entire streaming and tool execution process
-      // This is much simpler than manual stream processing
+             return await streamText({
+               ...params,
+               maxRetries: 8, // Increased from 3 to 8 for rate limit resilience
+             });
 
-      // Get final result from AI SDK - properly await promises
-      const finalText: string = await result.text;
-      const rawToolCalls = await result.toolCalls;
-      const rawToolResults = await result.toolResults;
-      if (!Array.isArray(rawToolCalls)) {
-        logError(new Error("Tool calls result was not an array"), "Stream shape invalid");
-      }
-      if (!Array.isArray(rawToolResults)) {
-        logError(new Error("Tool results result was not an array"), "Stream shape invalid");
-      }
-      const finalToolCalls: any[] = Array.isArray(rawToolCalls) ? rawToolCalls : [];
-      const finalToolResults: any[] = Array.isArray(rawToolResults) ? rawToolResults : [];
-      const finalUsage = await result.usage;
+           } catch (error: any) {
+             // Enhanced error classification
+             const isRateLimit = error?.statusCode === 429 ||
+                                error?.responseBody?.includes('rate-limited') ||
+                                error?.message?.includes('rate limit') ||
+                                error?.message?.includes('temporarily rate-limited');
+
+             if (isRateLimit && attempt < maxAttempts - 1) {
+               // Parse retry-after header if available
+               const retryAfter = error?.responseHeaders?.['retry-after'] ||
+                                error?.responseHeaders?.['Retry-After'];
+               const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : null;
+
+               // Exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+               const baseDelay = Math.min(1000 * Math.pow(2, attempt), 30000);
+               const jitter = Math.random() * 1000; // Add 0-1s jitter
+               const delay = retryAfterSeconds ? retryAfterSeconds * 1000 : baseDelay + jitter;
+
+               logWarning(`[RATE_LIMIT] Attempt ${attempt + 1} failed, retrying in ${Math.round(delay/1000)}s. Model: ${modelName}`);
+
+               // Create structured rate limit error for logging
+               const rateLimitError = new RateLimitError(
+                 error?.statusCode || 429,
+                 retryAfterSeconds ?? undefined,
+                 provider,
+                 modelName
+               );
+               logError(rateLimitError, `Rate limit retry ${attempt + 1}/${maxAttempts}`);
+
+               await new Promise(resolve => setTimeout(resolve, delay));
+               attempt++;
+               continue;
+             }
+
+             // For non-rate-limit errors or final attempt, classify and throw
+             if (error?.statusCode === 401 || error?.message?.includes('API key') || error?.message?.includes('Unauthorized')) {
+               throw new ProviderAuthError(provider, error.message || 'Authentication failed', modelName);
+             } else if (error?.statusCode === 404 || error?.message?.includes('model not found')) {
+               throw new ModelNotFoundError(modelName, provider);
+             } else if (isRateLimit) {
+               // Final rate limit attempt failed
+               const retryAfterSeconds = error?.responseHeaders?.['retry-after'] ||
+                                       error?.responseHeaders?.['Retry-After'];
+               throw new RateLimitError(error?.statusCode || 429, retryAfterSeconds ? parseInt(retryAfterSeconds) : undefined, provider, modelName);
+             }
+
+             // Re-throw original error for unhandled cases
+             throw error;
+           }
+         }
+
+         throw new Error(`Max retry attempts (${maxAttempts}) exceeded for ${modelName}`);
+       }
+
+       // Define variables to hold the final results of the multi-step conversation.
+       let messages = cachedMessages;
+       let finalText = '';
+       let finalToolCalls: any[] = [];
+       let finalToolResults: any[] = [];
+       let finalUsage: any = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+       // Allow up to 5 steps (e.g., 2 tool calls and a final response) to prevent infinite loops.
+       const maxSteps = 5;
+
+       for (let i = 0; i < maxSteps; i++) {
+         const result = await streamTextWithRateLimit({
+           model: modelProvider.chat(modelName, {
+             usage: { include: true },
+             maxTokens: maxTokensForCall,
+           }),
+           messages,
+           tools,
+           stopWhen: stepCountIs(1),
+           activeTools: Object.keys(tools),
+         });
+
+         // Capture tool-call names and tool-error events while streaming (align with OpenCode)
+         const toolNameById: Record<string, string> = {};
+         const pendingErrors: Array<{ toolCallId: string; toolName: string; result: any }> = [];
+
+         try {
+           for await (const ev of (result as any).fullStream) {
+             if (!ev || !ev.type) continue;
+             if (ev.type === 'tool-call') {
+               if (ev.toolCallId && ev.toolName) {
+                 toolNameById[ev.toolCallId] = ev.toolName;
+               }
+             } else if (ev.type === 'tool-error') {
+               const id = ev.toolCallId as string;
+               const name = toolNameById[id] || 'unknown';
+               const errMsg = ev?.error?.message ?? (typeof ev?.error === 'string' ? ev.error : String(ev?.error ?? 'Tool error'));
+               pendingErrors.push({ toolCallId: id, toolName: name, result: { error: errMsg } });
+             }
+           }
+         } catch (_) {
+           // Ignore stream consumption errors; aggregated getters below still resolve
+         }
+
+         // Await all promises from the stream result
+         const [text, toolCalls, rawToolResults, usage, finishReason] = await Promise.all([
+           result.text,
+           result.toolCalls,
+           result.toolResults,
+           result.usage,
+           result.finishReason,
+         ]);
+
+         const mergedToolResults = [...rawToolResults, ...pendingErrors.map(e => ({
+           toolCallId: e.toolCallId,
+           toolName: e.toolName,
+           output: e.result,
+         }))];
+
+         // Aggregate usage stats from each step
+         finalUsage.inputTokens += usage.inputTokens || 0;
+         finalUsage.outputTokens += usage.outputTokens || 0;
+         finalUsage.totalTokens += usage.totalTokens || 0;
+
+         // Store the latest results from this step
+         finalText = text;
+         finalToolCalls = toolCalls;
+         finalToolResults = mergedToolResults;
+
+         // If the model did not call a tool, the conversation is over.
+         if (finishReason !== 'tool-calls' || toolCalls.length === 0) {
+           break;
+         }
+
+            // If the model did call a tool, persist tool calls/results into Convex-style history
+            // and rebuild ModelMessages from history for the next iteration.
+            convHistory = [
+              ...convHistory,
+              {
+                role: 'assistant',
+                content: '',
+                toolCalls: finalToolCalls.map((toolCall: any) => ({
+                  name: toolCall.toolName,
+                  args: toolCall.input,
+                  toolCallId: toolCall.toolCallId,
+                })),
+                timestamp: Date.now(),
+              },
+              {
+                role: 'tool',
+                toolResults: finalToolResults.map((toolResult: any) => ({
+                  toolCallId: toolResult.toolCallId,
+                  toolName: toolResult.toolName,
+                  result: toolResult.output ?? toolResult.result,
+                })),
+                timestamp: Date.now(),
+              },
+            ] as any;
+
+            const rebuilt = convertConvexToModelMessages(convHistory);
+            const withSystem = [
+              { role: 'system' as const, content: systemPrompt },
+              ...rebuilt,
+            ];
+            messages = MessageCaching.applyCaching(withSystem, modelName);
+       }
       
       if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] AI SDK result:', {
         finalTextType: typeof finalText,
@@ -880,19 +957,18 @@ export const chatWithAI = action({
       }
 
       // End conversation and flush to Langfuse Cloud
-      // Minimal neutral fallback when the model doesn't return text
-      const neutralFallback = "Okay.";
 
-      await endConversation({
-        response: finalText || neutralFallback,
-        toolCalls: finalToolCalls.length,
-        toolResults: finalToolResults.length,
-        tokens: finalUsage ? {
-          input: finalUsage.inputTokens || 0,
-          output: finalUsage.outputTokens || 0,
-          total: finalUsage.totalTokens || 0
-        } : undefined
-      });
+
+       await endConversation({
+         response: finalText || "Okay.", // Using a literal here is fine for the trace.
+         toolCalls: finalToolCalls.length,
+         toolResults: finalToolResults.length,
+         tokens: finalUsage ? {
+           input: finalUsage.inputTokens || 0,
+           output: finalUsage.outputTokens || 0,
+           total: finalUsage.totalTokens || 0
+         } : undefined
+       });
       
       // Log session completion (with error protection)
       try {
@@ -904,7 +980,7 @@ export const chatWithAI = action({
       
       // Return simple response
       // Remove any XML tags from the response to prevent them from being returned to the user
-      let cleanResponse: string = finalText || neutralFallback;
+       let cleanResponse: string = finalText || "";
       
       if (process.env.LOG_LEVEL === 'debug') console.log('✅ [BACKEND DEBUG] Pre-cleanup response:', {
         originalResponse: cleanResponse,
@@ -927,19 +1003,7 @@ export const chatWithAI = action({
         }
       }
       
-      // Prevent false success claims when no execution tool actually succeeded this turn
-      try {
-        const successPhrases = /(created|scheduled|added|updated|deleted|booked|completed)\b/i;
-        const executionTools = new Set([
-          'createCalendarEvent','updateCalendarEvent','deleteCalendarEvent',
-          'createTask','updateTask','deleteTask',
-          'createBatchTasks','deleteBatchTasks','completeBatchTasks','updateBatchTasks'
-        ]);
-        const hasExecutionResult = Array.isArray(finalToolResults) && finalToolResults.some((tr: any) => executionTools.has(tr.toolName));
-        if (successPhrases.test(cleanResponse) && !hasExecutionResult) {
-          cleanResponse = neutralFallback;
-        }
-      } catch {}
+
 
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
       
