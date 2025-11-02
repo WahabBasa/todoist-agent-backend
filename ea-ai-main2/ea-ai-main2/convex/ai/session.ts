@@ -934,6 +934,73 @@ export const chatWithAI = action({
         }
       }
 
+      // Guard: detect param-only responses (two ISO lines + optional timezone) and
+      // convert them into a proper calendar query + summarized reply.
+      function parseIsoRangeFromText(text: string): { timeMin: string; timeMax: string; timeZone?: string } | null {
+        if (!text) return null;
+        const lines = text
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        if (lines.length < 2) return null;
+        const isoRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+        const tzRe = /^(UTC(?:[+-]\d{1,2}(?::?\d{2})?)?|[A-Za-z]+\/[A-Za-z_]+)$/;
+        if (!isoRe.test(lines[0]) || !isoRe.test(lines[1])) return null;
+        const maybeTz = lines[2] && tzRe.test(lines[2]) ? lines[2] : undefined;
+        return { timeMin: lines[0], timeMax: lines[1], timeZone: maybeTz };
+      }
+
+      if ((finalToolResults?.length ?? 0) === 0 && typeof finalText === 'string') {
+        const parsed = parseIsoRangeFromText(finalText);
+        if (parsed) {
+          try {
+            const result: any = await ctx.runAction(api.googleCalendar.auth.getCalendarEventTimes as any, {
+              start: parsed.timeMin,
+              end: parsed.timeMax,
+            });
+
+            const events = Array.isArray(result)
+              ? result.map((e: any) => ({
+                  title: e.title,
+                  start: e.start,
+                  end: e.end,
+                  isAllDay: !!e.isAllDay,
+                }))
+              : [];
+
+            const callId = `synthetic_${Date.now()}`;
+            finalToolCalls = [
+              ...finalToolCalls,
+              {
+                toolCallId: callId,
+                toolName: 'listCalendarEvents',
+                input: { timeMin: parsed.timeMin, timeMax: parsed.timeMax, timeZone: parsed.timeZone },
+              },
+            ];
+            finalToolResults = [
+              ...finalToolResults,
+              {
+                toolCallId: callId,
+                toolName: 'listCalendarEvents',
+                output: { events, meta: { start: parsed.timeMin, end: parsed.timeMax, timeZone: parsed.timeZone } },
+              },
+            ];
+
+            finalText = '';
+            if (process.env.LOG_LEVEL === 'debug') {
+              console.log('[BACKEND DEBUG] Converted param-only response into calendar tool call', {
+                timeMin: parsed.timeMin,
+                timeMax: parsed.timeMax,
+                timeZone: parsed.timeZone || 'unspecified',
+                eventCount: events.length,
+              });
+            }
+          } catch (e) {
+            console.warn('[ParamGuard] Failed to fetch calendar events for parsed range:', e);
+          }
+        }
+      }
+
       // Save conversation - simple, direct approach
       if (process.env.LOG_LEVEL === 'debug') console.log('💾 [BACKEND DEBUG] Saving conversation to database:', {
         sessionId,

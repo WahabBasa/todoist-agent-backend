@@ -154,6 +154,10 @@ export async function createSimpleToolRegistry(
         // Legacy API compatibility
         inputSchema: simpleTool.inputSchema,
         execute: async (args: any, _options?: any) => {
+          if (process.env.LOG_LEVEL === 'debug') {
+            const hasCtx = !!context.currentTimeContext;
+            console.log(`[TOOLS] Executing ${simpleTool.id} (hasTimeContext=${hasCtx})`);
+          }
           // Create OpenTelemetry span for tool call
           createToolCallSpan({
             toolName: simpleTool.id,

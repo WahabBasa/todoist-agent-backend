@@ -162,9 +162,7 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
         timeZone: z.string().optional().describe("IANA timezone used to resolve nlRange."),
         maxResults: z.number().optional(),
         calendarIds: z.array(z.string()).optional(),
-      }),
-      // Accept empty {} to surface a helpful message instead of a validation failure
-      z.object({}).strict()
+      })
     ]),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       // Expect explicit ISO boundaries for full flexibility
@@ -265,7 +263,10 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
       } catch {
         // Use browser-provided time context if available
         if ((context as any).currentTimeContext) {
-          console.log("[getCurrentTime] Using browser-provided time context");
+          console.log("[getCurrentTime] Using browser-provided time context", {
+            hasContext: true,
+            tz: (context as any).currentTimeContext?.userTimezone,
+          });
           const timeContext = (context as any).currentTimeContext;
           return {
             title: "Current Time Retrieved",
@@ -278,7 +279,9 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
           };
         }
         // Fallback to server time if no other context provided
-        console.warn("[getCurrentTime] No browser context provided, using server time");
+        console.warn("[getCurrentTime] No browser context provided, using server time", {
+          hasContext: !!(context as any).currentTimeContext,
+        });
         const now = new Date();
         return {
           title: "Current Time Retrieved (Server Fallback)",

@@ -56,25 +56,52 @@ const GCAL_SCOPES = [
 /**
  * Helper: Fetch Clerk Google access token for current user and discover its scopes.
  */
-async function getClerkAccessTokenAndScopes(clerkUserId: string): Promise<{ accessToken: string; scopes: string[] } | null> {
+async function getClerkAccessTokenAndScopes(
+  clerkUserId: string,
+): Promise<{ accessToken: string; scopes: string[]; provider: string } | null> {
   const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-  const tokens = await clerkClient.users.getUserOauthAccessToken(clerkUserId, "oauth_google");
-  const accessToken = tokens?.data?.[0]?.token as string | undefined;
-  if (!accessToken) return null;
+
+  async function tryProvider(provider: string) {
+    try {
+      const tokens = await clerkClient.users.getUserOauthAccessToken(clerkUserId, provider as any);
+      const accessToken = tokens?.data?.[0]?.token as string | undefined;
+      return accessToken ? { accessToken, count: tokens?.data?.length || 0 } : null;
+    } catch (e) {
+      // Debug hint only; don't throw to allow fallback
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.warn(`[ClerkOAuth] getUserOauthAccessToken failed for provider=${provider}:`, e instanceof Error ? e.message : e);
+      }
+      return null;
+    }
+  }
+
+  // Try the common provider slugs in order
+  const providers = ["oauth_google", "google"];
+  let access: { accessToken: string; count: number } | null = null;
+  let used: string | null = null;
+  for (const p of providers) {
+    access = await tryProvider(p);
+    if (access) {
+      used = p;
+      break;
+    }
+  }
+  if (!access || !used) return null;
 
   // Use Google's tokeninfo endpoint to retrieve scopes for this access token
   try {
-    const resp = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(accessToken));
+    const resp = await fetch(
+      "https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(access.accessToken),
+    );
     if (!resp.ok) {
-      // If tokeninfo fails, assume unknown scopes; caller will handle
-      return { accessToken, scopes: [] };
+      return { accessToken: access.accessToken, scopes: [], provider: used };
     }
     const json: any = await resp.json();
     const scopeStr: string = json?.scope || "";
     const scopes = scopeStr.split(/\s+/).filter(Boolean);
-    return { accessToken, scopes };
+    return { accessToken: access.accessToken, scopes, provider: used };
   } catch {
-    return { accessToken, scopes: [] };
+    return { accessToken: access.accessToken, scopes: [], provider: used };
   }
 }
 
@@ -87,7 +114,7 @@ async function getClerkOAuthClientWithScopes(requiredScopes: string[], clerkUser
   if (!tokenInfo) {
     throw new Error("Google Calendar not connected. Please connect in Settings.");
   }
-  const missing = requiredScopes.filter(s => !tokenInfo.scopes.includes(s));
+  const missing = requiredScopes.filter((s) => !tokenInfo.scopes.includes(s));
   if (missing.length > 0) {
     throw new Error(`Google Calendar is connected but missing required scope(s): ${missing.join(", ")}. Please reconnect in Settings.`);
   }
@@ -177,6 +204,49 @@ export const testGoogleCalendarConnection = action({
       console.error("Error testing Google Calendar connection:", error);
       return { success: false, error: error instanceof Error ? error.message : "Unknown error", testTimestamp: Date.now() };
     }
+  },
+});
+
+// Debug utility: inspect Clerk Google OAuth status for current user
+export const debugGoogleOAuthStatus = action({
+  args: {},
+  handler: async (ctx: ActionCtx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { success: false, error: "Not authenticated" };
+    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+
+    const providers = ["oauth_google", "google"];
+    const attempts: Array<{ provider: string; ok: boolean; count?: number; error?: string }> = [];
+    for (const p of providers) {
+      try {
+        const tokens = await clerkClient.users.getUserOauthAccessToken(identity.subject, p as any);
+        const count = tokens?.data?.length || 0;
+        attempts.push({ provider: p, ok: count > 0, count });
+      } catch (e) {
+        attempts.push({ provider: p, ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    let tokenInfo: { accessToken: string; scopes: string[]; provider: string } | null = null;
+    try {
+      tokenInfo = await getClerkAccessTokenAndScopes(identity.subject);
+    } catch {}
+
+    const env = {
+      CLERK_SECRET_KEY: Boolean(process.env.CLERK_SECRET_KEY),
+      GOOGLE_OAUTH_CLIENT_ID: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID),
+      GOOGLE_OAUTH_CLIENT_SECRET: Boolean(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+      GOOGLE_OAUTH_REDIRECT_URL: Boolean(process.env.GOOGLE_OAUTH_REDIRECT_URL),
+    };
+
+    return {
+      success: true,
+      identity: identity.subject,
+      attempts,
+      tokenProvider: tokenInfo?.provider || null,
+      scopes: tokenInfo?.scopes || [],
+      env,
+    };
   },
 });
 
