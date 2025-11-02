@@ -248,7 +248,36 @@ function buildUiPartsFromConvexMessage(msg: any): UiPart[] {
       toolInvocation.args = call.args;
     }
     if (result?.result !== undefined) {
-      (toolInvocation as any).result = result.result;
+      const payload = result.result as any
+      if (payload && typeof payload === 'object') {
+        const summary = typeof payload.summary === 'string' ? payload.summary : undefined
+        const raw = 'raw' in payload ? (payload as any).raw : undefined
+        const metadata = 'metadata' in payload ? (payload as any).metadata : undefined
+        const title = 'title' in payload ? (payload as any).title : undefined
+        const status = 'status' in payload ? (payload as any).status : undefined
+
+        if (summary && summary.trim()) {
+          toolInvocation.summary = summary
+          toolInvocation.result = summary
+        } else if (raw !== undefined) {
+          toolInvocation.result = stringifyForUi(raw)
+        }
+
+        if (raw !== undefined) {
+          toolInvocation.raw = raw
+        }
+        if (metadata !== undefined) {
+          toolInvocation.metadata = metadata
+        }
+        if (title !== undefined) {
+          toolInvocation.title = title
+        }
+        if (typeof status === 'string') {
+          toolInvocation.status = status as 'success' | 'info' | 'error'
+        }
+      } else {
+        toolInvocation.result = payload
+      }
     }
 
     parts.push({ type: 'tool-invocation', toolInvocation } as ToolInvocationUIPart);
@@ -993,4 +1022,13 @@ export function useChat() {
     throw new Error('useChat must be used within a ChatProvider');
   }
   return context;
+}
+
+function stringifyForUi(value: unknown): string {
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }

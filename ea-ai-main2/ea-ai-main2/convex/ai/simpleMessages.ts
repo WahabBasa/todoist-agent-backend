@@ -1,5 +1,16 @@
 import { ModelMessage, convertToModelMessages, type UIMessage } from "ai";
 
+function toModelString(value: unknown): string {
+  if (typeof value === "string") {
+    return value
+  }
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
 /**
  * Simplified message conversion for Vercel AI SDK + Convex integration
  * Replaces the complex 4-layer transformation pipeline with direct conversion
@@ -115,10 +126,14 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
               continue;
             }
 
+            const payload = (matchingResult as any).result
+            const outputValue =
+              payload && typeof payload === 'object' && payload !== null && 'raw' in (payload as Record<string, unknown>)
+                ? (payload as Record<string, unknown>).raw
+                : payload
+
             // For AI SDK v4 compatibility, provide string output
-            const outputString = typeof (matchingResult as any).result === 'string'
-              ? (matchingResult as any).result
-              : JSON.stringify((matchingResult as any).result);
+            const outputString = toModelString(outputValue)
             parts.push({
               type: `tool-${toolCall.name}` as `tool-${string}`,
               toolCallId: toolCall.toolCallId,

@@ -16,6 +16,11 @@ export interface ToolInvocationUIPart {
     toolName: string;
     args?: unknown;
     result?: unknown;
+    summary?: string;
+    raw?: unknown;
+    metadata?: unknown;
+    title?: string;
+    status?: 'success' | 'info' | 'error';
   };
 }
 

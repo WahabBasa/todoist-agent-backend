@@ -23,6 +23,7 @@ import { ModeController } from "./modes/controller";
 
 // Import clean logging system
 import { logStep, logModeSwitch, logUserMessage, logSession, logToolCalls, logCurrentMode, logNoToolsCalled, logDebug, logError, logFinalResponse, logWarning } from "./logger";
+import { summariseToolResults, formatToolResultForStorage, describeToolResult } from "./toolResultFormatter";
 
 // Import existing types
 
@@ -578,11 +579,14 @@ export const chatWithAI = action({
        }
 
        // Define variables to hold the final results of the multi-step conversation.
-       let messages = cachedMessages;
-       let finalText = '';
-       let finalToolCalls: any[] = [];
-       let finalToolResults: any[] = [];
-       let finalUsage: any = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      let messages = cachedMessages;
+      let finalText = '';
+      let finalToolCalls: any[] = [];
+      let finalToolResults: any[] = [];
+      let finalUsage: any = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      const toolErrorCounts: Record<string, { count: number; summary: string }> = {};
+      let forcedStopMessage: string | null = null;
+      const repeatedToolErrorLimit = 2;
 
        // Allow up to 5 steps (e.g., 2 tool calls and a final response) to prevent infinite loops.
        const maxSteps = 5;
@@ -646,8 +650,30 @@ export const chatWithAI = action({
          finalToolCalls = toolCalls;
          finalToolResults = mergedToolResults;
 
-         // If the model did not call a tool, the conversation is over.
-         if (finishReason !== 'tool-calls' || toolCalls.length === 0) {
+         // Track repeated tool errors to prevent infinite retries (e.g., missing_range)
+         mergedToolResults.forEach((toolResult: any) => {
+           const rawPayload = toolResult.output ?? toolResult.result;
+           const description = describeToolResult(toolResult.toolName, rawPayload);
+           if (description.summary && description.severity === "error") {
+             const key = `${toolResult.toolName ?? 'unknown'}::${description.summary}`;
+             const current = toolErrorCounts[key]?.count ?? 0;
+             const nextCount = current + 1;
+             toolErrorCounts[key] = { count: nextCount, summary: description.summary };
+             if (nextCount >= repeatedToolErrorLimit && !forcedStopMessage) {
+               forcedStopMessage = description.summary;
+             }
+           }
+         });
+
+         const shouldContinue = finishReason === 'tool-calls' && toolCalls.length > 0 && !forcedStopMessage;
+
+         if (!shouldContinue) {
+           if (forcedStopMessage && (!finalText || finalText.trim() === '')) {
+             finalText = forcedStopMessage;
+           }
+           if (forcedStopMessage) {
+             finalToolCalls = [];
+           }
            break;
          }
 
@@ -856,15 +882,32 @@ export const chatWithAI = action({
 
         // Add tool results as separate message (required for conversation flow)
         if (finalToolResults.length > 0) {
-          finalHistory.push({
-            role: "tool",
-            toolResults: finalToolResults.map((tr: any) => ({
+          const toolResultsForHistory = finalToolResults.map((tr: any) => {
+            const rawPayload = tr.output ?? tr.result
+            let extra: { title?: unknown; metadata?: unknown } | undefined
+
+            if (tr.output && typeof tr.output === "object" && tr.output !== null) {
+              const obj = tr.output as Record<string, unknown>
+              extra = {
+                title: obj.title,
+                metadata: obj.metadata ?? tr.metadata,
+              }
+            } else if (tr.metadata) {
+              extra = { metadata: tr.metadata }
+            }
+
+            return {
               toolCallId: tr.toolCallId,
               toolName: tr.toolName,
-              result: typeof tr.output === 'string' ? tr.output : JSON.stringify(tr.output)
-            })),
-            timestamp: Date.now()
-          });
+              result: formatToolResultForStorage(tr.toolName, rawPayload, extra),
+            }
+          })
+
+          finalHistory.push({
+            role: "tool",
+            toolResults: toolResultsForHistory,
+            timestamp: Date.now(),
+          })
         }
       } else if (finalToolCalls.length === 0 && finalToolResults.length === 0) {
         // If no tools were called and no results, check if we switched to planning mode
@@ -1006,38 +1049,22 @@ export const chatWithAI = action({
       // Fallback: if tools produced results but the model returned no text,
       // synthesize a short, user-friendly message instead of surfacing raw tool output.
       if ((!cleanResponse || cleanResponse.trim() === "") && Array.isArray(finalToolResults) && finalToolResults.length > 0) {
-        try {
-          const last = finalToolResults[finalToolResults.length - 1];
-          const raw = (last && (last.output ?? last.result));
-          let summary = "";
-          if (typeof raw === 'string') {
-            try {
-              const parsed = JSON.parse(raw);
-              if (parsed?.error === 'missing_range') {
-                // Provide a clear, user-facing clarification request.
-                summary = "To check your calendar I need a specific time window. For example: tomorrow 00:00–23:59. Should I use that?";
-              } else if (parsed?.meta?.count !== undefined) {
-                const m = parsed.meta;
-                const range = [m.start, m.end].filter(Boolean).join(' → ');
-                summary = `Retrieved ${m.count} items${range ? ` for ${range}` : ''}.`;
-              } else if (parsed?.message) {
-                // Avoid echoing internal tool guidance; provide a concise explanation instead.
-                summary = "I need a precise time range (start and end) to check your calendar. Example: 2025-10-19 00:00–23:59. What window should I use?";
-              } else if (parsed?.error) {
-                summary = `There was a tool error: ${parsed.error}.`;
-              } else {
-                summary = raw;
-              }
-            } catch {
-              summary = raw;
-            }
-          } else if (raw !== undefined) {
-            summary = JSON.stringify(raw);
+        const summary = summariseToolResults(finalToolResults)
+        if (summary && summary.trim()) {
+          cleanResponse = summary.trim()
+        } else {
+          cleanResponse = "I collected the data from your tools. Let me know how you would like me to use it."
+        }
+      }
+
+      if (cleanResponse && Array.isArray(finalToolResults) && finalToolResults.length > 0) {
+        const lower = cleanResponse.toLowerCase()
+        if (lower.includes("i collected the data") || lower.includes("let me know how you would like me to use it")) {
+          const summary = summariseToolResults(finalToolResults)
+          if (summary && summary.trim()) {
+            cleanResponse = summary.trim()
           }
-          if (summary && summary.trim().length > 0) {
-            cleanResponse = summary.slice(0, 300);
-          }
-        } catch { /* ignore */ }
+        }
       }
 
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
