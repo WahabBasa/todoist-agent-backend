@@ -162,7 +162,9 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
         timeZone: z.string().optional().describe("IANA timezone used to resolve nlRange."),
         maxResults: z.number().optional(),
         calendarIds: z.array(z.string()).optional(),
-      })
+      }),
+      // Accept empty {} to surface a helpful message instead of a validation failure
+      z.object({}).strict()
     ]),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
       // Expect explicit ISO boundaries for full flexibility

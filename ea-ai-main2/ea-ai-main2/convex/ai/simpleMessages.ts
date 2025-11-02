@@ -133,20 +133,14 @@ export function convertConvexToModelMessages(convexMessages: ConvexMessage[]): M
         // This prevents API rejections due to undefined content in tool messages
         const validatedParts = parts.map(part => part);
 
-        // Only push assistant messages if they have actual text content
-        // Tool-only messages without text can confuse the model about roles
-        const hasTextContent = validatedParts.some(p => p.type === 'text' && (p as any).text?.trim());
-        
-        if (hasTextContent || validatedParts.length > 1) {
-          // Either has text content OR multiple parts (text + tools)
+        // Always push assistant messages when parts exist (text or tool parts).
+        // Tool-only assistant messages carry tool-call/result context needed for the next step.
+        if (validatedParts.length > 0) {
           uiMessages.push({
             id: `${i}`,
             role: "assistant",
             parts: validatedParts,
           });
-        } else if (validatedParts.length > 0) {
-          // If we only have tool parts without text, skip to prevent role confusion
-          console.debug(`[SimpleMessages] Skipping tool-only assistant message without text at index ${i}`);
         }
         continue;
       }

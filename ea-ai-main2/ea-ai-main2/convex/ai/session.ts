@@ -1003,7 +1003,42 @@ export const chatWithAI = action({
         }
       }
       
-
+      // Fallback: if tools produced results but the model returned no text,
+      // synthesize a short, user-friendly message instead of surfacing raw tool output.
+      if ((!cleanResponse || cleanResponse.trim() === "") && Array.isArray(finalToolResults) && finalToolResults.length > 0) {
+        try {
+          const last = finalToolResults[finalToolResults.length - 1];
+          const raw = (last && (last.output ?? last.result));
+          let summary = "";
+          if (typeof raw === 'string') {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed?.error === 'missing_range') {
+                // Provide a clear, user-facing clarification request.
+                summary = "To check your calendar I need a specific time window. For example: tomorrow 00:00–23:59. Should I use that?";
+              } else if (parsed?.meta?.count !== undefined) {
+                const m = parsed.meta;
+                const range = [m.start, m.end].filter(Boolean).join(' → ');
+                summary = `Retrieved ${m.count} items${range ? ` for ${range}` : ''}.`;
+              } else if (parsed?.message) {
+                // Avoid echoing internal tool guidance; provide a concise explanation instead.
+                summary = "I need a precise time range (start and end) to check your calendar. Example: 2025-10-19 00:00–23:59. What window should I use?";
+              } else if (parsed?.error) {
+                summary = `There was a tool error: ${parsed.error}.`;
+              } else {
+                summary = raw;
+              }
+            } catch {
+              summary = raw;
+            }
+          } else if (raw !== undefined) {
+            summary = JSON.stringify(raw);
+          }
+          if (summary && summary.trim().length > 0) {
+            cleanResponse = summary.slice(0, 300);
+          }
+        } catch { /* ignore */ }
+      }
 
       cleanResponse = cleanResponse.replace(/<[^>]*>/g, '').trim();
       
