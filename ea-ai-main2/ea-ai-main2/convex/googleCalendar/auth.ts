@@ -137,13 +137,10 @@ export const hasGoogleCalendarConnection = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return false;
     try {
-      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
-      const tokens = await clerkClient.users.getUserOauthAccessToken(identity.subject, "oauth_google");
-      const hasToken = Array.isArray(tokens?.data) && tokens.data.length > 0 && !!tokens.data[0]?.token;
-      if (!hasToken) return false;
-      // Consider connected if minimal read scopes are present
+      // Use the same helper that tries both provider slugs and inspects scopes
       const info = await getClerkAccessTokenAndScopes(identity.subject);
-      const have = info?.scopes || [];
+      if (!info) return false;
+      const have = info.scopes || [];
       const need = [
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/calendar.settings.readonly",
@@ -175,9 +172,37 @@ export const testGoogleCalendarConnection = action({
         return { success: false, error: "Not authenticated", testTimestamp: Date.now() };
       }
 
+      // Print rich diagnostics to Convex logs when user clicks Connect
+      try {
+        const diag: any = await ctx.runAction(api.googleCalendar.auth.debugGoogleOAuthStatus, {} as any);
+        console.log("[GCAL_DIAGNOSTICS]", {
+          identity: identity.subject,
+          attempts: diag?.attempts,
+          tokenProvider: diag?.tokenProvider,
+          scopes: diag?.scopes,
+          env: diag?.env,
+          externalAccounts: diag?.externalAccounts,
+        });
+        // Also probe Clerk REST BAPI directly to distinguish instance/secret/provider issues
+        try {
+          const bapi: any = await ctx.runAction(api.googleCalendar.auth.debugClerkBapi, {} as any);
+          console.log("[GCAL_DIAGNOSTICS_BAPI]", {
+            instance: { status: bapi?.instance?.status, ok: bapi?.instance?.ok },
+            user: { status: bapi?.user?.status, ok: bapi?.user?.ok },
+            tokens_google: { status: bapi?.tokens_google?.status, ok: bapi?.tokens_google?.ok },
+            tokens_oauth_google: { status: bapi?.tokens_oauth_google?.status, ok: bapi?.tokens_oauth_google?.ok },
+          });
+        } catch (e) {
+          console.warn("[GCAL_DIAGNOSTICS_BAPI] failed:", e instanceof Error ? e.message : e);
+        }
+      } catch (e) {
+        console.warn("[GCAL_DIAGNOSTICS] debugGoogleOAuthStatus failed:", e instanceof Error ? e.message : e);
+      }
+
       // Inspect Clerk token scopes for diagnostics
       const tokenInfo = await getClerkAccessTokenAndScopes(identity.subject);
       if (!tokenInfo) {
+        console.warn("[GCAL_TEST] No Clerk Google token found for user; reauthorize may be required");
         return { success: false, error: "Google Calendar not connected.", testTimestamp: Date.now() };
       }
       const have = tokenInfo.scopes;
@@ -195,10 +220,16 @@ export const testGoogleCalendarConnection = action({
         const msg = resp.status === 403
           ? `Insufficient Google Calendar scopes (have: ${have.join(" ") || "none"}; need: ${need.join(", ")})`
           : `HTTP ${resp.status}`;
+        console.warn("[GCAL_TEST] CalendarList request failed:", { status: resp.status, msg, have, need });
         return { success: false, error: msg, testTimestamp: Date.now() };
       }
       const json: any = await resp.json();
       const count = Array.isArray(json?.items) ? json.items.length : 0;
+      console.log("[GCAL_TEST] Connection OK via Clerk token", {
+        calendars: count,
+        provider: tokenInfo?.provider,
+        scopesSample: have?.slice?.(0, 8),
+      });
       return { success: true, message: `Connected to Google Calendar via Clerk token (${count} calendar(s))`, testTimestamp: Date.now(), hasConnection: true };
     } catch (error) {
       console.error("Error testing Google Calendar connection:", error);
@@ -228,8 +259,20 @@ export const debugGoogleOAuthStatus = action({
     }
 
     let tokenInfo: { accessToken: string; scopes: string[]; provider: string } | null = null;
+    let externalAccountsSummary: Array<{ id: string; provider: string; approvedScopes?: string }> = [];
     try {
       tokenInfo = await getClerkAccessTokenAndScopes(identity.subject);
+    } catch {}
+
+    // Also fetch external accounts to verify presence of Google connection
+    try {
+      const user = await clerkClient.users.getUser(identity.subject);
+      const accounts = (user?.externalAccounts || []) as any[];
+      externalAccountsSummary = accounts.map((acc: any) => ({
+        id: String(acc?.id || ''),
+        provider: String(acc?.provider || ''),
+        approvedScopes: typeof acc?.approvedScopes === 'string' ? acc.approvedScopes : undefined,
+      }));
     } catch {}
 
     const env = {
@@ -245,8 +288,97 @@ export const debugGoogleOAuthStatus = action({
       attempts,
       tokenProvider: tokenInfo?.provider || null,
       scopes: tokenInfo?.scopes || [],
+      externalAccounts: externalAccountsSummary,
       env,
     };
+  },
+});
+
+// Deep Clerk BAPI diagnostics: verify secret works against Clerk REST, show instance info,
+// user external accounts, and raw oauth_access_tokens responses for both provider slugs.
+export const debugClerkBapi = action({
+  args: {},
+  handler: async (ctx: ActionCtx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { success: false, error: "Not authenticated" } as const;
+
+    const secret = process.env.CLERK_SECRET_KEY;
+    const issuer = process.env.CLERK_JWT_ISSUER_DOMAIN;
+    if (!secret) return { success: false, error: "CLERK_SECRET_KEY missing" } as const;
+
+    async function bapi(path: string) {
+      try {
+        const resp = await fetch("https://api.clerk.com" + path, {
+          headers: { Authorization: `Bearer ${secret}` },
+        });
+        const text = await resp.text();
+        return { ok: resp.ok, status: resp.status, body: text.slice(0, 800) };
+      } catch (e) {
+        return { ok: false, status: 0, body: String(e instanceof Error ? e.message : e) };
+      }
+    }
+
+    const userId = identity.subject;
+    const results: any = { issuer, userId };
+
+    results.instance = await bapi("/v1/instances/me");
+    results.user = await bapi(`/v1/users/${encodeURIComponent(userId)}`);
+    results.tokens_google = await bapi(`/v1/users/${encodeURIComponent(userId)}/oauth_access_tokens/google`);
+    results.tokens_oauth_google = await bapi(`/v1/users/${encodeURIComponent(userId)}/oauth_access_tokens/oauth_google`);
+
+    // Attempt to parse useful fields
+    function safeParse(text?: string) {
+      try {
+        return text ? JSON.parse(text) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const userJson = safeParse(results.user?.body);
+    const eaRaw: any[] = (userJson?.external_accounts || userJson?.externalAccounts || []) as any[];
+    const eaSummary = eaRaw.map((acc: any) => ({
+      id: String(acc?.id ?? acc?.external_account?.id ?? ''),
+      provider: String(acc?.provider ?? ''),
+      approvedScopes: String(acc?.approved_scopes ?? acc?.approvedScopes ?? ''),
+    }));
+
+    const tgJson = safeParse(results.tokens_google?.body);
+    const togJson = safeParse(results.tokens_oauth_google?.body);
+    const tgErr = tgJson?.errors?.[0];
+    const togErr = togJson?.errors?.[0];
+
+    console.log("[CLERK_BAPI]", {
+      issuer,
+      userId,
+      instance: { status: results.instance?.status, ok: results.instance?.ok },
+      user: { status: results.user?.status, ok: results.user?.ok },
+      tokens_google: { status: results.tokens_google?.status, ok: results.tokens_google?.ok },
+      tokens_oauth_google: { status: results.tokens_oauth_google?.status, ok: results.tokens_oauth_google?.ok },
+    });
+    try {
+      console.log("[CLERK_BAPI_BODY] tokens_google:", (results.tokens_google?.body ?? "").slice(0, 200));
+      console.log("[CLERK_BAPI_BODY] tokens_oauth_google:", (results.tokens_oauth_google?.body ?? "").slice(0, 200));
+    } catch {}
+
+    // Log concise summaries for quick triage
+    console.log("[CLERK_BAPI_USER] external_accounts:", eaSummary);
+    console.log("[CLERK_BAPI_TOKENS]", {
+      google: {
+        status: results.tokens_google?.status,
+        code: tgErr?.code,
+        provider_error: tgErr?.meta?.provider_error,
+        long_message: tgErr?.long_message,
+      },
+      oauth_google: {
+        status: results.tokens_oauth_google?.status,
+        code: togErr?.code,
+        provider_error: togErr?.meta?.provider_error,
+        long_message: togErr?.long_message,
+      }
+    });
+
+    return { success: true, ...results } as const;
   },
 });
 

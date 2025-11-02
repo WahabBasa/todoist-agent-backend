@@ -162,29 +162,45 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
         timeZone: z.string().optional().describe("IANA timezone used to resolve nlRange."),
         maxResults: z.number().optional(),
         calendarIds: z.array(z.string()).optional(),
-      })
+      }),
+      // Pragmatic fallback: allow empty args so we can default to a sensible window
+      z.object({}).optional(),
     ]),
     async execute(args: any, context: ToolContext, actionCtx: ActionCtx) {
-      // Expect explicit ISO boundaries for full flexibility
-      const hasExplicitRange = typeof args?.timeMin === 'string' && typeof args?.timeMax === 'string';
+      // Expect explicit ISO boundaries for full flexibility. If missing, default to next 7 days using
+      // the user's Google Calendar timezone to determine "now".
+      let timeMinISO: string | undefined = typeof args?.timeMin === 'string' ? args.timeMin : undefined;
+      let timeMaxISO: string | undefined = typeof args?.timeMax === 'string' ? args.timeMax : undefined;
       const tz = typeof args?.timeZone === 'string' ? args.timeZone : undefined;
-      if (!hasExplicitRange) {
-        // Do not guess ranges in the tool. Ask the model to compute and supply explicit timeMin/timeMax.
-        return {
-          title: "Calendar Events (range required)",
-          metadata: { error: "missing_range" },
-          output: JSON.stringify({
-            error: "missing_range",
-            message: "Provide explicit timeMin and timeMax (ISO) based on the user's timezone (use getCurrentTime() or calendar settings). Example: { timeMin: '2025-10-19T00:00:00Z', timeMax: '2025-10-19T23:59:59Z' }.",
-          }),
-        };
+
+      if (!timeMinISO || !timeMaxISO) {
+        try {
+          const nowCtx: any = await actionCtx.runAction(api.googleCalendar.auth.getCurrentCalendarTime, {});
+          const nowISO: string = nowCtx?.currentTime || new Date().toISOString();
+          const start = new Date(nowISO);
+          const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000); // next 7 days
+          timeMinISO = start.toISOString();
+          timeMaxISO = end.toISOString();
+          console.log(`[GoogleCalendar] Missing range; defaulting to next 7 days`, { timeMin: timeMinISO, timeMax: timeMaxISO, timeZone: nowCtx?.userTimezone });
+        } catch {
+          // If we cannot resolve a default, instruct the model to provide explicit range
+          return {
+            title: "Calendar Events (range required)",
+            metadata: { error: "missing_range" },
+            output: JSON.stringify({
+              error: "missing_range",
+              message: "Provide explicit timeMin and timeMax (ISO) based on the user's timezone (use getCurrentTime() or calendar settings). Example: { timeMin: '2025-10-19T00:00:00Z', timeMax: '2025-10-19T23:59:59Z' }.",
+            }),
+          };
+        }
       }
-      console.log(`[GoogleCalendar] Listing calendar events for explicit window`, { timeMin: args.timeMin, timeMax: args.timeMax, timeZone: tz });
+
+      console.log(`[GoogleCalendar] Listing calendar events for window`, { timeMin: timeMinISO, timeMax: timeMaxISO, timeZone: tz });
       void context;
       
       try {
-        const timeMin: string = args.timeMin;
-        const timeMax: string = args.timeMax;
+        const timeMin: string = timeMinISO!;
+        const timeMax: string = timeMaxISO!;
 
         const result = await actionCtx.runAction(api.googleCalendar.auth.getCalendarEventTimes, {
           start: timeMin,
@@ -193,18 +209,48 @@ export const GoogleCalendarTools: Record<string, ToolDefinition> = {
 
         const events = Array.isArray(result) ? result.map((e: any) => ({
           title: e.title,
-          start: e.start,
-          end: e.end,
+          start: e.start ?? e.startDate,
+          end: e.end ?? e.endDate,
           isAllDay: !!e.isAllDay,
+          timeZone: e.timeZone,
         })) : [];
 
-        const meta = { count: events.length, start: timeMin, end: timeMax, timeZone: tz };
+        // Build user-local render using Google Calendar timezone (prefer nowCtx)
+        let tzEffective: string | undefined;
+        try {
+          const nowCtx: any = await actionCtx.runAction(api.googleCalendar.auth.getCurrentCalendarTime, {});
+          tzEffective = nowCtx?.userTimezone;
+        } catch {}
+        tzEffective = tzEffective || tz;
+
+        const fmt = tzEffective ? new Intl.DateTimeFormat('en-US', {
+          timeZone: tzEffective,
+          year: 'numeric', month: 'short', day: '2-digit',
+          hour: 'numeric', minute: '2-digit'
+        }) : undefined;
+
+        const eventsLocal = events.map(e => {
+          if (e.isAllDay) {
+            return { title: e.title, isAllDay: true, startLocal: String(e.start), endLocal: String(e.end), timeZone: tzEffective };
+          }
+          try {
+            const s = new Date(String(e.start));
+            const en = new Date(String(e.end));
+            const startLocal = fmt ? fmt.format(s) : s.toISOString();
+            const endLocal = fmt ? fmt.format(en) : en.toISOString();
+            return { title: e.title, isAllDay: false, startLocal, endLocal, timeZone: tzEffective };
+          } catch {
+            return { title: e.title, isAllDay: e.isAllDay, startLocal: String(e.start), endLocal: String(e.end), timeZone: tzEffective };
+          }
+        });
+
+        const meta = { count: events.length, start: timeMin, end: timeMax, timeZone: tzEffective || tz };
         console.log(`[GoogleCalendar] Window result`, meta);
 
         return {
           title: `Calendar Events (${events.length})`,
-          metadata: { eventCount: events.length, start: timeMin, end: timeMax, timeZone: tz },
-          output: JSON.stringify({ events, meta }),
+          metadata: { eventCount: events.length, start: timeMin, end: timeMax, timeZone: tzEffective || tz },
+          output: JSON.stringify({ events, eventsLocal, meta }),
         };
       } catch (error: any) {
         const errorMessage = error.message || "Unknown error listing calendar events";
