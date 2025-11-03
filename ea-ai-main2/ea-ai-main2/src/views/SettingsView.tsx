@@ -85,7 +85,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
   
   // Move Todoist connection query to parent to persist across tab switches
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
-  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
 
   const renderContent = () => {
@@ -95,7 +94,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
           clerkUser={clerkUser} 
           signOut={signOut} 
           hasTodoistConnection={hasTodoistConnection}
-          generateOAuthURL={generateOAuthURL}
           removeTodoistConnection={removeTodoistConnection}
           isConnecting={isConnecting}
           setIsConnecting={setIsConnecting}
@@ -109,7 +107,6 @@ export function SettingsView({ onBackToChat }: SettingsViewProps) {
           clerkUser={clerkUser} 
           signOut={signOut} 
           hasTodoistConnection={hasTodoistConnection}
-          generateOAuthURL={generateOAuthURL}
           removeTodoistConnection={removeTodoistConnection}
           isConnecting={isConnecting}
           setIsConnecting={setIsConnecting}
@@ -211,7 +208,6 @@ interface ConnectedAppsSettingsProps {
   clerkUser: any;
   signOut: () => void;
   hasTodoistConnection: boolean | undefined;
-  generateOAuthURL: any;
   removeTodoistConnection: any;
   isConnecting: string | null;
   setIsConnecting: (value: string | null) => void;
@@ -221,7 +217,6 @@ function ConnectedAppsSettings({
   clerkUser, 
   signOut, 
   hasTodoistConnection,
-  generateOAuthURL,
   removeTodoistConnection,
   isConnecting,
   setIsConnecting 
@@ -256,7 +251,7 @@ function ConnectedAppsSettings({
 
 
   // GOOGLE CALENDAR CONNECTION STATE
-  const { user } = useUser();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const clerkCtx = useClerk();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
   const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
@@ -266,31 +261,32 @@ function ConnectedAppsSettings({
   // Removed enable flag usage; backend derives connection from Clerk tokens
   const revokeLegacyGoogleToken = useAction(api.googleCalendar.auth.revokeLegacyGoogleToken);
   const forceDestroyGoogleExternalAccount = useAction(api.googleCalendar.auth.forceDestroyGoogleExternalAccount);
+  // Lazy Todoist OAuth URL generation
+  const generateTodoistOAuthURL = useAction(api.todoist.auth.generateOAuthURLAction);
 
   // Connection is derived from Clerk tokens via action; use query-free booleans
   const gcalEnabled = undefined as unknown as boolean | undefined; // deprecated
-  const gcalStatusLoading = false;
-  const [gcalConnectedQuery, setGcalConnectedQuery] = useState<boolean>(false);
-
+  const [gcalConnected, setGcalConnected] = useState<boolean | null>(null);
   const [gcalTesting] = useState<boolean>(false);
 
-   const refreshGcalStatus = async () => {
-     // Use testGoogleCalendarConnection for better diagnostics
-     try {
-       const result = await testGoogleCalendarConnection();
-       setGcalConnectedQuery(result?.success || false);
-     } catch (e) {
-       console.warn("[Settings] Failed to check Google Calendar connection", e);
-       setGcalConnectedQuery(false);
-     }
-   };
+  const refreshGcalStatus = async () => {
+    try {
+      setGcalConnected(null); // indicate checking
+      const result = await testGoogleCalendarConnection();
+      setGcalConnected(!!result?.success);
+    } catch (e) {
+      console.warn("[Settings] Failed to check Google Calendar connection", e);
+      setGcalConnected(false);
+    }
+  };
 
   useEffect(() => {
+    if (!isUserLoaded || !user) return;
     void refreshGcalStatus();
     const onFocus = () => void refreshGcalStatus();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, []);
+  }, [isUserLoaded, user?.id]);
 
   const GCAL_SCOPES = [
     'https://www.googleapis.com/auth/calendar.events',
@@ -516,21 +512,21 @@ function ConnectedAppsSettings({
   const connectedApps = [
     {
       appName: "Google Calendar",
-      description: gcalStatusLoading
+      description: (gcalConnected === null)
         ? "Checking Google Calendar status..."
-        : (gcalConnectedQuery
+        : (gcalConnected
           ? "Connected to Google Calendar."
           : "Connect Google Calendar to schedule and sync events."),
       iconBgColor: "bg-green-600",
       iconText: "G",
       gradientFrom: undefined,
       gradientTo: undefined,
-      isConnected: gcalConnectedQuery,
-      canConnect: !gcalStatusLoading,
-      isConnecting: isConnecting === 'Google Calendar' || gcalTesting || gcalStatusLoading,
+      isConnected: gcalConnected === true,
+      canConnect: gcalConnected !== null,
+      isConnecting: isConnecting === 'Google Calendar' || gcalTesting || gcalConnected === null,
       onConnect: () => {
-        if (gcalStatusLoading) return;
-        if (gcalConnectedQuery) {
+        if (gcalConnected === null) return;
+        if (gcalConnected) {
           void disconnectGoogleCalendar();
         } else {
           void connectGoogleCalendar();
@@ -562,17 +558,20 @@ function ConnectedAppsSettings({
         }
       } else {
         // Connect Todoist
-        if (generateOAuthURL?.error) {
-          console.error("Todoist OAuth error:", generateOAuthURL.error);
-          alert("Todoist integration is not properly configured. Please contact support.");
-        } else if (generateOAuthURL?.url) {
+        try {
           setIsConnecting("Todoist");
           // Clear any existing conflict data
           setTodoistConflictData(null);
-          
-          // Open OAuth URL in a popup window
+          const resp = await generateTodoistOAuthURL();
+          if (resp?.error || !resp?.url) {
+            console.error("Todoist OAuth error:", resp?.error || "missing URL");
+            alert("Todoist integration is not properly configured. Please contact support.");
+            setIsConnecting(null);
+            return;
+          }
+
           const popup = window.open(
-            generateOAuthURL.url,
+            resp.url,
             'todoist-oauth',
             'width=500,height=600,scrollbars=yes,resizable=yes'
           );
@@ -592,24 +591,14 @@ function ConnectedAppsSettings({
             checkCount++;
             
             try {
-              // Check if popup still exists and is not closed
               if (popup.closed) {
                 clearInterval(checkClosed);
                 console.log("🔄 [Settings] Todoist OAuth popup closed, processing result...");
-                
-                // Give a moment for any postMessage to arrive
                 setTimeout(() => {
-                  // If no conflict data was received, assume success or user cancelled
-                  if (!todoistConflictData) {
-                    console.log("🔄 [Settings] No conflict detected, refreshing connection status");
-                    // The hasTodoistConnection query should automatically refresh
-                  }
                   setIsConnecting(null);
                 }, 300);
                 return;
               }
-              
-              // Timeout after 5 minutes
               if (checkCount >= maxChecks) {
                 clearInterval(checkClosed);
                 popup.close();
@@ -619,13 +608,13 @@ function ConnectedAppsSettings({
                 return;
               }
             } catch (_error) {
-              // Popup might be cross-origin and throw errors - this is expected
-              // Continue monitoring
+              // Ignore cross-origin access errors while monitoring
             }
           }, 1000);
-        } else {
-          console.error("No OAuth URL generated");
+        } catch (err) {
+          console.error("Failed to start Todoist OAuth:", err);
           alert("Unable to connect to Todoist. Please try again later.");
+          setIsConnecting(null);
         }
       }
     } else {

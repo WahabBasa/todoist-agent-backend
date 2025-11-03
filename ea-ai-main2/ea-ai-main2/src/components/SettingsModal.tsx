@@ -57,7 +57,7 @@ function SettingsActionButton({ icon: Icon, children, variant = "default", onCli
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
-  const { user: clerkUser } = useUser();
+  const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
   const { signOut } = useClerk();
 
   const renderContent = () => {
@@ -212,7 +212,8 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   
   // Check if Todoist is connected
   const hasTodoistConnection = useQuery(api.todoist.auth.hasTodoistConnection);
-  const generateOAuthURL = useQuery(api.todoist.auth.generateOAuthURL);
+  // Lazy OAuth URL generation via action to avoid page-load query/logs
+  const generateTodoistOAuthURL = useAction(api.todoist.auth.generateOAuthURLAction);
   const removeTodoistConnection = useAction(api.todoist.auth.removeTodoistConnection);
   
   // Google Calendar (Clerk-based OAuth endpoints)
@@ -245,11 +246,12 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
   };
 
   useEffect(() => {
+    if (!isUserLoaded) return;
     console.log("ConnectedAppsSettings: Component mounted, loading connection status...");
     loadConnectionStatus().catch(error => {
       console.error("ConnectedAppsSettings: Failed to load initial connection status:", error);
     });
-  }, []);
+  }, [isUserLoaded]);
 
   // Refresh connection status when user changes (e.g., after OAuth completion)
   useEffect(() => {
@@ -324,30 +326,44 @@ function ConnectedAppsSettings({ clerkUser, signOut }: { clerkUser: any; signOut
           console.error("Failed to disconnect Todoist:", error);
         }
       } else {
-        // Connect Todoist
-        if (generateOAuthURL?.error) {
-          console.error("Todoist OAuth error:", generateOAuthURL.error);
-          alert("Todoist integration is not properly configured. Please contact support.");
-        } else if (generateOAuthURL?.url) {
+        // Connect Todoist – lazily request OAuth URL via action
+        try {
           setIsConnecting("Todoist");
-          // Open OAuth URL in a popup window
-          const popup = window.open(
-            generateOAuthURL.url,
-            'todoist-oauth',
-            'width=500,height=600,scrollbars=yes,resizable=yes'
-          );
-          
-          // Listen for the popup to close (successful connection)
-          const checkClosed = setInterval(() => {
-            if (popup?.closed) {
-              clearInterval(checkClosed);
+          const resp = await generateTodoistOAuthURL();
+          if (resp?.error) {
+            console.error("Todoist OAuth error:", resp.error);
+            alert("Todoist integration is not properly configured. Please contact support.");
+            setIsConnecting(null);
+            return;
+          }
+          if (resp?.url) {
+            const popup = window.open(
+              resp.url,
+              'todoist-oauth',
+              'width=500,height=600,scrollbars=yes,resizable=yes'
+            );
+            if (!popup) {
+              console.error("Failed to open OAuth popup (blocked by browser)");
+              alert("Unable to open authentication window. Please allow popups and try again.");
               setIsConnecting(null);
-              // The connection status will update automatically via the query
+              return;
             }
-          }, 1000);
-        } else {
-          console.error("No OAuth URL generated");
+            // Listen for the popup to close (successful connection)
+            const checkClosed = setInterval(() => {
+              if (popup?.closed) {
+                clearInterval(checkClosed);
+                setIsConnecting(null);
+              }
+            }, 1000);
+          } else {
+            console.error("No OAuth URL generated");
+            alert("Unable to connect to Todoist. Please try again later.");
+            setIsConnecting(null);
+          }
+        } catch (err) {
+          console.error("Failed to start Todoist OAuth:", err);
           alert("Unable to connect to Todoist. Please try again later.");
+          setIsConnecting(null);
         }
       }
     } else if (appName === "Google Calendar") {

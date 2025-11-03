@@ -318,6 +318,25 @@ export const generateOAuthURL = query({
   },
 });
 
+// Action wrapper to lazily generate the OAuth URL on demand (avoids page-load query)
+export const generateOAuthURLAction = action({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    // Reuse the existing query logic without duplicating code
+    const result = await ctx.runQuery(api.todoist.auth.generateOAuthURL);
+    return result;
+  },
+});
+
+// Action wrapper to lazily check Todoist connection (optional: avoids extra query on mount)
+export const hasTodoistConnectionAction = action({
+  args: {},
+  handler: async (ctx): Promise<boolean> => {
+    const connected = await ctx.runQuery(api.todoist.auth.hasTodoistConnection);
+    return !!connected;
+  },
+});
+
 // Exchange authorization code for access token
 export const exchangeCodeForToken = action({
   args: {
