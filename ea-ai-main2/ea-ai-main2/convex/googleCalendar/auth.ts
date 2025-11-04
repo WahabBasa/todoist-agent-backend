@@ -206,6 +206,130 @@ export const testGoogleCalendarConnection = action({
   },
 });
 
+// =================================================================
+// CONNECTION STATUS MATRIX (single source of truth for UI)
+// =================================================================
+
+/**
+ * Returns a comprehensive connection status for Google Calendar, used by Settings.
+ * This avoids UI heuristics by relying solely on server verification of tokens/scopes.
+ */
+export const getConnectionStatus = action({
+  args: {},
+  handler: async (ctx: ActionCtx): Promise<{
+    connected: boolean;
+    reason?: string;
+    userId?: string;
+    hasExternalAccount: boolean;
+    externalAccountId?: string | null;
+    approvedScopes?: string[];
+    providerAttempts: Array<{ provider: string; ok: boolean; scopes?: string[]; error?: string }>;
+    legacyRefreshTokenPresent: boolean;
+    checkedAt: number;
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return {
+        connected: false,
+        reason: "not_authenticated",
+        hasExternalAccount: false,
+        legacyRefreshTokenPresent: false,
+        providerAttempts: [],
+        checkedAt: Date.now(),
+      };
+    }
+    const clerkUserId = identity.subject;
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    console.log('[GCAL][STATUS_API] start', { runId, userId: clerkUserId });
+
+    // Inspect Clerk user external accounts to discover approved scopes if present
+    let hasExternalAccount = false;
+    let externalAccountId: string | null = null;
+    let approvedScopesArr: string[] | undefined;
+    try {
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+      const user = await clerkClient.users.getUser(clerkUserId);
+      const googleAccount: any = (user?.externalAccounts || []).find(
+        (acc: any) => acc?.provider === 'oauth_google' || acc?.provider === 'google'
+      );
+      hasExternalAccount = !!googleAccount;
+      externalAccountId = googleAccount?.id || null;
+      const approvedRaw = String(googleAccount?.approvedScopes || '');
+      approvedScopesArr = approvedRaw ? approvedRaw.split(/\s+/).filter(Boolean) : undefined;
+    } catch (e) {
+      // If this fails, proceed with token-based verification only
+      console.warn('[GCAL][STATUS_API] failed to inspect external accounts', e);
+    }
+
+    // Try to obtain an access token via Clerk for providers and inspect scopes via tokeninfo
+    const attempts: Array<{ provider: string; ok: boolean; scopes?: string[]; error?: string }> = [];
+    let tokenScopes: string[] | undefined;
+    try {
+      const info = await getClerkAccessTokenAndScopes(clerkUserId);
+      if (info) {
+        attempts.push({ provider: info.provider, ok: true, scopes: info.scopes });
+        tokenScopes = info.scopes;
+      } else {
+        // Try both slugs explicitly for logging clarity
+        for (const provider of ["oauth_google", "google"]) {
+          try {
+            const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+            const tokens = await clerkClient.users.getUserOauthAccessToken(clerkUserId, provider as any);
+            if (tokens?.data?.length) {
+              // We have a token but unknown scopes; attempt tokeninfo
+              const token = tokens.data[0].token as string;
+              let scopes: string[] | undefined;
+              try {
+                const resp = await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(token));
+                if (resp.ok) {
+                  const j: any = await resp.json();
+                  scopes = String(j?.scope || '').split(/\s+/).filter(Boolean);
+                }
+              } catch {}
+              attempts.push({ provider, ok: true, scopes });
+              if (!tokenScopes && scopes) tokenScopes = scopes;
+            } else {
+              attempts.push({ provider, ok: false, error: 'no_token' });
+            }
+          } catch (err: any) {
+            const msg = err?.message || 'error';
+            attempts.push({ provider, ok: false, error: msg });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GCAL][STATUS_API] token attempts failed', e);
+    }
+
+    // Legacy token presence
+    let legacyPresent = false;
+    try {
+      const rt = await ctx.runQuery(api.googleCalendar.tokens.getRefreshToken, {});
+      legacyPresent = !!rt;
+    } catch {}
+
+    // Compute connection result
+    const have = tokenScopes || approvedScopesArr || [];
+    const missing = GCAL_SCOPES.filter((s) => !have.includes(s));
+    const connected = missing.length === 0 && have.length > 0;
+    const reason = connected ? undefined : (hasExternalAccount ? (have.length ? 'missing_scopes' : 'no_token') : 'no_external_account');
+
+    console.log('[GCAL][STATUS_API] done', { runId, connected, reason });
+
+    return {
+      connected,
+      reason,
+      userId: clerkUserId,
+      hasExternalAccount,
+      externalAccountId,
+      approvedScopes: approvedScopesArr,
+      providerAttempts: attempts,
+      legacyRefreshTokenPresent: legacyPresent,
+      checkedAt: Date.now(),
+    };
+  },
+});
+
 // Debug utility: inspect Clerk Google OAuth status for current user
 export const debugGoogleOAuthStatus = action({
   args: {},

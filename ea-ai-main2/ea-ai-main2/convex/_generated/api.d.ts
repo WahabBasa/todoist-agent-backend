@@ -13,6 +13,8 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as account from "../account.js";
+import type * as accountData from "../accountData.js";
 import type * as ai_assistantMessage_parseAssistantMessage from "../ai/assistantMessage/parseAssistantMessage.js";
 import type * as ai_caching from "../ai/caching.js";
 import type * as ai_compaction from "../ai/compaction.js";
@@ -110,6 +112,8 @@ import type * as userProfiles from "../userProfiles.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  account: typeof account;
+  accountData: typeof accountData;
   "ai/assistantMessage/parseAssistantMessage": typeof ai_assistantMessage_parseAssistantMessage;
   "ai/caching": typeof ai_caching;
   "ai/compaction": typeof ai_compaction;

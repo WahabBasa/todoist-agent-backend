@@ -10,6 +10,7 @@ import { sendAuthTelemetry, authDebugLog } from "@/lib/telemetry";
 
 type Mode = "idle" | "verifying";
 type Flow = "signIn" | "signUp" | null;
+type AuthMode = "signin" | "signup";
 
 export function Auth() {
   const { signIn, isLoaded: isSignInLoaded } = useSignIn();
@@ -18,22 +19,34 @@ export function Auth() {
   const [code, setCode] = useState("");
   const [mode, setMode] = useState<Mode>("idle");
   const [flow, setFlow] = useState<Flow>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [error, setError] = useState<string | null>(null);
 
   const handleGoogle = async () => {
-    if (!isSignInLoaded) return;
     try {
       setError(null);
-      sendAuthTelemetry("oauth_signin_start");
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/",
-      });
+      if (authMode === "signup") {
+        if (!isSignUpLoaded) return;
+        sendAuthTelemetry("oauth_signup_start");
+        await (signUp as any).authenticateWithRedirect({
+          strategy: "oauth_google",
+          redirectUrl: "/sso-callback",
+          redirectUrlComplete: "/",
+        });
+      } else {
+        if (!isSignInLoaded) return;
+        sendAuthTelemetry("oauth_signin_start");
+        await signIn.authenticateWithRedirect({
+          strategy: "oauth_google",
+          redirectUrl: "/sso-callback",
+          redirectUrlComplete: "/",
+        });
+      }
     } catch (err: any) {
       authDebugLog("Google OAuth Error", err);
-      sendAuthTelemetry("oauth_signin_error", { error: String(err?.message || err) });
-      setError("Failed to sign in with Google. Please try again.");
+      const msg = String(err?.message || err);
+      sendAuthTelemetry(authMode === "signup" ? "oauth_signup_error" : "oauth_signin_error", { error: msg });
+      setError(authMode === "signup" ? "Failed to sign up with Google. Please try again." : "Failed to sign in with Google. Please try again.");
     }
   };
 
@@ -42,7 +55,18 @@ export function Auth() {
     if (!email) return;
     setError(null);
     try {
-      // Try sign-in passwordless
+      if (authMode === "signup") {
+        // Explicit Create Account flow: start sign up with email code
+        if (!isSignUpLoaded) return;
+        sendAuthTelemetry("email_code_prepare_signup", { email });
+        await signUp.create({ emailAddress: email });
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+        setFlow("signUp");
+        setMode("verifying");
+        return;
+      }
+
+      // Sign in flow: try email_code first; if not available, fall back to sign up
       if (!isSignInLoaded) return;
       sendAuthTelemetry("email_code_prepare_signin", { email });
       const si = await signIn.create({ identifier: email });
@@ -53,7 +77,7 @@ export function Auth() {
         setMode("verifying");
         return;
       }
-      // If no email_code factor, fall back to sign up
+      // Fallback to signup if email_code sign-in factor isn’t present
       if (!isSignUpLoaded) return;
       sendAuthTelemetry("email_code_prepare_signup", { email });
       await signUp.create({ emailAddress: email });
@@ -123,12 +147,18 @@ export function Auth() {
               </div>
               <span className="font-semibold text-lg">Oldowan</span>
             </a>
-            <h1 className="mb-1 mt-4 text-xl font-semibold">Sign In</h1>
-            <p>Welcome back! Sign in to continue</p>
+            <h1 className="mb-1 mt-4 text-xl font-semibold">{authMode === "signup" ? "Create Account" : "Sign In"}</h1>
+            <p>{authMode === "signup" ? "Join us. It’s fast and easy." : "Welcome back! Sign in to continue"}</p>
           </div>
 
           <div className="mt-6">
-            <Button type="button" variant="outline" className="w-full" onClick={handleGoogle} disabled={!isSignInLoaded}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogle}
+              disabled={authMode === "signup" ? !isSignUpLoaded : !isSignInLoaded}
+            >
               {/* Google icon */}
               <svg xmlns="http://www.w3.org/2000/svg" width="0.98em" height="1em" viewBox="0 0 256 262">
                 <path fill="#4285f4" d="M255.878 133.451c0-10.734-.871-18.567-2.756-26.69H130.55v48.448h71.947c-1.45 12.04-9.283 30.172-26.69 42.356l-.244 1.622l38.755 30.023l2.685.268c24.659-22.774 38.875-56.282 38.875-96.027"></path>
@@ -136,13 +166,13 @@ export function Auth() {
                 <path fill="#fbbc05" d="M56.281 156.37c-2.756-8.123-4.351-16.827-4.351-25.82c0-8.994 1.595-17.697 4.206-25.82l-.073-1.73L15.26 71.312l-1.335.635C5.077 89.644 0 109.517 0 130.55s5.077 40.905 13.925 58.602z"></path>
                 <path fill="#eb4335" d="M130.55 50.479c24.514 0 41.05 10.589 50.479 19.438l36.844-35.974C195.245 12.91 165.798 0 130.55 0C79.49 0 35.393 29.301 13.925 71.947l42.211 32.783c10.59-31.477 39.891-54.251 74.414-54.251"></path>
               </svg>
-              <span>Sign in with Google</span>
+              <span>{authMode === "signup" ? "Sign up with Google" : "Sign in with Google"}</span>
             </Button>
           </div>
 
           <div className="my-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
             <hr className="border-dashed" />
-            <span className="text-muted-foreground text-xs">Or continue With</span>
+            <span className="text-muted-foreground text-xs">Or continue with</span>
             <hr className="border-dashed" />
           </div>
 
@@ -169,10 +199,41 @@ export function Auth() {
           </div>
         </div>
 
-        <p className="text-accent-foreground text-center text-sm">
-          Don't have an account ?
-          <a href="#" className="text-primary hover:text-primary/80 transition-colors ml-1">Create account</a>
-        </p>
+        {authMode === "signin" ? (
+          <p className="text-accent-foreground text-center text-sm">
+            Don&apos;t have an account?
+            <button
+              type="button"
+              className="text-primary hover:text-primary/80 transition-colors ml-1"
+              onClick={() => {
+                setAuthMode("signup");
+                setMode("idle");
+                setFlow(null);
+                setCode("");
+                setError(null);
+              }}
+            >
+              Create account
+            </button>
+          </p>
+        ) : (
+          <p className="text-accent-foreground text-center text-sm">
+            Already have an account?
+            <button
+              type="button"
+              className="text-primary hover:text-primary/80 transition-colors ml-1"
+              onClick={() => {
+                setAuthMode("signin");
+                setMode("idle");
+                setFlow(null);
+                setCode("");
+                setError(null);
+              }}
+            >
+              Sign in
+            </button>
+          </p>
+        )}
 
         <div className="mt-8 pt-6 border-t border-border flex flex-wrap justify-center gap-6 text-xs text-muted-foreground">
           <a href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</a>

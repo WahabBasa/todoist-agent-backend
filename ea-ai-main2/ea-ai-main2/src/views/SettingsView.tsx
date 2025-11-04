@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { useClerk, useUser } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -254,7 +254,7 @@ function ConnectedAppsSettings({
   const { user, isLoaded: isUserLoaded } = useUser();
   const clerkCtx = useClerk();
   const hasGoogleCalendarConnection = useAction(api.googleCalendar.auth.hasGoogleCalendarConnection);
-  const testGoogleCalendarConnection = useAction(api.googleCalendar.auth.testGoogleCalendarConnection);
+  const getGoogleCalendarStatus = useAction(api.googleCalendar.auth.getConnectionStatus);
   // Removed unused generateGoogleOAuthURL action
   
   const removeGoogleCalendarConnection = useAction(api.googleCalendar.auth.removeGoogleCalendarConnection);
@@ -268,24 +268,36 @@ function ConnectedAppsSettings({
   const gcalEnabled = undefined as unknown as boolean | undefined; // deprecated
   const [gcalConnected, setGcalConnected] = useState<boolean | null>(null);
   const [gcalTesting] = useState<boolean>(false);
+  const gcalStatusInFlight = useRef(false);
 
   const refreshGcalStatus = async () => {
+    // Prevent concurrent checks and keep UX deterministic
+    if (gcalStatusInFlight.current) {
+      return;
+    }
+    gcalStatusInFlight.current = true;
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     try {
-      setGcalConnected(null); // indicate checking
-      const result = await testGoogleCalendarConnection();
-      setGcalConnected(!!result?.success);
+      // indicate passive checking (not an active connect)
+      setGcalConnected(null);
+      // debug trace
+      console.log('[GCAL][STATUS] start', { runId, isUserLoaded, userId: user?.id });
+      const result = await getGoogleCalendarStatus();
+      const ok = !!result?.connected;
+      setGcalConnected(ok);
+      console.log('[GCAL][STATUS] done', { runId, connected: ok, reason: result?.reason });
     } catch (e) {
-      console.warn("[Settings] Failed to check Google Calendar connection", e);
+      console.warn('[Settings][GCAL] status check failed', e);
       setGcalConnected(false);
+    } finally {
+      gcalStatusInFlight.current = false;
     }
   };
 
   useEffect(() => {
     if (!isUserLoaded || !user) return;
     void refreshGcalStatus();
-    const onFocus = () => void refreshGcalStatus();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    // Avoid adding focus listeners in production to prevent flicker
   }, [isUserLoaded, user?.id]);
 
   const GCAL_SCOPES = [
@@ -338,7 +350,7 @@ function ConnectedAppsSettings({
             const approved = String(acc?.approvedScopes || '');
             const ok = GCAL_SCOPES.every(s => approved.includes(s));
             if (ok) {
-              try { await testGoogleCalendarConnection(); } catch {}
+              try { await getGoogleCalendarStatus(); } catch {}
               await refreshGcalStatus();
               setIsConnecting(null);
               return;
@@ -371,7 +383,7 @@ function ConnectedAppsSettings({
             const approved = String(acc?.approvedScopes || '');
             const ok = GCAL_SCOPES.every(s => approved.includes(s));
             if (ok) {
-              try { await testGoogleCalendarConnection(); } catch {}
+              try { await getGoogleCalendarStatus(); } catch {}
               await refreshGcalStatus();
               setIsConnecting(null);
               return;
@@ -396,7 +408,7 @@ function ConnectedAppsSettings({
         if (popup.closed) {
           clearInterval(timer);
           setTimeout(async () => {
-            try { await testGoogleCalendarConnection(); } catch {}
+            try { await getGoogleCalendarStatus(); } catch {}
             await refreshGcalStatus();
             setIsConnecting(null);
           }, 500);
@@ -470,7 +482,7 @@ function ConnectedAppsSettings({
         console.log('✅ [Settings] Google Calendar connected message received');
         setIsConnecting(null);
         // Verify scopes by testing connection before enabling
-        testGoogleCalendarConnection().finally(() => { void refreshGcalStatus(); });
+        getGoogleCalendarStatus().finally(() => { void refreshGcalStatus(); });
       } else if (event.data?.type === 'GCAL_MISSING_SCOPES') {
         console.warn('⚠️ [Settings] Google Calendar missing scopes; prompting re-consent');
         setIsConnecting(null);
@@ -523,7 +535,8 @@ function ConnectedAppsSettings({
       gradientTo: undefined,
       isConnected: gcalConnected === true,
       canConnect: gcalConnected !== null,
-      isConnecting: isConnecting === 'Google Calendar' || gcalTesting || gcalConnected === null,
+      // Only show "Connecting" when the user initiated a connect/disconnect
+      isConnecting: isConnecting === 'Google Calendar' || gcalTesting,
       onConnect: () => {
         if (gcalConnected === null) return;
         if (gcalConnected) {
@@ -982,6 +995,8 @@ function ProfileSettings() {
 }
 
 function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () => void }) {
+  const deleteMyAccount = useAction(api.account.deleteMyAccount);
+  const [isDeleting, setIsDeleting] = useState(false);
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -1051,8 +1066,27 @@ function AccountSettings({ clerkUser, signOut }: { clerkUser: any; signOut: () =
         <SettingsActionButton 
           icon={Trash2}
           variant="destructive"
+          onClick={async () => {
+            if (isDeleting) return;
+            const confirmed = confirm(
+              "This will permanently delete your account and all associated data. This action cannot be undone.\n\nAre you sure you want to continue?"
+            );
+            if (!confirmed) return;
+            try {
+              setIsDeleting(true);
+              toast("Deleting your account...", { description: "Please wait" });
+              await deleteMyAccount({});
+              toast.success("Account deleted successfully");
+              // Ensure user is logged out locally as well
+              await signOut();
+            } catch (e: any) {
+              const msg = e?.data?.message || e?.message || "Unknown error";
+              toast.error(`Failed to delete account: ${msg}`);
+              setIsDeleting(false);
+            }
+          }}
         >
-          Delete Account
+          {isDeleting ? "Deleting..." : "Delete Account"}
         </SettingsActionButton>
       </div>
     </div>
